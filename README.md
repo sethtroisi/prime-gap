@@ -7,7 +7,7 @@ head while working on gmp mpz_prevprime.
 ## Commands
 
 ```bash
-$ g++ -Wall -O3 gap_search.cpp -lgmp -o gap_search
+$ g++ -Wall -Werror -O3 gap_search.cpp -lgmp -o gap_search
 # ./gap_search <params>
 $ time ./gap_search 200000000 1000000 887 210 20
 

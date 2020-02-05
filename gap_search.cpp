@@ -33,10 +33,10 @@ using std::vector;
 
 // TODO determine which is fastest
 // Dynamically set smaller if M_inc is tiny
-//#define SIEVE_RANGE   300'000'000
+#define SIEVE_RANGE   300'000'000
 //#define SIEVE_RANGE   100'000'000
 //#define SIEVE_RANGE    30'000'000
-#define SIEVE_RANGE    10'000'000
+//#define SIEVE_RANGE    10'000'000
 //#define SIEVE_RANGE     3'000'000
 //#define SIEVE_RANGE     1'000'000
 #define SIEVE_SMALL        40'000
@@ -63,8 +63,7 @@ int main(int argc, char* argv[]) {
     printf("Compiled with GMP %d.%d.%d\n\n",
         __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
     printf("SIEVE_LENGTH: 2x%d, SIEVE_RANGE: %d\n\n", SIEVE_LENGTH, SIEVE_RANGE);
-    printf("Showing results with merit > %.1f\n\n", min_merit);
-    printf("Testing m * %ld#/%ld, m = %ld + [0, %ld)\n\n", p, d, m, m_inc);
+    printf("Testing m * %ld#/%ld, m = %ld + [0, %ld)\n", p, d, m, m_inc);
 
     // Some mod logic below demands this for now.
     assert( (m + m_inc) < MAX_INT );
@@ -241,7 +240,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             search_threshold = SIEVE_RANGE;
         }
         printf("\tCalculating prime steps\n");
-        if (search_threshold <= SIEVE_RANGE) {
+        if (search_threshold < SIEVE_RANGE) {
             printf("\tThreshold: %12ld\n", search_threshold);
         }
         // Print "."s during, equal in length to 'Calculat...'
@@ -312,12 +311,19 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     // ----- Main sieve loop.
     cout << "\n\n\tStarting m=" << M << "\n\n" << endl;
     bool composite[2][SIEVE_LENGTH];
-    if (next_m.top().first == 0)
-        return;
 
-    long total_unknown = 0;
+    // Used for various stats
+    long  s_total_unknown = 0;
+    long  s_total_prp_tests = 0;
+    long  s_gap_out_of_sieve_prev = 0;
+    long  s_gap_out_of_sieve_next = 0;
+    float s_best_merit_interval = 0;
+    long  s_best_merit_interval_m = 0;
+    long  s_bad_next_m = 0;
+
     for (int mi = 0; mi < M_inc; mi++) {
         long m = M + mi;
+        // TODO if gcd(m, d) != 1 continue?
 
         // Reset last sieve to True;
         std::fill_n(*composite, 2*SIEVE_LENGTH, 1);
@@ -326,19 +332,22 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             m, SIEVE_SMALL_PRIME_PI,
             primes, remainder, composite);
 
-        int unknown_small_u = std::count(composite[1], composite[1]+SIEVE_LENGTH, true);
-        int unknown_small_l = std::count(composite[0], composite[0]+SIEVE_LENGTH, true);
+        // Maybe useful for some stats later.
+        // int unknown_small_u = std::count(composite[1], composite[1]+SIEVE_LENGTH, true);
+        // int unknown_small_l = std::count(composite[0], composite[0]+SIEVE_LENGTH, true);
 
-        int tested = 0, valid = 0;
+        int s_large_primes_tested = 0;
         // /*
         while (next_m.size() && next_m.top().first == mi) {
-            // Check if prime divides this, otherwise push to somewhere
+            s_large_primes_tested += 1;
+
+            // Large prime should divide some number in SIEVE for this m
+            // When done push to next mi.
             int pi = next_m.top().second;
             next_m.pop();
             const int prime   = primes[pi];
             int base_r  = remainder[pi];
             long modulo = (base_r * m) % prime;
-            tested += 1;
 
             if (0) {
                 mpz_t test; mpz_init(test); mpz_mul_ui(test, K, m);
@@ -351,16 +360,16 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             }
 
             if (modulo < SIEVE_LENGTH) {
-                valid += 1;
                 // Just past a multiple
                 composite[0][modulo] = false;
             } else {
                 // Don't have to deal with 0 case anymore.
                 int first_negative = -(modulo - prime);
                 if (first_negative < SIEVE_LENGTH) {
-                    valid += 1;
                     // Just before a multiple
                     composite[1][first_negative] = false;
+                } else {
+                    s_bad_next_m += 1;
                 }
             }
 
@@ -382,41 +391,28 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
         int unknown_u = std::count(composite[1], composite[1]+SIEVE_LENGTH, true);
         int unknown_l = std::count(composite[0], composite[0]+SIEVE_LENGTH, true);
-        total_unknown += unknown_u + unknown_l;
-
-        if ( (m % 1000 == 0) || ((mi+1) == M_inc) ) {
-
-            printf("\t%ld %4d, %4d unknown | tested: %ld, avg: %.1f, pqueue: %ld\n",
-                m,
-                unknown_l, unknown_u,
-                total_unknown, total_unknown / (float) (mi+1),
-                next_m.size()
-            );
-            // TODO verbose flag
-            if (0) {
-                printf("\tfast_sieve %4d, %4d | large_sieve tested: %d, %d\n",
-                    unknown_small_l, unknown_small_u,
-                    tested, valid
-                );
-            }
-        }
+        s_total_unknown += unknown_u + unknown_l;
 
         // TODO break out to function, also count tests.
+        int prev_p_i = 0;
+        int next_p_i = 0;
         if (0) {
             mpz_t center, ptest;
             mpz_init(center); mpz_init(ptest);
             mpz_mul_ui(center, K, m);
 
-            int prev_p_i = 0;
-            int next_p_i = 0;
             for (int i = 1; (next_p_i == 0 || prev_p_i == 0) && i < SIEVE_LENGTH; i++) {
                 if (prev_p_i == 0 && composite[0][i]) {
+                    s_total_prp_tests += 1;
+
                     mpz_sub_ui(ptest, center, i);
                     if (mpz_probab_prime_p(ptest, 25)) {
                         prev_p_i = i;
                     }
                 }
                 if (next_p_i == 0 && composite[1][i]) {
+                    s_total_prp_tests += 1;
+
                     mpz_add_ui(ptest, center, i);
                     if (mpz_probab_prime_p(ptest, 25)) {
                         next_p_i = i;
@@ -425,15 +421,17 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             }
 
             if (next_p_i == 0) {
+                s_gap_out_of_sieve_next += 1;
                 // Using fallback to slower gmp routine
+                cout << "\tfalling back to mpz_nextprime" << endl;
                 mpz_add_ui(ptest, center, SIEVE_LENGTH-1);
                 mpz_nextprime(ptest, ptest);
                 mpz_sub(ptest, ptest, center);
                 next_p_i = mpz_get_ui(ptest);
-                cout << "\tfalling back to mpz_nextprime" << endl;
             }
 
             if (prev_p_i == 0) {
+                s_gap_out_of_sieve_prev += 1;
                 // REALLY UGLY FALLBACK
                 cout << "\tUGLY prevprime hack" << endl;
                 mpz_sub_ui(ptest, center, 2*SIEVE_LENGTH-1);
@@ -460,8 +458,32 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 printf("%d  %.4f  %ld * %d#/%d - %d to +%d\n",
                     gap, merit, m, P, D, prev_p_i, next_p_i);
             }
+            if (merit > s_best_merit_interval) {
+                s_best_merit_interval = merit;
+                s_best_merit_interval_m = m;
+            }
 
             mpz_clear(center); mpz_clear(ptest);
+        }
+
+/*
+    long  s_bad_next_m = 0;
+*/
+        if ( (mi == 1 || mi == 100 || mi == 1000) || (m % 5000 == 0) || ((mi+1) == M_inc) ) {
+            printf("\t%ld %4d, %4d unknown\t%4d, %4d gap\n",
+                m,
+                unknown_l, unknown_u,
+                prev_p_i, next_p_i);
+            printf("\t    unknowns  %ld (avg: %.2f)\n"
+                   "\t    prp tests %ld (avg: %.2f)\n",
+                s_total_unknown, s_total_unknown / (float) (mi+1),
+                s_total_prp_tests, s_total_prp_tests / (float) (mi+1));
+            printf("\t    fallback prev_gap %ld, next_gap %ld\n",
+                s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next);
+            printf("\t    best merit (interval): %.2f (at m=%ld)\n",
+                s_best_merit_interval, s_best_merit_interval_m);
+            printf("\t    large prime queue size: %ld (%ld used here) (bad next_m %ld)\n",
+                next_m.size(), s_large_primes_tested, s_bad_next_m);
         }
     }
 
