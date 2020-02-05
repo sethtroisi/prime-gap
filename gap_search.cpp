@@ -60,10 +60,10 @@ int main(int argc, char* argv[]) {
     long d     = atol(argv[4]);
     float min_merit = atof(argv[5]);
 
-    printf("GMP %d.%d.%d\n",
+    printf("Compiled with GMP %d.%d.%d\n\n",
         __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
     printf("SIEVE_LENGTH: 2x%d, SIEVE_RANGE: %d\n\n", SIEVE_LENGTH, SIEVE_RANGE);
-    printf("showing results with merit > %.1f\n\n", min_merit);
+    printf("Showing results with merit > %.1f\n\n", min_merit);
     printf("Testing m * %ld#/%ld, m = %ld + [0, %ld)\n\n", p, d, m, m_inc);
 
     // Some mod logic below demands this for now.
@@ -131,9 +131,29 @@ inline void sieve_small_primes(
 
 
 void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
+    // ----- Merit STuff
+    mpz_t K;
+    mpz_init(K);
+    mpz_primorial_ui(K, P);
+    assert( 0 == mpz_tdiv_q_ui(K, K, D) );
+    int K_bits   = mpz_sizeinbase(K, 2);
+    int K_digits = mpz_sizeinbase(K, 10);
+    float K_log;
+    float m_log = log(M);
+    {
+        long exp;
+        double mantis = mpz_get_d_2exp(&exp, K);
+        K_log = log(mantis) + log(2) * exp;
+    }
+    printf("K = %d bits, %d digits, log(K) = %.2f\n",
+        K_bits, K_digits, K_log);
+    printf("Min Gap ~= %d (for merit > %.1f)\n\n",
+        (int) (min_merit * (K_log + m_log)), min_merit);
+
+
     // ----- Generate primes under SIEVE_RANGE.
     const vector<int> primes = get_sieve_primes();
-    printf("PrimePi(%d) = %ld (2 ... %d)\n",
+    printf("\tPrimePi(%d) = %ld (2 ... %d)\n",
         SIEVE_RANGE, primes.size(), primes.back());
 
     const int P_pi = std::distance(primes.begin(),
@@ -151,24 +171,6 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         SIEVE_SMALL_PRIME_PI, SIEVE_SMALL);
     assert( primes[SIEVE_SMALL_PRIME_PI] > SIEVE_SMALL );
 
-    // ----- Setup helper
-    mpz_t K;
-    mpz_init(K);
-    mpz_primorial_ui(K, P);
-    assert( 0 == mpz_tdiv_q_ui(K, K, D) );
-    int K_bits   = mpz_sizeinbase(K, 2);
-    int K_digits = mpz_sizeinbase(K, 10);
-    float K_log;
-    float m_log = log(M);
-    {
-        long exp;
-        double mantis = mpz_get_d_2exp(&exp, K);
-        K_log = log(mantis) + log(2) * exp;
-    }
-    printf("K = %d bits, %d digits, log(K) = %.2f\n",
-        K_bits, K_digits, K_log);
-    printf("min gap (for merit > %.1f) ~= %d\n\n",
-        min_merit, (int) (min_merit * (K_log + m_log)));
 
     // ----- Allocate memory for a handful of utility functions.
 
@@ -308,7 +310,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
 
     // ----- Main sieve loop.
-    cout << "\tStarting\n\n" << endl;
+    cout << "\n\n\tStarting m=" << M << "\n\n" << endl;
     bool composite[2][SIEVE_LENGTH];
     if (next_m.top().first == 0)
         return;
