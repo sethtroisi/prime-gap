@@ -35,9 +35,9 @@ using std::vector;
 // TODO determine which is fastest
 // Dynamically set smaller if M_inc is tiny
 //#define SIEVE_RANGE   300'000'000
-#define SIEVE_RANGE   100'000'000
+//#define SIEVE_RANGE   100'000'000
 //#define SIEVE_RANGE    30'000'000
-//#define SIEVE_RANGE     1'000'000
+#define SIEVE_RANGE     1'000'000
 #define SIEVE_SMALL        40'000
 
 #define MAX_INT     ((1L << 32) - 1)
@@ -177,12 +177,12 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     for (size_t pi = 0; pi < primes.size(); pi++) {
         int prime = primes[pi];
 
-        // Genius idea is to only do this once.
+        // Big improvement over surround_prime is reusing this for each m.
         long mod = mpz_fdiv_ui(K, prime);
         assert( 0 <= mod && mod < prime );
         remainder[pi] = mod;
     }
-    cout << "\tCalculated all modulos\n\n" << endl;
+    cout << "\tCalculated all modulos\n" << endl;
 
     bool is_composite[2][SIEVE_LENGTH];
 
@@ -197,6 +197,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     }
 
     // ----- Main sieve loop.
+    cout << "\tStarting\n\n" << endl;
 
     long total_unknown = 0;
     for (int mi = 0; mi < M_inc; mi++) {
@@ -277,7 +278,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
         if ( (m % 1000 == 0) || ((mi+1) == M_inc) ) {
 
-            printf("%ld\t unknown: %4d, %4d  | (total: %ld, avg: %.1f) (pqueue: %ld)\n",
+            printf("\t%ld %4d, %4d unknown | tested: %ld, avg: %.1f, pqueue: %ld\n",
                 m,
                 unknown_l, unknown_u,
                 total_unknown, total_unknown / (float) (mi+1),
@@ -347,8 +348,9 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             float merit = gap / (K_log + m_log);
             // TODO parameter or merit.
             if (merit > min_merit)  {
-                printf("m: %ld, gap: %5d = %5d + %5d, %.3f\n",
-                    m, gap, prev_p_i, next_p_i, merit);
+                // TODO write to file.
+                printf("%d  %.4f  %ld * %d#/%d - %d to +%d\n",
+                    gap, merit, m, P, D, prev_p_i, next_p_i);
             }
 
             mpz_clear(center); mpz_clear(ptest);

@@ -12,4 +12,3 @@ $ g++ -Wall -O3 gap_search.cpp -lgmp -o gap_search
 $ time ./gap_search 200000000 1000000 887 210 20
 
 ```
-
