@@ -13,19 +13,14 @@ using std::cout;
 using std::endl;
 using std::vector;
 
-//using namespace std;
-
-// Move some of these to be configurable
-
-// Rare that one side is longer than this!
-// It's a good thing if this happens!
 
 // 13 = 8192, 14 = 16384
-#define SIEVE_BITS      13
+#define SIEVE_BITS      14
 #define SIEVE_LENGTH    (1 << SIEVE_BITS)
 
-#define SIEVE_RANGE   300'000'000
-//#define SIEVE_RANGE   100'000'000
+// TODO determine which is fastest
+//#define SIEVE_RANGE   300'000'000
+#define SIEVE_RANGE   100'000'000
 //#define SIEVE_RANGE    30'000'000
 //#define SIEVE_RANGE     1'000'000
 #define SIEVE_SMALL        40'000
@@ -51,9 +46,9 @@ int main(int argc, char* argv[]) {
 
     printf("GMP %d.%d.%d\n",
         __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
-
+    printf("SIEVE_LENGTH: 2x%d, SIEVE_RANGE: %d\n\n", SIEVE_LENGTH, SIEVE_RANGE);
+    printf("showing results with merit > %.1f\n\n", min_merit);
     printf("Testing m * %ld#/%ld, m = %ld + [0, %ld)\n\n", p, d, m, m_inc);
-    printf("\tshowing results with merit > %.1f\n", min_merit);
 
     // Some mod logic below demands this for now.
     assert( (m + m_inc) < MAX_INT );
@@ -154,8 +149,10 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         double mantis = mpz_get_d_2exp(&exp, K);
         K_log = log(mantis) + log(2) * exp;
     }
-    printf("K = %d bits, %d digits, log(K) = %.2f\n\n",
+    printf("K = %d bits, %d digits, log(K) = %.2f\n",
         K_bits, K_digits, K_log);
+    printf("min gap (for merit > %.1f) ~= %d\n\n",
+        min_merit, (int) (min_merit * (K_log + m_log)));
 
     // ----- Allocate memory for a handful of utility functions.
 
@@ -263,7 +260,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         int unknown_l = std::count(is_composite[0], is_composite[0]+SIEVE_LENGTH, true);
         total_unknown += unknown_u + unknown_l;
 
-        if ( (m % 100 == 0) || ((mi+1) == M_inc) ) {
+        if ( (m % 1000 == 0) || ((mi+1) == M_inc) ) {
 
             printf("%ld\t unknown: %4d, %4d  | (total: %ld, avg: %.1f) (pqueue: %ld)\n",
                 m,
@@ -313,7 +310,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
             if (prev_p_i == 0) {
                 // REALLY UGLY FALLBACK
-                mpz_add_ui(ptest, center, 2*SIEVE_LENGTH-1);
+                cout << "\tUGLY prevprime hack" << endl;
+                mpz_sub_ui(ptest, center, 2*SIEVE_LENGTH-1);
                 mpz_nextprime(ptest, ptest);
                 if (mpz_cmp(ptest, center) > 1) {
                     cout << m << "What!" << endl;
