@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <chrono>
 #include <cstdio>
 #include <iostream>
 #include <queue>
@@ -26,6 +27,8 @@
 using std::cout;
 using std::endl;
 using std::vector;
+using namespace std::chrono;
+
 
 
 // Aim for 99% of gaps smaller?
@@ -33,8 +36,8 @@ using std::vector;
 
 // TODO determine which is fastest
 // Dynamically set smaller if M_inc is tiny
-#define SIEVE_RANGE   300'000'000
-//#define SIEVE_RANGE   100'000'000
+//#define SIEVE_RANGE   300'000'000
+#define SIEVE_RANGE   100'000'000
 //#define SIEVE_RANGE    30'000'000
 //#define SIEVE_RANGE    10'000'000
 //#define SIEVE_RANGE     3'000'000
@@ -313,6 +316,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     bool composite[2][SIEVE_LENGTH];
 
     // Used for various stats
+    auto  s_start_t = high_resolution_clock::now();
     long  s_total_unknown = 0;
     long  s_total_prp_tests = 0;
     long  s_gap_out_of_sieve_prev = 0;
@@ -396,7 +400,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         // TODO break out to function, also count tests.
         int prev_p_i = 0;
         int next_p_i = 0;
-        if (0) {
+        if (1) {
             mpz_t center, ptest;
             mpz_init(center); mpz_init(ptest);
             mpz_mul_ui(center, K, m);
@@ -466,24 +470,30 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             mpz_clear(center); mpz_clear(ptest);
         }
 
-/*
-    long  s_bad_next_m = 0;
-*/
+
         if ( (mi == 1 || mi == 100 || mi == 1000) || (m % 5000 == 0) || ((mi+1) == M_inc) ) {
+            auto s_stop_t = high_resolution_clock::now();
+            double   secs = duration<double>(s_stop_t - s_start_t).count();
+
             printf("\t%ld %4d, %4d unknown\t%4d, %4d gap\n",
                 m,
                 unknown_l, unknown_u,
                 prev_p_i, next_p_i);
-            printf("\t    unknowns  %ld (avg: %.2f)\n"
-                   "\t    prp tests %ld (avg: %.2f)\n",
+            printf("\t    tests     %-10d (%.1f/sec)  %.0f elapsed\n",
+                mi+1, (mi+1) / secs, secs);
+            printf("\t    unknowns  %-10ld (avg: %.2f)\n"
+                   "\t    prp tests %-10ld (avg: %.2f)\n",
                 s_total_unknown, s_total_unknown / (float) (mi+1),
                 s_total_prp_tests, s_total_prp_tests / (float) (mi+1));
             printf("\t    fallback prev_gap %ld, next_gap %ld\n",
                 s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next);
             printf("\t    best merit (interval): %.2f (at m=%ld)\n",
                 s_best_merit_interval, s_best_merit_interval_m);
-            printf("\t    large prime queue size: %ld (%ld used here) (bad next_m %ld)\n",
+            printf("\t    large prime queue size: %ld (%d used here) (bad next_m %ld)\n",
                 next_m.size(), s_large_primes_tested, s_bad_next_m);
+
+            s_best_merit_interval = 0;
+            s_best_merit_interval_m = -1;
         }
     }
 
