@@ -33,6 +33,7 @@ using std::vector;
 #define SIEVE_LENGTH    (1 << SIEVE_BITS)
 
 // TODO determine which is fastest
+// Dynamically set smaller if M_inc is tiny
 //#define SIEVE_RANGE   300'000'000
 #define SIEVE_RANGE   100'000'000
 //#define SIEVE_RANGE    30'000'000
@@ -291,6 +292,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             }
         }
 
+        // TODO break out to function, also count tests.
         if (1) {
             mpz_t center, ptest;
             mpz_init(center); mpz_init(ptest);
@@ -336,6 +338,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                     // save distance
                     mpz_sub(center, center, ptest);
                     prev_p_i = mpz_get_ui(center);
+                    mpz_add(center, center, ptest);
                     mpz_nextprime(ptest, ptest);
                 }
             }
