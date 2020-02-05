@@ -100,7 +100,7 @@ vector<int> get_sieve_primes() {
 
 inline void sieve_small_primes(
         const long m,  const int SIEVE_SMALL_PRIME_PI,
-        const vector<int>& primes, int *remainder, bool is_composite[2][SIEVE_LENGTH]) {
+        const vector<int>& primes, int *remainder, bool composite[2][SIEVE_LENGTH]) {
 
     // For small primes that we don't do trick things with.
     for (int pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {
@@ -118,12 +118,12 @@ inline void sieve_small_primes(
 //        }
 
         for (int d = modulo; d < SIEVE_LENGTH; d += prime) {
-            is_composite[0][d] = false;
+            composite[0][d] = false;
         }
         int first_negative = modulo == 0 ? 0 : -(modulo - prime);
         assert( 0 <= first_negative && first_negative < prime );
         for (int d = first_negative; d < SIEVE_LENGTH; d += prime) {
-            is_composite[1][d] = false;
+            composite[1][d] = false;
         }
     }
 }
@@ -184,8 +184,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     }
     cout << "\tCalculated all modulos\n" << endl;
 
-    bool is_composite[2][SIEVE_LENGTH];
-
+    int* remainder = (int*) malloc(sizeof(int) * primes.size());
     // pair<next_m, prime> for large primes that only rarely divide a sieve
     typedef std::pair<int, int> mpair;
     std::priority_queue<mpair, vector<mpair>, std::greater<mpair>> next_m;
@@ -198,20 +197,21 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
     // ----- Main sieve loop.
     cout << "\tStarting\n\n" << endl;
+    bool composite[2][SIEVE_LENGTH];
 
     long total_unknown = 0;
     for (int mi = 0; mi < M_inc; mi++) {
         long m = M + mi;
 
         // Reset last sieve to True;
-        std::fill_n(*is_composite, 2*SIEVE_LENGTH, 1);
+        std::fill_n(*composite, 2*SIEVE_LENGTH, 1);
 
         sieve_small_primes(
             m, SIEVE_SMALL_PRIME_PI,
-            primes, remainder, is_composite);
+            primes, remainder, composite);
 
-        int unknown_small_u = std::count(is_composite[1], is_composite[1]+SIEVE_LENGTH, true);
-        int unknown_small_l = std::count(is_composite[0], is_composite[0]+SIEVE_LENGTH, true);
+        int unknown_small_u = std::count(composite[1], composite[1]+SIEVE_LENGTH, true);
+        int unknown_small_l = std::count(composite[0], composite[0]+SIEVE_LENGTH, true);
 
         int tested = 0, valid = 0;
         // /*
@@ -237,14 +237,14 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             if (modulo < SIEVE_LENGTH) {
                 valid += 1;
                 // Just past a multiple
-                is_composite[0][modulo] = false;
+                composite[0][modulo] = false;
             } else {
                 // Don't have to deal with 0 case anymore.
                 int first_negative = -(modulo - prime);
                 if (first_negative < SIEVE_LENGTH) {
                     valid += 1;
                     // Just before a multiple
-                    is_composite[1][first_negative] = false;
+                    composite[1][first_negative] = false;
                 }
             }
 
@@ -272,8 +272,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         }
         // */
 
-        int unknown_u = std::count(is_composite[1], is_composite[1]+SIEVE_LENGTH, true);
-        int unknown_l = std::count(is_composite[0], is_composite[0]+SIEVE_LENGTH, true);
+        int unknown_u = std::count(composite[1], composite[1]+SIEVE_LENGTH, true);
+        int unknown_l = std::count(composite[0], composite[0]+SIEVE_LENGTH, true);
         total_unknown += unknown_u + unknown_l;
 
         if ( (m % 1000 == 0) || ((mi+1) == M_inc) ) {
@@ -302,13 +302,13 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             int prev_p_i = 0;
             int next_p_i = 0;
             for (int i = 1; (next_p_i == 0 || prev_p_i == 0) && i < SIEVE_LENGTH; i++) {
-                if (prev_p_i == 0 && is_composite[0][i]) {
+                if (prev_p_i == 0 && composite[0][i]) {
                     mpz_sub_ui(ptest, center, i);
                     if (mpz_probab_prime_p(ptest, 25)) {
                         prev_p_i = i;
                     }
                 }
-                if (next_p_i == 0 && is_composite[1][i]) {
+                if (next_p_i == 0 && composite[1][i]) {
                     mpz_add_ui(ptest, center, i);
                     if (mpz_probab_prime_p(ptest, 25)) {
                         next_p_i = i;
@@ -395,12 +395,12 @@ real	5m36.869s
             long modulo = (remainder[pi] * m) % prime;
 
             if (modulo < SIEVE_LENGTH) {
-                is_composite[1][modulo] = false;
+                composite[1][modulo] = false;
             } else {
                 // Don't have to deal with 0 case anymore.
                 int first_negative = -(modulo - prime);
                 if (first_negative < SIEVE_LENGTH) {
-                    is_composite[0][first_negative] = false;
+                    composite[0][first_negative] = false;
                 }
             }
 
