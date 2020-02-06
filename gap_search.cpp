@@ -30,7 +30,7 @@ using std::vector;
 using namespace std::chrono;
 
 
-#define SKIP_PRP        1
+#define SKIP_PRP        0
 
 // Aim for 99% of gaps smaller?
 #define SIEVE_LENGTH    8'192
@@ -43,10 +43,10 @@ using namespace std::chrono;
 // Dynamically set smaller if M_inc is tiny
 //#define SIEVE_RANGE   100'000'000
 //#define SIEVE_RANGE    30'000'000
-#define SIEVE_RANGE    20'000'000
+//#define SIEVE_RANGE    20'000'000
 //#define SIEVE_RANGE    10'000'000
 //#define SIEVE_RANGE     3'000'000
-//#define SIEVE_RANGE     1'000'000
+#define SIEVE_RANGE     1'000'000
 
 #define SIEVE_SMALL        50'000
 //#define SIEVE_SMALL        40'000
@@ -185,9 +185,9 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     // ----- Allocate memory for a handful of utility functions.
 
     // Remainders of (p#/d) mod prime
-    int* remainder   = (int*) malloc(sizeof(int) * primes.size());
+    int *remainder   = (int*) malloc(sizeof(int) * primes.size());
     // Inverse of Remainder mod prime
-    int* rem_inverse = (int*) malloc(sizeof(int) * primes.size());
+    int *rem_inverse = (int*) malloc(sizeof(int) * primes.size());
     {
         cout << "\tCalculating modulos and inverses" << endl;
 
@@ -225,6 +225,10 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     // pair<next_m, prime> for large primes that only rarely divide a sieve
     typedef std::pair<int, int> mpair;
     std::priority_queue<mpair, vector<mpair>, std::greater<mpair>> next_m;
+
+    // Big improvement to help us figure out where next large prime is without loop
+    // SLOW to build but VERY fast to use.
+    vector<mpair> *next_m_lookup = new vector<mpair>[primes.size()];
     {
         // Find next m this will divide
         // solve (base_r * i) % prime < SIEVE_LENGTH
@@ -244,8 +248,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         //   do exactly 2*SL checks
         //   (check involves modulo
         const long SL = SIEVE_LENGTH;
-        const int brute_speedup = 3;
-        long search_threshold = brute_speedup * 4L * SL * SL;
+        const int brute_speedup = 4;
+        long search_threshold = brute_speedup * 4L * SL;
         // Potentially can be optimized if M_inc is small
         if (M_inc <= brute_speedup * 2 * SL) {
             search_threshold = SIEVE_RANGE;
@@ -257,6 +261,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         // Print "."s during, equal in length to 'Calculat...'
         unsigned int print_dots = 24;
 
+        long next_m_lookup_size = 0;
         long first_m_sum = 0;
         cout << "\t";
         for (size_t pi = SIEVE_SMALL_PRIME_PI; pi < primes.size(); pi++) {
@@ -299,7 +304,6 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             assert (0 < distance && distance < prime);
             long test = ((distance * inverse) % prime) + inverse;
             for (int k = 0; k < 2 * SL - 1; k++) {
-                // Need negative distance but C mod negative is weird.
                 test -= inverse;
                 if (test < 0) test += prime;
 
@@ -313,9 +317,76 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 first_m_sum += first_m;
                 next_m.push(std::make_pair(first_m, pi));
             }
+
+
+            // If prime divides index i in SIEVE for m
+            //      => will divide same index for m + base_r_inverse;
+            // Could lookup/store what m for each prime, each index
+            // But would run out of memory.
+
+            // Compromise is to store a little lookup that helps
+            // find mdelta with modulo <= abs(2*SIEVE_LENGTH)
+
+            {
+                vector<mpair> distance_by_shift;
+                if (2 * M_inc > prime) {
+                    distance_by_shift.reserve(2 * SL - 1);
+                } else {
+                    distance_by_shift.reserve(2 * SL * M_inc / prime);
+                }
+
+                long mod_shift = SL - 1;
+                long mdelta = ((mod_shift * inverse) % prime) + inverse;
+                for (int k = 0; k < 2 * SL - 1; k++) {
+                    mdelta -= inverse;
+                    if (mdelta < 0) mdelta += prime;
+
+                    if (mdelta < M_inc) {
+                        if (mdelta == 0) continue;
+
+                        // k = mod_shift
+                        distance_by_shift.push_back(std::make_pair(mdelta, mod_shift - k));
+                        assert( ((base_r * mdelta) % prime) == ((mod_shift - k + prime) % prime) );
+                    }
+                }
+                assert(!distance_by_shift.empty());
+
+                // Goal is to quickly find the smallest i with shift in some range [X, Y]
+                // X <= -2*SIEVE_LENGTH, Y <= 2*SIEVE_LENGTH, X-Y = 2*SIEVE_LENGTH
+                //  If -50 is in interval with delta1,
+                //  would never use -45 (closer to zero) with delta2 > delta1
+                // Basically highwater mark with decreasing shift
+
+                // Don't need a tight bound on the positive side if negative side is wide
+                //   e.g. once max_shift_neg + max_shift_pos < 2*SIEVE_LENGTH can stop
+
+                std::sort(distance_by_shift.begin(), distance_by_shift.end());
+                int max_shift_neg = -SIEVE_LENGTH;
+                int max_shift_pos = SIEVE_LENGTH;
+                for (const auto& shift_pair : distance_by_shift) {
+                    // Must be closer to zero than previous records
+                    const int shift = shift_pair.first;
+
+                    if (shift < 0 && shift > max_shift_neg) {
+                        max_shift_neg = shift;
+                        next_m_lookup[pi].push_back(shift_pair);
+                    }
+                    if (shift > 0 && shift < max_shift_pos) {
+                        max_shift_pos = shift;
+                        next_m_lookup[pi].push_back(shift_pair);
+                    }
+
+                    // TODO plus or minus 1?
+                    if (max_shift_pos - max_shift_neg < 2*SIEVE_LENGTH) {
+                        break;
+                    }
+                }
+                next_m_lookup_size += next_m_lookup[pi].size();
+            }
         }
         cout << endl;
         printf("\tSum of m1: %12ld\n", first_m_sum);
+        printf("\tlookp size: %11ld\n", next_m_lookup_size);
     }
 
 
@@ -382,16 +453,29 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                     // Just before a multiple
                     composite[1][first_negative] = false;
                 } else {
-                    cout << "Bad next m: " << m << " " << prime << endl;
+                    cout << "Bad next m: " << m << " " << prime << " mod: " << modulo << endl;
                     assert( false );
                 }
             }
 
-            // TODO this COULD be improved by caching next_m,
-            // See 'This method is slow' section.
-            // The trick is to record a series of record near m2
-            // that chance modulo by <= 2*SIEVE_LENGTH.
-            {
+            if (next_m_lookup[pi].size()) {
+                // Lookup in records till we find a shift still in range
+                for (const auto& shift : next_m_lookup[pi]) {
+                    int new_mod = modulo + shift.second;
+
+                    if (new_mod >= prime) new_mod -= prime;
+                    if (new_mod < SIEVE_LENGTH || new_mod + SIEVE_LENGTH > prime) {
+                        int new_shift = mi + shift.first;
+
+                        assert( (base_r * (M + new_shift)) % prime == (new_mod + prime) % prime );
+
+                        if (new_shift < M_inc) {
+                            next_m.push(std::make_pair(new_shift, pi));
+                        }
+                        break;
+                    }
+                }
+            } else {
                 int temp = (modulo + SIEVE_LENGTH - 1 + base_r);
                 if (temp >= prime) temp -= prime;
                 for (int m2 = mi + 1; m2 < M_inc; m2++) {
@@ -518,6 +602,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
     // ----- cleanup
 
+    delete[] next_m_lookup;
     free(remainder);
     free(rem_inverse);
     mpz_clear(K);
