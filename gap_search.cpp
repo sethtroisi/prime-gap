@@ -42,8 +42,8 @@ using namespace std::chrono;
 // TODO determine which is fastest
 // Dynamically set smaller if M_inc is tiny
 //#define SIEVE_RANGE   100'000'000
-//#define SIEVE_RANGE    30'000'000
-#define SIEVE_RANGE    20'000'000
+#define SIEVE_RANGE    30'000'000
+//#define SIEVE_RANGE    20'000'000
 //#define SIEVE_RANGE    10'000'000
 //#define SIEVE_RANGE     3'000'000
 //#define SIEVE_RANGE     1'000'000
@@ -141,20 +141,60 @@ inline void sieve_small_primes(
 
 
 int modulo_search(int p, int A, int L, int R) {
-    // find smallest i such that L <= A*i <= R mod p
+    // min i : L <= (A * i) % p <= L
+/*
     assert( 0 <= A && A < p );
     assert( 0 <= L && L < p );
     assert( 0 <= R && R < p );
+    assert(      L <= R     );
+*/
 
-    int temp = 0;
-    for (int i = 1; i < p; i++) {
-        temp += A;
-        if (temp > p) temp -= p;
-        if (L <= temp && temp <= R) {
-            return i;
+    if (L == 0) return 0;
+
+    if (2 * A > p) {
+        std::swap(L, R);
+        A = p - A;
+        L = p - L;
+        R = p - R;
+    }
+
+    // check if small i works
+    if (A <= R) {
+        int mult = (L + A-1) / A;
+        int test = mult * A;
+        if (test <= R) {
+            return mult;
         }
     }
-    assert( false );
+
+    // Reduce to simplier problem
+    int new_a = A + ((-p) % A);
+    assert( 0 <= new_a && new_a < A );
+    long k = modulo_search(A, new_a, L % A, R % A);
+
+    long tL = L + p * k;
+    long mult = (tL + A-1) / A;
+/*
+    long tR = R + p * k;
+    long test = mult * A;
+    assert(       test <= tR );
+    assert( tL <= test );
+*/
+    return mult;
+
+    if (0) {
+        int temp = 0;
+        for (int i = 1; i < p; i++) {
+            temp += A;
+            if (temp > p) temp -= p;
+            if (L <= temp && temp <= R) {
+                cout << p << " " << A << " " << L << " " << R << " | " << mult << " " << i << endl;
+                assert( mult == i );
+                return i;
+            }
+        }
+        assert( false );
+    }
 }
 
 
