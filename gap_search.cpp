@@ -42,11 +42,11 @@ using namespace std::chrono;
 // TODO determine which is fastest
 // Dynamically set smaller if M_inc is tiny
 //#define SIEVE_RANGE   100'000'000
-//#define SIEVE_RANGE    30'000'000
+#define SIEVE_RANGE    30'000'000
 //#define SIEVE_RANGE    20'000'000
 //#define SIEVE_RANGE    10'000'000
 //#define SIEVE_RANGE     3'000'000
-#define SIEVE_RANGE     1'000'000
+//#define SIEVE_RANGE     1'000'000
 
 #define SIEVE_SMALL        50'000
 //#define SIEVE_SMALL        40'000
@@ -404,6 +404,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     long  s_gap_out_of_sieve_next = 0;
     float s_best_merit_interval = 0;
     long  s_best_merit_interval_m = 0;
+    long  s_large_primes_tested = 0;
 
     for (int mi = 0; mi < M_inc; mi++) {
         long m = M + mi;
@@ -420,7 +421,6 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         // int unknown_small_l = std::count(composite[0], composite[0]+SIEVE_LENGTH, true);
         // int unknown_small_u = std::count(composite[1], composite[1]+SIEVE_LENGTH, true);
 
-        int s_large_primes_tested = 0;
         // /*
         while (next_m.size() && next_m.top().first == mi) {
             s_large_primes_tested += 1;
@@ -591,8 +591,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next);
             printf("\t    best merit this interval: %.2f (at m=%ld)\n",
                 s_best_merit_interval, s_best_merit_interval_m);
-            printf("\t    large prime queue size: %ld (%d used here)\n",
-                next_m.size(), s_large_primes_tested);
+            printf("\t    large prime queue size: %ld (avg/test: %ld)\n",
+                next_m.size(), s_large_primes_tested / (mi+1));
 
             s_best_merit_interval = 0;
             s_best_merit_interval_m = -1;
