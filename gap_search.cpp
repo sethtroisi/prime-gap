@@ -30,6 +30,7 @@ using std::vector;
 using namespace std::chrono;
 
 
+#define SKIP_PRP        0
 
 // Aim for 99% of gaps smaller?
 #define SIEVE_LENGTH    8'192
@@ -37,8 +38,8 @@ using namespace std::chrono;
 // TODO determine which is fastest
 // Dynamically set smaller if M_inc is tiny
 //#define SIEVE_RANGE   300'000'000
-#define SIEVE_RANGE   100'000'000
-//#define SIEVE_RANGE    30'000'000
+//#define SIEVE_RANGE   100'000'000
+#define SIEVE_RANGE    30'000'000
 //#define SIEVE_RANGE    10'000'000
 //#define SIEVE_RANGE     3'000'000
 //#define SIEVE_RANGE     1'000'000
@@ -377,13 +378,16 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 }
             }
 
+            // TODO this COULD be improved by caching next_m,
+            // See 'This method is slow' section.
+            // The trick is to record a series of record near m2
+            // that chance modulo by <= 2*SIEVE_LENGTH.
             {
-                int temp = (modulo + SIEVE_LENGTH + base_r);
+                int temp = (modulo + SIEVE_LENGTH - 1 + base_r);
                 if (temp >= prime) temp -= prime;
-
                 for (int m2 = mi + 1; m2 < M_inc; m2++) {
                     if (temp >= prime) temp -= prime;
-                    if (temp < (2*SIEVE_LENGTH)) {
+                    if (temp < (2*SIEVE_LENGTH-1)) {
                         next_m.push(std::make_pair(m2, pi));
                         break;
                     }
@@ -400,7 +404,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         // TODO break out to function, also count tests.
         int prev_p_i = 0;
         int next_p_i = 0;
-        if (1) {
+        if (SKIP_PRP) {
             mpz_t center, ptest;
             mpz_init(center); mpz_init(ptest);
             mpz_mul_ui(center, K, m);
