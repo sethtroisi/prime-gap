@@ -40,16 +40,15 @@ using namespace std::chrono;
 
 // TODO determine which is fastest
 // Dynamically set smaller if M_inc is tiny
-//#define SIEVE_RANGE   300'000'000
+#define SIEVE_RANGE   300'000'000
 //#define SIEVE_RANGE   100'000'000
-#define SIEVE_RANGE    30'000'000
+//#define SIEVE_RANGE    30'000'000
 //#define SIEVE_RANGE    20'000'000
 //#define SIEVE_RANGE    10'000'000
 //#define SIEVE_RANGE     3'000'000
 //#define SIEVE_RANGE     1'000'000
 
-#define SIEVE_SMALL        50'000
-//#define SIEVE_SMALL        40'000
+#define SIEVE_SMALL       80'000
 
 #define MAX_INT     ((1L << 32) - 1)
 
@@ -78,6 +77,8 @@ int main(int argc, char* argv[]) {
     // Some mod logic below demands this for now.
     assert( (m + m_inc) < MAX_INT );
     assert( SIEVE_RANGE < MAX_INT );
+
+    assert( m_inc <    50'000'000 ); // vector of this length just large.
 
     prime_gap_search(m, m_inc, p, d,   min_merit);
 }
@@ -139,8 +140,28 @@ inline void sieve_small_primes(
     }
 }
 
-
+int modulo_search_euclid(int p, int A, int L, int R);
 int modulo_search(int p, int A, int L, int R) {
+/*
+    assert( R - L == 2 * SIEVE_LENGTH - 2 );
+
+    // if expect a hit within 16 just brute force.
+    if (16 * SIEVE_LENGTH < p) {
+        int temp = 0;
+        for (int i = 1; i <= 20; i++) {
+            temp += A;
+            if (temp >= p) temp -= p;
+            if (L <= A && A <= R) {
+                return i;
+            }
+        }
+    }
+*/
+    return modulo_search_euclid(p, A, L, R);
+}
+
+
+int modulo_search_euclid(int p, int A, int L, int R) {
     // min i : L <= (A * i) % p <= L
 /*
     assert( 0 <= A && A < p );
@@ -170,7 +191,7 @@ int modulo_search(int p, int A, int L, int R) {
     // Reduce to simplier problem
     int new_a = A + ((-p) % A);
     assert( 0 <= new_a && new_a < A );
-    long k = modulo_search(A, new_a, L % A, R % A);
+    long k = modulo_search_euclid(A, new_a, L % A, R % A);
 
     long tL = L + p * k;
     long mult = (tL + A-1) / A;
@@ -254,6 +275,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             100 * prob_prime, K_digits);
         printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
             100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
+        printf("\t~%.1f PRP tests per m\n",
+            2 / prob_prime_after_sieve);
         cout << endl;
     }
 
@@ -578,7 +601,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
 
-            printf("\t%ld %4d <- unknowns -> %4d\t%4d <- gap -> %4d\n",
+            printf("\t%ld %4d <- unknowns -> %-4d\t%4d <- gap -> %-4d\n",
                 m,
                 unknown_l, unknown_u,
                 prev_p_i, next_p_i);
