@@ -41,8 +41,9 @@ using namespace std::chrono;
 
 // TODO determine which is fastest
 // Dynamically set smaller if M_inc is tiny
+#define SIEVE_RANGE   300'000'000
 //#define SIEVE_RANGE   100'000'000
-#define SIEVE_RANGE    30'000'000
+//#define SIEVE_RANGE    30'000'000
 //#define SIEVE_RANGE    20'000'000
 //#define SIEVE_RANGE    10'000'000
 //#define SIEVE_RANGE     3'000'000
@@ -240,6 +241,24 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     assert( primes[SIEVE_SMALL_PRIME_PI] > SIEVE_SMALL );
 
 
+    // ----- Sieve stats
+    {
+        double unknowns_after_sieve = 1;
+        for (int prime : primes) unknowns_after_sieve *= (prime - 1.0) / prime;
+
+        double prob_prime = 1 / K_log;
+        double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
+
+        printf("\t%.3f%% of sieve is unknown (%dM)\n",
+            100 * unknowns_after_sieve, SIEVE_RANGE/1'000'000);
+        printf("\t%.3f%% of %d digit numbers are prime\n",
+            100 * prob_prime, K_digits);
+        printf("\t%.3f%% of tests should be prime (%.2fx speedup)\n",
+            100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
+        cout << endl;
+    }
+
+
     // ----- Allocate memory for a handful of utility functions.
 
     // Remainders of (p#/d) mod prime
@@ -290,29 +309,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         // =>
         // solve (SIEVE_LENGTH + base_r * i) % prime < 2 * SIEVE_LENGTH
         //
-        // find inverse_r such that inverse_r * base_r = 1 mod prime
-        //   distance * inverse * base_r = distance mod prime
-        // find distance in [-SIEVE_LENGTH, +SIEVE_LENGTH]
-        //   that minimizes (distance * inverse) % prime
-
-        // is it faster to just look search one-by-one for next range?
-        //   expected_searches = prime/(2*SL)
-        //   (searches are addition and 2 * conditional)
-        // otherwise
-        //   do exactly 2*SL checks
-        //   (check involves modulo
         const long SL = SIEVE_LENGTH;
-        const int brute_speedup = 12;
-        long search_threshold = brute_speedup * 4L * SL * SL;
-        // Potentially can be optimized if M_inc is small
-        if (M_inc <= brute_speedup * 2 * SL) {
-            search_threshold = SIEVE_RANGE;
-        }
         printf("\tCalculating prime steps\n");
-        if (search_threshold < SIEVE_RANGE) {
-            printf("\tThreshold: %12ld\n", search_threshold);
-        }
-        // TODO print an explination and maybe eta.
 
         // Print "."s during, equal in length to 'Calculat...'
         unsigned int print_dots = 24;
@@ -339,10 +337,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             // let shift = (base_r * M + SL - 1) % prime
             //   0 <= shift + base_r * mi < 2 * SL mod prime
             // add (prime - shift) to all three
-
-            //  (prime - shift) <= (prime - shift) + shift + base_r * mi < (prime - shift) + 2 * SL mod prime
-            //  (prime - shift) <= prime - shift + shift + base_r * mi < (prime - shift) + 2 * SL mod prime
-            //  (prime - shift) <= prime + base_r * mi < (prime - shift) + 2 * SL mod prime
+            //
             //  (prime - shift) <= base_r * mi < (prime - shift) + 2 * SL mod prime
 
             long shift = modulo + (SL - 1);
@@ -361,8 +356,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 first_m_sum += mi;
             }
 
-            // just look for next M if prime is small.
             if (0) {
+                // Brute force doublecheck
                 int temp = (modulo + SL - 1) - base_r;
                 int mi2 = - 1;
                 for (mi2 = 0; mi2 < M_inc; mi2++) {
@@ -386,7 +381,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
 
     // ----- Main sieve loop.
-    cout << "\n\n\tStarting m=" << M << "\n\n" << endl;
+    cout << "\n\tStarting m=" << M << "\n" << endl;
     bool composite[2][SIEVE_LENGTH];
 
     // Used for various stats
@@ -578,7 +573,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         }
 
 
-        if ( (mi == 1 || mi == 100 || mi == 1000) || (m % 5000 == 0) || ((mi+1) == M_inc) ) {
+        if ( (mi == 1 || mi == 10 || mi == 100 || mi == 1000) ||
+             (m % 5000 == 0) || ((mi+1) == M_inc) ) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
 
@@ -586,6 +582,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 m,
                 unknown_l, unknown_u,
                 prev_p_i, next_p_i);
+            if (mi <= 10) continue;
+            // Stats!
             printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
                 mi+1, (mi+1) / secs, secs);
             printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
