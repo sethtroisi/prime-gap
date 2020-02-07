@@ -30,7 +30,7 @@ using std::vector;
 using namespace std::chrono;
 
 
-#define SKIP_PRP        0
+#define SKIP_PRP        1
 
 // Aim for 99% of gaps smaller?
 #define SIEVE_LENGTH    8'192
@@ -132,8 +132,8 @@ inline void sieve_small_primes(
         for (int d = modulo; d < SIEVE_LENGTH; d += prime) {
             composite[0][d] = false;
         }
-        int first_negative = modulo == 0 ? 0 : -(modulo - prime);
-        assert( 0 <= first_negative && first_negative < prime );
+        int first_negative = modulo == 0 ? 0 : prime - modulo;
+//        assert( 0 <= first_negative && first_negative < prime );
         for (int d = first_negative; d < SIEVE_LENGTH; d += prime) {
             composite[1][d] = false;
         }
@@ -142,11 +142,10 @@ inline void sieve_small_primes(
 
 int modulo_search_euclid(int p, int A, int L, int R);
 int modulo_search(int p, int A, int L, int R) {
-/*
     assert( R - L == 2 * SIEVE_LENGTH - 2 );
 
     // if expect a hit within 16 just brute force.
-    if (16 * SIEVE_LENGTH < p) {
+    if (8 * SIEVE_LENGTH < p) {
         int temp = 0;
         for (int i = 1; i <= 20; i++) {
             temp += A;
@@ -156,7 +155,7 @@ int modulo_search(int p, int A, int L, int R) {
             }
         }
     }
-*/
+
     return modulo_search_euclid(p, A, L, R);
 }
 
@@ -460,14 +459,13 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 composite[0][modulo] = false;
             } else {
                 // Don't have to deal with 0 case anymore.
-                int first_negative = -(modulo - prime);
-                if (first_negative < SIEVE_LENGTH) {
-                    // Just before a multiple
-                    composite[1][first_negative] = false;
-                } else {
-                    cout << "Bad next m: " << m << " " << prime << " mod: " << modulo << endl;
-                    assert( false );
-                }
+                int first_negative = prime - modulo;
+
+                assert( first_negative < SIEVE_LENGTH); // Bad next m!
+                //cout << "Bad next m: " << m << " " << prime << " mod: " << modulo << endl;
+
+                // Just before a multiple
+                composite[1][first_negative] = false;
             }
 
             // Find next mi that primes divides part of SIEVE
@@ -561,6 +559,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
             if (prev_p_i == 0) {
                 s_gap_out_of_sieve_prev += 1;
+                /*
                 // REALLY UGLY FALLBACK
                 cout << "\tUGLY prevprime hack" << endl;
                 mpz_sub_ui(ptest, center, 2*SIEVE_LENGTH-1);
@@ -577,6 +576,29 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                     mpz_add(center, center, ptest);
                     mpz_nextprime(ptest, ptest);
                 }
+                // */
+
+                // /*
+                // Medium ugly fallback.
+                for (int i = SIEVE_LENGTH+1; ; i++) {
+                    bool composite = false;
+                    for (int pi = 0; pi < 2000; pi++) {
+                        const int prime = primes[pi];
+                        long modulo = (remainder[pi] * m) % prime;
+                        if (i % prime == modulo) {
+                            composite = true;
+                            break;
+                        }
+                    }
+                    if (!composite) {
+                        mpz_sub_ui(ptest, center, i);
+                        if (mpz_probab_prime_p(ptest, 25)) {
+                            prev_p_i = i;
+                            break;
+                        }
+                    }
+                }
+                // */
             }
 
             int gap = next_p_i + prev_p_i;
