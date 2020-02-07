@@ -35,15 +35,14 @@ using namespace std::chrono;
 // Aim for 99% of gaps smaller?
 #define SIEVE_LENGTH    8'192
 
-
 // For SIEVE_LENGTH=8192
-//  SIEVE_RANGE = 20M, SIEVE_SMALL=50K seems to work best
+//  SIEVE_RANGE = 300M, SIEVE_SMALL=50K seems to work best
 
 // TODO determine which is fastest
 // Dynamically set smaller if M_inc is tiny
-#define SIEVE_RANGE   300'000'000
+//#define SIEVE_RANGE   300'000'000
 //#define SIEVE_RANGE   100'000'000
-//#define SIEVE_RANGE    30'000'000
+#define SIEVE_RANGE    30'000'000
 //#define SIEVE_RANGE    20'000'000
 //#define SIEVE_RANGE    10'000'000
 //#define SIEVE_RANGE     3'000'000
@@ -249,11 +248,11 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         double prob_prime = 1 / K_log;
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
-        printf("\t%.3f%% of sieve is unknown (%dM)\n",
+        printf("\t%.3f%% of sieve should be unknown (%dM)\n",
             100 * unknowns_after_sieve, SIEVE_RANGE/1'000'000);
         printf("\t%.3f%% of %d digit numbers are prime\n",
             100 * prob_prime, K_digits);
-        printf("\t%.3f%% of tests should be prime (%.2fx speedup)\n",
+        printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
             100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
         cout << endl;
     }
@@ -299,9 +298,9 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     }
 
     // Big improvement over surround_prime is avoiding checking each large prime.
-    // pair<next_m, prime> for large primes that only rarely divide a sieve
-    typedef std::pair<int, int> mpair;
-    std::priority_queue<mpair, vector<mpair>, std::greater<mpair>> next_m;
+    // vector<m, vector<pi>> for large primes that only rarely divide a sieve
+    int s_large_primes_rem = 0;
+    std::vector<int> *large_prime_queue = new vector<int>[M_inc+1];
     {
         // Find next m this will divide
         // solve (base_r * i) % prime < SIEVE_LENGTH
@@ -326,7 +325,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             const long base_r = remainder[pi];
             const long modulo = (base_r * M) % prime;
             if ( (modulo < SL) || (modulo + SL) > prime) {
-                next_m.push(std::make_pair(0, pi));
+                large_prime_queue[0].push_back(pi);
+                s_large_primes_rem += 1;
                 assert( (modulo + SL) % prime < 2*SL );
                 continue;
             }
@@ -352,7 +352,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
             assert( (base_r * (M + mi) + (SL - 1)) % prime < (2*SL-1) );
             if (mi < M_inc) {
-                next_m.push(std::make_pair(mi, pi));
+                large_prime_queue[mi].push_back(pi);
+                s_large_primes_rem += 1;
                 first_m_sum += mi;
             }
 
@@ -411,14 +412,12 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         // int unknown_small_l = std::count(composite[0], composite[0]+SIEVE_LENGTH, true);
         // int unknown_small_u = std::count(composite[1], composite[1]+SIEVE_LENGTH, true);
 
-        // /*
-        while (next_m.size() && next_m.top().first == mi) {
+        for (int pi : large_prime_queue[mi]) {
             s_large_primes_tested += 1;
+            s_large_primes_rem -= 1;
 
             // Large prime should divide some number in SIEVE for this m
-            // When done push to next mi.
-            int pi = next_m.top().second;
-            next_m.pop();
+            // When done find next mi prime divides.
             const int prime   = primes[pi];
             int base_r  = remainder[pi];
             long modulo = (base_r * m) % prime;
@@ -474,7 +473,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
                 assert( (base_r * (M + next_mi) + (SL - 1)) % prime < (2*SL-1) );
                 if (next_mi < M_inc) {
-                    next_m.push(std::make_pair(next_mi, pi));
+                    large_prime_queue[next_mi].push_back(pi);
+                    s_large_primes_rem += 1;
                 }
 
                 if (0) {
@@ -491,7 +491,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 }
             }
         }
-        // */
+        large_prime_queue[mi].clear();
 
         int unknown_l = std::count(composite[0], composite[0]+SIEVE_LENGTH, true);
         int unknown_u = std::count(composite[1], composite[1]+SIEVE_LENGTH, true);
@@ -597,8 +597,8 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next);
             printf("\t    best merit this interval: %.2f (at m=%ld)\n",
                 s_best_merit_interval, s_best_merit_interval_m);
-            printf("\t    large prime queue size: %ld (avg/test: %ld)\n",
-                next_m.size(), s_large_primes_tested / (mi+1));
+            printf("\t    large prime remaining: %d (avg/test: %ld)\n",
+                s_large_primes_rem, s_large_primes_tested / (mi+1));
 
             s_best_merit_interval = 0;
             s_best_merit_interval_m = -1;
@@ -608,6 +608,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
     // ----- cleanup
 
+    delete[] large_prime_queue;
     free(remainder);
     free(rem_inverse);
     mpz_clear(K);
