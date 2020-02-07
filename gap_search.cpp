@@ -31,21 +31,26 @@ using namespace std::chrono;
 #define SKIP_PRP        1
 
 // Aim for ~98% of gaps short
-//#define SIEVE_LENGTH    8'192
-#define SIEVE_LENGTH    7'040
+//#define SIEVE_LENGTH    24'676
+//#define SIEVE_LENGTH    16'384
+#define SIEVE_LENGTH    8'192
+//#define SIEVE_LENGTH    7'040
+//#define SIEVE_LENGTH    1'040
 
 // For SIEVE_LENGTH=8192
-//  SIEVE_RANGE = 300M, SIEVE_SMALL=50K seems to work best
+//  SIEVE_RANGE = 1000M, SIEVE_SMALL=60K seems to work best
 
 // TODO determine which is fastest
-// Dynamically set smaller if M_inc is tiny
-#define SIEVE_RANGE   300'000'000
-//#define SIEVE_RANGE   100'000'000
-//#define SIEVE_RANGE    30'000'000
-//#define SIEVE_RANGE    20'000'000
-//#define SIEVE_RANGE    10'000'000
-//#define SIEVE_RANGE     3'000'000
-//#define SIEVE_RANGE     1'000'000
+// TODO dynamically set (or accept from CLI)
+//#define SIEVE_RANGE   2'000'000'000
+#define SIEVE_RANGE   1'000'000'000
+//#define SIEVE_RANGE     300'000'000
+//#define SIEVE_RANGE     100'000'000
+//#define SIEVE_RANGE      30'000'000
+//#define SIEVE_RANGE      20'000'000
+//#define SIEVE_RANGE      10'000'000
+//#define SIEVE_RANGE       3'000'000
+//#define SIEVE_RANGE       1'000'000
 
 #define SIEVE_SMALL       80'000
 
@@ -79,6 +84,17 @@ int main(int argc, char* argv[]) {
 
     assert( m_inc <    50'000'000 ); // vector of this length just large.
 
+    {
+        mpz_t ptest;
+        mpz_init_set_ui(ptest, p);
+        bool valid = 0 != mpz_probab_prime_p(ptest, 25);
+        mpz_clear(ptest);
+        if (!valid) {
+            cout << "p# not prime (p=" << p << ")" << endl;
+            return 1;
+        }
+    }
+
     prime_gap_search(m, m_inc, p, d,   min_merit);
 }
 
@@ -97,7 +113,7 @@ vector<int> get_sieve_primes() {
             int p2 = p * p;
             if (p2 > SIEVE_RANGE) break;
 
-            for (int m = p2; m <= SIEVE_RANGE; m += p)
+            for (int m = p2; m <= SIEVE_RANGE; m += 2*p)
                 is_prime[m] = false;
         }
     }
@@ -144,7 +160,7 @@ int modulo_search(int p, int A, int L, int R) {
     assert( R - L == 2 * SIEVE_LENGTH - 2 );
 
     // if expect a hit within 16 just brute force.
-    if (8 * SIEVE_LENGTH < p) {
+    if (16 * SIEVE_LENGTH > p) {
         int temp = 0;
         for (int i = 1; i <= 20; i++) {
             temp += A;
@@ -170,7 +186,7 @@ int modulo_search_euclid(int p, int A, int L, int R) {
 
     if (L == 0) return 0;
 
-    if (2 * A > p) {
+    if (2L * A > p) {
         std::swap(L, R);
         A = p - A;
         L = p - L;
@@ -179,20 +195,21 @@ int modulo_search_euclid(int p, int A, int L, int R) {
 
     // check if small i works
     if (A <= R) {
-        int mult = (L + A-1) / A;
-        int test = mult * A;
+        long mult = ((long) L + A-1L) / A;
+        long test = mult * A;
         if (test <= R) {
+            // assert( mult >= 0 );
             return mult;
         }
     }
 
     // Reduce to simplier problem
-    int new_a = A + ((-p) % A);
+    long new_a = ((long) A) + ((-p) % A);
     assert( 0 <= new_a && new_a < A );
     long k = modulo_search_euclid(A, new_a, L % A, R % A);
 
     long tL = L + p * k;
-    long mult = (tL + A-1) / A;
+    long mult = (tL + A-1L) / A;
 /*
     long tR = R + p * k;
     long test = mult * A;
@@ -202,7 +219,7 @@ int modulo_search_euclid(int p, int A, int L, int R) {
     return mult;
 
     if (0) {
-        int temp = 0;
+        long temp = 0;
         for (int i = 1; i < p; i++) {
             temp += A;
             if (temp > p) temp -= p;
@@ -239,16 +256,9 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
 
     // ----- Generate primes under SIEVE_RANGE.
-    const vector<int> primes = get_sieve_primes();
+    vector<int> const primes = get_sieve_primes();
     printf("\tPrimePi(%d) = %ld (2 ... %d)\n",
         SIEVE_RANGE, primes.size(), primes.back());
-
-    const int P_pi = std::distance(primes.begin(),
-        std::find(primes.begin(), primes.end(), P));
-    if (primes[P_pi] != P) {
-        cout << "p# not prime (p=" << P << ")" << endl;
-        exit(1);
-    }
 
     // SIEVE_SMALL deals with all primes can mark of two items in SIEVE_LENGTH.
     assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
@@ -262,7 +272,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     // ----- Sieve stats
     {
         double unknowns_after_sieve = 1;
-        for (int prime : primes) unknowns_after_sieve *= (prime - 1.0) / prime;
+        for (long prime : primes) unknowns_after_sieve *= (prime - 1.0) / prime;
 
         double prob_prime = 1 / K_log;
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
@@ -283,7 +293,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
         printf("\t~%.1f PRP tests per m\n",
             2 / prob_prime_after_sieve);
-        printf("\tSIEVE_LENGTH=%d is sufficient >%.2f%%, experimentally: ~%.2f%%\n",
+        printf("\tSIEVE_LENGTH=%d is sufficient %.2f%%, experimentally: ~%.2f%%\n",
             SIEVE_LENGTH,
             100 * prob_gap_shorter_hypothetical, 100 * prob_gap_shorter_experimental);
         cout << endl;
@@ -304,7 +314,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         mpz_init(m_prime);
 
         for (size_t pi = 0; pi < primes.size(); pi++) {
-            const int prime = primes[pi];
+            const long prime = primes[pi];
 
             // Big improvement over surround_prime is reusing this for each m.
             long mod = mpz_fdiv_ui(K, prime);
@@ -332,7 +342,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     // Big improvement over surround_prime is avoiding checking each large prime.
     // vector<m, vector<pi>> for large primes that only rarely divide a sieve
     int s_large_primes_rem = 0;
-    std::vector<int> *large_prime_queue = new vector<int>[M_inc+1];
+    std::vector<int> *large_prime_queue = new vector<int>[M_inc];
     {
         // Find next m this will divide
         // solve (base_r * i) % prime < SIEVE_LENGTH
@@ -353,7 +363,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 cout << "." << std::flush;
             }
 
-            const int prime = primes[pi];
+            const long prime = primes[pi];
             const long base_r = remainder[pi];
             const long modulo = (base_r * M) % prime;
             if ( (modulo < SL) || (modulo + SL) > prime) {
@@ -378,7 +388,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             long high = low + (2*SL-2);
             assert( 0 <= low && high < prime );
 
-            int mi = modulo_search(prime, base_r, low, high);
+            long mi = modulo_search(prime, base_r, low, high);
             assert( low <= (mi * base_r) % prime );
             assert(        (mi * base_r) % prime <= high );
 
@@ -391,7 +401,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
             if (0) {
                 // Brute force doublecheck
-                int temp = (modulo + SL - 1) - base_r;
+                long temp = (modulo + SL - 1) - base_r;
                 int mi2 = - 1;
                 for (mi2 = 0; mi2 < M_inc; mi2++) {
                     temp += base_r;
@@ -450,13 +460,13 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
 
             // Large prime should divide some number in SIEVE for this m
             // When done find next mi prime divides.
-            const int prime   = primes[pi];
-            int base_r  = remainder[pi];
+            const long prime   = primes[pi];
+            long base_r  = remainder[pi];
             long modulo = (base_r * m) % prime;
 
             if (0) {
                 mpz_t test; mpz_init(test); mpz_mul_ui(test, K, m);
-                int mod = mpz_fdiv_ui(test, prime);
+                long mod = mpz_fdiv_ui(test, prime);
                 if (mod != modulo) {
                     cout << m << " " << prime << "\t" << mod << " vs " << modulo << endl;
                     assert( false );
@@ -469,7 +479,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 composite[0][modulo] = false;
             } else {
                 // Don't have to deal with 0 case anymore.
-                int first_negative = prime - modulo;
+                long first_negative = prime - modulo;
 
                 assert( first_negative < SIEVE_LENGTH); // Bad next m!
                 //cout << "Bad next m: " << m << " " << prime << " mod: " << modulo << endl;
@@ -509,7 +519,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 }
 
                 if (0) {
-                    int temp = (modulo + base_r) + SL - 1;
+                    long temp = (modulo + base_r) + SL - 1;
                     if (temp >= prime) temp -= prime;
                     for (int m3 = m + 1; m3 < M_inc; m3++) {
                         if (temp >= prime) temp -= prime;
@@ -523,6 +533,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             }
         }
         large_prime_queue[mi].clear();
+        large_prime_queue[mi].shrink_to_fit();
 
         int unknown_l = std::count(composite[0], composite[0]+SIEVE_LENGTH, true);
         int unknown_u = std::count(composite[1], composite[1]+SIEVE_LENGTH, true);
@@ -593,7 +604,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
                 for (int i = SIEVE_LENGTH+1; ; i++) {
                     bool composite = false;
                     for (int pi = 0; pi < 2000; pi++) {
-                        const int prime = primes[pi];
+                        const long prime = primes[pi];
                         long modulo = (remainder[pi] * m) % prime;
                         if (i % prime == modulo) {
                             composite = true;
@@ -660,6 +671,10 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         }
     }
 
+    // Should be cleaning up after self.
+    for(int mi = 0; mi < M_inc; mi++)  {
+        assert( large_prime_queue[mi].size() == 0 );
+    }
 
     // ----- cleanup
 
