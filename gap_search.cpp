@@ -18,8 +18,6 @@
 #include <chrono>
 #include <cstdio>
 #include <iostream>
-#include <queue>
-#include <utility>
 #include <vector>
 
 #include <gmp.h>
@@ -32,8 +30,9 @@ using namespace std::chrono;
 
 #define SKIP_PRP        1
 
-// Aim for 99% of gaps smaller?
-#define SIEVE_LENGTH    8'192
+// Aim for ~98% of gaps short
+//#define SIEVE_LENGTH    8'192
+#define SIEVE_LENGTH    7'040
 
 // For SIEVE_LENGTH=8192
 //  SIEVE_RANGE = 300M, SIEVE_SMALL=50K seems to work best
@@ -268,6 +267,14 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         double prob_prime = 1 / K_log;
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
+        double prob_gap_shorter_hypothetical =
+            1 - pow(1 - prob_prime, SIEVE_LENGTH);
+
+        // In pratice we get slightly better sieving than expected.
+        // TODO refine this constant
+        double prob_gap_shorter_experimental =
+            1 - pow(1 - prob_prime, 0.37 * SIEVE_LENGTH);
+
         printf("\t%.3f%% of sieve should be unknown (%dM)\n",
             100 * unknowns_after_sieve, SIEVE_RANGE/1'000'000);
         printf("\t%.3f%% of %d digit numbers are prime\n",
@@ -276,6 +283,9 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
         printf("\t~%.1f PRP tests per m\n",
             2 / prob_prime_after_sieve);
+        printf("\tSIEVE_LENGTH=%d is sufficient >%.2f%%, experimentally: ~%.2f%%\n",
+            SIEVE_LENGTH,
+            100 * prob_gap_shorter_hypothetical, 100 * prob_gap_shorter_experimental);
         cout << endl;
     }
 
@@ -287,7 +297,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     // Inverse of Remainder mod prime
     int *rem_inverse = (int*) malloc(sizeof(int) * primes.size());
     {
-        cout << "\tCalculating modulos and inverses" << endl;
+        cout << "\tCalculating remainder and inverse for each prime" << endl;
 
         mpz_t temp, m_prime;
         mpz_init(temp);
@@ -331,10 +341,10 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
         // solve (SIEVE_LENGTH + base_r * i) % prime < 2 * SIEVE_LENGTH
         //
         const long SL = SIEVE_LENGTH;
-        printf("\tCalculating prime steps\n");
+        printf("\tCalculating first m each large prime divides\n");
 
         // Print "."s during, equal in length to 'Calculat...'
-        unsigned int print_dots = 24;
+        unsigned int print_dots = 44 + 1;
 
         long first_m_sum = 0;
         cout << "\t";
@@ -399,7 +409,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             }
         }
         cout << endl;
-        printf("\tSum of m1: %12ld\n", first_m_sum);
+        printf("\tSum of m1: %ld\n", first_m_sum);
     }
 
 
