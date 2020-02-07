@@ -240,19 +240,21 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
     mpz_init(K);
     mpz_primorial_ui(K, P);
     assert( 0 == mpz_tdiv_q_ui(K, K, D) );
-    int K_bits   = mpz_sizeinbase(K, 2);
+
     int K_digits = mpz_sizeinbase(K, 10);
     float K_log;
-    float m_log = log(M);
     {
         long exp;
         double mantis = mpz_get_d_2exp(&exp, K);
         K_log = log(mantis) + log(2) * exp;
+        float m_log = log(M);
+        int K_bits   = mpz_sizeinbase(K, 2);
+
+        printf("K = %d bits, %d digits, log(K) = %.2f\n",
+            K_bits, K_digits, K_log);
+        printf("Min Gap ~= %d (for merit > %.1f)\n\n",
+            (int) (min_merit * (K_log + m_log)), min_merit);
     }
-    printf("K = %d bits, %d digits, log(K) = %.2f\n",
-        K_bits, K_digits, K_log);
-    printf("Min Gap ~= %d (for merit > %.1f)\n\n",
-        (int) (min_merit * (K_log + m_log)), min_merit);
 
 
     // ----- Generate primes under SIEVE_RANGE.
@@ -623,7 +625,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             }
 
             int gap = next_p_i + prev_p_i;
-            float merit = gap / (K_log + m_log);
+            float merit = gap / (K_log + log(m));
             // TODO parameter or merit.
             if (merit > min_merit)  {
                 // TODO write to file.
