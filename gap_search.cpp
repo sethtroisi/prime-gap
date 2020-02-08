@@ -71,6 +71,45 @@ struct Config {
 Config argparse(int argc, char* argv[]);
 void prime_gap_search(const struct Config config);
 
+int main(int argc, char* argv[]) {
+    Config config = argparse(argc, argv);
+    if (config.valid == 0) {
+        show_usage(argv[0]);
+        return 1;
+    }
+
+    printf("Compiled with GMP %d.%d.%d\n\n",
+        __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
+    printf("SIEVE_LENGTH: 2x%d, SIEVE_RANGE: %d\n\n", SIEVE_LENGTH, SIEVE_RANGE);
+
+    printf("Testing m * %d#/%d, m = %d + [0, %d)\n",
+        config.p, config.d, config.mstart, config.minc);
+
+    // Some mod logic below demands this for now.
+    assert( SIEVE_RANGE < MAX_INT );
+
+    prime_gap_search(config);
+}
+
+void show_usage(char* name) {
+    cout << "Usage: " << name << endl;
+    cout << "[REQUIRED]" << endl;
+    cout << "  -p <p>" << endl;
+    cout << "  -d <p>" << endl;
+    cout << "  --mstart <start>" << endl;
+    cout << "  --minc   <int>" << endl;
+    cout << "[OPTIONALLY]" << endl;
+    cout << "  --minmerit <minmerit>" << endl;
+    cout << "    only display prime gaps with merit >= minmerit " << endl;
+    cout << "  --sieve-only" << endl;
+    cout << "    only sieve ranges, don't run PRP. useful for benchmarking" << endl;
+    cout << "  -h, --help" << endl;
+    cout << "    print this help message" << endl;
+    cout << endl;
+    cout << "calculates prime_gaps for (mstart + mi) * p#/d, mi <= minc " << endl;
+}
+
+
 Config argparse(int argc, char* argv[]) {
     // TODO add print_interval option.
     // TODO accept SIEVE_LENGTH, SIEVE_RANGE
@@ -120,8 +159,10 @@ Config argparse(int argc, char* argv[]) {
                 config.valid = 0;
                 break;
             case '?':
+                config.valid = 0;
                 break;
             default:
+                config.valid = 0;
                 printf("getopt returned \"%d\"\n", c);
         }
     }
@@ -169,32 +210,6 @@ Config argparse(int argc, char* argv[]) {
     }
 
     return config;
-}
-
-
-int main(int argc, char* argv[]) {
-    Config config = argparse(argc, argv);
-    if (config.valid == 0) {
-        show_usage(argv[0]);
-        return 1;
-    }
-
-    printf("Compiled with GMP %d.%d.%d\n\n",
-        __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
-    printf("SIEVE_LENGTH: 2x%d, SIEVE_RANGE: %d\n\n", SIEVE_LENGTH, SIEVE_RANGE);
-
-    printf("Testing m * %d#/%d, m = %d + [0, %d)\n",
-        config.p, config.d, config.mstart, config.minc);
-
-    // Some mod logic below demands this for now.
-    assert( SIEVE_RANGE < MAX_INT );
-
-    prime_gap_search(config);
-}
-
-void show_usage(char* name) {
-    cout << "Usage: " << name << " m  m_inc  p  d  min_merit" << endl
-         << "\tcalculates prime_gaps for m * p#/d, with merit > min_merit" << endl;
 }
 
 
