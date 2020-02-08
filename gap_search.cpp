@@ -221,7 +221,8 @@ vector<int> get_sieve_primes() {
 
 inline void sieve_small_primes(
         const long m,  const int SIEVE_SMALL_PRIME_PI,
-        const vector<int>& primes, int *remainder, bool composite[2][SIEVE_LENGTH]) {
+        const vector<int>& primes, int *remainder,
+        vector<char> *composite) {
 
     // For small primes that we don't do trick things with.
     for (int pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {
@@ -527,7 +528,14 @@ void prime_gap_search(const struct Config config) {
 
     // ----- Main sieve loop.
     cout << "\n\tStarting m=" << M << "\n" << endl;
-    bool composite[2][SIEVE_LENGTH];
+
+    // vector<bool> uses bit indexing which is ~5% slower.
+    vector<char> composite[2] = {
+        vector<char>(SIEVE_LENGTH, 0),
+        vector<char>(SIEVE_LENGTH, 0)
+    };
+    assert( composite[0].size() == SIEVE_LENGTH );
+    assert( composite[1].size() == SIEVE_LENGTH );
 
     // Used for various stats
     auto  s_start_t = high_resolution_clock::now();
@@ -545,16 +553,18 @@ void prime_gap_search(const struct Config config) {
         long m = M + mi;
         // TODO if gcd(m, d) != 1 continue?
 
-        // Reset last sieve to True;
-        std::fill_n(*composite, 2*SIEVE_LENGTH, 1);
+        // Reset last sieve to True
+        // TODO consider not reseting first p terms (other than 1st).
+        std::fill_n(composite[0].begin(), SIEVE_LENGTH, 1);
+        std::fill_n(composite[1].begin(), SIEVE_LENGTH, 1);
 
         sieve_small_primes(
             m, SIEVE_SMALL_PRIME_PI,
             primes, remainder, composite);
 
         // Maybe useful for some stats later.
-        // int unknown_small_l = std::count(composite[0], composite[0]+SIEVE_LENGTH, true);
-        // int unknown_small_u = std::count(composite[1], composite[1]+SIEVE_LENGTH, true);
+        // int unknown_small_l = std::count(composite[0].begin(), composite[0].end(), true);
+        // int unknown_small_u = std::count(composite[1].begin(), composite[1].end(), true);
 
         for (int pi : large_prime_queue[mi]) {
             s_large_primes_tested += 1;
@@ -637,8 +647,8 @@ void prime_gap_search(const struct Config config) {
         large_prime_queue[mi].clear();
         large_prime_queue[mi].shrink_to_fit();
 
-        int unknown_l = std::count(composite[0], composite[0]+SIEVE_LENGTH, true);
-        int unknown_u = std::count(composite[1], composite[1]+SIEVE_LENGTH, true);
+        int unknown_l = std::count(composite[0].begin(), composite[0].end(), true);
+        int unknown_u = std::count(composite[1].begin(), composite[1].end(), true);
         s_total_unknown += unknown_l + unknown_u;
         s_t_unk_low += unknown_l;
         s_t_unk_hgh += unknown_u;
