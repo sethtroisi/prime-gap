@@ -17,6 +17,7 @@
 #include <cmath>
 #include <chrono>
 #include <cstdio>
+#include <getopt.h>
 #include <iostream>
 #include <vector>
 
@@ -57,45 +58,133 @@ using namespace std::chrono;
 #define MAX_INT     ((1L << 32) - 1)
 
 
-void prime_gap_search(long M, long M_inc, int P, int D, float min_merit);
 void show_usage(char* name);
+struct Config {
+    int valid;
+    int mstart;
+    int minc;
+    int p;
+    int d;
+    float minmerit;
+};
+Config argparse(int argc, char* argv[]);
+void prime_gap_search(const struct Config config);
+
+Config argparse(int argc, char* argv[]) {
+    // TODO add NOPRP option.
+    // TODO except SIEVE_LENGTH, SIEVE_RANGE
+
+    static struct option long_options[] = {
+        {"help",     no_argument,       0,  'h' },
+        {"mstart",   required_argument, 0,   1  },
+        {"minc",     required_argument, 0,   2  },
+        {"p",        required_argument, 0,  'p' },
+        {"d",        required_argument, 0,  'd' },
+        {"minmerit", required_argument, 0,   3  },
+        {0,         0,                 0,  0 }
+    };
+
+    Config config;
+    config.valid = 1;
+
+    int option_index = 0;
+    char c;
+    while ((c = getopt_long(argc, argv, "hp:d:", long_options, &option_index)) >= 0) {
+        switch (c) {
+            case 'h':
+                show_usage(argv[0]);
+                exit(0);
+            case 'p':
+                config.p = atoi(optarg);
+                break;
+            case 'd':
+                config.d = atoi(optarg);
+                break;
+            case 1:
+                config.mstart = atoi(optarg);
+                break;
+            case 2:
+                config.minc = atoi(optarg);
+                break;
+            case 3:
+                config.minmerit = atof(optarg);
+                break;
+
+            case 0:
+                printf("option %s arg %s\n", long_options[option_index].name, optarg);
+                config.valid = 0;
+                break;
+            case '?':
+                break;
+            default:
+                printf("getopt returned \"%d\"\n", c);
+        }
+    }
+
+    if (optind < argc) {
+        config.valid = 0;
+        printf("unknown positional arguements: ");
+        while (optind < argc) {
+            printf("%s ", argv[optind++]);
+        }
+        printf("\n");
+    }
+
+    // ----- Validation
+
+    if (((long) config.mstart + config.minc) >= MAX_INT) {
+        config.valid = 0;
+        cout << "mstart + minc must be < 1e9" << endl;
+    }
+
+    if (config.minc >= 50'000'000) {
+        config.valid = 0;
+        cout << "minc > 50M will use to much memory" << endl;
+    }
+
+    {
+        mpz_t ptest;
+        mpz_init_set_ui(ptest, config.p);
+        bool valid = 0 != mpz_probab_prime_p(ptest, 25);
+        mpz_clear(ptest);
+        if (!valid) {
+            config.valid = 0;
+            cout << "p# not prime (p=" << config.p << ")" << endl;
+        }
+    }
+
+    if (config.d <= 0) {
+        config.valid = 0;
+        cout << "d must be greater than 0: " << config.d << endl;
+    }
+
+    if (config.minc <= 0) {
+        config.valid = 0;
+        cout << "minc must be greater than 0: " << config.minc << endl;
+    }
+
+    return config;
+}
 
 
 int main(int argc, char* argv[]) {
-    if (argc != 6) {
+    Config config = argparse(argc, argv);
+    if (config.valid == 0) {
         show_usage(argv[0]);
         return 1;
     }
 
-    long m     = atol(argv[1]);
-    long m_inc = atol(argv[2]);
-    long p     = atol(argv[3]);
-    long d     = atol(argv[4]);
-    float min_merit = atof(argv[5]);
-
     printf("Compiled with GMP %d.%d.%d\n\n",
         __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
     printf("SIEVE_LENGTH: 2x%d, SIEVE_RANGE: %d\n\n", SIEVE_LENGTH, SIEVE_RANGE);
-    printf("Testing m * %ld#/%ld, m = %ld + [0, %ld)\n", p, d, m, m_inc);
+
+    printf("Testing m * %d#/%d, m = %d + [0, %d)\n",
+        config.p, config.d, config.mstart, config.minc);
 
     // Some mod logic below demands this for now.
-    assert( (m + m_inc) < MAX_INT );
     assert( SIEVE_RANGE < MAX_INT );
 
-    assert( m_inc <    50'000'000 ); // vector of this length just large.
-
-    {
-        mpz_t ptest;
-        mpz_init_set_ui(ptest, p);
-        bool valid = 0 != mpz_probab_prime_p(ptest, 25);
-        mpz_clear(ptest);
-        if (!valid) {
-            cout << "p# not prime (p=" << p << ")" << endl;
-            return 1;
-        }
-    }
-
-    prime_gap_search(m, m_inc, p, d,   min_merit);
+    prime_gap_search(config);
 }
 
 void show_usage(char* name) {
@@ -234,7 +323,13 @@ int modulo_search_euclid(int p, int A, int L, int R) {
 }
 
 
-void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
+void prime_gap_search(const struct Config config) {
+    const long M = config.mstart;
+    const long M_inc = config.minc;
+    const long P = config.p;
+    const long D = config.d;
+    const float min_merit = config.minmerit;
+
     // ----- Merit STuff
     mpz_t K;
     mpz_init(K);
@@ -629,7 +724,7 @@ void prime_gap_search(long M, long M_inc, int P, int D, float min_merit) {
             // TODO parameter or merit.
             if (merit > min_merit)  {
                 // TODO write to file.
-                printf("%d  %.4f  %ld * %d#/%d - %d to +%d\n",
+                printf("%d  %.4f  %ld * %ld#/%ld -%d to +%d\n",
                     gap, merit, m, P, D, prev_p_i, next_p_i);
             }
             if (merit > s_best_merit_interval) {
