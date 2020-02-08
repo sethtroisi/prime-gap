@@ -29,8 +29,6 @@ using std::vector;
 using namespace std::chrono;
 
 
-#define SKIP_PRP        1
-
 // Aim for ~98% of gaps short
 //#define SIEVE_LENGTH    24'676
 //#define SIEVE_LENGTH    16'384
@@ -60,28 +58,32 @@ using namespace std::chrono;
 
 void show_usage(char* name);
 struct Config {
-    int valid;
+    int valid = 0;
     int mstart;
     int minc;
     int p;
     int d;
-    float minmerit;
+    float minmerit = 10;
+
+    bool run_prp = true;
 };
+
 Config argparse(int argc, char* argv[]);
 void prime_gap_search(const struct Config config);
 
 Config argparse(int argc, char* argv[]) {
-    // TODO add NOPRP option.
-    // TODO except SIEVE_LENGTH, SIEVE_RANGE
+    // TODO add print_interval option.
+    // TODO accept SIEVE_LENGTH, SIEVE_RANGE
 
     static struct option long_options[] = {
-        {"help",     no_argument,       0,  'h' },
-        {"mstart",   required_argument, 0,   1  },
-        {"minc",     required_argument, 0,   2  },
-        {"p",        required_argument, 0,  'p' },
-        {"d",        required_argument, 0,  'd' },
-        {"minmerit", required_argument, 0,   3  },
-        {0,         0,                 0,  0 }
+        {"help",        no_argument,       0,  'h' },
+        {"sieve-only",  no_argument,       0,  's' },
+        {"mstart",      required_argument, 0,   1  },
+        {"minc",        required_argument, 0,   2  },
+        {"p",           required_argument, 0,  'p' },
+        {"d",           required_argument, 0,  'd' },
+        {"minmerit",    required_argument, 0,   3  },
+        {0,             0,                 0,  0 }
     };
 
     Config config;
@@ -99,6 +101,9 @@ Config argparse(int argc, char* argv[]) {
                 break;
             case 'd':
                 config.d = atoi(optarg);
+                break;
+            case 's':
+                config.run_prp = false;
                 break;
             case 1:
                 config.mstart = atoi(optarg);
@@ -641,7 +646,7 @@ void prime_gap_search(const struct Config config) {
         // TODO break out to function, also count tests.
         int prev_p_i = 0;
         int next_p_i = 0;
-        if (SKIP_PRP) {
+        if (config.run_prp) {
             mpz_t center, ptest;
             mpz_init(center); mpz_init(ptest);
             mpz_mul_ui(center, K, m);
