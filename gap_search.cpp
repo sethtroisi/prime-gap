@@ -240,12 +240,12 @@ inline void sieve_small_primes(
 //        }
 
         for (int d = modulo; d < SIEVE_LENGTH; d += prime) {
-            composite[0][d] = false;
+            composite[0][d] = true;
         }
         int first_negative = modulo == 0 ? 0 : prime - modulo;
 //        assert( 0 <= first_negative && first_negative < prime );
         for (int d = first_negative; d < SIEVE_LENGTH; d += prime) {
-            composite[1][d] = false;
+            composite[1][d] = true;
         }
     }
 }
@@ -553,18 +553,18 @@ void prime_gap_search(const struct Config config) {
         long m = M + mi;
         // TODO if gcd(m, d) != 1 continue?
 
-        // Reset last sieve to True
+        // Reset sieve array to unknown.
         // TODO consider not reseting first p terms (other than 1st).
-        std::fill_n(composite[0].begin(), SIEVE_LENGTH, 1);
-        std::fill_n(composite[1].begin(), SIEVE_LENGTH, 1);
+        std::fill_n(composite[0].begin(), SIEVE_LENGTH, 0);
+        std::fill_n(composite[1].begin(), SIEVE_LENGTH, 0);
 
         sieve_small_primes(
             m, SIEVE_SMALL_PRIME_PI,
             primes, remainder, composite);
 
         // Maybe useful for some stats later.
-        // int unknown_small_l = std::count(composite[0].begin(), composite[0].end(), true);
-        // int unknown_small_u = std::count(composite[1].begin(), composite[1].end(), true);
+        // int unknown_small_l = std::count(composite[0].begin(), composite[0].end(), false);
+        // int unknown_small_u = std::count(composite[1].begin(), composite[1].end(), false);
 
         for (int pi : large_prime_queue[mi]) {
             s_large_primes_tested += 1;
@@ -588,7 +588,7 @@ void prime_gap_search(const struct Config config) {
 
             if (modulo < SIEVE_LENGTH) {
                 // Just past a multiple
-                composite[0][modulo] = false;
+                composite[0][modulo] = true;
             } else {
                 // Don't have to deal with 0 case anymore.
                 long first_negative = prime - modulo;
@@ -597,7 +597,7 @@ void prime_gap_search(const struct Config config) {
                 //cout << "Bad next m: " << m << " " << prime << " mod: " << modulo << endl;
 
                 // Just before a multiple
-                composite[1][first_negative] = false;
+                composite[1][first_negative] = true;
             }
 
             // Find next mi that primes divides part of SIEVE
@@ -647,8 +647,8 @@ void prime_gap_search(const struct Config config) {
         large_prime_queue[mi].clear();
         large_prime_queue[mi].shrink_to_fit();
 
-        int unknown_l = std::count(composite[0].begin(), composite[0].end(), true);
-        int unknown_u = std::count(composite[1].begin(), composite[1].end(), true);
+        int unknown_l = std::count(composite[0].begin(), composite[0].end(), false);
+        int unknown_u = std::count(composite[1].begin(), composite[1].end(), false);
         s_total_unknown += unknown_l + unknown_u;
         s_t_unk_low += unknown_l;
         s_t_unk_hgh += unknown_u;
@@ -662,7 +662,7 @@ void prime_gap_search(const struct Config config) {
             mpz_mul_ui(center, K, m);
 
             for (int i = 1; (next_p_i == 0 || prev_p_i == 0) && i < SIEVE_LENGTH; i++) {
-                if (prev_p_i == 0 && composite[0][i]) {
+                if (prev_p_i == 0 && !composite[0][i]) {
                     s_total_prp_tests += 1;
 
                     mpz_sub_ui(ptest, center, i);
@@ -670,7 +670,7 @@ void prime_gap_search(const struct Config config) {
                         prev_p_i = i;
                     }
                 }
-                if (next_p_i == 0 && composite[1][i]) {
+                if (next_p_i == 0 && !composite[1][i]) {
                     s_total_prp_tests += 1;
 
                     mpz_add_ui(ptest, center, i);
