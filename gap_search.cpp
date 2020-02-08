@@ -30,26 +30,8 @@ using namespace std::chrono;
 
 
 // Aim for ~98% of gaps short
-//#define SIEVE_LENGTH    24'676
-//#define SIEVE_LENGTH    16'384
-#define SIEVE_LENGTH    8'192
-//#define SIEVE_LENGTH    7'040
-//#define SIEVE_LENGTH    1'040
-
 // For SIEVE_LENGTH=8192
 //  SIEVE_RANGE = 1000M, SIEVE_SMALL=60K seems to work best
-
-// TODO determine which is fastest
-// TODO dynamically set (or accept from CLI)
-//#define SIEVE_RANGE   2'000'000'000
-#define SIEVE_RANGE   1'000'000'000
-//#define SIEVE_RANGE     300'000'000
-//#define SIEVE_RANGE     100'000'000
-//#define SIEVE_RANGE      30'000'000
-//#define SIEVE_RANGE      20'000'000
-//#define SIEVE_RANGE      10'000'000
-//#define SIEVE_RANGE       3'000'000
-//#define SIEVE_RANGE       1'000'000
 
 #define SIEVE_SMALL       80'000
 
@@ -64,6 +46,9 @@ struct Config {
     int p;
     int d;
     float minmerit = 10;
+
+    unsigned int sieve_length = 8192;
+    unsigned long sieve_range  = 20'000'000;
 
     bool run_prp = true;
 };
@@ -80,13 +65,11 @@ int main(int argc, char* argv[]) {
 
     printf("Compiled with GMP %d.%d.%d\n\n",
         __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
-    printf("SIEVE_LENGTH: 2x%d, SIEVE_RANGE: %d\n\n", SIEVE_LENGTH, SIEVE_RANGE);
+    printf("sieve_length: 2x%d, sieve_range: %ld\n\n",
+        config.sieve_length, config.sieve_range);
 
     printf("Testing m * %d#/%d, m = %d + [0, %d)\n",
         config.p, config.d, config.mstart, config.minc);
-
-    // Some mod logic below demands this for now.
-    assert( SIEVE_RANGE < MAX_INT );
 
     prime_gap_search(config);
 }
@@ -101,6 +84,11 @@ void show_usage(char* name) {
     cout << "[OPTIONALLY]" << endl;
     cout << "  --minmerit <minmerit>" << endl;
     cout << "    only display prime gaps with merit >= minmerit " << endl;
+    cout << "  --sieve-length" << endl;
+    cout << "    how large the positive/negative sieve arrays should be. (default: 8192)" << endl;
+    cout << "  --sieve-range" << endl;
+    cout << "    Use primes <= sieve-range for checking composite. (default: 20M)" << endl;
+    cout  << endl;
     cout << "  --sieve-only" << endl;
     cout << "    only sieve ranges, don't run PRP. useful for benchmarking" << endl;
     cout << "  -h, --help" << endl;
@@ -112,17 +100,19 @@ void show_usage(char* name) {
 
 Config argparse(int argc, char* argv[]) {
     // TODO add print_interval option.
-    // TODO accept SIEVE_LENGTH, SIEVE_RANGE
 
     static struct option long_options[] = {
-        {"help",        no_argument,       0,  'h' },
-        {"sieve-only",  no_argument,       0,  's' },
-        {"mstart",      required_argument, 0,   1  },
-        {"minc",        required_argument, 0,   2  },
-        {"p",           required_argument, 0,  'p' },
-        {"d",           required_argument, 0,  'd' },
-        {"minmerit",    required_argument, 0,   3  },
-        {0,             0,                 0,  0 }
+        {"mstart",       required_argument, 0,   1  },
+        {"minc",         required_argument, 0,   2  },
+        {"p",            required_argument, 0,  'p' },
+        {"d",            required_argument, 0,  'd' },
+
+        {"help",         no_argument,       0,  'h' },
+        {"minmerit",     required_argument, 0,   3  },
+        {"sieve-only",   no_argument,       0,   4 },
+        {"sieve-length", required_argument, 0,   5 },
+        {"sieve-range",  required_argument, 0,   6 },
+        {0,              0,                 0,  0 }
     };
 
     Config config;
@@ -141,9 +131,6 @@ Config argparse(int argc, char* argv[]) {
             case 'd':
                 config.d = atoi(optarg);
                 break;
-            case 's':
-                config.run_prp = false;
-                break;
             case 1:
                 config.mstart = atoi(optarg);
                 break;
@@ -152,6 +139,15 @@ Config argparse(int argc, char* argv[]) {
                 break;
             case 3:
                 config.minmerit = atof(optarg);
+                break;
+            case 4:
+                config.run_prp = false;
+                break;
+            case 5:
+                config.sieve_length = atoi(optarg);
+                break;
+            case 6:
+                config.sieve_range = atol(optarg);
                 break;
 
             case 0:
@@ -188,6 +184,11 @@ Config argparse(int argc, char* argv[]) {
         cout << "minc > 50M will use to much memory" << endl;
     }
 
+    if (config.sieve_range > 2'000'000'000) {
+        config.valid = 0;
+        cout << "sieve_range > 2B not supported" << endl;
+    }
+
     {
         mpz_t ptest;
         mpz_init_set_ui(ptest, config.p);
@@ -213,20 +214,20 @@ Config argparse(int argc, char* argv[]) {
 }
 
 
-vector<int> get_sieve_primes() {
+vector<int> get_sieve_primes(unsigned int n) {
     vector<int> primes = {2};
-    vector<bool> is_prime(SIEVE_RANGE+1, true);
-    for (int p = 3; p <= SIEVE_RANGE; p += 2) {
+    vector<bool> is_prime(n+1, true);
+    for (unsigned int p = 3; p <= n; p += 2) {
         if (is_prime[p]) {
             primes.push_back(p);
-            int p2 = p * p;
-            if (p2 > SIEVE_RANGE) break;
+            unsigned int p2 = p * p;
+            if (p2 > n) break;
 
-            for (int m = p2; m <= SIEVE_RANGE; m += 2*p)
+            for (unsigned int m = p2; m <= n; m += 2*p)
                 is_prime[m] = false;
         }
     }
-    for (int p = primes.back() + 2; p <= SIEVE_RANGE; p += 2) {
+    for (unsigned int p = primes.back() + 2; p <= n; p += 2) {
         if (is_prime[p])
             primes.push_back(p);
     }
@@ -235,9 +236,12 @@ vector<int> get_sieve_primes() {
 
 
 inline void sieve_small_primes(
-        const long m,  const int SIEVE_SMALL_PRIME_PI,
+        const long m,
+        const int SIEVE_SMALL_PRIME_PI,
         const vector<int>& primes, int *remainder,
         vector<char> *composite) {
+
+    const int SL = composite[0].size();
 
     // For small primes that we don't do trick things with.
     for (int pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {
@@ -254,12 +258,13 @@ inline void sieve_small_primes(
 //            mpz_clear(test);
 //        }
 
-        for (int d = modulo; d < SIEVE_LENGTH; d += prime) {
+        for (int d = modulo; d < SL; d += prime) {
             composite[0][d] = true;
         }
+        // todo just remove this.
         int first_negative = modulo == 0 ? 0 : prime - modulo;
 //        assert( 0 <= first_negative && first_negative < prime );
-        for (int d = first_negative; d < SIEVE_LENGTH; d += prime) {
+        for (int d = first_negative; d < SL; d += prime) {
             composite[1][d] = true;
         }
     }
@@ -267,10 +272,11 @@ inline void sieve_small_primes(
 
 int modulo_search_euclid(int p, int A, int L, int R);
 int modulo_search(int p, int A, int L, int R) {
-    assert( R - L == 2 * SIEVE_LENGTH - 2 );
+    // assert( R - L == 2 * sieve_length - 2 );
 
+    /*
     // if expect a hit within 16 just brute force.
-    if (16 * SIEVE_LENGTH > p) {
+    if (16 * sieve_length > p) {
         int temp = 0;
         for (int i = 1; i <= 20; i++) {
             temp += A;
@@ -280,6 +286,7 @@ int modulo_search(int p, int A, int L, int R) {
             }
         }
     }
+    */
 
     return modulo_search_euclid(p, A, L, R);
 }
@@ -351,6 +358,9 @@ void prime_gap_search(const struct Config config) {
     const long D = config.d;
     const float min_merit = config.minmerit;
 
+    const unsigned int SIEVE_LENGTH = config.sieve_length;
+    const unsigned int SL = SIEVE_LENGTH;
+
     // ----- Merit STuff
     mpz_t K;
     mpz_init(K);
@@ -374,11 +384,11 @@ void prime_gap_search(const struct Config config) {
 
 
     // ----- Generate primes under SIEVE_RANGE.
-    vector<int> const primes = get_sieve_primes();
-    printf("\tPrimePi(%d) = %ld (2 ... %d)\n",
-        SIEVE_RANGE, primes.size(), primes.back());
+    vector<int> const primes = get_sieve_primes(config.sieve_range);
+    printf("\tPrimePi(%ld) = %ld (2 ... %d)\n",
+        config.sieve_range, primes.size(), primes.back());
 
-    // SIEVE_SMALL deals with all primes can mark of two items in SIEVE_LENGTH.
+    // SIEVE_SMALL deals with all primes can mark off two items in SIEVE_LENGTH.
     assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
     const long SIEVE_SMALL_PRIME_PI = std::distance(primes.begin(),
         std::lower_bound(primes.begin(), primes.end(), SIEVE_SMALL));
@@ -403,8 +413,8 @@ void prime_gap_search(const struct Config config) {
         double prob_gap_shorter_experimental =
             1 - pow(1 - prob_prime, 0.37 * SIEVE_LENGTH);
 
-        printf("\t%.3f%% of sieve should be unknown (%dM)\n",
-            100 * unknowns_after_sieve, SIEVE_RANGE/1'000'000);
+        printf("\t%.3f%% of sieve should be unknown (%ldM)\n",
+            100 * unknowns_after_sieve, config.sieve_range/1'000'000);
         printf("\t%.3f%% of %d digit numbers are prime\n",
             100 * prob_prime, K_digits);
         printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
@@ -468,7 +478,6 @@ void prime_gap_search(const struct Config config) {
         // =>
         // solve (SIEVE_LENGTH + base_r * i) % prime < 2 * SIEVE_LENGTH
         //
-        const long SL = SIEVE_LENGTH;
         printf("\tCalculating first m each large prime divides\n");
 
         // Print "."s during, equal in length to 'Calculat...'
@@ -617,7 +626,6 @@ void prime_gap_search(const struct Config config) {
 
             // Find next mi that primes divides part of SIEVE
             {
-                const long SL = SIEVE_LENGTH;
                 // next modulo otherwise m = 0;
                 long shift = (modulo + base_r) + (SL - 1);
                 if (shift >= prime) shift -= prime;
@@ -676,7 +684,7 @@ void prime_gap_search(const struct Config config) {
             mpz_init(center); mpz_init(ptest);
             mpz_mul_ui(center, K, m);
 
-            for (int i = 1; (next_p_i == 0 || prev_p_i == 0) && i < SIEVE_LENGTH; i++) {
+            for (unsigned int i = 1; (next_p_i == 0 || prev_p_i == 0) && i < SL; i++) {
                 if (prev_p_i == 0 && !composite[0][i]) {
                     s_total_prp_tests += 1;
 
@@ -699,7 +707,7 @@ void prime_gap_search(const struct Config config) {
                 s_gap_out_of_sieve_next += 1;
                 // Using fallback to slower gmp routine
                 //cout << "\tfalling back to mpz_nextprime" << endl;
-                mpz_add_ui(ptest, center, SIEVE_LENGTH-1);
+                mpz_add_ui(ptest, center, SIEVE_LENGTH - 1);
                 mpz_nextprime(ptest, ptest);
                 mpz_sub(ptest, ptest, center);
                 next_p_i = mpz_get_ui(ptest);
