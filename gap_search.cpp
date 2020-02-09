@@ -38,41 +38,50 @@ using namespace std::chrono;
 #define MAX_INT     ((1L << 32) - 1)
 
 
-void show_usage(char* name);
 struct Config {
-    int valid = 0;
-    int mstart;
-    int minc;
-    int p;
-    int d;
+    int valid   = 0;
+    int mstart  = 0;
+    int minc    = 0;
+    int p       = 0;
+    int d       = 0;
     float minmerit = 10;
 
-    unsigned int sieve_length = 8192;
-    unsigned long sieve_range  = 20'000'000;
+    unsigned int sieve_length = 0;
+    unsigned long sieve_range  = 0;
 
     bool run_prp = true;
 };
 
+void show_usage(char* name);
 Config argparse(int argc, char* argv[]);
+void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config config);
 
+
 int main(int argc, char* argv[]) {
+    printf("\tCompiled with GMP %d.%d.%d\n\n",
+        __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
+
     Config config = argparse(argc, argv);
+    set_defaults(config);
     if (config.valid == 0) {
         show_usage(argv[0]);
         return 1;
     }
 
-    printf("Compiled with GMP %d.%d.%d\n\n",
-        __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
-    printf("sieve_length: 2x%d, sieve_range: %ld\n\n",
-        config.sieve_length, config.sieve_range);
-
+    printf("\n");
     printf("Testing m * %d#/%d, m = %d + [0, %d)\n",
         config.p, config.d, config.mstart, config.minc);
 
+    printf("\n");
+    printf("sieve_length: 2x%d\n", config.sieve_length);
+    printf("sieve_range: %ld\n", config.sieve_range);
+    printf("\n");
+
+
     prime_gap_search(config);
 }
+
 
 void show_usage(char* name) {
     cout << "Usage: " << name << endl;
@@ -174,9 +183,19 @@ Config argparse(int argc, char* argv[]) {
 
     // ----- Validation
 
+    if (config.mstart <= 0) {
+        config.valid = 0;
+        cout << "mstart must be greater than 0: " << config.mstart << endl;
+    }
+
     if (((long) config.mstart + config.minc) >= MAX_INT) {
         config.valid = 0;
         cout << "mstart + minc must be < 1e9" << endl;
+    }
+
+    if (config.minc <= 0) {
+        config.valid = 0;
+        cout << "minc must be greater than 0: " << config.minc << endl;
     }
 
     if (config.minc >= 50'000'000) {
@@ -205,14 +224,53 @@ Config argparse(int argc, char* argv[]) {
         cout << "d must be greater than 0: " << config.d << endl;
     }
 
-    if (config.minc <= 0) {
-        config.valid = 0;
-        cout << "minc must be greater than 0: " << config.minc << endl;
-    }
-
     return config;
 }
 
+
+void set_defaults(struct Config& config) {
+    if (config.valid == 0) {
+        // Don't do anything if argparse didn't work.
+        return;
+    }
+
+    if (config.sieve_range == 0) {
+        mpz_t K;
+        mpz_init(K);
+        mpz_primorial_ui(K, config.p);
+        assert( 0 == mpz_tdiv_q_ui(K, K, config.d) );
+        long exp;
+        double mantis = mpz_get_d_2exp(&exp, K);
+        float logn = log(config.mstart) + log(mantis) + log(2) * exp;
+        mpz_clear(K);
+
+        // TODO improve this.
+        // Potentially based on:
+        //  sieve_length
+        //  min_merit
+        if (logn >= 1500) {
+            // Largest supported number right now
+            config.sieve_range = 2'000'000'000;
+            // 2020-02-09 tuning notes
+            //  P 1627 SL=8192
+            //      log(t) ~= 1600, ~= 4 primes in SL
+            //       100M => 620/s | 293 unknowns
+            //       200M => 549/s | 282 unknowns
+            //       400M => 480/s | 273 unknowns
+            //          81.6 PRP / test => 1.70s/test
+            //       800M => 440/s | 264 unknowns
+            //          78.6 PRP / test => 1.75s/test
+            //      1600M => 440/s | 254 unknowns
+            //          76.2 PRP / test => 1.78s/test
+        } else {
+            config.sieve_range =   100'000'000;
+        }
+
+        printf("AUTO SET: sieve range (log(t) = ~%.0f): %ld\n",
+            logn, config.sieve_range);
+    }
+
+}
 
 vector<int> get_sieve_primes(unsigned int n) {
     vector<int> primes = {2};
@@ -774,7 +832,7 @@ void prime_gap_search(const struct Config config) {
         }
 
 
-        if ( (mi == 1 || mi == 10 || mi == 100 || mi == 1000) ||
+        if ( (mi == 1 || mi == 10 || mi == 100 || mi == 500 || mi == 1000) ||
              (m % 5000 == 0) || ((mi+1) == M_inc) ) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
