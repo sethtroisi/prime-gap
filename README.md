@@ -4,6 +4,14 @@
 This is the combination of a couple of ideas I've had bouncing around in my
 head while working on gmp mpz_prevprime.
 
+### TODO
+
+* [] Dynamic sieve_length
+* [] Dynamic sieve_range
+* [] generate expected length
+* [] sort and PRP only some
+
+
 ## Commands
 
 ```bash
