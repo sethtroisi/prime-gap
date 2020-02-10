@@ -56,6 +56,7 @@ void show_usage(char* name);
 Config argparse(int argc, char* argv[]);
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config config);
+vector<int> get_sieve_primes(unsigned int n);
 
 
 int main(int argc, char* argv[]) {
@@ -234,21 +235,115 @@ void set_defaults(struct Config& config) {
         return;
     }
 
-    if (config.sieve_range == 0) {
+    float logK;
+    {
         mpz_t K;
         mpz_init(K);
+
         mpz_primorial_ui(K, config.p);
         assert( 0 == mpz_tdiv_q_ui(K, K, config.d) );
         long exp;
         double mantis = mpz_get_d_2exp(&exp, K);
-        float logn = log(config.mstart) + log(mantis) + log(2) * exp;
+        logK = log(config.mstart) + log(mantis) + log(2) * exp;
         mpz_clear(K);
+    }
+
+    if (config.sieve_length == 0) {
+        // TODO improve this.
+        // TODO adjust up for very large minmerit.
+
+        // 10^6 => 0.04064
+        // 10^7 => 0.03483
+        // 10^8 => 0.03048
+        // 10^9 => 0.02709
+
+        // factors of K = p#/d
+        vector<int> K_primes = get_sieve_primes(config.p);
+        {
+            int td = config.d;
+            while (td > 1) {
+                bool change = false;
+                for (size_t pi = 0; pi <= K_primes.size(); pi++) {
+                    if (td % K_primes[pi] == 0) {
+                        td /= K_primes[pi];
+                        K_primes.erase(K_primes.begin() + pi);
+                        change = true;
+                        // Indexes are messed changes so do easy thing.
+                        break;
+                    }
+                }
+                assert( change ); // d is not made up of primes <= p.
+            }
+        }
+
+        // Chance of having factor <= 100M
+        double unknowns_after_sieve = 0.03048;
+
+        // Chance of having factor <= 100M OR factor <= P
+        double unknowns_coprime_sieve = unknowns_after_sieve;
+        {
+            for (int prime : K_primes) {
+                unknowns_coprime_sieve /= 1 - 1.0 / prime;
+            }
+
+        }
+
+        double prob_prime = 1 / logK;
+        double prob_prime_after_sieve = prob_prime / unknowns_coprime_sieve;
+        printf("\tProb composite in sieve: %0.5f, prob prime after: %0.5f\n",
+            unknowns_coprime_sieve, prob_prime_after_sieve);
+
+        // K = #p/d
+        // only numbers K+i has no factor <= p
+        //      => (K+i, i) == 1
+        //      => only relatively prime i
+        // p is generally large enough that SL <= p*p
+        //      => i is prime (not two product of two primes > p)
+        //          or
+        //         i is composite of factors in d
+        assert( config.p > 51 );
+
+        // Search till something counting chance of shorter gap.
+        int P = config.p;
+        for (int tSL = P+1; tSL <= P*P; tSL += 2) {
+            int count_coprime   = 0;
+            for (int i = 1; i <= tSL; i++) {
+                bool found = false;
+                // if (K, i) == 1
+                for (int prime : K_primes) {
+                    if ((i % prime) == 0) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    count_coprime += 1;
+                }
+            }
+
+
+            // Assume each coprime is independent (not quite true)
+            double prob_gap_shorter = pow(1 - prob_prime_after_sieve, count_coprime);
+            if (prob_gap_shorter <= 0.01) {
+                config.sieve_length = tSL;
+                printf("AUTO SET: sieve length (coprime: %d, prob_gap longer %.1f%%): %d\n",
+                    count_coprime, 100 * prob_gap_shorter, tSL);
+                break;
+            }
+        }
+        assert( config.sieve_length > 100 ); // Something went wrong above.
+    }
+
+
+    if (config.sieve_range == 0) {
+        // each additional numbers removes unknowns / prime
+        // and takes log2(prime / sieve_length) time
 
         // TODO improve this.
         // Potentially based on:
         //  sieve_length
         //  min_merit
-        if (logn >= 1500) {
+        if (logK >= 1500) {
             // Largest supported number right now
             config.sieve_range = 2'000'000'000;
             // 2020-02-09 tuning notes
@@ -267,7 +362,7 @@ void set_defaults(struct Config& config) {
         }
 
         printf("AUTO SET: sieve range (log(t) = ~%.0f): %ld\n",
-            logn, config.sieve_range);
+            logK, config.sieve_range);
     }
 
 }
@@ -370,6 +465,8 @@ int modulo_search_euclid(int p, int A, int L, int R) {
 
     // check if small i works
     if (A <= R) {
+        // Find next multiple of A >= L
+        // check if <= R
         long mult = ((long) L + A-1L) / A;
         long test = mult * A;
         if (test <= R) {
@@ -393,19 +490,20 @@ int modulo_search_euclid(int p, int A, int L, int R) {
 */
     return mult;
 
+/*
     if (0) {
         long temp = 0;
         for (int i = 1; i < p; i++) {
             temp += A;
             if (temp > p) temp -= p;
             if (L <= temp && temp <= R) {
-                cout << p << " " << A << " " << L << " " << R << " | " << mult << " " << i << endl;
                 assert( mult == i );
                 return i;
             }
         }
         assert( false );
     }
+*/
 }
 
 
