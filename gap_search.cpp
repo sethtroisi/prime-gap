@@ -17,6 +17,7 @@
 #include <cmath>
 #include <chrono>
 #include <cstdio>
+#include <fstream>
 #include <getopt.h>
 #include <iostream>
 #include <vector>
@@ -50,6 +51,7 @@ struct Config {
     unsigned long sieve_range  = 0;
 
     bool run_prp = true;
+    bool save_unknowns = false;
 };
 
 void show_usage(char* name);
@@ -101,6 +103,9 @@ void show_usage(char* name) {
     cout  << endl;
     cout << "  --sieve-only" << endl;
     cout << "    only sieve ranges, don't run PRP. useful for benchmarking" << endl;
+    cout << "  --save-unknowns" << endl;
+    cout << "    save unknowns to be PRPed to a temp file (p_d_mstart_minc_sieve_range.txt)" << endl;
+    cout << "    where they can be processed in a 2nd pass." << endl;
     cout << "  -h, --help" << endl;
     cout << "    print this help message" << endl;
     cout << endl;
@@ -112,17 +117,20 @@ Config argparse(int argc, char* argv[]) {
     // TODO add print_interval option.
 
     static struct option long_options[] = {
-        {"mstart",       required_argument, 0,   1  },
-        {"minc",         required_argument, 0,   2  },
-        {"p",            required_argument, 0,  'p' },
-        {"d",            required_argument, 0,  'd' },
+        {"mstart",        required_argument, 0,   1  },
+        {"minc",          required_argument, 0,   2  },
+        {"p",             required_argument, 0,  'p' },
+        {"d",             required_argument, 0,  'd' },
 
-        {"help",         no_argument,       0,  'h' },
-        {"minmerit",     required_argument, 0,   3  },
-        {"sieve-only",   no_argument,       0,   4 },
-        {"sieve-length", required_argument, 0,   5 },
-        {"sieve-range",  required_argument, 0,   6 },
-        {0,              0,                 0,  0 }
+        {"minmerit",      required_argument, 0,   3  },
+        {"sieve-length",  required_argument, 0,   4  },
+        {"sieve-range",   required_argument, 0,   5  },
+
+        {"sieve-only",    no_argument,       0,   6  },
+        {"save-unknowns", no_argument,       0,   7  },
+
+        {"help",          no_argument,       0,  'h' },
+        {0,               0,                 0,   0  }
     };
 
     Config config;
@@ -147,17 +155,22 @@ Config argparse(int argc, char* argv[]) {
             case 2:
                 config.minc = atoi(optarg);
                 break;
+
             case 3:
                 config.minmerit = atof(optarg);
                 break;
             case 4:
-                config.run_prp = false;
-                break;
-            case 5:
                 config.sieve_length = atoi(optarg);
                 break;
-            case 6:
+            case 5:
                 config.sieve_range = atol(optarg);
+                break;
+
+            case 6:
+                config.run_prp = false;
+                break;
+            case 7:
+                config.save_unknowns = true;
                 break;
 
             case 0:
@@ -279,19 +292,10 @@ void set_defaults(struct Config& config) {
         // Chance of having factor <= 100M
         double unknowns_after_sieve = 0.03048;
 
-        // Chance of having factor <= 100M OR factor <= P
-        double unknowns_coprime_sieve = unknowns_after_sieve;
-        {
-            for (int prime : K_primes) {
-                unknowns_coprime_sieve /= 1 - 1.0 / prime;
-            }
-
-        }
-
         double prob_prime = 1 / logK;
-        double prob_prime_after_sieve = prob_prime / unknowns_coprime_sieve;
+        double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
         printf("\tProb composite in sieve: %0.5f, prob prime after: %0.5f\n",
-            unknowns_coprime_sieve, prob_prime_after_sieve);
+            1 - unknowns_after_sieve, prob_prime_after_sieve);
 
         // K = #p/d
         // only numbers K+i has no factor <= p
@@ -321,10 +325,9 @@ void set_defaults(struct Config& config) {
                 }
             }
 
-
             // Assume each coprime is independent (not quite true)
             double prob_gap_shorter = pow(1 - prob_prime_after_sieve, count_coprime);
-            if (prob_gap_shorter <= 0.01) {
+            if (prob_gap_shorter <= 0.04) {
                 config.sieve_length = tSL;
                 printf("AUTO SET: sieve length (coprime: %d, prob_gap longer %.1f%%): %d\n",
                     count_coprime, 100 * prob_gap_shorter, tSL);
@@ -517,7 +520,7 @@ void prime_gap_search(const struct Config config) {
     const unsigned int SIEVE_LENGTH = config.sieve_length;
     const unsigned int SL = SIEVE_LENGTH;
 
-    // ----- Merit STuff
+    // ----- Merit Stuff
     mpz_t K;
     mpz_init(K);
     mpz_primorial_ui(K, P);
@@ -538,6 +541,21 @@ void prime_gap_search(const struct Config config) {
             (int) (min_merit * (K_log + m_log)), min_merit);
     }
 
+    // ----- Save Output file
+    std::ofstream unknown_file;
+    if (config.save_unknowns) {
+        std::string fn =
+            std::to_string(config.mstart) + "_" +
+            std::to_string(config.p) + "_" +
+            std::to_string(config.d) + "_" +
+            std::to_string(config.minc) + "_s" +
+            std::to_string(config.sieve_length) + "_l" +
+            std::to_string(config.sieve_range / 1'000'000) + "M" +
+            ".txt";
+        printf("\tSaving unknowns to '%s'\n", fn.c_str());
+        unknown_file.open(fn, std::ios::out);
+        assert( unknown_file.is_open() ); // Can't open save_unknowns file
+    }
 
     // ----- Generate primes under SIEVE_RANGE.
     vector<int> const primes = get_sieve_primes(config.sieve_range);
@@ -569,8 +587,8 @@ void prime_gap_search(const struct Config config) {
         double prob_gap_shorter_experimental =
             1 - pow(1 - prob_prime, 0.37 * SIEVE_LENGTH);
 
-        printf("\t%.3f%% of sieve should be unknown (%ldM)\n",
-            100 * unknowns_after_sieve, config.sieve_range/1'000'000);
+        printf("\t%.3f%% of sieve should be unknown (%ldM) ~= %.0f\n",
+            100 * unknowns_after_sieve, config.sieve_range/1'000'000, SL * unknowns_after_sieve);
         printf("\t%.3f%% of %d digit numbers are prime\n",
             100 * prob_prime, K_digits);
         printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
@@ -929,6 +947,29 @@ void prime_gap_search(const struct Config config) {
             mpz_clear(center); mpz_clear(ptest);
         }
 
+        // Save unknowns
+        if (config.save_unknowns) {
+            unknown_file << mi;
+            if (config.run_prp) {
+                unknown_file << " PRP -" << prev_p_i << " to +" << next_p_i;
+            }
+            unknown_file << " : -" << unknown_l << " +" << unknown_u << " |";
+
+            for (int d = 0; d <= 1; d++) {
+                char prefix = "-+"[d];
+
+                for (size_t i = 1; i < SL; i++) {
+                    if (!composite[d][i]) {
+                        unknown_file << " " << prefix << i;
+                        s_total_prp_tests += 1;
+                    }
+                }
+                if (d == 0) {
+                    unknown_file << " |";
+                }
+            }
+            unknown_file << "\n";
+        }
 
         if ( (mi == 1 || mi == 10 || mi == 100 || mi == 500 || mi == 1000) ||
              (m % 5000 == 0) || ((mi+1) == M_inc) ) {
@@ -940,22 +981,27 @@ void prime_gap_search(const struct Config config) {
                 unknown_l, unknown_u,
                 prev_p_i, next_p_i);
             if (mi <= 10) continue;
+
             // Stats!
+            int tests = mi + 1;
             printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
-                mi+1, (mi+1) / secs, secs);
+                tests, tests / secs, secs);
             printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
-                s_total_unknown, s_total_unknown / (float) (mi+1),
-                100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * (mi+1))),
+                s_total_unknown, s_total_unknown / ((double) tests),
+                100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * tests)),
                 100.0 * s_t_unk_low / s_total_unknown,
                 100.0 * s_t_unk_hgh / s_total_unknown);
-            printf("\t    prp tests %-10ld (avg: %.2f)\n",
-                s_total_prp_tests, s_total_prp_tests / (float) (mi+1));
-            printf("\t    fallback prev_gap %ld, next_gap %ld\n",
-                s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next);
-            printf("\t    best merit this interval: %.2f (at m=%ld)\n",
-                s_best_merit_interval, s_best_merit_interval_m);
+            if (config.run_prp) {
+                printf("\t    prp tests %-10ld (avg: %.2f)\n",
+                    s_total_prp_tests, s_total_prp_tests / (float) tests);
+                printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
+                    s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / tests,
+                    s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / tests);
+                printf("\t    best merit this interval: %.2f (at m=%ld)\n",
+                    s_best_merit_interval, s_best_merit_interval_m);
+            }
             printf("\t    large prime remaining: %d (avg/test: %ld)\n",
-                s_large_primes_rem, s_large_primes_tested / (mi+1));
+                s_large_primes_rem, s_large_primes_tested / tests);
 
             s_best_merit_interval = 0;
             s_best_merit_interval_m = -1;

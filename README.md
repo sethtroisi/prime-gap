@@ -21,6 +21,36 @@ $ time ./gap_search 200000000 1000000 887 210 20
 
 ```
 
+### Average unknowns in sieve
+```
+# Lower side
+$ g++ -Wall -Werror -O3 gap_search.cpp -lgmp -o gap_search
+$ time ./gap_search -p 953 -d 1 --mstart 50000 --minc 50000 --save-unknowns --sieve-only --sieve-range 200000000
+$ cat 50000_953_1_50000_s1598_l200M.txt | awk ' { print $7 }' | ministat
+    N           Min           Max        Median           Avg        Stddev
+x 2611           -48           -17           -32      -32.3401     4.5766353
+$ cat 50000_953_1_50000_s1598_l200M.txt | awk ' { print $8 }' | ministat
+    N           Min           Max        Median           Avg        Stddev
+x 2770            16            51            33     32.566787     4.4752094
+$ cat 50000_953_1_50000_s1598_l200M.txt | cut -d' ' -f 10- | sed 's/ /\n/g' | sort | uniq -c
+    1
+   4091 |
+   1472 -1
+   1482 +1
+   1484 -1009
+   1490 +1009
+   1439 -1013
+   1454 +1013
+   1442 -1019
+...
+   1649 +983
+   1704 -991
+   1699 +991
+   1652 -997
+   1669 +997
+```
+
+
 ## Benchmark
 
 ```bash
