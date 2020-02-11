@@ -18,11 +18,12 @@
 #include <chrono>
 #include <cstdio>
 #include <fstream>
-#include <getopt.h>
 #include <iostream>
 #include <vector>
 
 #include <gmp.h>
+
+#include "gap_common.h"
 
 using std::cout;
 using std::endl;
@@ -31,28 +32,8 @@ using namespace std::chrono;
 
 #define SIEVE_SMALL       80'000
 
-#define MAX_INT     ((1L << 32) - 1)
-
-struct Config {
-    int valid   = 0;
-    int mstart  = 0;
-    int minc    = 0;
-    int p       = 0;
-    int d       = 0;
-    float minmerit = 10;
-
-    unsigned int sieve_length = 0;
-    unsigned long sieve_range  = 0;
-
-    bool run_prp = true;
-    bool save_unknowns = false;
-};
-
-void show_usage(char* name);
-Config argparse(int argc, char* argv[]);
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config config);
-vector<int> get_sieve_primes(unsigned int n);
 
 
 int main(int argc, char* argv[]) {
@@ -77,162 +58,6 @@ int main(int argc, char* argv[]) {
 
 
     prime_gap_search(config);
-}
-
-
-void show_usage(char* name) {
-    cout << "Usage: " << name << endl;
-    cout << "[REQUIRED]" << endl;
-    cout << "  -p <p>" << endl;
-    cout << "  -d <p>" << endl;
-    cout << "  --mstart <start>" << endl;
-    cout << "  --minc   <int>" << endl;
-    cout << "[OPTIONALLY]" << endl;
-    cout << "  --minmerit <minmerit>" << endl;
-    cout << "    only display prime gaps with merit >= minmerit " << endl;
-    cout << "  --sieve-length" << endl;
-    cout << "    how large the positive/negative sieve arrays should be. (default: 8192)" << endl;
-    cout << "  --sieve-range" << endl;
-    cout << "    Use primes <= sieve-range for checking composite. (default: 20M)" << endl;
-    cout  << endl;
-    cout << "  --sieve-only" << endl;
-    cout << "    only sieve ranges, don't run PRP. useful for benchmarking" << endl;
-    cout << "  --save-unknowns" << endl;
-    cout << "    save unknowns to be PRPed to a temp file (p_d_mstart_minc_sieve_range.txt)" << endl;
-    cout << "    where they can be processed in a 2nd pass." << endl;
-    cout << "  -h, --help" << endl;
-    cout << "    print this help message" << endl;
-    cout << endl;
-    cout << "calculates prime_gaps for (mstart + mi) * p#/d, mi <= minc " << endl;
-}
-
-
-Config argparse(int argc, char* argv[]) {
-    // TODO add print_interval option.
-
-    static struct option long_options[] = {
-        {"mstart",        required_argument, 0,   1  },
-        {"minc",          required_argument, 0,   2  },
-        {"p",             required_argument, 0,  'p' },
-        {"d",             required_argument, 0,  'd' },
-
-        {"minmerit",      required_argument, 0,   3  },
-        {"sieve-length",  required_argument, 0,   4  },
-        {"sieve-range",   required_argument, 0,   5  },
-
-        {"sieve-only",    no_argument,       0,   6  },
-        {"save-unknowns", no_argument,       0,   7  },
-
-        {"help",          no_argument,       0,  'h' },
-        {0,               0,                 0,   0  }
-    };
-
-    Config config;
-    config.valid = 1;
-
-    int option_index = 0;
-    char c;
-    while ((c = getopt_long(argc, argv, "hp:d:", long_options, &option_index)) >= 0) {
-        switch (c) {
-            case 'h':
-                show_usage(argv[0]);
-                exit(0);
-            case 'p':
-                config.p = atoi(optarg);
-                break;
-            case 'd':
-                config.d = atoi(optarg);
-                break;
-            case 1:
-                config.mstart = atoi(optarg);
-                break;
-            case 2:
-                config.minc = atoi(optarg);
-                break;
-
-            case 3:
-                config.minmerit = atof(optarg);
-                break;
-            case 4:
-                config.sieve_length = atoi(optarg);
-                break;
-            case 5:
-                config.sieve_range = atol(optarg);
-                break;
-
-            case 6:
-                config.run_prp = false;
-                break;
-            case 7:
-                config.save_unknowns = true;
-                break;
-
-            case 0:
-                printf("option %s arg %s\n", long_options[option_index].name, optarg);
-                config.valid = 0;
-                break;
-            case '?':
-                config.valid = 0;
-                break;
-            default:
-                config.valid = 0;
-                printf("getopt returned \"%d\"\n", c);
-        }
-    }
-
-    if (optind < argc) {
-        config.valid = 0;
-        printf("unknown positional arguements: ");
-        while (optind < argc) {
-            printf("%s ", argv[optind++]);
-        }
-        printf("\n");
-    }
-
-    // ----- Validation
-
-    if (config.mstart <= 0) {
-        config.valid = 0;
-        cout << "mstart must be greater than 0: " << config.mstart << endl;
-    }
-
-    if (((long) config.mstart + config.minc) >= MAX_INT) {
-        config.valid = 0;
-        cout << "mstart + minc must be < 1e9" << endl;
-    }
-
-    if (config.minc <= 0) {
-        config.valid = 0;
-        cout << "minc must be greater than 0: " << config.minc << endl;
-    }
-
-    if (config.minc >= 50'000'000) {
-        config.valid = 0;
-        cout << "minc > 50M will use to much memory" << endl;
-    }
-
-    if (config.sieve_range > 2'000'000'000) {
-        config.valid = 0;
-        cout << "sieve_range > 2B not supported" << endl;
-    }
-
-    {
-        mpz_t ptest;
-        mpz_init_set_ui(ptest, config.p);
-        bool valid = 0 != mpz_probab_prime_p(ptest, 25);
-        mpz_clear(ptest);
-        if (!valid) {
-            config.valid = 0;
-            cout << "p# not prime (p=" << config.p << ")" << endl;
-        }
-    }
-
-    if (config.d <= 0) {
-        config.valid = 0;
-        cout << "d must be greater than 0: " << config.d << endl;
-    }
-
-    return config;
 }
 
 
@@ -357,26 +182,6 @@ void set_defaults(struct Config& config) {
             logK, config.sieve_range);
     }
 
-}
-
-vector<int> get_sieve_primes(unsigned int n) {
-    vector<int> primes = {2};
-    vector<bool> is_prime(n+1, true);
-    for (unsigned int p = 3; p <= n; p += 2) {
-        if (is_prime[p]) {
-            primes.push_back(p);
-            unsigned int p2 = p * p;
-            if (p2 > n) break;
-
-            for (unsigned int m = p2; m <= n; m += 2*p)
-                is_prime[m] = false;
-        }
-    }
-    for (unsigned int p = primes.back() + 2; p <= n; p += 2) {
-        if (is_prime[p])
-            primes.push_back(p);
-    }
-    return primes;
 }
 
 
@@ -761,7 +566,6 @@ void prime_gap_search(const struct Config config) {
         // TODO if gcd(m, d) != 1 continue?
 
         // Reset sieve array to unknown.
-        // TODO consider not reseting first p terms (other than 1st).
         std::fill_n(composite[0].begin(), SIEVE_LENGTH, 0);
         std::fill_n(composite[1].begin(), SIEVE_LENGTH, 0);
 

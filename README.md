@@ -16,7 +16,7 @@ head while working on gmp mpz_prevprime.
 ## Commands
 
 ```bash
-$ g++ -Wall -Werror -O3 gap_search.cpp -lgmp -o gap_search
+$ g++ -Wall -Werror -O3 gap_search.cpp gap_common.cpp -lgmp -o gap_search
 # ./gap_search <params>
 $ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 5000 --minmerit 16
 ...
@@ -55,8 +55,8 @@ sys	0m0.057s
 ### Average unknowns in sieve
 ```
 # Lower side
-$ g++ -Wall -Werror -O3 gap_search.cpp -lgmp -o gap_search
-$ time ./gap_search -p 701 -d 1 --minmerit 18 --mstart 50000 --minc 10000 --save-unknowns --sieve-range 200000000
+$ g++ -Wall -Werror -O3 gap_search.cpp gap_common.cpp -lgmp -o gap_search
+$ time ./gap_search -p 701 -d 1 --mstart 50000 --minc 10000 --save-unknowns --sieve-range 200000000
 ...
 	prob_prime_coprime: 0.01718
 AUTO SET: sieve length (coprime: 266, prob_gap longer 0.99%): 2690
