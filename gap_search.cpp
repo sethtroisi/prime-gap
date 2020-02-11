@@ -29,15 +29,9 @@ using std::endl;
 using std::vector;
 using namespace std::chrono;
 
-
-// Aim for ~98% of gaps short
-// For SIEVE_LENGTH=8192
-//  SIEVE_RANGE = 1000M, SIEVE_SMALL=60K seems to work best
-
 #define SIEVE_SMALL       80'000
 
 #define MAX_INT     ((1L << 32) - 1)
-
 
 struct Config {
     int valid   = 0;
@@ -740,7 +734,7 @@ void prime_gap_search(const struct Config config) {
 
 
     // ----- Main sieve loop.
-    cout << "\n\tStarting m=" << M << "\n" << endl;
+    cout << "\nStarting m=" << M << "\n" << endl;
 
     // vector<bool> uses bit indexing which is ~5% slower.
     vector<char> composite[2] = {
