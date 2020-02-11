@@ -78,7 +78,7 @@ int main(int argc, char* argv[]) {
 
     printf("\n");
     printf("sieve_length: 2x%d\n", config.sieve_length);
-    printf("sieve_range: %ld\n", config.sieve_range);
+    printf("sieve_range:  %ld\n", config.sieve_range);
     printf("\n");
 
 
@@ -289,13 +289,12 @@ void set_defaults(struct Config& config) {
             }
         }
 
-        // Chance of having factor <= 100M
-        double unknowns_after_sieve = 0.03048;
-
-        double prob_prime = 1 / logK;
-        double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
-        printf("\tProb composite in sieve: %0.5f, prob prime after: %0.5f\n",
-            1 - unknowns_after_sieve, prob_prime_after_sieve);
+        // Prob prime is slightly higher in practice
+        double prob_prime_coprime = 1 / logK;
+        for (int prime : K_primes) {
+            prob_prime_coprime /= (1 - 1.0/prime);
+        }
+        printf("\tprob_prime_coprime: %.5f\n", prob_prime_coprime);
 
         // K = #p/d
         // only numbers K+i has no factor <= p
@@ -309,27 +308,23 @@ void set_defaults(struct Config& config) {
 
         // Search till something counting chance of shorter gap.
         int P = config.p;
-        for (int tSL = P+1; tSL <= P*P; tSL += 2) {
-            int count_coprime   = 0;
-            for (int i = 1; i <= tSL; i++) {
-                bool found = false;
-                // if (K, i) == 1
+        for (size_t tSL = P+1; tSL <= P*P; tSL += 2) {
+            int count_coprime = tSL-1;
+            for (size_t i = 1; i < tSL; i++) {
                 for (int prime : K_primes) {
                     if ((i % prime) == 0) {
-                        found = true;
+                        count_coprime -= 1;
                         break;
                     }
-                }
-                if (!found) {
-                    count_coprime += 1;
                 }
             }
 
             // Assume each coprime is independent (not quite true)
-            double prob_gap_shorter = pow(1 - prob_prime_after_sieve, count_coprime);
-            if (prob_gap_shorter <= 0.04) {
+            double prob_gap_shorter = pow(1 - prob_prime_coprime, count_coprime);
+            // Only 1% should fail (fallback) in either direction.
+            if (prob_gap_shorter <= 0.01) {
                 config.sieve_length = tSL;
-                printf("AUTO SET: sieve length (coprime: %d, prob_gap longer %.1f%%): %d\n",
+                printf("AUTO SET: sieve length (coprime: %d, prob_gap longer %.2f%%): %ld\n",
                     count_coprime, 100 * prob_gap_shorter, tSL);
                 break;
             }
@@ -545,10 +540,10 @@ void prime_gap_search(const struct Config config) {
     std::ofstream unknown_file;
     if (config.save_unknowns) {
         std::string fn =
-            std::to_string(config.mstart) + "_" +
-            std::to_string(config.p) + "_" +
-            std::to_string(config.d) + "_" +
-            std::to_string(config.minc) + "_s" +
+            std::to_string(M) + "_" +
+            std::to_string(P) + "_" +
+            std::to_string(D) + "_" +
+            std::to_string(M_inc) + "_s" +
             std::to_string(config.sieve_length) + "_l" +
             std::to_string(config.sieve_range / 1'000'000) + "M" +
             ".txt";
@@ -576,33 +571,48 @@ void prime_gap_search(const struct Config config) {
         double unknowns_after_sieve = 1;
         for (long prime : primes) unknowns_after_sieve *= (prime - 1.0) / prime;
 
-        double prob_prime = 1 / K_log;
+        double prob_prime = 1 / (K_log + log(M));
+        double prob_prime_coprime = 1;
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
-        double prob_gap_shorter_hypothetical =
-            1 - pow(1 - prob_prime, SIEVE_LENGTH);
+        for (size_t pi = 0; primes[pi] <= P; pi++) {
+            if (D % primes[pi] != 0) {
+                prob_prime_coprime *= (1 - 1.0/primes[pi]);
+            }
+        }
 
-        // In pratice we get slightly better sieving than expected.
-        // TODO refine this constant
-        double prob_gap_shorter_experimental =
-            1 - pow(1 - prob_prime, 0.37 * SIEVE_LENGTH);
+        int count_coprime = SL-1;
+        for (size_t i = 1; i < SL; i++) {
+            for (int prime : primes) {
+                if ((unsigned) prime > P) break;
+                if ((i % prime) == 0 && (D % prime) != 0) {
+                    count_coprime -= 1;
+                    break;
+                }
+            }
+        }
+        double chance_coprime_composite = 1 - prob_prime / prob_prime_coprime;
+        double prob_gap_shorter_hypothetical = pow(chance_coprime_composite, count_coprime);
 
+        // count_coprime already includes some parts of unknown_after_sieve
         printf("\t%.3f%% of sieve should be unknown (%ldM) ~= %.0f\n",
-            100 * unknowns_after_sieve, config.sieve_range/1'000'000, SL * unknowns_after_sieve);
+            100 * unknowns_after_sieve,
+            config.sieve_range/1'000'000,
+            count_coprime * (unknowns_after_sieve / prob_prime_coprime));
         printf("\t%.3f%% of %d digit numbers are prime\n",
             100 * prob_prime, K_digits);
         printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
             100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
-        printf("\t~%.1f PRP tests per m\n",
-            2 / prob_prime_after_sieve);
-        printf("\tSIEVE_LENGTH=%d is sufficient %.2f%%, experimentally: ~%.2f%%\n",
-            SIEVE_LENGTH,
-            100 * prob_gap_shorter_hypothetical, 100 * prob_gap_shorter_experimental);
+        printf("\t~2x%.1f=%.1f PRP tests per m\n",
+            1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
+        printf("\tsieve_length=%d is insufficient ~%.2f%% of time\n",
+            SIEVE_LENGTH, 100 * prob_gap_shorter_hypothetical);
         cout << endl;
     }
 
 
     // ----- Allocate memory for a handful of utility functions.
+    auto  s_setup_t = high_resolution_clock::now();
 
     // Remainders of (p#/d) mod prime
     int *remainder   = (int*) malloc(sizeof(int) * primes.size());
@@ -721,6 +731,11 @@ void prime_gap_search(const struct Config config) {
         }
         cout << endl;
         printf("\tSum of m1: %ld\n", first_m_sum);
+    }
+    {
+        auto  s_stop_t = high_resolution_clock::now();
+        double   secs = duration<double>(s_stop_t - s_setup_t).count();
+        printf("\tSetup took %.1f seconds\n", secs);
     }
 
 
@@ -961,7 +976,6 @@ void prime_gap_search(const struct Config config) {
                 for (size_t i = 1; i < SL; i++) {
                     if (!composite[d][i]) {
                         unknown_file << " " << prefix << i;
-                        s_total_prp_tests += 1;
                     }
                 }
                 if (d == 0) {
