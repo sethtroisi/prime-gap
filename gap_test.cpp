@@ -395,8 +395,9 @@ void prime_gap_test(const struct Config config) {
                 100.0 * s_t_unk_low / s_total_unknown,
                 100.0 * s_t_unk_hgh / s_total_unknown);
             if (config.run_prp) {
-                printf("\t    prp tests %-10ld (avg: %.2f)\n",
-                    s_total_prp_tests, s_total_prp_tests / (float) tests);
+                printf("\t    prp tests %-10ld (avg: %.2f) (%.1f tests/sec)\n",
+                    s_total_prp_tests, s_total_prp_tests / (float) tests,
+                    tests / secs);
                 printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
                     s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / tests,
                     s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / tests);

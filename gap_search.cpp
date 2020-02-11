@@ -402,7 +402,7 @@ void prime_gap_search(const struct Config config) {
             100 * prob_prime, K_digits);
         printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
             100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
-        printf("\t~2x%.1f=%.1f PRP tests per m\n",
+        printf("\t~2x%.1f = %.1f PRP tests per m\n",
             1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
         printf("\tsieve_length=%d is insufficient ~%.2f%% of time\n",
             SIEVE_LENGTH, 100 * prob_gap_shorter_hypothetical);
@@ -804,8 +804,9 @@ void prime_gap_search(const struct Config config) {
                 100.0 * s_t_unk_low / s_total_unknown,
                 100.0 * s_t_unk_hgh / s_total_unknown);
             if (config.run_prp) {
-                printf("\t    prp tests %-10ld (avg: %.2f)\n",
-                    s_total_prp_tests, s_total_prp_tests / (float) tests);
+                printf("\t    prp tests %-10ld (avg: %.2f) (%.1f tests/sec)\n",
+                    s_total_prp_tests, s_total_prp_tests / (float) tests,
+                    tests / secs);
                 printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
                     s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / tests,
                     s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / tests);
