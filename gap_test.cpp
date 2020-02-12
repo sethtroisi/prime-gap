@@ -111,7 +111,7 @@ void prime_gap_test(const struct Config config) {
             (int) (min_merit * (K_log + m_log)), min_merit);
     }
 
-    // ----- Save Output file
+    // ----- Open Output file
     std::ifstream unknown_file;
     if (config.save_unknowns) {
         std::string fn =
@@ -337,7 +337,7 @@ void prime_gap_test(const struct Config config) {
 
                 // /*
                 // Medium ugly fallback.
-                for (int i = SIEVE_LENGTH+1; ; i++) {
+                for (int i = SIEVE_LENGTH; ; i++) {
                     bool composite = false;
                     for (size_t pi = 0; pi < primes.size(); pi++) {
                         const long prime = primes[pi];
@@ -360,7 +360,6 @@ void prime_gap_test(const struct Config config) {
 
             int gap = next_p_i + prev_p_i;
             float merit = gap / (K_log + log(m));
-            // TODO parameter or merit.
             if (merit > min_merit)  {
                 // TODO write to file.
                 printf("%d  %.4f  %ld * %ld#/%ld -%d to +%d\n",
@@ -396,8 +395,9 @@ void prime_gap_test(const struct Config config) {
                 100.0 * s_t_unk_hgh / s_total_unknown);
             if (config.run_prp) {
                 printf("\t    prp tests %-10ld (avg: %.2f) (%.1f tests/sec)\n",
-                    s_total_prp_tests, s_total_prp_tests / (float) tests,
-                    tests / secs);
+                    s_total_prp_tests,
+                    s_total_prp_tests / (float) tests,
+                    s_total_prp_tests / secs);
                 printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
                     s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / tests,
                     s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / tests);
