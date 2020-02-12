@@ -56,7 +56,7 @@ sys	0m0.057s
 ```
 # Lower side
 $ g++ -Wall -Werror -O3 gap_search.cpp gap_common.cpp -lgmp -o gap_search
-$ time ./gap_search -p 701 -d 1 --mstart 50000 --minc 10000 --save-unknowns --sieve-range 200000000
+$ time ./gap_search -p 701 -d 1 --mstart 50000 --minc 10000 --save-unknowns --sieve-range 200
 ...
 	prob_prime_coprime: 0.01718
 AUTO SET: sieve length (coprime: 266, prob_gap longer 0.99%): 2690

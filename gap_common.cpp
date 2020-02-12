@@ -61,7 +61,7 @@ void show_usage(char* name) {
     cout << "  --sieve-length" << endl;
     cout << "    how large the positive/negative sieve arrays should be" << endl;
     cout << "  --sieve-range" << endl;
-    cout << "    use primes <= sieve-range for checking composite" << endl;
+    cout << "    use primes <= sieve-range million for checking composite" << endl;
     cout  << endl;
     cout << "  --sieve-only" << endl;
     cout << "    only sieve ranges, don't run PRP. useful for benchmarking" << endl;
@@ -125,7 +125,7 @@ Config argparse(int argc, char* argv[]) {
                 config.sieve_length = atoi(optarg);
                 break;
             case 5:
-                config.sieve_range = atol(optarg);
+                config.sieve_range = atol(optarg) * 1'000'000;
                 break;
 
             case 6:
