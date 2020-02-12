@@ -85,6 +85,7 @@ def prob_prime_sieve_length(M, D, K_log, K_digits, K_primes, SL, sieve_range):
 
     return prob_prime_after_sieve
 
+
 def determine_next_prime_i(m, K, composites, SL):
     center = m * K
     tests = 0
@@ -99,6 +100,7 @@ def determine_next_prime_i(m, K, composites, SL):
         next_p_i = gmpy2.next_prime(center + SL - 1) - center
 
     return tests, next_p_i
+
 
 def determine_prev_prime_i(m, K, composites, SL, primes, remainder):
     center = m * K
@@ -126,6 +128,7 @@ def determine_prev_prime_i(m, K, composites, SL, primes, remainder):
 
     return tests, prev_p_i
 
+
 def prime_gap_test(args):
     P = args.p
     D = args.d
@@ -138,11 +141,9 @@ def prime_gap_test(args):
     if sieve_range <= 4000:
         sieve_range *= 10 ** 6
 
-    print ("Hi", args.sieve_only)
     run_prp = not args.sieve_only
 
     min_merit = args.min_merit
-
 
     K = gmpy2.primorial(P)
     assert K % D == 0
@@ -244,9 +245,6 @@ def prime_gap_test(args):
                 print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(
                     gap, merit, m, P, D, prev_p_i, next_p_i))
 
-                # Using fallback to slower gmp routine
-                next_p_i = gmpy2.next_prime(center + SL - 1) - center
-
             if merit > s_best_merit_interval:
                 s_best_merit_interval = merit
                 s_best_merit_interval_m = m
@@ -263,15 +261,15 @@ def prime_gap_test(args):
 
             # Stats!
             tests = mi + 1
-            print("\t    tests     {:-10d} ({:.2f}/sec)  {:.0f} seconds elapsed".format(
+            print("\t    tests     {:<10d} ({:.2f}/sec)  {:.0f} seconds elapsed".format(
                 tests, tests / secs, secs))
-            print("\t    unknowns  {:-10d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
+            print("\t    unknowns  {:<10d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
                 s_total_unknown, s_total_unknown / tests,
                 100 * (1 - s_total_unknown / (2 * (sieve_length - 1) * tests)),
                 100 * s_t_unk_low / s_total_unknown,
                 100 * s_t_unk_hgh / s_total_unknown))
             if run_prp:
-                print("\t    prp tests {:-10d} (avg: {:.2f}) ({:.1f} tests/sec)".format(
+                print("\t    prp tests {:<10d} (avg: {:.2f}) ({:.1f} tests/sec)".format(
                     s_total_prp_tests, s_total_prp_tests / tests, s_total_prp_tests / secs))
                 print("\t    fallback prev_gap {} ({:.1f}%), next_gap {} ({:.1f}%)".format(
                     s_gap_out_of_sieve_prev, 100 * s_gap_out_of_sieve_prev / tests,

@@ -390,7 +390,7 @@ void prime_gap_test(const struct Config config) {
             int tests = mi + 1;
             printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
                 tests, tests / secs, secs);
-            printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
+            printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f%% <- %% -> %.2f%%\n",
                 s_total_unknown, s_total_unknown / ((double) tests),
                 100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * tests)),
                 100.0 * s_t_unk_low / s_total_unknown,
@@ -403,7 +403,7 @@ void prime_gap_test(const struct Config config) {
                 printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
                     s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / tests,
                     s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / tests);
-                printf("\t    best merit this interval: %.2f (at m=%ld)\n",
+                printf("\t    best merit this interval: %.3f (at m=%ld)\n",
                     s_best_merit_interval, s_best_merit_interval_m);
             }
 

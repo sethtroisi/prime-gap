@@ -20,6 +20,7 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <locale.h>
 
 #include <gmp.h>
 
@@ -333,16 +334,18 @@ void prime_gap_search(const struct Config config) {
 
     // ----- Generate primes under SIEVE_RANGE.
     vector<uint32_t> const primes = get_sieve_primes(config.sieve_range);
-    printf("\tPrimePi(%ld) = %ld (2 ... %u)\n",
+    setlocale(LC_NUMERIC, "");
+    printf("\tPrimePi(%'ld) = %'ld (2 ... %'u)\n",
         config.sieve_range, primes.size(), primes.back());
 
     // SIEVE_SMALL deals with all primes can mark off two items in SIEVE_LENGTH.
     assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
     const uint32_t SIEVE_SMALL_PRIME_PI = std::distance(primes.begin(),
         std::lower_bound(primes.begin(), primes.end(), SIEVE_SMALL));
-    printf("\tUsing %d primes for SIEVE_SMALL(%d)\n\n",
+    printf("\tUsing %'d primes for SIEVE_SMALL(%'d)\n\n",
         SIEVE_SMALL_PRIME_PI, SIEVE_SMALL);
     assert( primes[SIEVE_SMALL_PRIME_PI] > SIEVE_SMALL );
+    setlocale(LC_NUMERIC, "C");
 
 
     // ----- Sieve stats
