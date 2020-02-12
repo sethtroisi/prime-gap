@@ -42,6 +42,16 @@ int main(int argc, char* argv[]) {
 
     Config config = argparse(argc, argv);
     set_defaults(config);
+
+    if (config.save_unknowns == 0) {
+        cout << "Must set --save-unknowns" << endl;
+        return 1;
+    }
+    if (config.run_prp == 1) {
+        cout << "Must set --sieve-only for gap_search" << endl;
+        return 1;
+    }
+
     if (config.valid == 0) {
         show_usage(argv[0]);
         return 1;
@@ -554,11 +564,6 @@ void prime_gap_search(const struct Config config) {
     long  s_total_unknown = 0;
     long  s_t_unk_low = 0;
     long  s_t_unk_hgh = 0;
-    long  s_total_prp_tests = 0;
-    long  s_gap_out_of_sieve_prev = 0;
-    long  s_gap_out_of_sieve_next = 0;
-    float s_best_merit_interval = 0;
-    long  s_best_merit_interval_m = 0;
     long  s_large_primes_tested = 0;
 
     for (int mi = 0; mi < M_inc; mi++) {
@@ -663,108 +668,9 @@ void prime_gap_search(const struct Config config) {
         s_t_unk_low += unknown_l;
         s_t_unk_hgh += unknown_u;
 
-        // TODO break out to function, also count tests.
-        int prev_p_i = 0;
-        int next_p_i = 0;
-        if (config.run_prp) {
-            mpz_t center, ptest;
-            mpz_init(center); mpz_init(ptest);
-            mpz_mul_ui(center, K, m);
-
-            for (unsigned int i = 1; (next_p_i == 0 || prev_p_i == 0) && i < SL; i++) {
-                if (prev_p_i == 0 && !composite[0][i]) {
-                    s_total_prp_tests += 1;
-
-                    mpz_sub_ui(ptest, center, i);
-                    if (mpz_probab_prime_p(ptest, 25)) {
-                        prev_p_i = i;
-                    }
-                }
-                if (next_p_i == 0 && !composite[1][i]) {
-                    s_total_prp_tests += 1;
-
-                    mpz_add_ui(ptest, center, i);
-                    if (mpz_probab_prime_p(ptest, 25)) {
-                        next_p_i = i;
-                    }
-                }
-            }
-
-            if (next_p_i == 0) {
-                s_gap_out_of_sieve_next += 1;
-                // Using fallback to slower gmp routine
-                //cout << "\tfalling back to mpz_nextprime" << endl;
-                mpz_add_ui(ptest, center, SIEVE_LENGTH - 1);
-                mpz_nextprime(ptest, ptest);
-                mpz_sub(ptest, ptest, center);
-                next_p_i = mpz_get_ui(ptest);
-            }
-
-            if (prev_p_i == 0) {
-                s_gap_out_of_sieve_prev += 1;
-                /*
-                // REALLY UGLY FALLBACK
-                cout << "\tUGLY prevprime hack" << endl;
-                mpz_sub_ui(ptest, center, 2*SIEVE_LENGTH-1);
-                mpz_nextprime(ptest, ptest);
-                if (mpz_cmp(ptest, center) > 1) {
-                    cout << m << "What!" << endl;
-                    exit(1);
-                }
-
-                while (mpz_cmp(ptest, center) < 0) {
-                    // save distance
-                    mpz_sub(center, center, ptest);
-                    prev_p_i = mpz_get_ui(center);
-                    mpz_add(center, center, ptest);
-                    mpz_nextprime(ptest, ptest);
-                }
-                // */
-
-                // /*
-                // Medium ugly fallback.
-                for (int i = SIEVE_LENGTH; ; i++) {
-                    bool composite = false;
-                    for (int pi = 0; pi < 2000; pi++) {
-                        const long prime = primes[pi];
-                        long modulo = (remainder[pi] * m) % prime;
-                        if (i % prime == modulo) {
-                            composite = true;
-                            break;
-                        }
-                    }
-                    if (!composite) {
-                        mpz_sub_ui(ptest, center, i);
-                        if (mpz_probab_prime_p(ptest, 25)) {
-                            prev_p_i = i;
-                            break;
-                        }
-                    }
-                }
-                // */
-            }
-
-            int gap = next_p_i + prev_p_i;
-            float merit = gap / (K_log + log(m));
-            if (merit > min_merit)  {
-                // TODO write to file.
-                printf("%d  %.4f  %ld * %ld#/%ld -%d to +%d\n",
-                    gap, merit, m, P, D, prev_p_i, next_p_i);
-            }
-            if (merit > s_best_merit_interval) {
-                s_best_merit_interval = merit;
-                s_best_merit_interval_m = m;
-            }
-
-            mpz_clear(center); mpz_clear(ptest);
-        }
-
         // Save unknowns
         if (config.save_unknowns) {
             unknown_file << mi;
-            if (config.run_prp) {
-                unknown_file << " PRP -" << prev_p_i << " to +" << next_p_i;
-            }
             unknown_file << " : -" << unknown_l << " +" << unknown_u << " |";
 
             for (int d = 0; d <= 1; d++) {
@@ -787,10 +693,9 @@ void prime_gap_search(const struct Config config) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
 
-            printf("\t%ld %4d <- unknowns -> %-4d\t%4d <- gap -> %-4d\n",
+            printf("\t%ld %4d <- unknowns -> %-4d\n",
                 m,
                 unknown_l, unknown_u,
-                prev_p_i, next_p_i);
             if (mi <= 10) continue;
 
             // Stats!
@@ -802,22 +707,8 @@ void prime_gap_search(const struct Config config) {
                 100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * tests)),
                 100.0 * s_t_unk_low / s_total_unknown,
                 100.0 * s_t_unk_hgh / s_total_unknown);
-            if (config.run_prp) {
-                printf("\t    prp tests %-10ld (avg: %.2f) (%.1f tests/sec)\n",
-                    s_total_prp_tests,
-                    s_total_prp_tests / (float) tests,
-                    s_total_prp_tests / secs);
-                printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
-                    s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / tests,
-                    s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / tests);
-                printf("\t    best merit this interval: %.2f (at m=%ld)\n",
-                    s_best_merit_interval, s_best_merit_interval_m);
-            }
             printf("\t    large prime remaining: %d (avg/test: %ld)\n",
                 s_large_primes_rem, s_large_primes_tested / tests);
-
-            s_best_merit_interval = 0;
-            s_best_merit_interval_m = -1;
         }
     }
 
