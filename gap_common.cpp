@@ -84,7 +84,7 @@ Config argparse(int argc, char* argv[]) {
         {"p",             required_argument, 0,  'p' },
         {"d",             required_argument, 0,  'd' },
 
-        {"minmerit",      required_argument, 0,   3  },
+        {"min-merit",      required_argument, 0,   3  },
         {"sieve-length",  required_argument, 0,   4  },
         {"sieve-range",   required_argument, 0,   5  },
 

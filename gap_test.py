@@ -30,7 +30,7 @@ def get_arg_parser():
     parser.add_argument('-p',       type=int, required=True)
     parser.add_argument('-d',       type=int, required=True)
 
-    parser.add_argument('--minmerit',     type=int, required=True,
+    parser.add_argument('--min-merit',     type=int, required=True,
         help="only display prime gaps with merit >= minmerit")
     parser.add_argument('--sieve-length', type=int, required=True,
         help="how large the search window was (must match gap_search param)")

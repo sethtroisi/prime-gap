@@ -18,7 +18,7 @@ head while working on gmp mpz_prevprime.
 ```bash
 $ g++ -Wall -Werror -O3 gap_search.cpp gap_common.cpp -lgmp -o gap_search
 # ./gap_search <params>
-$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 5000 --minmerit 16
+$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 5000 --min-merit 16
 ...
 	21400500  185 <- unknowns -> 212 	2341 <- gap -> 1087
 	    tests     501        (15.15/sec)  33 seconds elapsed
