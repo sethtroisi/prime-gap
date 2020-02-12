@@ -298,6 +298,7 @@ void prime_gap_search(const struct Config config) {
     mpz_init(K);
     mpz_primorial_ui(K, P);
     assert( 0 == mpz_tdiv_q_ui(K, K, D) );
+    assert( mpz_cmp_ui(K, 1) > 0); // K <= 1 ?!?
 
     int K_digits = mpz_sizeinbase(K, 10);
     float K_log;
@@ -539,6 +540,9 @@ void prime_gap_search(const struct Config config) {
         // Reset sieve array to unknown.
         std::fill_n(composite[0].begin(), SIEVE_LENGTH, 0);
         std::fill_n(composite[1].begin(), SIEVE_LENGTH, 0);
+        // center is always composite.
+        composite[0][0] = composite[1][0] = 1;
+
 
         // For small primes that we don't do trick things with.
         for (size_t pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {

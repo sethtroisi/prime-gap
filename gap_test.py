@@ -135,6 +135,8 @@ def prime_gap_test(args):
 
     SL = sieve_length = args.sieve_length
     sieve_range = args.sieve_range
+    if sieve_range <= 4000:
+        sieve_range *= 10 ** 6
 
     print ("Hi", args.sieve_only)
     run_prp = not args.sieve_only
