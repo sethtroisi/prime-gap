@@ -27,20 +27,20 @@ using std::endl;
 using std::vector;
 
 
-vector<int> get_sieve_primes(unsigned int n) {
-    vector<int> primes = {2};
+vector<uint32_t> get_sieve_primes(uint32_t n) {
+    vector<uint32_t> primes = {2};
     vector<bool> is_prime(n+1, true);
-    for (unsigned int p = 3; p <= n; p += 2) {
+    for (uint32_t p = 3; p <= n; p += 2) {
         if (is_prime[p]) {
             primes.push_back(p);
-            unsigned int p2 = p * p;
+            uint64_t p2 = p * p;
             if (p2 > n) break;
 
-            for (unsigned int m = p2; m <= n; m += 2*p)
+            for (uint32_t m = p2; m <= n; m += 2*p)
                 is_prime[m] = false;
         }
     }
-    for (unsigned int p = primes.back() + 2; p <= n; p += 2) {
+    for (uint32_t p = primes.back() + 2; p <= n; p += 2) {
         if (is_prime[p])
             primes.push_back(p);
     }
@@ -179,9 +179,9 @@ Config argparse(int argc, char* argv[]) {
         cout << "minc > 50M will use to much memory" << endl;
     }
 
-    if (config.sieve_range > 2'000'000'000) {
+    if (config.sieve_range > 4'000'000'000) {
         config.valid = 0;
-        cout << "sieve_range > 2B not supported" << endl;
+        cout << "sieve_range > 4B not supported" << endl;
     }
 
     {

@@ -130,7 +130,7 @@ void prime_gap_test(const struct Config config) {
 
     // used in next_prime
     assert( P <= 80000 );
-    vector<int> primes = get_sieve_primes(80000);
+    vector<uint32_t> primes = get_sieve_primes(80000);
 
     // ----- Allocate memory for a handful of utility functions.
 

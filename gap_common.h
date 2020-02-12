@@ -35,5 +35,5 @@ struct Config {
 
 void show_usage(char* name);
 Config argparse(int argc, char* argv[]);
-vector<int> get_sieve_primes(unsigned int n);
+vector<uint32_t> get_sieve_primes(uint32_t n);
 

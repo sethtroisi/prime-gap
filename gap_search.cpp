@@ -100,7 +100,7 @@ void set_defaults(struct Config& config) {
         // 10^9 => 0.02709
 
         // factors of K = p#/d
-        vector<int> K_primes = get_sieve_primes(config.p);
+        vector<uint32_t> K_primes = get_sieve_primes(config.p);
         {
             int td = config.d;
             while (td > 1) {
@@ -150,8 +150,9 @@ void set_defaults(struct Config& config) {
 
             // Assume each coprime is independent (not quite true)
             double prob_gap_shorter = pow(1 - prob_prime_coprime, count_coprime);
-            // Only 1% should fail (fallback) in either direction.
-            if (prob_gap_shorter <= 0.01) {
+
+            // This seems to balance PRP fallback and sieve_size
+            if (prob_gap_shorter <= 0.008) {
                 config.sieve_length = tSL;
                 printf("AUTO SET: sieve length (coprime: %d, prob_gap longer %.2f%%): %ld\n",
                     count_coprime, 100 * prob_gap_shorter, tSL);
@@ -195,49 +196,14 @@ void set_defaults(struct Config& config) {
 }
 
 
-inline void sieve_small_primes(
-        const long m,
-        const int SIEVE_SMALL_PRIME_PI,
-        const vector<int>& primes, int *remainder,
-        vector<char> *composite) {
-
-    const int SL = composite[0].size();
-
-    // For small primes that we don't do trick things with.
-    for (int pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {
-        const int prime = primes[pi];
-        long modulo = (remainder[pi] * m) % prime;
-
-//        if (0) {
-//            mpz_t test; mpz_init(test); mpz_mul_ui(test, K, m);
-//            int mod = mpz_fdiv_ui(test, prime);
-//            if (mod != modulo) {
-//                cout << m << " " << prime << "\t" << mod << " vs " << modulo << endl;
-//                assert( false );
-//            }
-//            mpz_clear(test);
-//        }
-
-        for (int d = modulo; d < SL; d += prime) {
-            composite[0][d] = true;
-        }
-        // todo just remove this.
-        int first_negative = modulo == 0 ? 0 : prime - modulo;
-//        assert( 0 <= first_negative && first_negative < prime );
-        for (int d = first_negative; d < SL; d += prime) {
-            composite[1][d] = true;
-        }
-    }
-}
-
-int modulo_search_euclid(int p, int A, int L, int R);
-int modulo_search(int p, int A, int L, int R) {
+uint32_t modulo_search_euclid(uint32_t p, uint32_t A, uint32_t L, uint32_t R);
+uint32_t modulo_search(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
     // assert( R - L == 2 * sieve_length - 2 );
 
     /*
     // if expect a hit within 16 just brute force.
     if (16 * sieve_length > p) {
-        int temp = 0;
+        uint32_t temp = 0;
         for (int i = 1; i <= 20; i++) {
             temp += A;
             if (temp >= p) temp -= p;
@@ -252,65 +218,68 @@ int modulo_search(int p, int A, int L, int R) {
 }
 
 
-int modulo_search_euclid(int p, int A, int L, int R) {
-    // min i : L <= (A * i) % p <= L
+uint32_t modulo_search_euclid(uint32_t p, uint32_t a, uint32_t l, uint32_t r) {
+    // min i : l <= (a * i) % p <= l
 /*
-    assert( 0 <= A && A < p );
-    assert( 0 <= L && L < p );
-    assert( 0 <= R && R < p );
-    assert(      L <= R     );
-*/
+    assert( 0 <= a && a < p );
+    assert( 0 <= l && l < p );
+    assert( 0 <= r && r < p );
+    assert(      l <= r     );
+// */
 
-    if (L == 0) return 0;
+    if (l == 0) return 0;
 
-    if (2L * A > p) {
-        std::swap(L, R);
-        A = p - A;
-        L = p - L;
-        R = p - R;
+    // 2 *a > p, but avoids int max
+    if (a > (p >> 1)) {
+        std::swap(l, r);
+        a = p - a;
+        l = p - l;
+        r = p - r;
     }
 
     // check if small i works
-    if (A <= R) {
-        // Find next multiple of A >= L
-        // check if <= R
-        long mult = ((long) L + A-1L) / A;
-        long test = mult * A;
-        if (test <= R) {
+    if (a <= r) {
+        // find next multiple of a >= l
+        // check if <= r
+        uint32_t mult = (l-1) / a + 1;
+        long test = mult * a;
+        if (test <= r) {
             // assert( mult >= 0 );
             return mult;
         }
     }
 
-    // Reduce to simplier problem
-    long new_a = ((long) A) + ((-p) % A);
-    assert( 0 <= new_a && new_a < A );
-    long k = modulo_search_euclid(A, new_a, L % A, R % A);
+    // reduce to simplier problem
+    uint32_t new_a = a - (p % a);
+    assert( 0 <= new_a && new_a < a );
+    uint32_t k = modulo_search_euclid(a, new_a, l % a, r % a);
 
-    long tL = L + p * k;
-    long mult = (tL + A-1L) / A;
+    long tl = l + p * ((long) k);
+    long mult = (tl + a-1) / a;
 /*
-    long tR = R + p * k;
-    long test = mult * A;
-    assert(       test <= tR );
-    assert( tL <= test );
-*/
+    long tr = r + p * k;
+    long test = mult * a;
+    assert(       test <= tr );
+    assert( tl <= test );
+// */
     return mult;
 
 /*
     if (0) {
-        long temp = 0;
-        for (int i = 1; i < p; i++) {
-            temp += A;
+        uint64_t temp = 0;
+        for (size_t i = 1; i < p; i++) {
+            temp += a;
             if (temp > p) temp -= p;
-            if (L <= temp && temp <= R) {
-                assert( mult == i );
+            if (l <= temp && temp <= r) {
+                assert( mult == (long) i );
                 return i;
             }
+            cout << i << " " << mult << endl;
         }
         assert( false );
     }
-*/
+// */
+
 }
 
 
@@ -362,15 +331,15 @@ void prime_gap_search(const struct Config config) {
     }
 
     // ----- Generate primes under SIEVE_RANGE.
-    vector<int> const primes = get_sieve_primes(config.sieve_range);
-    printf("\tPrimePi(%ld) = %ld (2 ... %d)\n",
+    vector<uint32_t> const primes = get_sieve_primes(config.sieve_range);
+    printf("\tPrimePi(%ld) = %ld (2 ... %u)\n",
         config.sieve_range, primes.size(), primes.back());
 
     // SIEVE_SMALL deals with all primes can mark off two items in SIEVE_LENGTH.
     assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
-    const long SIEVE_SMALL_PRIME_PI = std::distance(primes.begin(),
+    const uint32_t SIEVE_SMALL_PRIME_PI = std::distance(primes.begin(),
         std::lower_bound(primes.begin(), primes.end(), SIEVE_SMALL));
-    printf("\tUsing %ld primes for SIEVE_SMALL(%d)\n\n",
+    printf("\tUsing %d primes for SIEVE_SMALL(%d)\n\n",
         SIEVE_SMALL_PRIME_PI, SIEVE_SMALL);
     assert( primes[SIEVE_SMALL_PRIME_PI] > SIEVE_SMALL );
 
@@ -424,46 +393,43 @@ void prime_gap_search(const struct Config config) {
     auto  s_setup_t = high_resolution_clock::now();
 
     // Remainders of (p#/d) mod prime
-    int *remainder   = (int*) malloc(sizeof(int) * primes.size());
-    // Inverse of Remainder mod prime
-    int *rem_inverse = (int*) malloc(sizeof(int) * primes.size());
+    uint32_t *remainder   = (uint32_t*) malloc(sizeof(uint32_t) * primes.size());
     {
-        cout << "\tCalculating remainder and inverse for each prime" << endl;
+        cout << "\tCalculating remainders for each prime" << endl;
+
+        // Print "."s during, equal in length to 'Calculat...'
+        unsigned int print_dots = 37;
 
         mpz_t temp, m_prime;
         mpz_init(temp);
         mpz_init(m_prime);
 
+        cout << "\t";
         for (size_t pi = 0; pi < primes.size(); pi++) {
+            if ((pi * print_dots) % primes.size() < print_dots) {
+                cout << "." << std::flush;
+            }
+
             const long prime = primes[pi];
 
             // Big improvement over surround_prime is reusing this for each m.
             long mod = mpz_fdiv_ui(K, prime);
+            if (!( 0 <= mod && mod < prime )) {
+                cout << mod << " " << prime << endl;
+            }
             assert( 0 <= mod && mod < prime );
             remainder[pi] = mod;
-
-            // Measure vs powermod(mod, prime-2, prime);
-            if (mod == 0) {
-                rem_inverse[pi] = 0;
-                assert( prime <= P );
-            } else {
-                mpz_set_ui(temp, mod);
-                mpz_set_ui(m_prime, prime);
-                mpz_invert(temp, temp, m_prime);
-                long inverse = mpz_get_ui(temp);
-                assert( inverse * mod % prime == 1 );
-                rem_inverse[pi] = inverse;
-            }
         }
 
         mpz_clear(temp);
         mpz_clear(m_prime);
     }
+    cout << endl;
 
     // Big improvement over surround_prime is avoiding checking each large prime.
     // vector<m, vector<pi>> for large primes that only rarely divide a sieve
     int s_large_primes_rem = 0;
-    std::vector<int> *large_prime_queue = new vector<int>[M_inc];
+    std::vector<uint32_t> *large_prime_queue = new vector<uint32_t>[M_inc];
     {
         // Find next m this will divide
         // solve (base_r * i) % prime < SIEVE_LENGTH
@@ -471,14 +437,14 @@ void prime_gap_search(const struct Config config) {
         // =>
         // solve (SIEVE_LENGTH + base_r * i) % prime < 2 * SIEVE_LENGTH
         //
-        printf("\tCalculating first m each large prime divides\n");
+        printf("\tCalculating first m each prime divides\n");
 
         // Print "."s during, equal in length to 'Calculat...'
-        unsigned int print_dots = 44 + 1;
+        unsigned int print_dots = 39;
 
         long first_m_sum = 0;
         cout << "\t";
-        for (size_t pi = SIEVE_SMALL_PRIME_PI; pi < primes.size(); pi++) {
+        for (uint32_t pi = SIEVE_SMALL_PRIME_PI; pi < primes.size(); pi++) {
             if ((pi * print_dots) % primes.size() < print_dots) {
                 cout << "." << std::flush;
             }
@@ -574,9 +540,21 @@ void prime_gap_search(const struct Config config) {
         std::fill_n(composite[0].begin(), SIEVE_LENGTH, 0);
         std::fill_n(composite[1].begin(), SIEVE_LENGTH, 0);
 
-        sieve_small_primes(
-            m, SIEVE_SMALL_PRIME_PI,
-            primes, remainder, composite);
+        // For small primes that we don't do trick things with.
+        for (size_t pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {
+            const uint32_t prime = primes[pi];
+            long modulo = (remainder[pi] * m) % prime;
+
+            for (size_t d = modulo; d < SIEVE_LENGTH; d += prime) {
+                composite[0][d] = true;
+            }
+
+            // Not technically correct but fine to skip modulo == 0
+            int first_negative = prime - modulo;
+            for (size_t d = first_negative; d < SIEVE_LENGTH; d += prime) {
+                composite[1][d] = true;
+            }
+        }
 
         // Maybe useful for some stats later.
         // int unknown_small_l = std::count(composite[0].begin(), composite[0].end(), false);
@@ -694,8 +672,8 @@ void prime_gap_search(const struct Config config) {
             double   secs = duration<double>(s_stop_t - s_start_t).count();
 
             printf("\t%ld %4d <- unknowns -> %-4d\n",
-                m,
-                unknown_l, unknown_u,
+                m, unknown_l, unknown_u);
+
             if (mi <= 10) continue;
 
             // Stats!
@@ -721,54 +699,6 @@ void prime_gap_search(const struct Config config) {
 
     delete[] large_prime_queue;
     free(remainder);
-    free(rem_inverse);
     mpz_clear(K);
 }
-
-
-/*
-
-// Old code for large prime search ( ~20x slower ).
-        // SIEVE_SMALL has dealt with small primes.
-        for (int pi = SIEVE_SMALL_PRIME_PI; pi < primes.size(); pi++) {
-            int prime = primes[pi];
-            long modulo = (remainder[pi] * m) % prime;
-
-            if (modulo < SIEVE_LENGTH) {
-                composite[1][modulo] = false;
-            } else {
-                // Don't have to deal with 0 case anymore.
-                int first_negative = -(modulo - prime);
-                if (first_negative < SIEVE_LENGTH) {
-                    composite[0][first_negative] = false;
-                }
-            }
-
-            if (0) {
-                mpz_t test; mpz_init(test); mpz_mul_ui(test, K, m);
-                int mod = mpz_fdiv_ui(test, prime);
-                if (mod != modulo) {
-                    cout << m << " " << prime << "\t" << mod << " vs " << modulo << endl;
-                    assert( false );
-                }
-                mpz_clear(test);
-            }
-        }
-
-// Old code for finding first range with mult of large p
-// This is 15-20x slower because of many uses of modulo.
-            const long inverse = rem_inverse[pi];
-            long first_m = M_inc+1;
-            // Have to do a little extra work because M doesn't start at zero.
-            for (int distance = modulo - SL + 1; distance < modulo + SL; distance++) {
-                // Need negative distance but C mod negative is weird.
-                long test = ((-distance % prime) + prime) % prime;
-                test = (test * inverse) % prime;
-                if (test < first_m) {
-                    first_m = test;
-                    assert( ( base_r * (M + test) + SL) % prime <= 2*SL );
-                }
-            }
-
-*/
 
