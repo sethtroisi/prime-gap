@@ -149,8 +149,10 @@ void prime_gap_test(const struct Config config) {
 
     // ----- Sieve stats
     {
-        double unknowns_after_sieve = 1;
-        for (long prime : primes) unknowns_after_sieve *= (prime - 1.0) / prime;
+        assert( config.sieve_range >= 1e6 );
+        //From Mertens' 3rd theorem
+        double gamma = 0.577215665;
+        double unknowns_after_sieve = 1 / (log(config.sieve_range) * exp(gamma));
 
         double prob_prime = 1 / (K_log + log(M));
         double prob_prime_coprime = 1;

@@ -57,11 +57,11 @@ void show_usage(char* name) {
     cout << "  --minc   <int>" << endl;
     cout << "[OPTIONALLY]" << endl;
     cout << "  --minmerit <minmerit>" << endl;
-    cout << "    only display prime gaps with merit >= minmerit " << endl;
+    cout << "    only display prime gaps with merit >= minmerit" << endl;
     cout << "  --sieve-length" << endl;
-    cout << "    how large the positive/negative sieve arrays should be. (default: 8192)" << endl;
+    cout << "    how large the positive/negative sieve arrays should be" << endl;
     cout << "  --sieve-range" << endl;
-    cout << "    Use primes <= sieve-range for checking composite. (default: 20M)" << endl;
+    cout << "    use primes <= sieve-range for checking composite" << endl;
     cout  << endl;
     cout << "  --sieve-only" << endl;
     cout << "    only sieve ranges, don't run PRP. useful for benchmarking" << endl;
