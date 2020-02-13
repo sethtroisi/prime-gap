@@ -372,9 +372,13 @@ def prime_gap_test(args):
             hist_data = np.histogram(d, bins=80, density=True)
             plt.plot(hist_data[1][:-1], hist_data[0], color=color, marker='x')
 
-            mu, std = stats.norm.fit(d)
             gap_span = np.linspace(0, max_gap, 400)
-            p = stats.norm.pdf(gap_span, mu, std)
+            if 'gap' in label:
+                mu, std = stats.norm.fit(d)
+                p = stats.norm.pdf(gap_span, mu, std)
+            else:
+                a = stats.gamma.fit(d)
+                p = stats.gamma.pdf(gap_span, a[0], loc=a[1], scale=a[2])
 
             plt.plot(gap_span, p, label=label, color=color)
 
