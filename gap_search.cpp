@@ -613,7 +613,7 @@ void prime_gap_search(const struct Config config) {
                 long low  = (prime - shift);
                 long high = low + (2*SL-2);
 
-                int next_mi = M_inc;
+                long next_mi = M_inc;
                 if (high >= prime) {
                     next_mi = mi + 1;
                 } else {

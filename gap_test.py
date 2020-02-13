@@ -37,20 +37,22 @@ def get_arg_parser():
 
     parser.add_argument('--min-merit',    type=int, default=10,
         help="only display prime gaps with merit >= minmerit")
-    parser.add_argument('--sieve-only',  action='store_true', default=False,
+    parser.add_argument('--sieve-only',  action='store_true',
         help="only sieve ranges, don't run PRP. useful for benchmarking")
+
+    parser.add_argument('--plots', action='store_true',
+        help="Show plots about distributions")
 
     return parser
 
 
-def prob_prime_sieve_length(M, D, K_log, K_digits, K_primes, SL, sieve_range):
+def prob_prime_sieve_length(M, D, prob_prime, K_digits, K_primes, SL, sieve_range):
     assert sieve_range >= 10 ** 6, sieve_range
 
     # From Mertens' 3rd theorem
     gamma = 0.577215665
     unknowns_after_sieve = 1.0 / (math.log(sieve_range) * math.exp(gamma))
 
-    prob_prime = 1 / (K_log + math.log(M))
     prob_prime_coprime = 1
     prob_prime_after_sieve = prob_prime / unknowns_after_sieve
 
@@ -85,6 +87,17 @@ def prob_prime_sieve_length(M, D, K_log, K_digits, K_primes, SL, sieve_range):
 
     return prob_prime_after_sieve
 
+def calculate_expected_gap(composites, SL, prob_prime_after_sieve, log_m):
+    expected_length = 0
+    prob_gap_longer = 1
+    for v in composites:
+        expected_length += abs(v) * prob_gap_longer * prob_prime_after_sieve
+        prob_gap_longer *= 1 - prob_prime_after_sieve
+
+    # expected to encounter a prime at distance ~= ln(start)
+    expected_length += (SL + log_m) * prob_gap_longer
+    return expected_length
+
 
 def determine_next_prime_i(m, K, composites, SL):
     center = m * K
@@ -97,7 +110,7 @@ def determine_next_prime_i(m, K, composites, SL):
             break
     else:
         # Using fallback to slower gmp routine
-        next_p_i = gmpy2.next_prime(center + SL - 1) - center
+        next_p_i = int(gmpy2.next_prime(center + SL - 1) - center)
 
     return tests, next_p_i
 
@@ -151,11 +164,12 @@ def prime_gap_test(args):
 
     K_digits = gmpy2.num_digits(K, 10)
     K_bits   = gmpy2.num_digits(K, 2)
-    K_log    = gmpy2.log(K)
+    K_log    = float(gmpy2.log(K))
+    M_log    = K_log + math.log(M)
     print("K = {} bits, {} digits, log(K) = {:.2f}".format(
         K_bits, K_digits, K_log))
     print("Min Gap ~= {} (for merit > {:.1f})\n".format(
-        int(min_merit * (K_log + math.log(M))), min_merit))
+        int(min_merit * M_log), min_merit))
 
     # ----- Open Output file
     fn = "{}_{}_{}_{}_s{}_l{}M.txt".format(
@@ -177,7 +191,7 @@ def prime_gap_test(args):
 
     # ----- Sieve stats
     prob_prime_after_sieve = prob_prime_sieve_length(
-        M, D, K_log, K_digits, K_primes, SL, sieve_range)
+        M, D, 1 / M_log, K_digits, K_primes, SL, sieve_range)
 
     # ----- Main sieve loop.
     print("\nStarting m={}".format(M))
@@ -194,6 +208,12 @@ def prime_gap_test(args):
     s_best_merit_interval = 0
     s_best_merit_interval_m = 0
 
+    s_expected_prev = []
+    s_expected_next = []
+    s_expected_gap  = []
+    s_experimental_side = []
+    s_experimental_gap = []
+
     for mi in range(M_inc):
         m = M + mi
         # TODO if gcd(m, d) != 1 continue?
@@ -209,13 +229,9 @@ def prime_gap_test(args):
         line = unknown_file.readline()
         start, c_l, c_h = line.split("|")
 
-        match = re.match(r"^([0-9]+) PRP -([0-9]+) to \+([0-9]+) : -([0-9]+) \+([0-9]+)", start)
-        if match:
-            mtest, prev_p_i, next_p_i, unknown_l, unknown_u = map(int, match.groups())
-        else:
-            match = re.match(r"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
-            assert match, start
-            mtest, unknown_l, unknown_u = map(int, match.groups())
+        match = re.match(r"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
+        assert match, start
+        mtest, unknown_l, unknown_u = map(int, match.groups())
 
         composite[0] = list(map(int,c_l.strip().split(" ")))
         composite[1] = list(map(int,c_h.strip().split(" ")))
@@ -229,6 +245,14 @@ def prime_gap_test(args):
         s_t_unk_low += unknown_l
         s_t_unk_hgh += unknown_u
 
+        if args.plots:
+            log_m = (K_log + math.log(m))
+            e_prev = calculate_expected_gap(composite[0], SL, prob_prime_after_sieve, log_m)
+            e_next = calculate_expected_gap(composite[1], SL, prob_prime_after_sieve, log_m)
+            s_expected_prev.append(e_prev)
+            s_expected_next.append(e_next)
+            s_expected_gap.append(e_prev + e_next)
+
         if run_prp:
             tests, prev_p_i = determine_prev_prime_i(m, K, composite[0], SL, primes, remainder)
             s_total_prp_tests += tests
@@ -238,8 +262,13 @@ def prime_gap_test(args):
             s_total_prp_tests += tests
             s_gap_out_of_sieve_next += next_p_i >= SL
 
-            gap = next_p_i + prev_p_i
-            merit = gap / (K_log + math.log(m))
+            assert prev_p_i > 0 and next_p_i > 0
+            gap = int(next_p_i + prev_p_i)
+            s_experimental_gap.append(gap)
+            s_experimental_side.append(next_p_i)
+            s_experimental_side.append(prev_p_i)
+
+            merit = gap / log_m
             if merit > min_merit:
                 # TODO write to file.
                 print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(
@@ -279,6 +308,81 @@ def prime_gap_test(args):
 
             s_best_merit_interval = 0
             s_best_merit_interval_m = -1
+
+    if args.plots:
+        import numpy as np
+        import matplotlib.pyplot as plt
+        from scipy import stats
+
+        if run_prp:
+            corr, _ = stats.pearsonr(s_expected_gap, s_experimental_gap)
+            print ("Pearson's correlation for expected gap: {:.3f}".format( corr))
+
+
+        x = list(range(M, M + M_inc))
+        rows = 5 if run_prp else 4
+
+        def plot_gaps_with_trendline(data, ylabel):
+            trendline = np.polyfit(x, data, 1)
+            trend = np.poly1d(trendline)
+
+            plt.plot(x, data)
+            trend_equation = str(trend)
+            plt.plot(x, trend(x), label=trend_equation,
+                color='lightblue', linestyle='dashed')
+
+            # Histogram of gap sizes
+            #hist_data = np.histogram(data, bins=50)
+            #plt.plot(4 * hist_data[0], hist_data[1][:-1],
+            #    color='lightblue', marker='x', linestyle='');
+
+            plt.ylabel(ylabel)
+            plt.legend(loc='upper right')
+
+        # Set up subplots.
+        fig3 = plt.figure(constrained_layout=True)
+        gs = fig3.add_gridspec(rows, 2)
+
+        ax1 = fig3.add_subplot(gs[0, 0])
+        plot_gaps_with_trendline(s_expected_prev, "E(previous gap)")
+
+        ax2 = fig3.add_subplot(gs[0, 1])
+        ax1.get_shared_y_axes().join(ax1, ax2)
+        plot_gaps_with_trendline(s_expected_next, "E(next gap)")
+
+        fig3.add_subplot(gs[1, :])
+        plot_gaps_with_trendline(s_expected_gap, "E(combined gap)")
+
+        if run_prp:
+            fig3.add_subplot(gs[2, :])
+            plot_gaps_with_trendline(s_experimental_gap, "gap")
+
+        fig3.add_subplot(gs[2 + run_prp:, :])
+        for d, label, color in [
+                (s_expected_prev, 'prev', 'blueviolet'),
+                (s_expected_next, 'next', 'peru'),
+                (s_expected_gap,  'expected', 'dodgerblue'),
+                (s_experimental_side, 'one side gap', 'darkorange'),
+                (s_experimental_gap, 'gap', 'forestgreen')]:
+
+            if not d:
+                continue
+            max_gap = max(max(s_expected_gap), max(s_experimental_gap, default=0))
+
+            hist_data = np.histogram(d, bins=80, density=True)
+            plt.plot(hist_data[1][:-1], hist_data[0], color=color, marker='x')
+
+            mu, std = stats.norm.fit(d)
+            gap_span = np.linspace(0, max_gap, 400)
+            p = stats.norm.pdf(gap_span, mu, std)
+
+            plt.plot(gap_span, p, label=label, color=color)
+
+        # Don't show as many zeros
+        plt.ylim(bottom=1e-5)
+        plt.legend(loc='upper left')
+
+        plt.show()
 
 
 if __name__ == "__main__":

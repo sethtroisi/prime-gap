@@ -226,8 +226,6 @@ void prime_gap_test(const struct Config config) {
 
         int unknown_l;
         int unknown_u;
-        int prev_p_i = 0;
-        int next_p_i = 0;
         // Read a line from the file
         {
             int mtest;
@@ -237,18 +235,6 @@ void prime_gap_test(const struct Config config) {
             }
             std::string delim;
             unknown_file >> delim;
-            if (delim == "PRP") {
-                unknown_file >> prev_p_i;
-                prev_p_i *= -1;
-
-                unknown_file >> delim;
-                assert( delim == "to" );
-
-                unknown_file >> next_p_i;
-
-                unknown_file >> delim;
-            }
-
             assert( delim == ":" );
 
             unknown_file >> unknown_l;
@@ -282,6 +268,8 @@ void prime_gap_test(const struct Config config) {
         s_t_unk_hgh += unknown_u;
 
         // TODO break out to function, also count tests.
+        int prev_p_i = 0;
+        int next_p_i = 0;
         if (config.run_prp) {
             mpz_t center, ptest;
             mpz_init(center); mpz_init(ptest);
