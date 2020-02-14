@@ -15,6 +15,8 @@
 # limitations under the License.
 
 import argparse
+import contextlib
+import logging
 import math
 import os.path
 import re
@@ -23,6 +25,26 @@ import sys
 import time
 
 import gmpy2
+
+
+class TeeLogger:
+    def __init__(self, fn, sysout):
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)-15s %(levelname)s: %(message)s",
+            handlers=[
+                logging.StreamHandler(sys.stdout),
+                logging.FileHandler(fn, mode="w"),
+            ]
+        )
+        self.logger = logging.getLogger()
+
+    def write(self, msg):
+        if msg and not msg.isspace():
+            self.logger.info(msg)
+
+    def flush(self):
+        self.logger.flush()
 
 
 def get_arg_parser():
@@ -49,7 +71,48 @@ def get_arg_parser():
     parser.add_argument('--plots', action='store_true',
         help="Show plots about distributions")
 
+    parser.add_argument('--save-logs', action='store_true',
+        help="Save logs and plots about distributions")
+
     return parser
+
+def verify_args(args):
+    if args.unknown_filename:
+        fn = args.unknown_filename
+        if not os.path.exists(fn):
+            print ("\"{}\" doesn't exist".format(fn))
+            sys.exit(1)
+        match = re.match(
+            "^(\d+)_(\d+)_(\d+)_(\d+)_s(\d+)_l(\d+)M.txt",
+            os.path.basename(fn))
+        if not match:
+            print ("\"{}\" doesn't match unknown file format".format(fn))
+            sys.exit(1)
+
+        ms, p, d, mi, sl, sr = map(int, match.groups())
+        args.mstart = ms
+        args.minc = mi
+        args.p = p
+        args.d = d
+        args.sieve_length = sl
+        args.sieve_range = sr
+
+    if args.sieve_range <= 4000:
+        args.sieve_range *= 10 ** 6
+
+    for arg in ('mstart', 'minc', 'p', 'd', 'sieve_length', 'sieve_range'):
+        if arg not in args or args.__dict__[arg] in (None, 0):
+            print ("Missing required argument", arg)
+            sys.exit(1)
+
+    fn = "{}_{}_{}_{}_s{}_l{}M.txt".format(
+        args.mstart, args.p, args.d, args.minc,
+        args.sieve_length, args.sieve_range // 10 ** 6)
+
+    if args.unknown_filename:
+        assert fn == os.path.basename(args.unknown_filename), (fn, args.unknown_filename)
+    else:
+        args.unknown_filename = fn
 
 
 def prob_prime_sieve_length(M, D, prob_prime, K_digits, K_primes, SL, sieve_range):
@@ -157,8 +220,6 @@ def prime_gap_test(args):
 
     SL = sieve_length = args.sieve_length
     sieve_range = args.sieve_range
-    if sieve_range <= 4000:
-        sieve_range *= 10 ** 6
 
     run_prp = not args.sieve_only
 
@@ -178,11 +239,9 @@ def prime_gap_test(args):
         int(min_merit * M_log), min_merit))
 
     # ----- Open Output file
-    fn = "{}_{}_{}_{}_s{}_l{}M.txt".format(
-        M, P, D, M_inc, sieve_length, sieve_range // 10 ** 6)
-    print("\tSaving unknowns to '{}'".format(fn))
+    print("\tLoading unknowns from '{}'".format(args.unknown_filename))
     print()
-    unknown_file = open(fn, "r")
+    unknown_file = open(args.unknown_filename, "r")
 
     # used in next_prime
     assert P <= 80000
@@ -253,7 +312,7 @@ def prime_gap_test(args):
         s_t_unk_low += unknown_l
         s_t_unk_hgh += unknown_u
 
-        if args.plots:
+        if args.save_logs or args.plots:
             e_prev = calculate_expected_gap(composite[0], SL, prob_prime_after_sieve, log_m)
             e_next = calculate_expected_gap(composite[1], SL, prob_prime_after_sieve, log_m)
             s_expected_prev.append(e_prev)
@@ -316,7 +375,7 @@ def prime_gap_test(args):
             s_best_merit_interval = 0
             s_best_merit_interval_m = -1
 
-    if args.plots:
+    if args.plots or args.save_logs:
         import numpy as np
         import matplotlib.pyplot as plt
         from scipy import stats
@@ -324,7 +383,6 @@ def prime_gap_test(args):
         if run_prp:
             corr, _ = stats.pearsonr(s_expected_gap, s_experimental_gap)
             print ("Pearson's correlation for expected gap: {:.3f}".format( corr))
-
 
         x = list(range(M, M + M_inc))
         rows = 5 if run_prp else 4
@@ -393,36 +451,26 @@ def prime_gap_test(args):
         plt.ylim(bottom=1e-5)
         plt.legend(loc='upper left')
 
-        plt.show()
+        if args.save_logs:
+            plt.savefig(args.unknown_filename + ".png", dpi=200)
+
+        if args.plots:
+            plt.show()
+
+        plt.close()
 
 
 if __name__ == "__main__":
     parser = get_arg_parser()
     args = parser.parse_args()
+    verify_args(args)
 
-    if args.unknown_filename:
-        fn = args.unknown_filename
-        if not os.path.exists(fn):
-            print ("\"{}\" doesn't exist".format(fn))
-            sys.exit(1)
-        match = re.match(
-            "^(\d+)_(\d+)_(\d+)_(\d+)_s(\d+)_l(\d+)M.txt",
-            os.path.basename(fn))
-        if not match:
-            print ("\"{}\" doesn't match unknown file format".format(fn))
-            sys.exit(1)
+    context = contextlib.suppress()
+    if args.save_logs:
+        assert args.unknown_filename
+        log_fn = args.unknown_filename + '.log'
+        context = contextlib.redirect_stdout(TeeLogger(log_fn, sys.stdout))
 
-        ms, p, d, mi, sl, sr = map(int, match.groups())
-        args.mstart = ms
-        args.minc = mi
-        args.p = p
-        args.d = d
-        args.sieve_length = sl
-        args.sieve_range = sr
+    with context:
+        prime_gap_test(args)
 
-    for arg in ('mstart', 'minc', 'p', 'd', 'sieve_length', 'sieve_range'):
-        if arg not in args or args.__dict__[arg] in (None, 0):
-            print ("Missing required argument", arg)
-            sys.exit(1)
-
-    prime_gap_test(args)
