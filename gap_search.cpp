@@ -138,27 +138,28 @@ void set_defaults(struct Config& config) {
         assert( config.p > 51 );
 
         // Search till something counting chance of shorter gap.
-        int P = config.p;
-        for (size_t tSL = P+1; tSL <= P*P; tSL += 2) {
-            int count_coprime = tSL-1;
-            for (size_t i = 1; i < tSL; i++) {
+        {
+            int P = config.p;
+            int count_coprime = 0;
+            for (size_t tSL = 1; tSL <= P*P; tSL += 1) {
+                count_coprime += 1;
                 for (int prime : K_primes) {
-                    if ((i % prime) == 0) {
+                    if ((tSL % prime) == 0) {
                         count_coprime -= 1;
                         break;
                     }
                 }
-            }
 
-            // Assume each coprime is independent (not quite true)
-            double prob_gap_shorter = pow(1 - prob_prime_coprime, count_coprime);
+                // Assume each coprime is independent (not quite true)
+                double prob_gap_shorter = pow(1 - prob_prime_coprime, count_coprime);
 
-            // This seems to balance PRP fallback and sieve_size
-            if (prob_gap_shorter <= 0.008) {
-                config.sieve_length = tSL;
-                printf("AUTO SET: sieve length (coprime: %d, prob_gap longer %.2f%%): %ld\n",
-                    count_coprime, 100 * prob_gap_shorter, tSL);
-                break;
+                // This seems to balance PRP fallback and sieve_size
+                if (prob_gap_shorter <= 0.008) {
+                    config.sieve_length = tSL;
+                    printf("AUTO SET: sieve length (coprime: %d, prob_gap longer %.2f%%): %ld\n",
+                        count_coprime, 100 * prob_gap_shorter, tSL);
+                    break;
+                }
             }
         }
         assert( config.sieve_length > 100 ); // Something went wrong above.
