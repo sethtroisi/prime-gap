@@ -21,6 +21,7 @@ import math
 import os.path
 import re
 import sqlite3
+import subprocess
 import sys
 import time
 
@@ -75,6 +76,7 @@ def get_arg_parser():
         help="Save logs and plots about distributions")
 
     return parser
+
 
 def verify_args(args):
     if args.unknown_filename:
@@ -156,6 +158,7 @@ def prob_prime_sieve_length(M, D, prob_prime, K_digits, K_primes, SL, sieve_rang
 
     return prob_prime_after_sieve
 
+
 def calculate_expected_gap(composites, SL, prob_prime_after_sieve, log_m):
     expected_length = 0
     prob_gap_longer = 1
@@ -168,13 +171,29 @@ def calculate_expected_gap(composites, SL, prob_prime_after_sieve, log_m):
     return expected_length
 
 
-def determine_next_prime_i(m, K, composites, SL):
+def openPFGW_is_prime(strn):
+    # Overhead of subprocess calls seems to be ~0.03
+    T0 = time.time()
+    s = subprocess.getstatusoutput("./pfgw64 -e1 -q" + strn)
+    T1 = time.time()
+    assert s[1].startswith('PFGW'), s
+    return s[0] == 0
+
+
+def is_prime(num, strnum, dist):
+    if gmpy2.num_digits(num, 2) > 200000:
+        return openPFGW_is_prime(strnum + str(dist))
+
+    return gmpy2.is_prime(num)
+
+
+def determine_next_prime_i(m, strn, K, composites, SL):
     center = m * K
     tests = 0
 
     for i in composites:
         tests += 1;
-        if gmpy2.is_prime(center + i):
+        if is_prime(center + i, strn, i):
             next_p_i = i
             break
     else:
@@ -184,14 +203,14 @@ def determine_next_prime_i(m, K, composites, SL):
     return tests, next_p_i
 
 
-def determine_prev_prime_i(m, K, composites, SL, primes, remainder):
+def determine_prev_prime_i(m, strn, K, composites, SL, primes, remainder):
     center = m * K
     tests = 0
 
     for i in composites:
         assert i < 0
         tests += 1;
-        if gmpy2.is_prime(center + i):
+        if is_prime(center + i, strn, i):
             prev_p_i = -i
             break
     else:
@@ -204,7 +223,7 @@ def determine_prev_prime_i(m, K, composites, SL, primes, remainder):
                     composite = True
                     break
             if not composite:
-                if gmpy2.is_prime(center - i):
+                if is_prime(center - i, strn, -i):
                     prev_p_i = i
                     break
 
@@ -320,11 +339,15 @@ def prime_gap_test(args):
             s_expected_gap.append(e_prev + e_next)
 
         if run_prp:
-            tests, prev_p_i = determine_prev_prime_i(m, K, composite[0], SL, primes, remainder)
+            # Used for openPFGW
+            strn = "{}*{}#/{}+".format(m, P, D)
+
+            tests, prev_p_i = determine_prev_prime_i(m, strn, K, composite[0],
+                                                     SL, primes, remainder)
             s_total_prp_tests += tests
             s_gap_out_of_sieve_prev += prev_p_i >= SL
 
-            tests, next_p_i = determine_next_prime_i(m, K, composite[1], SL)
+            tests, next_p_i = determine_next_prime_i(m, strn, K, composite[1], SL)
             s_total_prp_tests += tests
             s_gap_out_of_sieve_next += next_p_i >= SL
 
@@ -344,7 +367,7 @@ def prime_gap_test(args):
                 s_best_merit_interval = merit
                 s_best_merit_interval_m = m
 
-        if mi in (1,10,100,500,1000, M_inc-1) or m % 5000 == 0:
+        if mi in (1,10,30,100,300,1000, M_inc-1) or m % 5000 == 0:
             s_stop_t = time.time()
             secs = s_stop_t - s_start_t
 
@@ -352,7 +375,7 @@ def prime_gap_test(args):
                 m,
                 unknown_l, unknown_u,
                 prev_p_i, next_p_i))
-            if mi <= 10: continue
+            if mi <= 10 and secs < 6: continue
 
             # Stats!
             tests = mi + 1
@@ -469,6 +492,7 @@ if __name__ == "__main__":
     if args.save_logs:
         assert args.unknown_filename
         log_fn = args.unknown_filename + '.log'
+        assert not os.path.exists(log_fn), "{} already exists!".format(log_fn)
         context = contextlib.redirect_stdout(TeeLogger(log_fn, sys.stdout))
 
     with context:
