@@ -392,7 +392,7 @@ def prime_gap_test(args):
             trend = np.poly1d(trendline)
 
             plt.plot(x, data)
-            trend_equation = str(trend)
+            trend_equation = "{:.2e} x + {:.1f}".format(*trend.coef) #str(trend)
             plt.plot(x, trend(x), label=trend_equation,
                 color='lightblue', linestyle='dashed')
 
@@ -415,14 +415,14 @@ def prime_gap_test(args):
         ax1.get_shared_y_axes().join(ax1, ax2)
         plot_gaps_with_trendline(s_expected_next, "E(next gap)")
 
-        fig3.add_subplot(gs[1, :])
+        fig3.add_subplot(gs[1, :2 - run_prp])
         plot_gaps_with_trendline(s_expected_gap, "E(combined gap)")
 
         if run_prp:
-            fig3.add_subplot(gs[2, :])
+            fig3.add_subplot(gs[1, 1])
             plot_gaps_with_trendline(s_experimental_gap, "gap")
 
-        fig3.add_subplot(gs[2 + run_prp:, :])
+        fig3.add_subplot(gs[2:, :])
         for d, label, color in [
                 (s_expected_prev, 'prev', 'blueviolet'),
                 (s_expected_next, 'next', 'peru'),
@@ -449,7 +449,7 @@ def prime_gap_test(args):
 
         # Don't show as many zeros
         plt.ylim(bottom=1e-5)
-        plt.legend(loc='upper left')
+        plt.legend(loc='upper right')
 
         if args.save_logs:
             plt.savefig(args.unknown_filename + ".png", dpi=200)
