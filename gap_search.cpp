@@ -258,22 +258,6 @@ uint32_t modulo_search_euclid(uint32_t p, uint32_t a, uint32_t l, uint32_t r) {
 // */
     return mult;
 
-/*
-    if (0) {
-        uint64_t temp = 0;
-        for (size_t i = 1; i < p; i++) {
-            temp += a;
-            if (temp > p) temp -= p;
-            if (l <= temp && temp <= r) {
-                assert( mult == (long) i );
-                return i;
-            }
-            cout << i << " " << mult << endl;
-        }
-        assert( false );
-    }
-// */
-
 }
 
 
@@ -352,6 +336,7 @@ void prime_gap_search(const struct Config config) {
 
     // ----- Sieve stats
     {
+        // Can also use Mertens' 3rd theorem
         double unknowns_after_sieve = 1;
         for (int64_t prime : primes) unknowns_after_sieve *= (prime - 1.0) / prime;
 
@@ -406,8 +391,7 @@ void prime_gap_search(const struct Config config) {
         // Print "."s during, equal in length to 'Calculat...'
         unsigned int print_dots = 37;
 
-        mpz_t temp, m_prime;
-        mpz_init(temp);
+        mpz_t m_prime;
         mpz_init(m_prime);
 
         cout << "\t";
@@ -424,7 +408,6 @@ void prime_gap_search(const struct Config config) {
             remainder[pi] = mod;
         }
 
-        mpz_clear(temp);
         mpz_clear(m_prime);
     }
     cout << endl;
@@ -525,7 +508,6 @@ void prime_gap_search(const struct Config config) {
         std::fill_n(composite[1].begin(), SIEVE_LENGTH, 0);
         // center is always composite.
         composite[0][0] = composite[1][0] = 1;
-
 
         // For small primes that we don't do trick things with.
         for (size_t pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {

@@ -53,7 +53,7 @@ vector<uint32_t> get_sieve_primes(uint32_t n) {
 
 // Faster because of better memory access patterns
 vector<uint64_t> get_sieve_primes_segmented(uint64_t n) {
-//    assert( n > 10'000 );
+    assert( n > 10'000 );
     uint64_t sqrt_n = sqrt(n);
     while (sqrt_n * sqrt_n < n) sqrt_n++;
 
@@ -67,6 +67,7 @@ vector<uint64_t> get_sieve_primes_segmented(uint64_t n) {
     // Large enough to be fast and still fit in L2/L3 cache.
     uint32_t BLOCKSIZE = 1 << 17;
     uint32_t ODD_BLOCKSIZE = 2 * BLOCKSIZE;
+    // only odd elements of ODD_BLOCKSIZE 0 => 1, 1 => 3, 2 => 5, ...
     vector<bool> is_prime(BLOCKSIZE, true);
 
     vector<uint64_t> primes = {2};
@@ -84,7 +85,6 @@ vector<uint64_t> get_sieve_primes_segmented(uint64_t n) {
         for (uint32_t pi = 1; pi < small_primes.size(); pi++) {
             uint32_t prime = small_primes[pi];
             uint32_t first = next_mod[pi];
-            // TODO indexing for odds.
             for (; first < BLOCKSIZE; first += prime){
                 is_prime[first] = 0;
             }
