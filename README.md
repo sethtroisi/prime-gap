@@ -6,11 +6,16 @@ head while working on gmp mpz_prevprime.
 
 ### TODO
 
-* [] Verify sieve_length math with d > 1
-* [] Dynamic sieve_range
-* [] generate expected length
-* [] sort and PRP only some
-* [x] Dynamic sieve_length
+* gap_test.py
+  * [ ] starting at m > mstart.
+  * [ ] sort and PRP only top expected_length
+  * [ ] try and describe distribution
+  * [x] generate expected length
+* gap_search.cpp
+  * [ ] `sieve_range` > 4B
+  * [ ] Verify `sieve_length` math with d > 1
+  * [x] Dynamic `sieve_length`
+  * [x] Dynamic `sieve_range`
 
 
 ## Commands
