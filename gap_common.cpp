@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <getopt.h>
 #include <iostream>
@@ -29,20 +31,70 @@ using std::vector;
 
 vector<uint32_t> get_sieve_primes(uint32_t n) {
     vector<uint32_t> primes = {2};
-    vector<bool> is_prime(n+1, true);
+    vector<bool> is_prime((n+1) >> 1, true);
+    uint32_t half_n = n >> 1;
+
     for (uint32_t p = 3; p <= n; p += 2) {
-        if (is_prime[p]) {
+        if (is_prime[p >> 1]) {
             primes.push_back(p);
             uint64_t p2 = p * p;
             if (p2 > n) break;
 
-            for (uint32_t m = p2; m <= n; m += 2*p)
+            for (uint32_t m = p2 >> 1; m <= half_n; m += p)
                 is_prime[m] = false;
         }
     }
     for (uint32_t p = primes.back() + 2; p <= n; p += 2) {
-        if (is_prime[p])
+        if (is_prime[p >> 1])
             primes.push_back(p);
+    }
+    return primes;
+}
+
+// Faster because of better memory access patterns
+vector<uint64_t> get_sieve_primes_segmented(uint64_t n) {
+//    assert( n > 10'000 );
+    uint64_t sqrt_n = sqrt(n);
+    while (sqrt_n * sqrt_n < n) sqrt_n++;
+
+    const vector<uint32_t> small_primes = get_sieve_primes(sqrt_n);
+    // First number in next block primes[pi] divides.
+    vector<uint32_t> next_mod(small_primes.size(), 0);
+    for (uint32_t pi = 1; pi < small_primes.size(); pi++) {
+        next_mod[pi] = small_primes[pi] * small_primes[pi] >> 1;
+    }
+
+    // Large enough to be fast and still fit in L2/L3 cache.
+    uint32_t BLOCKSIZE = 1 << 17;
+    uint32_t ODD_BLOCKSIZE = 2 * BLOCKSIZE;
+    vector<bool> is_prime(BLOCKSIZE, true);
+
+    vector<uint64_t> primes = {2};
+
+    for (uint64_t B = 0; B < n; B += ODD_BLOCKSIZE) {
+        if (B + ODD_BLOCKSIZE > n) {
+            BLOCKSIZE = (n - B) >> 1;
+        }
+
+        // reset is_prime
+        std::fill(is_prime.begin(), is_prime.end(), true);
+        if (B == 0) is_prime[0] = 0; // Skip 1
+
+        // Can skip some large pi up to certain B (would have to set next_mod correctly)
+        for (uint32_t pi = 1; pi < small_primes.size(); pi++) {
+            uint32_t prime = small_primes[pi];
+            uint32_t first = next_mod[pi];
+            // TODO indexing for odds.
+            for (; first < BLOCKSIZE; first += prime){
+                is_prime[first] = 0;
+            }
+            next_mod[pi] = first - BLOCKSIZE;
+        }
+        for (int64_t prime = 0; prime < BLOCKSIZE; prime++) {
+            if (is_prime[prime]) {
+                primes.push_back(B + 2 * prime + 1);
+            }
+        }
     }
     return primes;
 }
