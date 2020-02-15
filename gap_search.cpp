@@ -31,7 +31,8 @@ using std::endl;
 using std::vector;
 using namespace std::chrono;
 
-#define SIEVE_SMALL       80'000
+// Tweaking this doesn't seem to change speed much.
+#define SIEVE_SMALL       150'000
 
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config config);
@@ -174,7 +175,7 @@ void set_defaults(struct Config& config) {
         //  min_merit
         if (logK >= 1500) {
             // Largest supported number right now
-            config.sieve_range = 2'000'000'000;
+            config.sieve_range = 4'000'000'000;
             // 2020-02-09 tuning notes
             //  P 1627 SL=8192
             //      log(t) ~= 1600, ~= 4 primes in SL
@@ -197,27 +198,19 @@ void set_defaults(struct Config& config) {
 }
 
 
-uint32_t modulo_search_euclid(uint32_t p, uint32_t A, uint32_t L, uint32_t R);
-uint32_t modulo_search(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
-    // assert( R - L == 2 * sieve_length - 2 );
+uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
+    // A + p must not overflow.
+    assert( A + p > p );
 
-    /*
-    // if expect a hit within 16 just brute force.
-    if (16 * sieve_length > p) {
-        uint32_t temp = 0;
-        for (int i = 1; i <= 20; i++) {
-            temp += A;
-            if (temp >= p) temp -= p;
-            if (L <= A && A <= R) {
-                return i;
-            }
+    uint32_t temp = 0;
+    for (int i = 1; ; i++) {
+        temp += A;
+        if (temp >= p) temp -= p;
+        if (L <= temp && temp <= R) {
+            return i;
         }
     }
-    */
-
-    return modulo_search_euclid(p, A, L, R);
 }
-
 
 uint32_t modulo_search_euclid(uint32_t p, uint32_t a, uint32_t l, uint32_t r) {
     // min i : l <= (a * i) % p <= l
@@ -293,6 +286,9 @@ void prime_gap_search(const struct Config config) {
 
     const unsigned int SIEVE_LENGTH = config.sieve_length;
     const unsigned int SL = SIEVE_LENGTH;
+
+    mpz_t test;
+    mpz_init(test);
 
     // ----- Merit Stuff
     mpz_t K;
@@ -432,15 +428,10 @@ void prime_gap_search(const struct Config config) {
 
     // Big improvement over surround_prime is avoiding checking each large prime.
     // vector<m, vector<pi>> for large primes that only rarely divide a sieve
+    // TODO only allocate 100'000 at a time, further out mi go to a waiting vector.
     int s_large_primes_rem = 0;
     std::vector<uint32_t> *large_prime_queue = new vector<uint32_t>[M_inc];
     {
-        // Find next m this will divide
-        // solve (base_r * i) % prime < SIEVE_LENGTH
-        //  or   (base_r * i) + SIEVE_LENGTH % prime < SIEVE_LENGTH
-        // =>
-        // solve (SIEVE_LENGTH + base_r * i) % prime < 2 * SIEVE_LENGTH
-        //
         printf("\tCalculating first m each prime divides\n");
 
         // Print "."s during, equal in length to 'Calculat...'
@@ -478,7 +469,7 @@ void prime_gap_search(const struct Config config) {
             long high = low + (2*SL-2);
             assert( 0 <= low && high < prime );
 
-            long mi = modulo_search(prime, base_r, low, high);
+            long mi = modulo_search_euclid(prime, base_r, low, high);
             assert( low <= (mi * base_r) % prime );
             assert(        (mi * base_r) % prime <= high );
 
@@ -491,21 +482,7 @@ void prime_gap_search(const struct Config config) {
 
             if (0) {
                 // Brute force doublecheck
-                long temp = (modulo + SL - 1) - base_r;
-                int mi2 = - 1;
-                for (mi2 = 0; mi2 < M_inc; mi2++) {
-                    temp += base_r;
-                    if (temp >= prime) temp -= prime;
-                    assert( temp < prime );
-                    if (temp < (2*SL-1)) {
-                        first_m_sum += mi2;
-
-                        assert( (base_r * (M + mi2) + (SL - 1)) % prime < 2*SL );
-                        cout << prime << " " << base_r << " " << modulo << " | " << mi << " " << mi2 << endl;
-                        assert( mi2 == mi );
-                        break;
-                    }
-                }
+                assert( mi == modulo_search_brute(prime, base_r, low, high) );
             }
         }
         cout << endl;
@@ -572,18 +549,15 @@ void prime_gap_search(const struct Config config) {
             s_large_primes_rem -= 1;
 
             // Large prime should divide some number in SIEVE for this m
-            // When done find next mi prime divides.
+            // When done find next mi where prime divides a number in SIEVE.
             const long prime   = primes[pi];
             long base_r  = remainder[pi];
             long modulo = (base_r * m) % prime;
 
             if (0) {
-                mpz_t test; mpz_init(test); mpz_mul_ui(test, K, m);
+                mpz_mul_ui(test, K, m);
                 long mod = mpz_fdiv_ui(test, prime);
-                if (mod != modulo) {
-                    cout << m << " " << prime << "\t" << mod << " vs " << modulo << endl;
-                    assert( false );
-                }
+                assert( mod == modulo );
                 mpz_clear(test);
             }
 
@@ -593,17 +567,14 @@ void prime_gap_search(const struct Config config) {
             } else {
                 // Don't have to deal with 0 case anymore.
                 long first_negative = prime - modulo;
-
                 assert( first_negative < SIEVE_LENGTH); // Bad next m!
-                //cout << "Bad next m: " << m << " " << prime << " mod: " << modulo << endl;
-
                 // Just before a multiple
                 composite[1][first_negative] = true;
             }
 
             // Find next mi that primes divides part of SIEVE
             {
-                // next modulo otherwise m = 0;
+                // next modulo otherwise modulo_search returns 0;
                 long shift = (modulo + base_r) + (SL - 1);
                 if (shift >= prime) shift -= prime;
                 if (shift >= prime) shift -= prime;
@@ -618,7 +589,7 @@ void prime_gap_search(const struct Config config) {
                     next_mi = mi + 1;
                 } else {
                     assert( 0 <= low && high < prime );
-                    long m2 = modulo_search(prime, base_r, low, high);
+                    long m2 = modulo_search_euclid(prime, base_r, low, high);
                     assert( low <= (m2 * base_r) % prime );
                     assert(        (m2 * base_r) % prime <= high );
                     next_mi = mi + 1 + m2;
@@ -629,24 +600,12 @@ void prime_gap_search(const struct Config config) {
                     large_prime_queue[next_mi].push_back(pi);
                     s_large_primes_rem += 1;
                 }
-
-                if (0) {
-                    long temp = (modulo + base_r) + SL - 1;
-                    if (temp >= prime) temp -= prime;
-                    for (int m3 = m + 1; m3 < M_inc; m3++) {
-                        if (temp >= prime) temp -= prime;
-                        if (temp < (2*SL-1)) {
-                            assert( next_mi == m3 );
-                            break;
-                        }
-                        temp += base_r;
-                    }
-                }
             }
         }
         large_prime_queue[mi].clear();
         large_prime_queue[mi].shrink_to_fit();
 
+        // 2-3% of runtime, could be optimized into save_unknowns loop..
         int unknown_l = std::count(composite[0].begin(), composite[0].end(), false);
         int unknown_u = std::count(composite[1].begin(), composite[1].end(), false);
         s_total_unknown += unknown_l + unknown_u;
@@ -707,5 +666,6 @@ void prime_gap_search(const struct Config config) {
     delete[] large_prime_queue;
     free(remainder);
     mpz_clear(K);
+    mpz_clear(test);
 }
 
