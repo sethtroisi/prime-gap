@@ -7,11 +7,14 @@ head while working on gmp mpz_prevprime.
 ### TODO
 
 * gap_test.py
-  * [ ] starting at m > mstart.
-  * [ ] sort and PRP only top expected_length
-  * [ ] try and describe distribution
+  * [ ] Store ALL results to sql.
+  * [ ] Starting at m > mstart.
+  * [ ] Autoscale printing to every X seconds
+  * [ ] Sort and PRP only top expected_length
+  * [ ] Try and describe distribution
   * [x] generate expected length
 * gap_search.cpp
+  * [ ] Option to only output m with gcd(m, d) == 1
   * [ ] `sieve_range` > 4B
   * [ ] Verify `sieve_length` math with d > 1
   * [x] Dynamic `sieve_length`
