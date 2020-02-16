@@ -363,8 +363,9 @@ void prime_gap_test(const struct Config config) {
             mpz_clear(center); mpz_clear(ptest);
         }
 
-        if ( (mi == 1 || mi == 10 || mi == 100 || mi == 500 || mi == 1000) ||
-             (m % 5000 == 0) || ((mi+1) == M_inc) ) {
+        int tests = mi + 1;
+        if ( (tests == 1 || tests == 10 || tests == 100 || tests == 500 || tests == 1000) ||
+             (tests % 5000 == 0) || (tests == M_inc) ) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
 
@@ -375,7 +376,6 @@ void prime_gap_test(const struct Config config) {
             if (mi <= 10) continue;
 
             // Stats!
-            int tests = mi + 1;
             printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
                 tests, tests / secs, secs);
             printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f%% <- %% -> %.2f%%\n",

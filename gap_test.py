@@ -181,7 +181,7 @@ def openPFGW_is_prime(strn):
 
 
 def is_prime(num, strnum, dist):
-    if gmpy2.num_digits(num, 2) > 200000:
+    if gmpy2.num_digits(num, 2) > 2000000:
         return openPFGW_is_prime(strnum + str(dist))
 
     return gmpy2.is_prime(num)
@@ -367,7 +367,8 @@ def prime_gap_test(args):
                 s_best_merit_interval = merit
                 s_best_merit_interval_m = m
 
-        if mi in (1,10,30,100,300,1000, M_inc-1) or m % 5000 == 0:
+        tests = mi + 1
+        if tests in (1,10,30,100,300,1000, M_inc) or tests % 5000 == 0:
             s_stop_t = time.time()
             secs = s_stop_t - s_start_t
 
@@ -378,7 +379,6 @@ def prime_gap_test(args):
             if mi <= 10 and secs < 6: continue
 
             # Stats!
-            tests = mi + 1
             print("\t    tests     {:<10d} ({:.2f}/sec)  {:.0f} seconds elapsed".format(
                 tests, tests / secs, secs))
             print("\t    unknowns  {:<10d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
