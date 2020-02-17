@@ -58,23 +58,31 @@ vector<uint64_t> get_sieve_primes_segmented(uint64_t n) {
     while (sqrt_n * sqrt_n < n) sqrt_n++;
 
     const vector<uint32_t> small_primes = get_sieve_primes(sqrt_n);
-    // First number in next block primes[pi] divides.
-    vector<uint32_t> next_mod(small_primes.size(), 0);
-    for (uint32_t pi = 1; pi < small_primes.size(); pi++) {
-        next_mod[pi] = small_primes[pi] * small_primes[pi] >> 1;
-    }
 
-    // Large enough to be fast and still fit in L2/L3 cache.
-    uint32_t BLOCKSIZE = 1 << 17;
-    uint32_t ODD_BLOCKSIZE = 2 * BLOCKSIZE;
-    // only odd elements of ODD_BLOCKSIZE 0 => 1, 1 => 3, 2 => 5, ...
-    vector<bool> is_prime(BLOCKSIZE, true);
+    // First number in next block that primes[pi] divides.
+    vector<int32_t> next_mod(small_primes.size(), 0);
+
+    // Large enough to be fast and still fit in L1/L2 cache.
+    uint32_t BLOCKSIZE = 1 << 16;
+    uint32_t ODD_BLOCKSIZE = BLOCKSIZE >> 1;
+    vector<char> is_prime(ODD_BLOCKSIZE, true);
 
     vector<uint64_t> primes = {2};
 
-    for (uint64_t B = 0; B < n; B += ODD_BLOCKSIZE) {
-        if (B + ODD_BLOCKSIZE > n) {
-            BLOCKSIZE = (n - B) >> 1;
+    uint32_t max_pi = 0;
+    for (uint64_t B = 0; B < n; B += BLOCKSIZE) {
+        uint64_t B_END = B + BLOCKSIZE - 1;
+        if (B_END > n) {
+            BLOCKSIZE = (n - B);
+            ODD_BLOCKSIZE = (n - B + 1) >> 1;
+            B_END = n;
+        }
+
+        while ((max_pi < small_primes.size()) &&
+               small_primes[max_pi] * small_primes[max_pi] <= B_END) {
+            uint64_t first = small_primes[max_pi] * small_primes[max_pi];
+            next_mod[max_pi] = (first - B) >> 1;
+            max_pi += 1;
         }
 
         // reset is_prime
@@ -82,15 +90,15 @@ vector<uint64_t> get_sieve_primes_segmented(uint64_t n) {
         if (B == 0) is_prime[0] = 0; // Skip 1
 
         // Can skip some large pi up to certain B (would have to set next_mod correctly)
-        for (uint32_t pi = 1; pi < small_primes.size(); pi++) {
-            uint32_t prime = small_primes[pi];
+        for (uint32_t pi = 1; pi < max_pi; pi++) {
+            const uint32_t prime = small_primes[pi];
             uint32_t first = next_mod[pi];
-            for (; first < BLOCKSIZE; first += prime){
-                is_prime[first] = 0;
+            for (; first < ODD_BLOCKSIZE; first += prime){
+                is_prime[first] = false;
             }
-            next_mod[pi] = first - BLOCKSIZE;
+            next_mod[pi] = first - ODD_BLOCKSIZE;
         }
-        for (int64_t prime = 0; prime < BLOCKSIZE; prime++) {
+        for (uint32_t prime = 0; prime < ODD_BLOCKSIZE; prime++) {
             if (is_prime[prime]) {
                 primes.push_back(B + 2 * prime + 1);
             }
