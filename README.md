@@ -17,6 +17,7 @@ head while working on gmp mpz_prevprime.
   * [ ] Option to only output m with gcd(m, d) == 1
   * [ ] Verify `sieve_length` math with d > 1
   * [ ] Allow for long mi by using bucketed `large_prime_queue`
+  * [x] Only store prime/remainder for primes that divide ANY mi.
   * [x] `sieve_range` > 4B
   * [x] Dynamic `sieve_length`
   * [x] Dynamic `sieve_range`
