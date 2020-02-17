@@ -10,13 +10,14 @@ head while working on gmp mpz_prevprime.
   * [ ] Store ALL results to sql.
   * [ ] Starting at m > mstart.
   * [ ] Autoscale printing to every X seconds
-  * [ ] Sort and PRP only top expected_length
+  * [ ] Sort by expected gap and PRP only top X%
   * [ ] Try and describe distribution
-  * [x] generate expected length
+  * [x] Generate expected length
 * gap_search.cpp
   * [ ] Option to only output m with gcd(m, d) == 1
   * [ ] `sieve_range` > 4B
   * [ ] Verify `sieve_length` math with d > 1
+  * [ ] Allow for long mi by using bucketed `large_prime_queue`
   * [x] Dynamic `sieve_length`
   * [x] Dynamic `sieve_range`
 

@@ -32,7 +32,7 @@ using std::vector;
 using namespace std::chrono;
 
 // Tweaking this doesn't seem to change speed much.
-#define SIEVE_SMALL       150'000
+#define SIEVE_SMALL       1'000'000
 
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config config);
@@ -272,6 +272,8 @@ void prime_gap_search(const struct Config config) {
     const unsigned int SIEVE_LENGTH = config.sieve_length;
     const unsigned int SL = SIEVE_LENGTH;
 
+    const uint64_t SIEVE_RANGE = config.sieve_range;
+
     mpz_t test;
     mpz_init(test);
 
@@ -315,7 +317,7 @@ void prime_gap_search(const struct Config config) {
 
     // ----- Generate primes under SIEVE_RANGE.
     auto  s_primes_start_t = high_resolution_clock::now();
-    const vector<uint64_t> primes = get_sieve_primes_segmented(config.sieve_range);
+    const vector<uint64_t> primes = get_sieve_primes_segmented(SIEVE_RANGE);
     auto  s_primes_stop_t = high_resolution_clock::now();
     const uint32_t SIEVE_SMALL_PRIME_PI = std::distance(primes.begin(),
         std::lower_bound(primes.begin(), primes.end(), SIEVE_SMALL));
@@ -324,7 +326,7 @@ void prime_gap_search(const struct Config config) {
 
         setlocale(LC_NUMERIC, "");
         printf("\tPrimePi(%'ld) = %'ld (2 ... %'lu)\n",
-            config.sieve_range, primes.size(), primes.back());
+            SIEVE_RANGE, primes.size(), primes.back());
         printf("\tPrimes sieve took %.1f seconds\n", secs);
 
         // SIEVE_SMALL deals with all primes can mark off two items in SIEVE_LENGTH.
@@ -367,7 +369,7 @@ void prime_gap_search(const struct Config config) {
         // count_coprime already includes some parts of unknown_after_sieve
         printf("\t%.3f%% of sieve should be unknown (%ldM) ~= %.0f\n",
             100 * unknowns_after_sieve,
-            config.sieve_range/1'000'000,
+            SIEVE_RANGE/1'000'000,
             count_coprime * (unknowns_after_sieve / prob_prime_coprime));
         printf("\t%.3f%% of %d digit numbers are prime\n",
             100 * prob_prime, K_digits);
@@ -420,18 +422,23 @@ void prime_gap_search(const struct Config config) {
     std::vector<uint32_t> *large_prime_queue = new vector<uint32_t>[M_inc];
     {
         printf("\tCalculating first m each prime divides\n");
+        // large_prime_queue size can be approximated by
+        // https://en.wikipedia.org/wiki/Meissel–Mertens_constant
 
         // Print "."s during, equal in length to 'Calculat...'
-        unsigned int print_dots = 39;
+        unsigned int print_dots = 38;
 
         long first_m_sum = 0;
-        cout << "\t";
+        double expected_large_primes = 0;
+        cout << "\t."; // 0 * 38 % primes.size() < 38
         for (uint32_t pi = SIEVE_SMALL_PRIME_PI; pi < primes.size(); pi++) {
             if ((pi * print_dots) % primes.size() < print_dots) {
                 cout << "." << std::flush;
             }
 
             const uint64_t prime = primes[pi];
+            expected_large_primes += (2.0 * SL - 1) / prime;
+
             const uint64_t base_r = remainder[pi];
             const uint64_t modulo = (base_r * M) % prime;
             if ( (modulo < SL) || (modulo + SL) > prime) {
@@ -473,12 +480,15 @@ void prime_gap_search(const struct Config config) {
             }
         }
         cout << endl;
-        printf("\tSum of m1: %ld\n", first_m_sum);
+//        printf("\tSum of m1: %ld\n", first_m_sum);
+        printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
+            expected_large_primes,
+            (2 * SL - 1) * (log(log(SIEVE_RANGE)) - log(log(SIEVE_SMALL))));
     }
     {
         auto  s_stop_t = high_resolution_clock::now();
         double   secs = duration<double>(s_stop_t - s_setup_t).count();
-        printf("\tSetup took %.1f seconds\n", secs);
+        printf("\n\tSetup took %.1f seconds\n", secs);
     }
 
 
@@ -544,7 +554,6 @@ void prime_gap_search(const struct Config config) {
                 mpz_mul_ui(test, K, m);
                 uint64_t mod = mpz_fdiv_ui(test, prime);
                 assert( mod == modulo );
-                mpz_clear(test);
             }
 
             if (modulo < SIEVE_LENGTH) {
@@ -637,7 +646,7 @@ void prime_gap_search(const struct Config config) {
                 100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * tests)),
                 100.0 * s_t_unk_low / s_total_unknown,
                 100.0 * s_t_unk_hgh / s_total_unknown);
-            printf("\t    large prime remaining: %d (avg/test: %ld)\n",
+            printf("\t    large prime remaining: %d (avg/m: %ld)\n",
                 s_large_primes_rem, s_large_primes_tested / tests);
         }
     }
