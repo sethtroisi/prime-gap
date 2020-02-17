@@ -15,9 +15,9 @@ head while working on gmp mpz_prevprime.
   * [x] Generate expected length
 * gap_search.cpp
   * [ ] Option to only output m with gcd(m, d) == 1
-  * [ ] `sieve_range` > 4B
   * [ ] Verify `sieve_length` math with d > 1
   * [ ] Allow for long mi by using bucketed `large_prime_queue`
+  * [x] `sieve_range` > 4B
   * [x] Dynamic `sieve_length`
   * [x] Dynamic `sieve_range`
 

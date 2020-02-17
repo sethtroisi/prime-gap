@@ -213,7 +213,7 @@ uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
     }
 }
 
-uint32_t modulo_search_euclid(uint32_t p, uint32_t a, uint32_t l, uint32_t r) {
+uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
     // min i : l <= (a * i) % p <= l
 /*
     assert( 0 <= a && a < p );
@@ -236,24 +236,30 @@ uint32_t modulo_search_euclid(uint32_t p, uint32_t a, uint32_t l, uint32_t r) {
     if (a <= r) {
         // find next multiple of a >= l
         // check if <= r
-        uint32_t mult = (l-1) / a + 1;
-        long test = mult * a;
+        uint64_t mult = (l-1) / a + 1;
+        uint64_t test = mult * a;
         if (test <= r) {
-            // assert( mult >= 0 );
             return mult;
         }
     }
 
     // reduce to simplier problem
-    uint32_t new_a = a - (p % a);
+    uint64_t new_a = a - (p % a);
     assert( 0 <= new_a && new_a < a );
-    uint32_t k = modulo_search_euclid(a, new_a, l % a, r % a);
+    uint64_t k = modulo_search_euclid(a, new_a, l % a, r % a);
+    // k < a
 
-    long tl = l + p * ((long) k);
-    long mult = (tl + a-1) / a;
+    // TODO make sure this doesn't overflow.
+    //uint64_t tl = l + p * k;
+    //uint64_t mult = (tl-1) / a + 1;
+    __int128 tl = l + p * k;
+    uint64_t mult = (tl-1) / a + 1;
+
+    assert( mult < p );
+
 /*
-    long tr = r + p * k;
-    long test = mult * a;
+    __int128 tr = r + p * k;
+    uint64_t test = mult * a;
     assert(       test <= tr );
     assert( tl <= test );
 // */
@@ -322,7 +328,7 @@ void prime_gap_search(const struct Config config) {
     const uint32_t SIEVE_SMALL_PRIME_PI = std::distance(primes.begin(),
         std::lower_bound(primes.begin(), primes.end(), SIEVE_SMALL));
     {
-        double   secs = duration<double>(s_primes_start_t - s_primes_stop_t).count();
+        double   secs = duration<double>(s_primes_stop_t - s_primes_start_t).count();
 
         setlocale(LC_NUMERIC, "");
         printf("\tPrimePi(%'ld) = %'ld (2 ... %'lu)\n",
@@ -387,6 +393,7 @@ void prime_gap_search(const struct Config config) {
     auto  s_setup_t = high_resolution_clock::now();
 
     // Remainders of (p#/d) mod prime
+    // TODO consider only saving this for primes which divide ANY mi in range.
     uint32_t *remainder   = (uint32_t*) malloc(sizeof(uint32_t) * primes.size());
     {
         cout << "\tCalculating remainders for each prime" << endl;
@@ -480,7 +487,7 @@ void prime_gap_search(const struct Config config) {
             }
         }
         cout << endl;
-//        printf("\tSum of m1: %ld\n", first_m_sum);
+        printf("\tSum of m1: %ld\n", first_m_sum);
         printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
             expected_large_primes,
             (2 * SL - 1) * (log(log(SIEVE_RANGE)) - log(log(SIEVE_SMALL))));
@@ -639,7 +646,7 @@ void prime_gap_search(const struct Config config) {
 
             // Stats!
             int tests = mi + 1;
-            printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
+            printf("\t    mi        %-10d (%.2f/sec)  %.0f seconds elapsed\n",
                 tests, tests / secs, secs);
             printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
                 s_total_unknown, s_total_unknown / ((double) tests),
