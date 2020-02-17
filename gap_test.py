@@ -99,7 +99,7 @@ def verify_args(args):
         args.sieve_length = sl
         args.sieve_range = sr
 
-    if args.sieve_range <= 4000:
+    if args.sieve_range <= 20000:
         args.sieve_range *= 10 ** 6
 
     for arg in ('mstart', 'minc', 'p', 'd', 'sieve_length', 'sieve_range'):
@@ -181,7 +181,8 @@ def openPFGW_is_prime(strn):
 
 
 def is_prime(num, strnum, dist):
-    if gmpy2.num_digits(num, 2) > 2000000:
+    # TODO print log of which test is being used.
+    if gmpy2.num_digits(num, 2) > 5000:
         return openPFGW_is_prime(strnum + str(dist))
 
     return gmpy2.is_prime(num)
@@ -283,6 +284,7 @@ def prime_gap_test(args):
 
     # Used for various stats
     s_start_t = time.time()
+    s_last_print_t = time.time()
     s_total_unknown = 0
     s_t_unk_low = 0
     s_t_unk_hgh = 0
@@ -368,8 +370,9 @@ def prime_gap_test(args):
                 s_best_merit_interval_m = m
 
         tests = mi + 1
-        if tests in (1,10,30,100,300,1000, M_inc) or tests % 5000 == 0:
-            s_stop_t = time.time()
+        s_stop_t = time.time()
+        print_secs = s_stop_t - s_last_print_t
+        if tests in (1,10,30,100,300,1000, M_inc) or tests % 5000 == 0 or print_secs > 1200:
             secs = s_stop_t - s_start_t
 
             print("\t{:3d} {:4d} <- unknowns -> {:-4d}\t{:4d} <- gap -> {:-4d}".format(
@@ -377,6 +380,7 @@ def prime_gap_test(args):
                 unknown_l, unknown_u,
                 prev_p_i, next_p_i))
             if mi <= 10 and secs < 6: continue
+            s_last_print_t = s_stop_t
 
             # Stats!
             print("\t    tests     {:<10d} ({:.2f}/sec)  {:.0f} seconds elapsed".format(
@@ -387,7 +391,7 @@ def prime_gap_test(args):
                 100 * s_t_unk_low / s_total_unknown,
                 100 * s_t_unk_hgh / s_total_unknown))
             if run_prp:
-                print("\t    prp tests {:<10d} (avg: {:.2f}) ({:.1f} tests/sec)".format(
+                print("\t    prp tests {:<10d} (avg: {:.2f}) ({:.3f} tests/sec)".format(
                     s_total_prp_tests, s_total_prp_tests / tests, s_total_prp_tests / secs))
                 print("\t    fallback prev_gap {} ({:.1f}%), next_gap {} ({:.1f}%)".format(
                     s_gap_out_of_sieve_prev, 100 * s_gap_out_of_sieve_prev / tests,

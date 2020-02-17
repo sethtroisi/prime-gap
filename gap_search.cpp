@@ -325,7 +325,7 @@ void prime_gap_search(const struct Config config) {
     auto  s_primes_start_t = high_resolution_clock::now();
     vector<uint64_t> primes = get_sieve_primes_segmented(SIEVE_RANGE);
     auto  s_primes_stop_t = high_resolution_clock::now();
-    const uint32_t SIEVE_SMALL_PRIME_PI = std::distance(primes.begin(),
+    const size_t SIEVE_SMALL_PRIME_PI = std::distance(primes.begin(),
         std::lower_bound(primes.begin(), primes.end(), SIEVE_SMALL));
     {
         double   secs = duration<double>(s_primes_stop_t - s_primes_start_t).count();
@@ -337,7 +337,7 @@ void prime_gap_search(const struct Config config) {
 
         // SIEVE_SMALL deals with all primes can mark off two items in SIEVE_LENGTH.
         assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
-        printf("\tUsing %'d primes for SIEVE_SMALL(%'d)\n\n",
+        printf("\tUsing %'ld primes for SIEVE_SMALL(%'d)\n\n",
             SIEVE_SMALL_PRIME_PI, SIEVE_SMALL);
         assert( primes[SIEVE_SMALL_PRIME_PI] > SIEVE_SMALL );
         setlocale(LC_NUMERIC, "C");
@@ -410,12 +410,13 @@ void prime_gap_search(const struct Config config) {
 
     // Big improvement over surround_prime is avoiding checking each large prime.
     // vector<m, vector<pi>> for large primes that only rarely divide a sieve
-    // TODO only allocate 100'000 at a time, further out mi go to a waiting vector.
     int s_large_primes_rem = 0;
 
     // To save space, only save remainder for primes that divide ANY m in range.
     // This helps with memory usage when SIEVE_RANGE > X * MINC;
 
+    // TODO only allocate 10'000 at a time, further out mi go to a waiting vector.
+    // Downside is this takes more memory (have to store pi, mi).
     std::vector<uint32_t> *large_prime_queue = new vector<uint32_t>[M_inc];
     {
         size_t new_pi = SIEVE_SMALL_PRIME_PI;
@@ -424,12 +425,12 @@ void prime_gap_search(const struct Config config) {
         // https://en.wikipedia.org/wiki/Meissel–Mertens_constant
 
         // Print "."s during, equal in length to 'Calculat...'
-        unsigned int print_dots = 38;
+        size_t print_dots = 38;
 
         long first_m_sum = 0;
         double expected_large_primes = 0;
         cout << "\t."; // 0 * 38 % primes.size() < 38
-        for (uint32_t pi = SIEVE_SMALL_PRIME_PI; pi < primes.size(); pi++) {
+        for (size_t pi = SIEVE_SMALL_PRIME_PI; pi < primes.size(); pi++) {
             if ((pi * print_dots) % primes.size() < print_dots) {
                 cout << "." << std::flush;
             }
