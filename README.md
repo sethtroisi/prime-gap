@@ -23,6 +23,28 @@ head while working on gmp mpz_prevprime.
   * [x] Dynamic `sieve_range`
 
 
+## Pgsurround.pl benchmark
+On a i7-2600k single threaded.
+
+### Pgsurround.pl
+
+| Pn   | P#    | QPS (delta=0) |
+|------|-------|---------------|
+| 96   | 503   | 77.26         |
+| 169  | 1009  | 8.68          |
+| 303  | 1999  | 0.759         |
+| 670  | 5003  | 0.0655        |
+
+### Just sieving
+
+|  P#   | Width (merit 20)  | Depth     | avg\_remaining | QPS  |
+|-------|-------------------|-----------|---------------|------|
+| 503   | 9792              | 116490    | 703           | 1693 |
+| 1009  | 19456             | 811588    | 1123          | 223  |
+| 1999  | 38976             | 8660119   | 1812          | 20.9 |
+| 5003  | 98624             | 173202211 | 3665          | .895 |
+
+
 ## Commands
 
 ```bash
