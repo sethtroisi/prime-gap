@@ -1,5 +1,4 @@
-### A new program to find prime gaps.
----
+# Combined Sieve - a new program to find prime gaps.
 
 This is the combination of a couple of ideas I've had bouncing around in my
 head while working on gmp mpz_prevprime.
@@ -17,6 +16,7 @@ head while working on gmp mpz_prevprime.
   * [ ] Option to only output m with gcd(m, d) == 1
   * [ ] Verify `sieve_length` math with d > 1
   * [ ] Allow for long mi by using bucketed `large_prime_queue`
+    * [ ] Store remainder and prime in same array (and don't store pi for large primes)
   * [x] Only store prime/remainder for primes that divide ANY mi.
   * [x] `sieve_range` > 4B
   * [x] Dynamic `sieve_length`

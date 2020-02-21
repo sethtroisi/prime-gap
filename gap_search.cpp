@@ -139,7 +139,7 @@ void set_defaults(struct Config& config) {
 
         // Search till something counting chance of shorter gap.
         {
-            int P = config.p;
+            size_t P = config.p;
             int count_coprime = 0;
             for (size_t tSL = 1; tSL <= P*P; tSL += 1) {
                 count_coprime += 1;
