@@ -382,9 +382,17 @@ def prime_gap_test(args):
             if mi <= 10 and secs < 6: continue
             s_last_print_t = s_stop_t
 
+            def roundSig(n, sig):
+                return '{:g}'.format(float('{:.{p}g}'.format(n, p=sig)))
+
+            # Want 3 sig figs which is hard in python
+            timing = "{}/sec".format(roundSig(tests / secs, 3))
+            if tests < secs:
+                timing = "{} secs/test".format(roundSig(secs / tests, 3))
+
             # Stats!
-            print("\t    tests     {:<10d} ({:.2f}/sec)  {:.0f} seconds elapsed".format(
-                tests, tests / secs, secs))
+            print("\t    tests     {:<10d} ({})  {:.0f} seconds elapsed".format(
+                tests, timing, secs))
             print("\t    unknowns  {:<10d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
                 s_total_unknown, s_total_unknown / tests,
                 100 * (1 - s_total_unknown / (2 * (sieve_length - 1) * tests)),

@@ -129,7 +129,7 @@ void set_defaults(struct Config& config) {
         //         i is composite of factors in d
         assert( config.p > 51 );
 
-        // Search till something counting chance of shorter gap.
+        // Search till chance of shorter gap is small.
         {
             size_t P = config.p;
             int count_coprime = 0;
@@ -181,7 +181,7 @@ void set_defaults(struct Config& config) {
             //      1600M => 440/s | 254 unknowns
             //          76.2 PRP / test => 1.78s/test
         } else {
-            config.sieve_range =   100'000'000;
+            config.sieve_range =   1'000'000'000;
         }
 
         printf("AUTO SET: sieve range (log(t) = ~%.0f): %ld\n",
@@ -210,6 +210,35 @@ uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
     }
 }
 
+uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t r) {
+    // min i : l <= (a * i) % p <= l
+    if (l == 0) return 0;
+
+    if (a > (p >> 1)) {
+        std::swap(l, r);
+        a = p - a; l = p - l; r = p - r;
+    }
+
+    if (a <= r) {
+        uint64_t mult = (l-1) / a + 1;
+        uint64_t test = mult * a;
+        if (test <= r) {
+            return mult;
+        }
+    }
+
+    // reduce to simplier problem
+    uint32_t new_a = a - (p % a);
+    assert( 0 <= new_a && new_a < a );
+    uint64_t k = modulo_search_euclid_small(a, new_a, l % a, r % a);
+
+    uint64_t tl = k * p + l;
+    uint64_t mult = (tl - 1) / a + 1;
+
+    assert( mult < p );
+    return mult;
+}
+
 uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
     // min i : l <= (a * i) % p <= l
 /*
@@ -218,15 +247,16 @@ uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
     assert( 0 <= r && r < p );
     assert(      l <= r     );
 // */
-
     if (l == 0) return 0;
+
+    if (p < 0xFFFFFFFF) {
+        return modulo_search_euclid_small(p, a, l, r);
+    }
 
     // 2 *a > p, but avoids int max
     if (a > (p >> 1)) {
         std::swap(l, r);
-        a = p - a;
-        l = p - l;
-        r = p - r;
+        a = p - a; l = p - l; r = p - r;
     }
 
     // check if small i works
@@ -244,16 +274,11 @@ uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
     uint64_t new_a = a - (p % a);
     assert( 0 <= new_a && new_a < a );
     uint64_t k = modulo_search_euclid(a, new_a, l % a, r % a);
-    // k < a
 
-    // TODO make sure this doesn't overflow.
-    //uint64_t tl = l + p * k;
-    //uint64_t mult = (tl-1) / a + 1;
-    __int128 tl = l + p * k;
+    __int128 tl = (__int128) p * k + l;
     uint64_t mult = (tl-1) / a + 1;
 
     assert( mult < p );
-
 /*
     __int128 tr = r + p * k;
     uint64_t test = mult * a;
@@ -261,7 +286,6 @@ uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
     assert( tl <= test );
 // */
     return mult;
-
 }
 
 
@@ -319,32 +343,21 @@ void prime_gap_search(const struct Config config) {
     }
 
     // ----- Generate primes under SIEVE_RANGE.
-    auto  s_primes_start_t = high_resolution_clock::now();
     vector<uint64_t> primes = get_sieve_primes_segmented(SIEVE_SMALL);
-    auto  s_primes_stop_t = high_resolution_clock::now();
     const size_t SIEVE_SMALL_PRIME_PI = primes.size();
-    {
-        double   secs = duration<double>(s_primes_stop_t - s_primes_start_t).count();
-
-        setlocale(LC_NUMERIC, "");
-        printf("\tPrimePi(%'ld) = %'ld (2 ... %'lu)\n",
-            SIEVE_RANGE, primes.size(), primes.back());
-        printf("\tSegmented prime sieve took %.1f seconds\n", secs);
-
-        // SIEVE_SMALL deals with all primes that can mark off two items in SIEVE_LENGTH.
-        assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
-        printf("\tUsing %'ld primes for SIEVE_SMALL(%'d)\n\n",
-            SIEVE_SMALL_PRIME_PI, SIEVE_SMALL);
-        assert( primes[SIEVE_SMALL_PRIME_PI-1] < SIEVE_SMALL);
-        assert( primes[SIEVE_SMALL_PRIME_PI-1] + 200 > SIEVE_SMALL);
-        setlocale(LC_NUMERIC, "C");
-    }
+    // SIEVE_SMALL deals with all primes that can mark off two items in SIEVE_LENGTH.
+    assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
+    printf("\tUsing %'ld primes for SIEVE_SMALL(%'d)\n\n",
+        SIEVE_SMALL_PRIME_PI, SIEVE_SMALL);
+    assert( primes[SIEVE_SMALL_PRIME_PI-1] < SIEVE_SMALL);
+    assert( primes[SIEVE_SMALL_PRIME_PI-1] + 200 > SIEVE_SMALL);
 
     // ----- Sieve stats
     {
-        // Can also use Mertens' 3rd theorem
+        // From Mertens' 3rd theorem
         double unknowns_after_sieve = 1;
-        for (int64_t prime : primes) unknowns_after_sieve *= (prime - 1.0) / prime;
+        const double gamma = 0.577215665;
+        unknowns_after_sieve = 1 / (log(SIEVE_RANGE) * exp(gamma));
 
         double prob_prime = 1 / (K_log + log(M));
         double prob_prime_coprime = 1;
@@ -370,9 +383,9 @@ void prime_gap_search(const struct Config config) {
         double prob_gap_shorter_hypothetical = pow(chance_coprime_composite, count_coprime);
 
         // count_coprime already includes some parts of unknown_after_sieve
-        printf("\t%.3f%% of sieve should be unknown (%ldM) ~= %.0f\n",
+        printf("\t%.3f%% of sieve(%u) should be unknown (%ldM) ~= %.0f\n",
             100 * unknowns_after_sieve,
-            SIEVE_RANGE/1'000'000,
+            SIEVE_LENGTH, SIEVE_RANGE/1'000'000,
             count_coprime * (unknowns_after_sieve / prob_prime_coprime));
         printf("\t%.3f%% of %d digit numbers are prime\n",
             100 * prob_prime, K_digits);
@@ -419,12 +432,12 @@ void prime_gap_search(const struct Config config) {
         // https://en.wikipedia.org/wiki/Meissel–Mertens_constant
 
         // Print "."s during, equal in length to 'Calculat...'
-        size_t print_dots = 38;
+        size_t print_dots = 37;
         size_t expected_primes = 1.04 * SIEVE_RANGE / log(SIEVE_RANGE);
 
         long first_m_sum = 0;
         double expected_large_primes = 0;
-        cout << "\t."; // 0 * 38 % primes.size() < 38
+        cout << "\t."; // 0 * 37 % primes.size() < 37
         size_t pi = SIEVE_SMALL_PRIME_PI;
         get_sieve_primes_segmented_lambda(SIEVE_RANGE, [&](const uint64_t prime) {
             if (prime < primes.back()) return;
@@ -467,10 +480,13 @@ void prime_gap_search(const struct Config config) {
             assert( 0 <= low && high < prime );
 
             uint64_t mi = modulo_search_euclid(prime, base_r, low, high);
-            assert( low <= (mi * base_r) % prime );
-            assert(        (mi * base_r) % prime <= high );
+            // Can overflow.
+            //assert( low <= (mi * base_r) % prime );
+            //assert(        (mi * base_r) % prime <= high );
 
-            assert( (base_r * (M + mi) + (SL - 1)) % prime < (2*SL-1) );
+            __int128 mult = (__int128) base_r * (M + mi) + (SL - 1);
+            assert( mult % prime < (2*SL-1) );
+
             if (mi < M_inc) {
                 primes.push_back(prime);
                 remainder.push_back(base_r);
@@ -488,6 +504,7 @@ void prime_gap_search(const struct Config config) {
         cout << endl;
 
         printf("\tSum of m1: %ld\n", first_m_sum);
+        setlocale(LC_NUMERIC, "");
         printf("\tPrimePi(%ld) = %ld ~= %ld\n", SIEVE_RANGE, pi, expected_primes);
         printf("\t%ld primes not needed (%.1f%%)\n",
             pi - new_pi,
@@ -495,6 +512,7 @@ void prime_gap_search(const struct Config config) {
         printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
             expected_large_primes,
             (2 * SL - 1) * (log(log(SIEVE_RANGE)) - log(log(SIEVE_SMALL))));
+        setlocale(LC_NUMERIC, "C");
     }
     {
         auto  s_stop_t = high_resolution_clock::now();
@@ -522,7 +540,7 @@ void prime_gap_search(const struct Config config) {
     long  s_t_unk_hgh = 0;
     long  s_large_primes_tested = 0;
 
-    uint64_t mi_last = M_inc;
+    uint64_t mi_last = M_inc - 1;
     for (; mi_last > 0 && gcd(mi_last, D) > 1; mi_last -= 1);
     assert( mi_last > 0 );
 
@@ -582,7 +600,7 @@ void prime_gap_search(const struct Config config) {
                 composite[1][first_negative] = true;
             }
 
-            // Find next mi that primes divides part of SIEVE
+            // Find next mi where primes divides part of SIEVE
             {
                 // next modulo otherwise modulo_search returns 0;
                 uint64_t shift = (modulo + base_r) + (SL - 1);
@@ -600,12 +618,18 @@ void prime_gap_search(const struct Config config) {
                 } else {
                     assert( 0 <= low && high < prime );
                     int64_t m2 = modulo_search_euclid(prime, base_r, low, high);
-                    assert( low <= (m2 * base_r) % prime );
-                    assert(        (m2 * base_r) % prime <= high );
+                    // Can overflow, verified below
+                    //assert( low <= (m2 * base_r) % prime );
+                    //assert(        (m2 * base_r) % prime <= high );
+
+
                     next_mi = mi + 1 + m2;
                 }
 
-                assert( (base_r * (M + next_mi) + (SL - 1)) % prime < (2*SL-1) );
+                //assert( (base_r * (M + next_mi) + (SL - 1)) % prime < (2*SL-1) );
+                __int128 mult = (__int128) base_r * (M + next_mi) + (SL - 1);
+                assert ( mult % prime <= (2 * SL - 1) );
+
                 if (next_mi < M_inc) {
                     large_prime_queue[next_mi].push_back(pi);
                     s_large_primes_rem += 1;
