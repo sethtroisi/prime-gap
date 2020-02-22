@@ -32,7 +32,7 @@ using std::vector;
 using namespace std::chrono;
 
 // Tweaking this doesn't seem to change speed much.
-#define SIEVE_SMALL       1'000'000
+#define SIEVE_SMALL       400'000
 
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config config);
@@ -93,14 +93,6 @@ void set_defaults(struct Config& config) {
     }
 
     if (config.sieve_length == 0) {
-        // TODO improve this.
-        // TODO adjust up for very large minmerit.
-
-        // 10^6 => 0.04064
-        // 10^7 => 0.03483
-        // 10^8 => 0.03048
-        // 10^9 => 0.02709
-
         // factors of K = p#/d
         vector<uint32_t> K_primes = get_sieve_primes(config.p);
         {
@@ -198,6 +190,11 @@ void set_defaults(struct Config& config) {
 
 }
 
+
+uint32_t gcd(uint32_t a, uint32_t b) {
+    if (b == 0) return a;
+    return gcd(b, a % b);
+}
 
 uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
     // A + p must not overflow.
@@ -393,7 +390,6 @@ void prime_gap_search(const struct Config config) {
     auto  s_setup_t = high_resolution_clock::now();
 
     // Remainders of (p#/d) mod prime
-    // TODO consider only saving this for primes which divide ANY mi in range.
     vector<uint64_t> remainder;
     {
         cout << "\t";
@@ -522,15 +518,19 @@ void prime_gap_search(const struct Config config) {
     assert( composite[1].size() == SIEVE_LENGTH );
 
     // Used for various stats
+    long  s_tests = 0;
     auto  s_start_t = high_resolution_clock::now();
     long  s_total_unknown = 0;
     long  s_t_unk_low = 0;
     long  s_t_unk_hgh = 0;
     long  s_large_primes_tested = 0;
 
+    uint64_t mi_last = M_inc;
+    for (; mi_last > 0 && gcd(mi_last, D) > 1; mi_last -= 1);
+    assert( mi_last > 0 );
+
     for (uint64_t mi = 0; mi < M_inc; mi++) {
         uint64_t m = M + mi;
-        // TODO if gcd(m, d) != 1 continue?
 
         // Reset sieve array to unknown.
         std::fill_n(composite[0].begin(), SIEVE_LENGTH, 0);
@@ -618,6 +618,10 @@ void prime_gap_search(const struct Config config) {
         large_prime_queue[mi].clear();
         large_prime_queue[mi].shrink_to_fit();
 
+        if (gcd(m, D) > 1) continue;
+
+        s_tests += 1;
+
         // 2-3% of runtime, could be optimized into save_unknowns loop..
         int unknown_l = std::count(composite[0].begin(), composite[0].end(), false);
         int unknown_u = std::count(composite[1].begin(), composite[1].end(), false);
@@ -627,6 +631,7 @@ void prime_gap_search(const struct Config config) {
 
         // Save unknowns
         if (config.save_unknowns) {
+
             unknown_file << mi;
             unknown_file << " : -" << unknown_l << " +" << unknown_u << " |";
 
@@ -645,8 +650,8 @@ void prime_gap_search(const struct Config config) {
             unknown_file << "\n";
         }
 
-        if ( (mi == 1 || mi == 10 || mi == 100 || mi == 500 || mi == 1000) ||
-             (m % 5000 == 0) || ((mi+1) == M_inc) ) {
+        if ( (s_tests == 1 || s_tests == 10 || s_tests == 100 || s_tests == 500 || s_tests == 1000) ||
+             (s_tests % 5000 == 0) || (mi == mi_last) ) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
 
@@ -656,16 +661,15 @@ void prime_gap_search(const struct Config config) {
             if (mi <= 10) continue;
 
             // Stats!
-            int tests = mi + 1;
-            printf("\t    mi        %-10d (%.2f/sec)  %.0f seconds elapsed\n",
-                tests, tests / secs, secs);
+            printf("\t    tests     %-10ld (%.2f/sec)  %.0f seconds elapsed\n",
+                s_tests, s_tests / secs, secs);
             printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
-                s_total_unknown, s_total_unknown / ((double) tests),
-                100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * tests)),
+                s_total_unknown, s_total_unknown / ((double) s_tests),
+                100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
                 100.0 * s_t_unk_low / s_total_unknown,
                 100.0 * s_t_unk_hgh / s_total_unknown);
             printf("\t    large prime remaining: %d (avg/m: %ld)\n",
-                s_large_primes_rem, s_large_primes_tested / tests);
+                s_large_primes_rem, s_large_primes_tested / s_tests);
         }
     }
 
