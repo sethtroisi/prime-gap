@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <vector>
+#include <functional>
 
 #define MAX_INT     ((1L << 32) - 1)
 
@@ -37,4 +38,4 @@ void show_usage(char* name);
 Config argparse(int argc, char* argv[]);
 vector<uint32_t> get_sieve_primes(uint32_t n);
 vector<uint64_t> get_sieve_primes_segmented(uint64_t n);
-
+void             get_sieve_primes_segmented_lambda(uint64_t n, std::function<void (uint64_t)> lambda);
