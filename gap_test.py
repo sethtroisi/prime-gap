@@ -16,6 +16,7 @@
 
 import argparse
 import contextlib
+import itertools
 import logging
 import math
 import os.path
@@ -160,7 +161,8 @@ def prob_prime_sieve_length(M, D, prob_prime, K_digits, K_primes, SL, sieve_rang
     return prob_prime_after_sieve
 
 
-def calculate_expected_gap(composites, SL, prob_prime_after_sieve, log_m, p_gap_side, p_gap_comb):
+def calculate_expected_gaps(composites, SL, prob_prime_after_sieve, log_m,
+                            p_gap_side, p_gap_comb, min_merit_gap):
     expected_side = []
 
     # Geometric distribution
@@ -169,6 +171,7 @@ def calculate_expected_gap(composites, SL, prob_prime_after_sieve, log_m, p_gap_
     for i in range(max(len(composites[0]), len(composites[1]))+1):
         probs.append(prob_gap_longer * prob_prime_after_sieve)
         prob_gap_longer *= (1 - prob_prime_after_sieve)
+    assert min(probs) > 0
 
     for side in composites:
         expected_length = 0
@@ -183,14 +186,21 @@ def calculate_expected_gap(composites, SL, prob_prime_after_sieve, log_m, p_gap_
         expected_side.append(expected_length)
 
     # TODO really slow
+    p_merit = 0
     for i, lower in enumerate(composites[0]):
         for j, upper in enumerate(composites[1]):
             prob_joint = probs[i] * probs[j]
-            if prob_joint < 1e-6:
-                break
-            p_gap_comb[abs(lower) + abs(upper)] += prob_joint
+            gap = -lower + upper
+            if gap > min_merit_gap:
+                p_merit += prob_joint
 
-    return expected_side
+            p_gap_comb[gap] += prob_joint
+            if prob_joint < 1e-7:
+                break
+
+    assert p_merit >= 0
+
+    return expected_side + [p_merit]
 
 
 def openPFGW_is_prime(strn):
@@ -203,7 +213,7 @@ def openPFGW_is_prime(strn):
 
 
 def is_prime(num, strnum, dist):
-    # TODO print log of which test is being used.
+    # TODO print log of which library is being used.
     if gmpy2.num_digits(num, 2) > 5000:
         return openPFGW_is_prime(strnum + str(dist))
 
@@ -275,10 +285,11 @@ def prime_gap_test(args):
     K_bits   = gmpy2.num_digits(K, 2)
     K_log    = float(gmpy2.log(K))
     M_log    = K_log + math.log(M)
+    min_merit_gap = int(min_merit * M_log)
     print("K = {} bits, {} digits, log(K) = {:.2f}".format(
         K_bits, K_digits, K_log))
     print("Min Gap ~= {} (for merit > {:.1f})\n".format(
-        int(min_merit * M_log), min_merit))
+        min_merit_gap, min_merit))
 
     # ----- Open Output file
     print("\tLoading unknowns from '{}'".format(args.unknown_filename))
@@ -322,8 +333,9 @@ def prime_gap_test(args):
     s_expected_gap  = []
     s_experimental_side = []
     s_experimental_gap = []
-    p_gap_side = defaultdict(float)
-    p_gap_comb = defaultdict(float)
+    p_gap_side  = defaultdict(float)
+    p_gap_comb  = defaultdict(float)
+    p_gap_merit = []
 
     for mi in range(M_inc):
         m = M + mi
@@ -362,11 +374,13 @@ def prime_gap_test(args):
         s_t_unk_hgh += unknown_u
 
         if args.save_logs or args.plots:
-            e_prev, e_next = calculate_expected_gap(
-                composite, SL, prob_prime_after_sieve, log_m, p_gap_side, p_gap_comb)
+            e_prev, e_next, p_merit = calculate_expected_gaps(
+                composite, SL, prob_prime_after_sieve, log_m,
+                p_gap_side, p_gap_comb, min_merit_gap)
             s_expected_prev.append(e_prev)
             s_expected_next.append(e_next)
             s_expected_gap.append(e_prev + e_next)
+            p_gap_merit.append(p_merit)
 
         if run_prp:
             # Used for openPFGW
@@ -449,44 +463,51 @@ def prime_gap_test(args):
 
         # Set up subplots.
         fig3 = plt.figure(constrained_layout=True, figsize=(8, 8))
-        gs = fig3.add_gridspec(2, 2)
+        gs = fig3.add_gridspec(3, 2)
 
-        for d, label, color in [
-                #(s_expected_prev, 'prev', 'blueviolet'),
-                #(s_expected_next, 'next', 'peru'),
-                #(s_expected_gap,  'expected', 'dodgerblue'),
-                #(s_experimental_side, 'next/prev gap', 'darkorange'),
-                #(s_experimental_gap, 'gap', 'forestgreen'),
+        # TODO plot number of PRP tests per M
+
+        for plot_i, (d, label, color) in enumerate([
                 (s_expected_prev, 'prev', 'lightskyblue'),
                 (s_expected_next, 'next', 'darksalmon'),
                 (s_expected_gap,  'expected', 'seagreen'),
                 (s_experimental_side, 'next/prev gap', 'sandybrown'),
                 (s_experimental_gap, 'gap', 'peru'),
-        ]:
+                (p_gap_merit, f'P(gap > min_merit({min_merit}))', 'dodgerblue'),
+        ]):
             if not d: continue
 
-            if label == 'prev': # Not called for 'next'
+            if plot_i == 0: # Not called again on plot_i == 1
                 fig3.add_subplot(gs[0, 0])
-            elif label == 'expected':
+            elif plot_i == 2:
                 fig3.add_subplot(gs[1, 0])
-            elif label == 'next/prev gap':
+            elif plot_i == 3:
                 fig3.add_subplot(gs[0, 1])
-            elif label == 'gap':
+            elif plot_i == 4:
                 fig3.add_subplot(gs[1, 1])
+            elif plot_i == 5:
+                fig3.add_subplot(gs[2, 0])
 
             hist_data = np.histogram(d, bins=100, density=True)
-            plt.scatter(hist_data[1][:-1], hist_data[0], color=color, marker='x', s=8)
+            plt.scatter(hist_data[1][:-1], hist_data[0], color=color,
+                        marker='o' if plot_i in (3,4) else 'x', s=8)
             max_y = hist_data[0].max()
 
-            if label == 'next/prev gap':
-                trend, E = np.polyfit([x for x in X for i in range(2)], d, 1)
+            if plot_i == 3:
+                trend, E = np.polyfit([x for x in X for d in ['l','up']], d, 1)
             else:
                 trend, E = np.polyfit(X, d, 1)
 
-            assert trend < 2e-3, trend # Verify that expected value doesn't vary with M.
-            plt.axvline(x=E, ymax=1.0/1.2, color=color, label=f"E({label}) = {E:.0f}")
+#            assert trend < 2e-3, trend # Verify that expected value doesn't vary with M.
+            if plot_i != 5:
+                plt.axvline(x=E, ymax=1.0/1.2, color=color, label=f"E({label}) = {E:.0f}")
+                plt.legend(loc='upper right')
+            else:
+                plt.legend([label])
 
-            gap_span = np.linspace(np.percentile(d, 1), np.percentile(d, 99), 400)
+            gap_span = np.linspace(0.95 * np.percentile(d, 1), 1.05 * np.percentile(d, 99), 400)
+            if plot_i == 5:
+                gap_span = np.linspace(0, max(d) * 1.1, 400)
 
             if 'gap' not in label:
                 mu, std = stats.norm.fit(d)
@@ -494,8 +515,7 @@ def prime_gap_test(args):
                 plt.plot(gap_span, p, color=color)
 
             plt.xlim(np.percentile(d, 0.01), np.percentile(d, 99.9))
-            plt.ylim(1e-4, 1.2 * max_y)
-            plt.legend(loc='upper right')
+            plt.ylim(2e-5, 1.2 * max_y)
 
         for d, color in [
                 (p_gap_side, 'blueviolet'),
@@ -512,6 +532,21 @@ def prime_gap_test(args):
                      label='Theoretical P(gap)', color=color, alpha=0.4)
             plt.legend(loc='upper right')
 
+        # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
+        fig3.add_subplot(gs[2, 1])
+        items = sorted(
+            list(itertools.zip_longest(p_gap_merit, s_experimental_gap, fillvalue=0)),
+            reverse=True)
+        p_gap_merit_sorted, gap_real = zip(*items)
+
+        tests = list(range(1, len(p_gap_merit_sorted)+1))
+        sum_p = np.cumsum(p_gap_merit_sorted)
+        large_gap = np.cumsum(np.array(gap_real) > min_merit_gap)
+
+        plt.plot(tests, sum_p)
+        plt.plot(tests, large_gap)
+        plt.xlabel("tests")
+        plt.ylabel(f"Sum(P(gap > min_merit({min_merit})))")
 
         if args.save_logs:
             plt.savefig(args.unknown_filename + ".png", dpi=1080//8)

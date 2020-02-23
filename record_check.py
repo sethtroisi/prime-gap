@@ -111,7 +111,7 @@ def search_logs(args):
                     'SELECT merit,primedigits,startprime FROM gaps WHERE'
                     ' gapsize=?', (size,)).fetchone()
                 if (not existing) or (new_merit > existing[0] - 1e-4):
-                    print ("\tRecord! Gap={}, merit={} (old: {}) | {}".format(
+                    print ("\tRecord! Gap={}, merit={} (old: {})\n\t\t| {}".format(
                         size, new_merit, existing, gap[4]))
 
 
