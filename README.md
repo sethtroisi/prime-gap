@@ -8,16 +8,16 @@ head while working on gmp mpz_prevprime.
 * gap_test.py
   * [ ] Store ALL results to sql
   * [ ] Starting at m > mstart
-  * [ ] Print average to test count
+  * [ ] Plot average tests count
   * [ ] Autoscale printing to every X seconds
   * [ ] Sort by expected gap and PRP only top X%
-  * [ ] Try and describe distribution
+  * [x] Describe distribution
   * [x] Generate expected length
 * gap_search.cpp
   * [ ] Verify `sieve_length` math with d > 1
   * [ ] Allow for long mi by using bucketed `large_prime_queue`
     * [ ] Store remainder and prime in same array (and don't store pi for large primes)
-  * [ ] Option to only output m with gcd(m, d) != 1
+  * [ ] Option to output m with gcd(m, d) != 1
   * [x] Only store prime/remainder for primes that divide ANY mi.
   * [x] `sieve_range` > 4B
   * [x] Dynamic `sieve_length`

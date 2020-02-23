@@ -24,6 +24,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from collections import defaultdict
 
 import gmpy2
 
@@ -159,16 +160,37 @@ def prob_prime_sieve_length(M, D, prob_prime, K_digits, K_primes, SL, sieve_rang
     return prob_prime_after_sieve
 
 
-def calculate_expected_gap(composites, SL, prob_prime_after_sieve, log_m):
-    expected_length = 0
-    prob_gap_longer = 1
-    for v in composites:
-        expected_length += abs(v) * prob_gap_longer * prob_prime_after_sieve
-        prob_gap_longer *= 1 - prob_prime_after_sieve
+def calculate_expected_gap(composites, SL, prob_prime_after_sieve, log_m, p_gap_side, p_gap_comb):
+    expected_side = []
 
-    # expected to encounter a prime at distance ~= ln(start)
-    expected_length += (SL + log_m) * prob_gap_longer
-    return expected_length
+    # Geometric distribution
+    probs = []
+    prob_gap_longer = 1
+    for i in range(max(len(composites[0]), len(composites[1]))+1):
+        probs.append(prob_gap_longer * prob_prime_after_sieve)
+        prob_gap_longer *= (1 - prob_prime_after_sieve)
+
+    for side in composites:
+        expected_length = 0
+        for v, prob in zip(side, probs):
+            expected_length += abs(v) * prob
+            p_gap_side[abs(v)] += prob
+
+        # expected to encounter a prime at distance ~= ln(start)
+        prob_gap_longer = probs[len(side)]
+        assert prob_gap_longer < 0.01, (prob_gap_longer, len(side))
+        expected_length += (SL + log_m) * prob_gap_longer
+        expected_side.append(expected_length)
+
+    # TODO really slow
+    for i, lower in enumerate(composites[0]):
+        for j, upper in enumerate(composites[1]):
+            prob_joint = probs[i] * probs[j]
+            if prob_joint < 1e-6:
+                break
+            p_gap_comb[abs(lower) + abs(upper)] += prob_joint
+
+    return expected_side
 
 
 def openPFGW_is_prime(strn):
@@ -294,15 +316,20 @@ def prime_gap_test(args):
     s_best_merit_interval = 0
     s_best_merit_interval_m = 0
 
+    X = []
     s_expected_prev = []
     s_expected_next = []
     s_expected_gap  = []
     s_experimental_side = []
     s_experimental_gap = []
+    p_gap_side = defaultdict(float)
+    p_gap_comb = defaultdict(float)
 
     for mi in range(M_inc):
         m = M + mi
-        # TODO if gcd(m, d) != 1 continue?
+        if math.gcd(m, D) != 1: continue
+
+        X.append(m)
 
         log_m = (K_log + math.log(m))
 
@@ -320,6 +347,7 @@ def prime_gap_test(args):
         match = re.match(r"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
         assert match, start
         mtest, unknown_l, unknown_u = map(int, match.groups())
+        assert mtest == mi
 
         composite[0] = list(map(int,c_l.strip().split(" ")))
         composite[1] = list(map(int,c_h.strip().split(" ")))
@@ -334,8 +362,8 @@ def prime_gap_test(args):
         s_t_unk_hgh += unknown_u
 
         if args.save_logs or args.plots:
-            e_prev = calculate_expected_gap(composite[0], SL, prob_prime_after_sieve, log_m)
-            e_next = calculate_expected_gap(composite[1], SL, prob_prime_after_sieve, log_m)
+            e_prev, e_next = calculate_expected_gap(
+                composite, SL, prob_prime_after_sieve, log_m, p_gap_side, p_gap_comb)
             s_expected_prev.append(e_prev)
             s_expected_next.append(e_next)
             s_expected_gap.append(e_prev + e_next)
@@ -419,75 +447,74 @@ def prime_gap_test(args):
             corr, _ = stats.pearsonr(s_expected_gap, s_experimental_gap)
             print ("Pearson's correlation for expected gap: {:.3f}".format( corr))
 
-        x = list(range(M, M + M_inc))
-        rows = 5 if run_prp else 4
-
-        def plot_gaps_with_trendline(data, ylabel):
-            trendline = np.polyfit(x, data, 1)
-            trend = np.poly1d(trendline)
-
-            plt.plot(x, data)
-            trend_equation = "{:.2e} x + {:.1f}".format(*trend.coef) #str(trend)
-            plt.plot(x, trend(x), label=trend_equation,
-                color='lightblue', linestyle='dashed')
-
-            # Histogram of gap sizes
-            #hist_data = np.histogram(data, bins=50)
-            #plt.plot(4 * hist_data[0], hist_data[1][:-1],
-            #    color='lightblue', marker='x', linestyle='');
-
-            plt.ylabel(ylabel)
-            plt.legend(loc='upper right')
-
         # Set up subplots.
-        fig3 = plt.figure(constrained_layout=True)
-        gs = fig3.add_gridspec(rows, 2)
+        fig3 = plt.figure(constrained_layout=True, figsize=(8, 8))
+        gs = fig3.add_gridspec(2, 2)
 
-        ax1 = fig3.add_subplot(gs[0, 0])
-        plot_gaps_with_trendline(s_expected_prev, "E(previous gap)")
-
-        ax2 = fig3.add_subplot(gs[0, 1])
-        ax1.get_shared_y_axes().join(ax1, ax2)
-        plot_gaps_with_trendline(s_expected_next, "E(next gap)")
-
-        fig3.add_subplot(gs[1, :2 - run_prp])
-        plot_gaps_with_trendline(s_expected_gap, "E(combined gap)")
-
-        if run_prp:
-            fig3.add_subplot(gs[1, 1])
-            plot_gaps_with_trendline(s_experimental_gap, "gap")
-
-        fig3.add_subplot(gs[2:, :])
         for d, label, color in [
-                (s_expected_prev, 'prev', 'blueviolet'),
-                (s_expected_next, 'next', 'peru'),
-                (s_expected_gap,  'expected', 'dodgerblue'),
-                (s_experimental_side, 'one side gap', 'darkorange'),
-                (s_experimental_gap, 'gap', 'forestgreen')]:
+                #(s_expected_prev, 'prev', 'blueviolet'),
+                #(s_expected_next, 'next', 'peru'),
+                #(s_expected_gap,  'expected', 'dodgerblue'),
+                #(s_experimental_side, 'next/prev gap', 'darkorange'),
+                #(s_experimental_gap, 'gap', 'forestgreen'),
+                (s_expected_prev, 'prev', 'lightskyblue'),
+                (s_expected_next, 'next', 'darksalmon'),
+                (s_expected_gap,  'expected', 'seagreen'),
+                (s_experimental_side, 'next/prev gap', 'sandybrown'),
+                (s_experimental_gap, 'gap', 'peru'),
+        ]:
+            if not d: continue
 
-            if not d:
-                continue
-            max_gap = max(max(s_expected_gap), max(s_experimental_gap, default=0))
+            if label == 'prev': # Not called for 'next'
+                fig3.add_subplot(gs[0, 0])
+            elif label == 'expected':
+                fig3.add_subplot(gs[1, 0])
+            elif label == 'next/prev gap':
+                fig3.add_subplot(gs[0, 1])
+            elif label == 'gap':
+                fig3.add_subplot(gs[1, 1])
 
-            hist_data = np.histogram(d, bins=80, density=True)
-            plt.plot(hist_data[1][:-1], hist_data[0], color=color, marker='x')
+            hist_data = np.histogram(d, bins=100, density=True)
+            plt.scatter(hist_data[1][:-1], hist_data[0], color=color, marker='x', s=8)
+            max_y = hist_data[0].max()
 
-            gap_span = np.linspace(0, max_gap, 400)
-            if 'gap' in label:
+            if label == 'next/prev gap':
+                trend, E = np.polyfit([x for x in X for i in range(2)], d, 1)
+            else:
+                trend, E = np.polyfit(X, d, 1)
+
+            assert trend < 2e-3, trend # Verify that expected value doesn't vary with M.
+            plt.axvline(x=E, ymax=1.0/1.2, color=color, label=f"E({label}) = {E:.0f}")
+
+            gap_span = np.linspace(np.percentile(d, 1), np.percentile(d, 99), 400)
+
+            if 'gap' not in label:
                 mu, std = stats.norm.fit(d)
                 p = stats.norm.pdf(gap_span, mu, std)
+                plt.plot(gap_span, p, color=color)
+
+            plt.xlim(np.percentile(d, 0.01), np.percentile(d, 99.9))
+            plt.ylim(1e-4, 1.2 * max_y)
+            plt.legend(loc='upper right')
+
+        for d, color in [
+                (p_gap_side, 'blueviolet'),
+                (p_gap_comb, 'seagreen'),
+        ]:
+            if color == 'blueviolet':
+                fig3.add_subplot(gs[0, 1])
             else:
-                a = stats.gamma.fit(d)
-                p = stats.gamma.pdf(gap_span, a[0], loc=a[1], scale=a[2])
+                fig3.add_subplot(gs[1, 1])
 
-            plt.plot(gap_span, p, label=label, color=color)
+            d_x, d_w = zip(*sorted(d.items()))
 
-        # Don't show as many zeros
-        plt.ylim(bottom=1e-5)
-        plt.legend(loc='upper right')
+            plt.hist(d_x, weights=d_w, bins=100, density=True,
+                     label='Theoretical P(gap)', color=color, alpha=0.4)
+            plt.legend(loc='upper right')
+
 
         if args.save_logs:
-            plt.savefig(args.unknown_filename + ".png", dpi=200)
+            plt.savefig(args.unknown_filename + ".png", dpi=1080//8)
 
         if args.plots:
             plt.show()
