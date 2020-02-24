@@ -322,7 +322,7 @@ uint64_t modulo_search_euclid_gcd(
         modulo = mult % prime;
         assert( (modulo < SL) || (modulo + SL) > prime );
     }
-    return 0;
+    return max_m;
 }
 
 
@@ -516,7 +516,7 @@ void prime_gap_search(const struct Config config) {
                     M, D, M_inc, SL, prime, base_r);
 
             // signals mi > M_inc
-            if (mi == 0) return;
+            if (mi == M_inc) return;
 
             assert (mi < M_inc);
 
@@ -578,27 +578,30 @@ void prime_gap_search(const struct Config config) {
         uint64_t m = M + mi;
         bool good_m = gcd(m, D) == 1;
 
-        if (good_m) {
-            // Reset sieve array to unknown.
-            std::fill_n(composite[0].begin(), SIEVE_LENGTH, 0);
-            std::fill_n(composite[1].begin(), SIEVE_LENGTH, 0);
-            // center is always composite.
-            composite[0][0] = composite[1][0] = 1;
+        if (!good_m) {
+            assert( large_prime_queue[mi].empty() );
+            continue
+        }
 
-            // For small primes that we don't do trick things with.
-            for (size_t pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {
-                const uint32_t prime = primes[pi];
-                long modulo = (remainder[pi] * m) % prime;
+        // Reset sieve array to unknown.
+        std::fill_n(composite[0].begin(), SIEVE_LENGTH, 0);
+        std::fill_n(composite[1].begin(), SIEVE_LENGTH, 0);
+        // center is always composite.
+        composite[0][0] = composite[1][0] = 1;
 
-                for (size_t d = modulo; d < SIEVE_LENGTH; d += prime) {
-                    composite[0][d] = true;
-                }
+        // For small primes that we don't do trick things with.
+        for (size_t pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {
+            const uint32_t prime = primes[pi];
+            long modulo = (remainder[pi] * m) % prime;
 
-                // Not technically correct but fine to skip modulo == 0
-                int first_negative = prime - modulo;
-                for (size_t d = first_negative; d < SIEVE_LENGTH; d += prime) {
-                    composite[1][d] = true;
-                }
+            for (size_t d = modulo; d < SIEVE_LENGTH; d += prime) {
+                composite[0][d] = true;
+            }
+
+            // Not technically correct but fine to skip modulo == 0
+            int first_negative = prime - modulo;
+            for (size_t d = first_negative; d < SIEVE_LENGTH; d += prime) {
+                composite[1][d] = true;
             }
         }
 
@@ -637,44 +640,21 @@ void prime_gap_search(const struct Config config) {
 
             // Find next mi where primes divides part of SIEVE
             {
-                // next modulo otherwise modulo_search returns 0;
-                uint64_t shift = (modulo + base_r) + (SL - 1);
-                if (shift >= prime) shift -= prime;
-                if (shift >= prime) shift -= prime;
-
-                assert( 0 <= shift && shift < prime );
-
-                uint64_t low  = (prime - shift);
-                uint64_t high = low + (2*SL-2);
-
-                uint64_t next_mi;
-                if (high >= prime) {
-                    next_mi = mi + 1;
-                } else {
-                    assert( 0 <= low && high < prime );
-                    int64_t m2 = modulo_search_euclid(prime, base_r, low, high);
-                    // Can overflow, verified below
-                    //assert( low <= (m2 * base_r) % prime );
-                    //assert(        (m2 * base_r) % prime <= high );
-
-
-                    next_mi = mi + 1 + m2;
-                }
+                uint64_t start = mi + 1;
+                uint64_t next_mi = start + modulo_search_euclid_gcd(
+                        M + start, D, M_inc - start, SL, prime, base_r);
+                if (next_mi == M_inc) continue;
 
                 //assert( (base_r * (M + next_mi) + (SL - 1)) % prime < (2*SL-1) );
                 __int128 mult = (__int128) base_r * (M + next_mi) + (SL - 1);
                 assert ( mult % prime <= (2 * SL - 1) );
 
-                if (next_mi < M_inc) {
-                    large_prime_queue[next_mi].push_back(pi);
-                    s_large_primes_rem += 1;
-                }
+                large_prime_queue[next_mi].push_back(pi);
+                s_large_primes_rem += 1;
             }
         }
         large_prime_queue[mi].clear();
         large_prime_queue[mi].shrink_to_fit();
-
-        if (!good_m) continue;
 
         s_tests += 1;
 
@@ -724,7 +704,7 @@ void prime_gap_search(const struct Config config) {
                 100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
                 100.0 * s_t_unk_low / s_total_unknown,
                 100.0 * s_t_unk_hgh / s_total_unknown);
-            printf("\t    large prime remaining: %d (avg tested/m: %ld)\n",
+            printf("\t    large prime remaining: %d (avg/test: %ld)\n",
                 s_large_primes_rem, s_large_primes_tested / s_tests);
         }
     }
