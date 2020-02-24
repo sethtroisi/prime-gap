@@ -62,6 +62,10 @@ def get_arg_parser():
     parser.add_argument('--sieve-range',  type=int,
         help="Use primes <= sieve-range for checking composite (must match gap_search param)")
 
+    parser.add_argument('--prime-db', type=str,
+        default="prime-gaps.db",
+        help="Prime sqlite database")
+
     parser.add_argument('--unknown-filename', type=str,
         help="determine mstart, minc, p, d, sieve-length, and sieve-range"
              " from unknown-results filename")
@@ -101,6 +105,10 @@ def verify_args(args):
         args.sieve_length = sl
         args.sieve_range = sr
 
+    if not os.path.exists(args.prime_db):
+        print ("prime-db \"{}\" doesn't exist".format(args.prime_db))
+        sys.exit(1)
+
     args.sieve_range *= 10 ** 6
 
     for arg in ('mstart', 'minc', 'p', 'd', 'sieve_length', 'sieve_range'):
@@ -116,6 +124,21 @@ def verify_args(args):
         assert fn == os.path.basename(args.unknown_filename), (fn, args.unknown_filename)
     else:
         args.unknown_filename = fn
+
+
+def load_existing(conn, args):
+    # TODO to_process_range
+    rv = conn.execute(
+        "SELECT m, next_p_i, prev_p_i FROM result where m BETWEEN ? AND ?",
+        (args.mstart, args.mstart + args.minc - 1))
+    return {row['m']: [row['prev_p_i'], row['next_p_i']] for row in rv}
+
+
+def save(conn, m, p, d, n_p_i, p_p_i, merit):
+    conn.execute(
+        "INSERT INTO result VALUES(null, ?, ?, ?, ?, ?, ?)",
+        (m, p, d, n_p_i, p_p_i, round(merit,3)))
+    conn.commit()
 
 
 def prob_prime_sieve_length(M, D, prob_prime, K_digits, K_primes, SL, sieve_range):
@@ -305,6 +328,12 @@ def prime_gap_test(args):
     print()
     unknown_file = open(args.unknown_filename, "r")
 
+    # ----- Open Prime-DB
+    conn = sqlite3.connect(args.prime_db)
+    conn.row_factory = sqlite3.Row
+    existing = load_existing(conn, args)
+    print (f"Found {len(existing)} existing results")
+
     # used in next_prime
     assert P <= 80000
     # Very slow but works.
@@ -350,6 +379,7 @@ def prime_gap_test(args):
     while math.gcd(M + last_mi, D) != 1:
         last_mi -= 1
 
+    tested = 0
     for mi in range(M_inc):
         m = M + mi
         if math.gcd(m, D) != 1: continue
@@ -396,38 +426,44 @@ def prime_gap_test(args):
             p_gap_merit.append(p_merit)
 
         if run_prp:
-            # Used for openPFGW
-            strn = "{}*{}#/{}+".format(m, P, D)
 
-            p_tests, prev_p_i = determine_prev_prime_i(m, strn, K, composite[0],
-                                                     SL, primes, remainder)
-            s_total_prp_tests += p_tests
-            s_gap_out_of_sieve_prev += prev_p_i >= SL
+            if m in existing:
+                prev_p_i, next_p_i = existing[m]
+            else:
+                tested += 1
+                # Used for openPFGW
+                strn = "{}*{}#/{}+".format(m, P, D)
 
-            n_tests, next_p_i = determine_next_prime_i(m, strn, K, composite[1], SL)
-            s_total_prp_tests += n_tests
-            s_gap_out_of_sieve_next += next_p_i >= SL
+                p_tests, prev_p_i = determine_prev_prime_i(m, strn, K, composite[0],
+                                                         SL, primes, remainder)
+                s_total_prp_tests += p_tests
+                s_gap_out_of_sieve_prev += prev_p_i >= SL
+
+                n_tests, next_p_i = determine_next_prime_i(m, strn, K, composite[1], SL)
+                s_total_prp_tests += n_tests
+                s_gap_out_of_sieve_next += next_p_i >= SL
 
             assert prev_p_i > 0 and next_p_i > 0
             gap = int(next_p_i + prev_p_i)
             s_experimental_gap.append(gap)
             s_experimental_side.append(next_p_i)
             s_experimental_side.append(prev_p_i)
+            assert next_p_i > 0 and prev_p_i > 0, (m, next_pi, prev_p_i)
 
             merit = gap / log_m
-            if merit > min_merit:
-                # TODO write to file.
-                print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(
-                    gap, merit, m, P, D, prev_p_i, next_p_i))
+            if m not in existing:
+                save(conn, m, P, D, next_p_i, prev_p_i, merit)
+                if merit > min_merit:
+                    print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(
+                        gap, merit, m, P, D, prev_p_i, next_p_i))
 
             if merit > s_best_merit_interval:
                 s_best_merit_interval = merit
                 s_best_merit_interval_m = m
 
-        tests = len(X)
         s_stop_t = time.time()
         print_secs = s_stop_t - s_last_print_t
-        if tests in (1,10,30,100,300,1000) or tests % 5000 == 0 \
+        if len(X) in (1,10,30,100,300,1000) or len(X) % 5000 == 0 \
                 or mi == last_mi or print_secs > 1200:
             secs = s_stop_t - s_start_t
 
@@ -442,24 +478,25 @@ def prime_gap_test(args):
                 return '{:g}'.format(float('{:.{p}g}'.format(n, p=sig)))
 
             # Want 3 sig figs which is hard in python
-            timing = "{}/sec".format(roundSig(tests / secs, 3))
-            if tests < secs:
-                timing = "{} secs/test".format(roundSig(secs / tests, 3))
+            if tested and tested < secs:
+                timing = "{} secs/test".format(roundSig(secs / tested, 3))
+            else:
+                timing = "{}/sec".format(roundSig(tested / secs, 3))
 
             # Stats!
             print("\t    tests     {:<10d} ({})  {:.0f} seconds elapsed".format(
-                tests, timing, secs))
+                tested, timing, secs))
             print("\t    unknowns  {:<10d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
-                s_total_unknown, s_total_unknown / tests,
-                100 * (1 - s_total_unknown / (2 * (sieve_length - 1) * tests)),
+                s_total_unknown, s_total_unknown / max(1, tested),
+                100 * (1 - s_total_unknown / (2 * (sieve_length - 1) * len(X))),
                 100 * s_t_unk_low / s_total_unknown,
                 100 * s_t_unk_hgh / s_total_unknown))
-            if run_prp:
+            if tested and run_prp:
                 print("\t    prp tests {:<10d} (avg: {:.2f}) ({:.3f} tests/sec)".format(
-                    s_total_prp_tests, s_total_prp_tests / tests, s_total_prp_tests / secs))
+                    s_total_prp_tests, s_total_prp_tests / tested, s_total_prp_tests / secs))
                 print("\t    fallback prev_gap {} ({:.1f}%), next_gap {} ({:.1f}%)".format(
-                    s_gap_out_of_sieve_prev, 100 * s_gap_out_of_sieve_prev / tests,
-                    s_gap_out_of_sieve_next, 100 * s_gap_out_of_sieve_next / tests))
+                    s_gap_out_of_sieve_prev, 100 * s_gap_out_of_sieve_prev / tested,
+                    s_gap_out_of_sieve_next, 100 * s_gap_out_of_sieve_next / tested))
                 print("\t    best merit this interval: {:.3f} (at m={})".format(
                     s_best_merit_interval, s_best_merit_interval_m))
 
@@ -508,11 +545,13 @@ def prime_gap_test(args):
             max_y = hist_data[0].max()
 
             if plot_i == 3:
-                trend, E = np.polyfit([x for x in X for d in ['l','up']], d, 1)
+                trend, _ = np.polyfit([x for x in X for d in ['l','up']], d, 1)
             else:
-                trend, E = np.polyfit(X, d, 1)
+                trend, _ = np.polyfit(X, d, 1)
 
-#            assert trend < 2e-3, trend # Verify that expected value doesn't vary with M.
+            assert trend < 2e-3, trend # Verify that expected value doesn't vary with M.
+            E = np.mean(d)
+
             if plot_i != 5:
                 plt.axvline(x=E, ymax=1.0/1.2, color=color, label=f"E({label}) = {E:.0f}")
                 plt.legend(loc='upper right')
