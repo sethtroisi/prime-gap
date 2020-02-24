@@ -112,8 +112,8 @@ void prime_gap_test(const struct Config config) {
     }
 
     // ----- Open Output file
+    assert( config.save_unknowns );
     std::ifstream unknown_file;
-    if (config.save_unknowns) {
         std::string fn =
             std::to_string(M) + "_" +
             std::to_string(P) + "_" +

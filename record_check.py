@@ -48,7 +48,7 @@ def search_logs(args):
         "Logs directory ({}) doesn't exist".format(args.logs_directory))
 
     assert os.path.exists(args.prime_gaps_db), (
-        "Priem gaps database ({}) doesn't exist".format(args.prime_gaps_db))
+        "Prime gaps database ({}) doesn't exist".format(args.prime_gaps_db))
 
     gaps = []
     for log_fn in glob.glob(args.logs_directory + "/*.log"):

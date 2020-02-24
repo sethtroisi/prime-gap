@@ -487,6 +487,8 @@ void prime_gap_search(const struct Config config) {
                 return;
             }
 
+            expected_large_primes += (2.0 * SL - 1) / prime;
+
             // solve base_r * (M + mi) + (SL - 1)) % prime < 2 * SL
             //   0 <= (base_r * M + SL - 1) + base_r * mi < 2 * SL mod prime
             //
@@ -511,7 +513,6 @@ void prime_gap_search(const struct Config config) {
             large_prime_queue[mi].emplace_back(prime, base_r);
             pr_pi += 1;
 
-            expected_large_primes += (2.0 * SL - 1) / prime;
             s_large_primes_rem += 1;
             first_m_sum += mi;
         });
@@ -520,7 +521,7 @@ void prime_gap_search(const struct Config config) {
         printf("\tSum of m1: %ld\n", first_m_sum);
         setlocale(LC_NUMERIC, "");
         if (expected_primes == pi) {
-            printf("\tPrimePi(%ld) = %ld\n", SIEVE_RANGE, pi)
+            printf("\tPrimePi(%ld) = %ld\n", SIEVE_RANGE, pi);
         } else {
             printf("\tPrimePi(%ld) = %ld guessed %ld\n", SIEVE_RANGE, pi, expected_primes);
             assert(common_primepi.count(SIEVE_RANGE) == 0);
