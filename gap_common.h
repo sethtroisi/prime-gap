@@ -15,8 +15,6 @@
 #include <vector>
 #include <functional>
 
-#define MAX_INT     ((1L << 32) - 1)
-
 using std::vector;
 
 struct Config {

@@ -289,7 +289,8 @@ Config argparse(int argc, char* argv[]) {
         cout << "mstart must be greater than 0: " << config.mstart << endl;
     }
 
-    if (((long) config.mstart + config.minc) >= MAX_INT) {
+    uint64_t last_m = ((long) config.mstart) + config.minc;
+    if (last_m >= 0x7FFFFFFF ) {
         config.valid = 0;
         cout << "mstart + minc must be < 1e9" << endl;
     }
@@ -323,6 +324,12 @@ Config argparse(int argc, char* argv[]) {
     if (config.d <= 0) {
         config.valid = 0;
         cout << "d must be greater than 0: " << config.d << endl;
+    }
+
+    uint64_t max_m = (1UL << 63) / config.sieve_range;
+    if (max_m <= last_m) {
+        config.valid = 0;
+        cout << "sieve_range * last_m(" << last_m << ") will overflow int64" << endl;
     }
 
     return config;
