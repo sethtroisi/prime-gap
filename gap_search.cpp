@@ -14,13 +14,14 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cmath>
 #include <chrono>
+#include <clocale>
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+#include <utility>
 #include <vector>
-#include <locale.h>
 
 #include <gmp.h>
 
@@ -28,6 +29,7 @@
 
 using std::cout;
 using std::endl;
+using std::pair;
 using std::vector;
 using namespace std::chrono;
 
@@ -381,14 +383,14 @@ void prime_gap_search(const struct Config config) {
     }
 
     // ----- Generate primes under SIEVE_RANGE.
-    vector<uint64_t> primes = get_sieve_primes_segmented(SIEVE_SMALL);
-    const size_t SIEVE_SMALL_PRIME_PI = primes.size();
+    vector<uint64_t> small_primes = get_sieve_primes_segmented(SIEVE_SMALL);
+    const size_t SIEVE_SMALL_PRIME_PI = small_primes.size();
     // SIEVE_SMALL deals with all primes that can mark off two items in SIEVE_LENGTH.
     assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
     printf("\tUsing %'ld primes for SIEVE_SMALL(%'d)\n\n",
         SIEVE_SMALL_PRIME_PI, SIEVE_SMALL);
-    assert( primes[SIEVE_SMALL_PRIME_PI-1] < SIEVE_SMALL);
-    assert( primes[SIEVE_SMALL_PRIME_PI-1] + 200 > SIEVE_SMALL);
+    assert( small_primes[SIEVE_SMALL_PRIME_PI-1] < SIEVE_SMALL);
+    assert( small_primes[SIEVE_SMALL_PRIME_PI-1] + 200 > SIEVE_SMALL);
 
     // ----- Sieve stats
     {
@@ -401,15 +403,15 @@ void prime_gap_search(const struct Config config) {
         double prob_prime_coprime = 1;
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
-        for (size_t pi = 0; primes[pi] <= P; pi++) {
-            if (D % primes[pi] != 0) {
-                prob_prime_coprime *= (1 - 1.0/primes[pi]);
+        for (size_t pi = 0; small_primes[pi] <= P; pi++) {
+            if (D % small_primes[pi] != 0) {
+                prob_prime_coprime *= (1 - 1.0/small_primes[pi]);
             }
         }
 
         int count_coprime = SL-1;
         for (size_t i = 1; i < SL; i++) {
-            for (uint64_t prime : primes) {
+            for (uint64_t prime : small_primes) {
                 if (prime > P) break;
                 if ((i % prime) == 0 && (D % prime) != 0) {
                     count_coprime -= 1;
@@ -441,17 +443,7 @@ void prime_gap_search(const struct Config config) {
     auto  s_setup_t = high_resolution_clock::now();
 
     // Remainders of (p#/d) mod prime
-    vector<uint64_t> remainder;
-    {
-        for (size_t pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {
-            const uint64_t prime = primes[pi];
-
-            // Big improvement over surround_prime is reusing this for each m.
-            uint64_t mod = mpz_fdiv_ui(K, prime);
-            //assert( 0 <= mod && mod < prime );
-            remainder.push_back(mod);
-        }
-    }
+    vector<pair<uint64_t,uint64_t>> prime_and_remainder;
 
     // Big improvement over surround_prime is avoiding checking each large prime.
     // vector<m, vector<pi>> for large primes that only rarely divide a sieve
@@ -464,32 +456,35 @@ void prime_gap_search(const struct Config config) {
     // Downside is this takes more memory (have to store pi, mi).
     std::vector<uint32_t> *large_prime_queue = new vector<uint32_t>[M_inc];
     {
-        size_t new_pi = primes.size();
+        size_t pr_pi = 0;
         printf("\tCalculating first m each prime divides\n");
         // large_prime_queue size can be approximated by
         // https://en.wikipedia.org/wiki/Meissel–Mertens_constant
 
         // Print "."s during, equal in length to 'Calculat...'
         size_t print_dots = 37;
+
+        // TODO exact values for common answers
         size_t expected_primes = 1.04 * SIEVE_RANGE / log(SIEVE_RANGE);
 
         long first_m_sum = 0;
         double expected_large_primes = 0;
-        cout << "\t."; // 0 * 37 % primes.size() < 37
-        size_t pi = SIEVE_SMALL_PRIME_PI;
+        cout << "\t";
+        size_t pi = 0;
         get_sieve_primes_segmented_lambda(SIEVE_RANGE, [&](const uint64_t prime) {
-            if (prime < primes.back()) return;
-
             pi += 1;
-
             if ((pi * print_dots) % expected_primes < print_dots) {
                 cout << "." << std::flush;
             }
 
-            expected_large_primes += (2.0 * SL - 1) / prime;
-
             // Big improvement over surround_prime is reusing this for each m.
             const uint64_t base_r = mpz_fdiv_ui(K, prime);
+
+            if (prime < small_primes.back()) {
+                prime_and_remainder.emplace_back(prime, base_r);
+                pr_pi += 1;
+                return;
+            }
 
             // solve base_r * (M + mi) + (SL - 1)) % prime < 2 * SL
             //   0 <= (base_r * M + SL - 1) + base_r * mi < 2 * SL mod prime
@@ -499,7 +494,6 @@ void prime_gap_search(const struct Config config) {
             // add (prime - shift) to all three
             //
             //  (prime - shift) <= base_r * mi < (prime - shift) + 2 * SL mod prime
-
             uint64_t mi = modulo_search_euclid_gcd(
                     M, D, M_inc, SL, prime, base_r);
 
@@ -513,22 +507,24 @@ void prime_gap_search(const struct Config config) {
 
             //assert ( gcd(M + mi, D) == 1 );
 
-            primes.push_back(prime);
-            remainder.push_back(base_r);
-            large_prime_queue[mi].push_back(new_pi);
-            new_pi += 1;
+            prime_and_remainder.emplace_back(prime, base_r);
+            large_prime_queue[mi].push_back(pr_pi);
+            pr_pi += 1;
 
+            expected_large_primes += (2.0 * SL - 1) / prime;
             s_large_primes_rem += 1;
             first_m_sum += mi;
         });
         cout << endl;
 
+        // TODO exact values for common answers
+
         printf("\tSum of m1: %ld\n", first_m_sum);
         setlocale(LC_NUMERIC, "");
-        printf("\tPrimePi(%ld) = %ld ~= %ld\n", SIEVE_RANGE, pi, expected_primes);
+        printf("\tPrimePi(%ld) = %ld guessed %ld\n", SIEVE_RANGE, pi, expected_primes);
         printf("\t%ld primes not needed (%.1f%%)\n",
-            pi - new_pi,
-            100 - (100.0 * new_pi / pi));
+            (pi - SIEVE_SMALL_PRIME_PI) - pr_pi,
+            100 - (100.0 * pr_pi / (pi - SIEVE_SMALL_PRIME_PI)));
         printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
             expected_large_primes,
             (2 * SL - 1) * (log(log(SIEVE_RANGE)) - log(log(SIEVE_SMALL))));
@@ -581,16 +577,18 @@ void prime_gap_search(const struct Config config) {
 
         // For small primes that we don't do trick things with.
         for (size_t pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {
-            const uint32_t prime = primes[pi];
-            long modulo = (remainder[pi] * m) % prime;
+            const auto& pr = prime_and_remainder[pi];
+            const uint64_t modulo = (pr.second * m) % pr.first;
+//            const auto& [prime, remainder] = prime_and_remainder[pi];
+//            const uint64_t modulo = (remainder * m) % prime;
 
-            for (size_t d = modulo; d < SIEVE_LENGTH; d += prime) {
+            for (size_t d = modulo; d < SIEVE_LENGTH; d += pr.first) {
                 composite[0][d] = true;
             }
 
             // Not technically correct but fine to skip modulo == 0
-            int first_negative = prime - modulo;
-            for (size_t d = first_negative; d < SIEVE_LENGTH; d += prime) {
+            int first_negative = pr.first - modulo;
+            for (size_t d = first_negative; d < SIEVE_LENGTH; d += pr.first) {
                 composite[1][d] = true;
             }
         }
@@ -605,9 +603,12 @@ void prime_gap_search(const struct Config config) {
 
             // Large prime should divide some number in SIEVE for this m
             // When done find next mi where prime divides a number in SIEVE.
-            const uint64_t prime   = primes[pi];
-            const uint64_t base_r  = remainder[pi];
-            const uint64_t modulo = (base_r * m) % prime;
+            const auto& pr = prime_and_remainder[pi];
+            const auto& prime = pr.first;
+            const auto& remainder = pr.second;
+//            const uint64_t modulo = (pr.second * m) % pr.first;
+//            const auto& [prime, remainder] = prime_and_remainder[pi];
+            const uint64_t modulo = (remainder * m) % prime;
 
             if (0) {
                 mpz_mul_ui(test, K, m);
@@ -632,11 +633,11 @@ void prime_gap_search(const struct Config config) {
             {
                 uint64_t start = mi + 1;
                 uint64_t next_mi = start + modulo_search_euclid_gcd(
-                        M + start, D, M_inc - start, SL, prime, base_r);
+                        M + start, D, M_inc - start, SL, prime, remainder);
                 if (next_mi == M_inc) continue;
 
-                //assert( (base_r * (M + next_mi) + (SL - 1)) % prime < (2*SL-1) );
-                __int128 mult = (__int128) base_r * (M + next_mi) + (SL - 1);
+                //assert( (remainder * (M + next_mi) + (SL - 1)) % prime < (2*SL-1) );
+                __int128 mult = (__int128) remainder * (M + next_mi) + (SL - 1);
                 assert ( mult % prime <= (2 * SL - 1) );
 
                 //assert ( gcd(M + next_mi, D) == 1 );
