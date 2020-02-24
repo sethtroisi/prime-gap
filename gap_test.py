@@ -101,7 +101,7 @@ def verify_args(args):
         args.sieve_length = sl
         args.sieve_range = sr
 
-    if args.sieve_range <= 20000:
+    if args.sieve_range <= 50000:
         args.sieve_range *= 10 ** 6
 
     for arg in ('mstart', 'minc', 'p', 'd', 'sieve_length', 'sieve_range'):
@@ -165,12 +165,16 @@ def calculate_expected_gaps(composites, SL, prob_prime_after_sieve, log_m,
                             p_gap_side, p_gap_comb, min_merit_gap):
     expected_side = []
 
-    # Geometric distribution
+    # Geometric distribution (could be cached)
     probs = []
+    prob_longer = []
     prob_gap_longer = 1
     for i in range(max(len(composites[0]), len(composites[1]))+1):
         probs.append(prob_gap_longer * prob_prime_after_sieve)
+        prob_longer.append(prob_gap_longer)
+
         prob_gap_longer *= (1 - prob_prime_after_sieve)
+
     assert min(probs) > 0
 
     for side in composites:
@@ -186,20 +190,28 @@ def calculate_expected_gaps(composites, SL, prob_prime_after_sieve, log_m,
         expected_side.append(expected_length)
 
     # TODO really slow
+    # TODO lookup best merit of every gap.
     p_merit = 0
-    for i, lower in enumerate(composites[0]):
-        for j, upper in enumerate(composites[1]):
-            prob_joint = probs[i] * probs[j]
+    for prob_i, lower in zip(probs, composites[0]):
+        for prob_j, upper in zip(probs, composites[1]):
+            prob_joint = prob_i * prob_j
             gap = -lower + upper
-            if gap > min_merit_gap:
+            if gap >= min_merit_gap:
                 p_merit += prob_joint
 
             p_gap_comb[gap] += prob_joint
-            if prob_joint < 1e-7:
+            if prob_joint < 1e-8:
                 break
+        else:
+            if -lower + SL >= min_merit_gap:
+                p_merit += prob_i * prob_longer[len(composites[1])]
+    for prob_j, upper in zip(probs, composites[1]):
+        if SL + upper > min_merit_gap:
+            p_merit += prob_j * prob_longer[len(composites[0])]
+    if 2*SL > min_merit_gap:
+        p_merit += prob_longer[len(composites[0])] * prob_longer[len(composites[1])]
 
-    assert p_merit >= 0
-
+    assert 0 < p_merit <= 1.00, composites
     return expected_side + [p_merit]
 
 
@@ -337,6 +349,10 @@ def prime_gap_test(args):
     p_gap_comb  = defaultdict(float)
     p_gap_merit = []
 
+    last_mi = M_inc - 1
+    while math.gcd(M + last_mi, D) != 1:
+        last_mi -= 1
+
     for mi in range(M_inc):
         m = M + mi
         if math.gcd(m, D) != 1: continue
@@ -386,13 +402,13 @@ def prime_gap_test(args):
             # Used for openPFGW
             strn = "{}*{}#/{}+".format(m, P, D)
 
-            tests, prev_p_i = determine_prev_prime_i(m, strn, K, composite[0],
+            p_tests, prev_p_i = determine_prev_prime_i(m, strn, K, composite[0],
                                                      SL, primes, remainder)
-            s_total_prp_tests += tests
+            s_total_prp_tests += p_tests
             s_gap_out_of_sieve_prev += prev_p_i >= SL
 
-            tests, next_p_i = determine_next_prime_i(m, strn, K, composite[1], SL)
-            s_total_prp_tests += tests
+            n_tests, next_p_i = determine_next_prime_i(m, strn, K, composite[1], SL)
+            s_total_prp_tests += n_tests
             s_gap_out_of_sieve_next += next_p_i >= SL
 
             assert prev_p_i > 0 and next_p_i > 0
@@ -411,10 +427,11 @@ def prime_gap_test(args):
                 s_best_merit_interval = merit
                 s_best_merit_interval_m = m
 
-        tests = mi + 1
+        tests = len(X)
         s_stop_t = time.time()
         print_secs = s_stop_t - s_last_print_t
-        if tests in (1,10,30,100,300,1000, M_inc) or tests % 5000 == 0 or print_secs > 1200:
+        if tests in (1,10,30,100,300,1000) or tests % 5000 == 0 \
+                or mi == last_mi or print_secs > 1200:
             secs = s_stop_t - s_start_t
 
             print("\t{:3d} {:4d} <- unknowns -> {:-4d}\t{:4d} <- gap -> {:-4d}".format(
