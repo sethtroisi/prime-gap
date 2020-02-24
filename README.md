@@ -9,8 +9,8 @@ head while working on gmp mpz_prevprime.
   * [ ] Store ALL results to sql
   * [ ] Starting at m > mstart
   * [ ] Plot average tests count
-  * [ ] Autoscale printing to every X seconds
   * [ ] Sort by expected gap and PRP only top X%
+  * [x] Autoscale printing to every X seconds
   * [x] Describe distribution
   * [x] Generate expected length
 * gap_search.cpp

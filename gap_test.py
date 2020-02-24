@@ -101,8 +101,7 @@ def verify_args(args):
         args.sieve_length = sl
         args.sieve_range = sr
 
-    if args.sieve_range <= 50000:
-        args.sieve_range *= 10 ** 6
+    args.sieve_range *= 10 ** 6
 
     for arg in ('mstart', 'minc', 'p', 'd', 'sieve_length', 'sieve_range'):
         if arg not in args or args.__dict__[arg] in (None, 0):
@@ -217,9 +216,7 @@ def calculate_expected_gaps(composites, SL, prob_prime_after_sieve, log_m,
 
 def openPFGW_is_prime(strn):
     # Overhead of subprocess calls seems to be ~0.03
-    T0 = time.time()
     s = subprocess.getstatusoutput("./pfgw64 -e1 -q" + strn)
-    T1 = time.time()
     assert s[1].startswith('PFGW'), s
     return s[0] == 0
 
@@ -475,8 +472,8 @@ def prime_gap_test(args):
         from scipy import stats
 
         if run_prp:
-            corr, _ = stats.pearsonr(s_expected_gap, s_experimental_gap)
-            print ("Pearson's correlation for expected gap: {:.3f}".format( corr))
+            slope, _, R, _, _ = stats.linregress(s_expected_gap, s_experimental_gap)
+            print ("R^2 for expected gap: {:.3f}, corr: {:.3f}".format(R**2, slope))
 
         # Set up subplots.
         fig3 = plt.figure(constrained_layout=True, figsize=(8, 8))
