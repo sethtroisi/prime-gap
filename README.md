@@ -1,11 +1,10 @@
 # Combined Sieve - a new program to find prime gaps.
 
-This is the combination of a couple of ideas I've had bouncing around in my
-head while working on gmp mpz_prevprime.
+This is the combination of a couple of ideas I had while working on gmp mpz\_prevprime.
 
 ### TODO
 
-* gap_test.py
+* gap\_test.py
   * [ ] Store ALL results to sql
   * [ ] Starting at m > mstart
   * [ ] Plot average tests count
@@ -13,11 +12,12 @@ head while working on gmp mpz_prevprime.
   * [x] Autoscale printing to every X seconds
   * [x] Describe distribution
   * [x] Generate expected length
-* gap_search.cpp
+* gap\_search.cpp
   * [ ] Verify `sieve_length` math with d > 1
   * [ ] Allow for long mi by using bucketed `large_prime_queue`
     * [ ] Store remainder and prime in same array (and don't store pi for large primes)
   * [ ] Option to output m with gcd(m, d) != 1
+  * [ ] Don't save to large\_prime\_queue[next\_mi] with (next\_mi, d) > 1
   * [x] Only store prime/remainder for primes that divide ANY mi.
   * [x] `sieve_range` > 4B
   * [x] Dynamic `sieve_length`

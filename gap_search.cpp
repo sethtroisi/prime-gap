@@ -546,26 +546,29 @@ void prime_gap_search(const struct Config config) {
 
     for (uint64_t mi = 0; mi < M_inc; mi++) {
         uint64_t m = M + mi;
+        bool good_m = gcd(m, D) == 1;
 
-        // Reset sieve array to unknown.
-        std::fill_n(composite[0].begin(), SIEVE_LENGTH, 0);
-        std::fill_n(composite[1].begin(), SIEVE_LENGTH, 0);
-        // center is always composite.
-        composite[0][0] = composite[1][0] = 1;
+        if (good_m) {
+            // Reset sieve array to unknown.
+            std::fill_n(composite[0].begin(), SIEVE_LENGTH, 0);
+            std::fill_n(composite[1].begin(), SIEVE_LENGTH, 0);
+            // center is always composite.
+            composite[0][0] = composite[1][0] = 1;
 
-        // For small primes that we don't do trick things with.
-        for (size_t pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {
-            const uint32_t prime = primes[pi];
-            long modulo = (remainder[pi] * m) % prime;
+            // For small primes that we don't do trick things with.
+            for (size_t pi = 0; pi < SIEVE_SMALL_PRIME_PI; pi++) {
+                const uint32_t prime = primes[pi];
+                long modulo = (remainder[pi] * m) % prime;
 
-            for (size_t d = modulo; d < SIEVE_LENGTH; d += prime) {
-                composite[0][d] = true;
-            }
+                for (size_t d = modulo; d < SIEVE_LENGTH; d += prime) {
+                    composite[0][d] = true;
+                }
 
-            // Not technically correct but fine to skip modulo == 0
-            int first_negative = prime - modulo;
-            for (size_t d = first_negative; d < SIEVE_LENGTH; d += prime) {
-                composite[1][d] = true;
+                // Not technically correct but fine to skip modulo == 0
+                int first_negative = prime - modulo;
+                for (size_t d = first_negative; d < SIEVE_LENGTH; d += prime) {
+                    composite[1][d] = true;
+                }
             }
         }
 
@@ -589,15 +592,17 @@ void prime_gap_search(const struct Config config) {
                 assert( mod == modulo );
             }
 
-            if (modulo < SIEVE_LENGTH) {
-                // Just past a multiple
-                composite[0][modulo] = true;
-            } else {
-                // Don't have to deal with 0 case anymore.
-                int64_t first_negative = prime - modulo;
-                assert( first_negative < SIEVE_LENGTH); // Bad next m!
-                // Just before a multiple
-                composite[1][first_negative] = true;
+            if (good_m) {
+                if (modulo < SIEVE_LENGTH) {
+                    // Just past a multiple
+                    composite[0][modulo] = true;
+                } else {
+                    // Don't have to deal with 0 case anymore.
+                    int64_t first_negative = prime - modulo;
+                    assert( first_negative < SIEVE_LENGTH); // Bad next m!
+                    // Just before a multiple
+                    composite[1][first_negative] = true;
+                }
             }
 
             // Find next mi where primes divides part of SIEVE
@@ -639,7 +644,7 @@ void prime_gap_search(const struct Config config) {
         large_prime_queue[mi].clear();
         large_prime_queue[mi].shrink_to_fit();
 
-        if (gcd(m, D) > 1) continue;
+        if !good_m: continue;
 
         s_tests += 1;
 
