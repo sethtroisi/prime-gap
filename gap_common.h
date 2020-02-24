@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
 #include <vector>
 #include <functional>
+#include <map>
 
 using std::vector;
 
@@ -31,6 +34,8 @@ struct Config {
     bool run_prp = true;
     bool save_unknowns = false;
 };
+
+extern std::map<uint64_t,uint64_t> common_primepi;
 
 void show_usage(char* name);
 Config argparse(int argc, char* argv[]);
