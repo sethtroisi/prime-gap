@@ -13,6 +13,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [x] Describe distribution
   * [x] Generate expected length
 * gap\_search.cpp
+  * [ ] Estimate initial large prime remaining
   * [ ] Verify `sieve_length` math with d > 1
   * [ ] Allow for long mi by using bucketed `large_prime_queue`
     * [ ] Store remainder and prime in same array (and don't store pi for large primes)
@@ -22,7 +23,10 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [x] `sieve_range` > 4B
   * [x] Dynamic `sieve_length`
   * [x] Dynamic `sieve_range`
-
+* record\_check.py
+  * [ ] Read from sql db
+* double\_check.py
+  * [ ] run ecm on random unknowns and verify factors found > sieve limit
 
 ## gap\_search && gap\_test
 
@@ -31,7 +35,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
 | Pn   | P#    | M/second | PRP/second |
 |------|-------|-----------------------|
 | 96   | 503   | 86       | 2081       |
-| 169  | 1009  | 60       | 560        |
+| 169  | 1009  | 12       | 560        |
 | 303  | 1999  | 1.01     | 85.3       |
 | 670  | 5003  | 1/29.3   | 7.53       |
 
