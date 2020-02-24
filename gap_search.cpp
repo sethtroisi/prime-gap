@@ -196,6 +196,7 @@ uint32_t gcd(uint32_t a, uint32_t b) {
     return gcd(b, a % b);
 }
 
+
 uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
     // A + p must not overflow.
     assert( A + p > p );
@@ -286,6 +287,42 @@ uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
     assert( tl <= test );
 // */
     return mult;
+}
+
+
+uint64_t modulo_search_euclid_gcd(
+        uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
+        uint64_t prime, uint64_t base_r) {
+    uint64_t mi = 0;
+
+    // TODO validate no overflow
+    uint64_t modulo = (base_r * (M + mi)) % prime;
+    while (mi < max_m) {
+        if ( (modulo < SL) || (modulo + SL) > prime) {
+            if (gcd(M + mi, D) > 1) {
+                mi += 1;
+                modulo += base_r;
+                if (modulo >= prime) modulo -= prime;
+                continue;
+            }
+            //assert( mi == z );
+            return mi;
+        }
+
+        uint64_t shift = modulo + (SL - 1);
+        assert( 0 <= shift && shift < prime );
+        uint64_t low  = (prime - shift);
+        uint64_t high = low + (2*SL-2);
+        assert( 0 <= low && high < prime );
+
+        uint64_t mi2 = modulo_search_euclid(prime, base_r, low, high);
+        mi += mi2;
+
+        __int128 mult = (__int128) base_r * (M + mi);
+        modulo = mult % prime;
+        assert( (modulo < SL) || (modulo + SL) > prime );
+    }
+    return 0;
 }
 
 
@@ -451,7 +488,9 @@ void prime_gap_search(const struct Config config) {
             expected_large_primes += (2.0 * SL - 1) / prime;
 
             // Big improvement over surround_prime is reusing this for each m.
-            uint64_t base_r = mpz_fdiv_ui(K, prime);
+            const uint64_t base_r = mpz_fdiv_ui(K, prime);
+
+            // TODO validate no overflow
             const uint64_t modulo = (base_r * M) % prime;
             if ( (modulo < SL) || (modulo + SL) > prime) {
                 primes.push_back(prime);
@@ -473,33 +512,24 @@ void prime_gap_search(const struct Config config) {
             //
             //  (prime - shift) <= base_r * mi < (prime - shift) + 2 * SL mod prime
 
-            uint64_t shift = modulo + (SL - 1);
-            assert( 0 <= shift && shift < prime );
-            uint64_t low  = (prime - shift);
-            uint64_t high = low + (2*SL-2);
-            assert( 0 <= low && high < prime );
+            uint64_t mi = modulo_search_euclid_gcd(
+                    M, D, M_inc, SL, prime, base_r);
 
-            uint64_t mi = modulo_search_euclid(prime, base_r, low, high);
-            // Can overflow.
-            //assert( low <= (mi * base_r) % prime );
-            //assert(        (mi * base_r) % prime <= high );
+            // signals mi > M_inc
+            if (mi == 0) return;
+
+            assert (mi < M_inc);
 
             __int128 mult = (__int128) base_r * (M + mi) + (SL - 1);
             assert( mult % prime < (2*SL-1) );
 
-            if (mi < M_inc) {
-                primes.push_back(prime);
-                remainder.push_back(base_r);
-                large_prime_queue[mi].push_back(new_pi);
-                new_pi += 1;
+            primes.push_back(prime);
+            remainder.push_back(base_r);
+            large_prime_queue[mi].push_back(new_pi);
+            new_pi += 1;
 
-                s_large_primes_rem += 1;
-                first_m_sum += mi;
-            }
-            if (0) {
-                // Brute force doublecheck
-                assert( mi == modulo_search_brute(prime, base_r, low, high) );
-            }
+            s_large_primes_rem += 1;
+            first_m_sum += mi;
         });
         cout << endl;
 
@@ -644,7 +674,7 @@ void prime_gap_search(const struct Config config) {
         large_prime_queue[mi].clear();
         large_prime_queue[mi].shrink_to_fit();
 
-        if !good_m: continue;
+        if (!good_m) continue;
 
         s_tests += 1;
 
@@ -694,7 +724,7 @@ void prime_gap_search(const struct Config config) {
                 100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
                 100.0 * s_t_unk_low / s_total_unknown,
                 100.0 * s_t_unk_hgh / s_total_unknown);
-            printf("\t    large prime remaining: %d (avg/m: %ld)\n",
+            printf("\t    large prime remaining: %d (avg tested/m: %ld)\n",
                 s_large_primes_rem, s_large_primes_tested / s_tests);
         }
     }

@@ -17,7 +17,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [ ] Allow for long mi by using bucketed `large_prime_queue`
     * [ ] Store remainder and prime in same array (and don't store pi for large primes)
   * [ ] Option to output m with gcd(m, d) != 1
-  * [ ] Don't save to large\_prime\_queue[next\_mi] with (next\_mi, d) > 1
+  * [x] Don't save to large\_prime\_queue[next\_mi] with (next\_mi, d) > 1
   * [x] Only store prime/remainder for primes that divide ANY mi.
   * [x] `sieve_range` > 4B
   * [x] Dynamic `sieve_length`
