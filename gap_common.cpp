@@ -304,9 +304,9 @@ Config argparse(int argc, char* argv[]) {
         cout << "minc > 50M will use to much memory" << endl;
     }
 
-    if (config.sieve_range > 50'000'000'000) {
+    if (config.sieve_range > 100'000'000'000) {
         config.valid = 0;
-        cout << "sieve_range > 50B not supported" << endl;
+        cout << "sieve_range > 100B not supported" << endl;
     }
 
     {

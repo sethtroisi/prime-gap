@@ -320,6 +320,7 @@ uint64_t modulo_search_euclid_gcd(
 
         __int128 mult = (__int128) base_r * (M + mi);
         modulo = mult % prime;
+
         assert( (modulo < SL) || (modulo + SL) > prime );
     }
     return max_m;
@@ -490,19 +491,6 @@ void prime_gap_search(const struct Config config) {
             // Big improvement over surround_prime is reusing this for each m.
             const uint64_t base_r = mpz_fdiv_ui(K, prime);
 
-            // TODO validate no overflow
-            const uint64_t modulo = (base_r * M) % prime;
-            if ( (modulo < SL) || (modulo + SL) > prime) {
-                primes.push_back(prime);
-                remainder.push_back(base_r);
-                large_prime_queue[0].push_back(new_pi);
-                new_pi += 1;
-
-                s_large_primes_rem += 1;
-                assert( (modulo + SL) % prime < 2*SL );
-                return;
-            }
-
             // solve base_r * (M + mi) + (SL - 1)) % prime < 2 * SL
             //   0 <= (base_r * M + SL - 1) + base_r * mi < 2 * SL mod prime
             //
@@ -522,6 +510,8 @@ void prime_gap_search(const struct Config config) {
 
             __int128 mult = (__int128) base_r * (M + mi) + (SL - 1);
             assert( mult % prime < (2*SL-1) );
+
+            //assert ( gcd(M + mi, D) == 1 );
 
             primes.push_back(prime);
             remainder.push_back(base_r);
@@ -580,7 +570,7 @@ void prime_gap_search(const struct Config config) {
 
         if (!good_m) {
             assert( large_prime_queue[mi].empty() );
-            continue
+            continue;
         }
 
         // Reset sieve array to unknown.
@@ -648,6 +638,8 @@ void prime_gap_search(const struct Config config) {
                 //assert( (base_r * (M + next_mi) + (SL - 1)) % prime < (2*SL-1) );
                 __int128 mult = (__int128) base_r * (M + next_mi) + (SL - 1);
                 assert ( mult % prime <= (2 * SL - 1) );
+
+                //assert ( gcd(M + next_mi, D) == 1 );
 
                 large_prime_queue[next_mi].push_back(pi);
                 s_large_primes_rem += 1;

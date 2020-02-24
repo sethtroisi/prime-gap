@@ -129,8 +129,9 @@ def verify_args(args):
 def load_existing(conn, args):
     # TODO to_process_range
     rv = conn.execute(
-        "SELECT m, next_p_i, prev_p_i FROM result where m BETWEEN ? AND ?",
-        (args.mstart, args.mstart + args.minc - 1))
+        "SELECT m, next_p_i, prev_p_i FROM result"
+        " WHERE P = ? and D = ? and m BETWEEN ? AND ?",
+        (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
     return {row['m']: [row['prev_p_i'], row['next_p_i']] for row in rv}
 
 
@@ -233,7 +234,7 @@ def calculate_expected_gaps(composites, SL, prob_prime_after_sieve, log_m,
     if 2*SL > min_merit_gap:
         p_merit += prob_longer[len(composites[0])] * prob_longer[len(composites[1])]
 
-    assert 0 < p_merit <= 1.00, composites
+    assert 0 <= p_merit <= 1.00, (p_merit, composites)
     return expected_side + [p_merit]
 
 
@@ -487,7 +488,7 @@ def prime_gap_test(args):
             print("\t    tests     {:<10d} ({})  {:.0f} seconds elapsed".format(
                 tested, timing, secs))
             print("\t    unknowns  {:<10d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
-                s_total_unknown, s_total_unknown / max(1, tested),
+                s_total_unknown, s_total_unknown / len(X),
                 100 * (1 - s_total_unknown / (2 * (sieve_length - 1) * len(X))),
                 100 * s_t_unk_low / s_total_unknown,
                 100 * s_t_unk_hgh / s_total_unknown))
