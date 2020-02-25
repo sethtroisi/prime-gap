@@ -44,6 +44,14 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
 | 670  | 5003  | 1/29.3   | 7.53       |
 | 1230 | 10007 |          |            |
 
+### Memory use
+
+| P#    | SL    | M\_inc   | Memory(MB) | Time(s) |
+| 10007 | 1000M | 80,000   | 1149       | 1040    |
+| 10007 | 2000M | 80,000   | 2075       | 1176    |
+| 10007 | 4000M | 80,000   | 3350       | 1333    |
+| 10007 | 8000M | 80,000   | 4913       | 1488    |
+
 
 ## Pgsurround.pl benchmark
 On a i7-2600k single threaded.
