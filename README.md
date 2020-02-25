@@ -28,7 +28,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [x] Dynamic `sieve_length`
   * [x] Dynamic `sieve_range`
 * record\_check.py
-  * [ ] Read from sql db
+  * [x] Read from sql db
 * double\_check.py
   * [ ] run ecm on random unknowns and verify factors found > sieve limit
 
