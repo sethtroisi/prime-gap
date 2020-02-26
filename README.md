@@ -18,7 +18,12 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
 * gap\_search.cpp
   * [ ] Estimate initial large prime remaining
   * [ ] Verify `sieve_length` math with d > 1
+    * [ ] Find worst m % d, and calculate from that?
   * [ ] Option to output m with gcd(m, d) != 1
+  * [ ] Consider inverting the problem and keeping all composites in memory (and immediately marking mi off)
+    * Printing at each 1B primes tells you PRP tests saved / time taken.
+    * No large startup cost.
+    * [ ] Ctrl-c then just writes out the results at that point.
   * [ ] Allow for long mi by using bucketed `large_prime_queue`
     * [x] Store remainder and prime in same array
     * [x] don't store pi for large primes (just pass around the pair)
@@ -33,25 +38,28 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [ ] run ecm on random unknowns and verify factors found > sieve limit
 
 ## gap\_search && gap\_test
+On a i7-2600k single threaded.
 
 ###
 
-| Pn   | P#    | M/second | PRP/second |
-|------|-------|-----------------------|
-| 96   | 503   | 86       | 2081       |
-| 169  | 1009  | 12       | 560        |
-| 303  | 1999  | 1.03     | 92.7       |
-| 670  | 5003  | 1/29.3   | 7.53       |
-| 1230 | 10007 |          |            |
+| Pn   | P#    | M/second  | PRP/second |
+|------|-------|-----------|------------|
+| 96   | 503   | 86        | 2081       |
+| 169  | 1009  | 12        | 560        |
+| 303  | 1999  | 1.03      | 92.7       |
+| 670  | 5003  | 24s/test  | 9.40       |
+| 1230 | 10007 | 154s/test | 2.81       |
 
 ### Memory use
 
-| P#    | SL    | M\_inc   | Memory(MB) | Time(s) |
-| 10007 | 1000M | 80,000   | 1149       | 1040    |
-| 10007 | 2000M | 80,000   | 2075       | 1176    |
-| 10007 | 4000M | 80,000   | 3350       | 1333    |
-| 10007 | 8000M | 80,000   | 4913       | 1488    |
-
+| P#    | SL   | M\_inc   | Memory(MB) | Time(s) | PRP/prime |
+|-------|------|----------|------------|---------|-----------|
+| 10007 |  1e9 | 80,000   | 1149       | 1040    | 268       |
+| 10007 |  2e9 | 80,000   | 2075       | 1176    | 260       |
+| 10007 |  4e9 | 80,000   | 3350       | 1333    | 252       |
+| 10007 |  8e9 | 80,000   | 4913       | 1488    | 244       |
+| 10007 | 16e9 | 80,000   | 6507       | 1813    | 236       |
+| 10007 | 32e9 | 80,000   | 8544       | 2327    | 230       |
 
 ## Pgsurround.pl benchmark
 On a i7-2600k single threaded.
