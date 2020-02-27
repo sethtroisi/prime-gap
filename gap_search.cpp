@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdio>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <utility>
 #include <vector>
@@ -36,8 +37,11 @@ using namespace std::chrono;
 // Tweaking this doesn't seem to change speed much.
 #define SIEVE_SMALL       400'000
 
+const double GAMMA = 0.577215665;
+
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config config);
+void prime_gap_parallel(const struct Config config);
 
 
 int main(int argc, char* argv[]) {
@@ -70,8 +74,11 @@ int main(int argc, char* argv[]) {
     printf("sieve_range:  %ld\n", config.sieve_range);
     printf("\n");
 
-
-    prime_gap_search(config);
+    if ((config.sieve_range/1'000'000) & 1) {
+        prime_gap_search(config);
+    } else {
+        prime_gap_parallel(config);
+    }
 }
 
 
@@ -329,6 +336,41 @@ uint64_t modulo_search_euclid_gcd(
 }
 
 
+void modulo_search_euclid_all(
+        uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
+        uint64_t prime, uint64_t base_r,
+        std::function<void (uint64_t)> lambda) {
+    uint64_t mi = 0;
+
+    // TODO validate no overflow
+    uint64_t modulo = (base_r * (M + mi)) % prime;
+    while (mi < max_m) {
+        if ( (modulo < SL) || (modulo + SL) > prime) {
+            lambda(mi);
+            mi += 1;
+            modulo += base_r;
+            if (modulo >= prime) modulo -= prime;
+            continue;
+        }
+
+        uint64_t shift = modulo + (SL - 1);
+        assert( 0 <= shift && shift < prime );
+        uint64_t low  = (prime - shift);
+        uint64_t high = low + (2*SL-2);
+        assert( 0 <= low && high < prime );
+
+        uint64_t mi2 = modulo_search_euclid(prime, base_r, low, high);
+        mi += mi2;
+
+        __int128 mult = (__int128) base_r * (M + mi);
+        modulo = mult % prime;
+
+        assert( (modulo < SL) || (modulo + SL) > prime );
+    }
+}
+
+
+
 void prime_gap_search(const struct Config config) {
     const uint64_t M = config.mstart;
     const uint64_t M_inc = config.minc;
@@ -395,14 +437,12 @@ void prime_gap_search(const struct Config config) {
     // ----- Sieve stats
     {
         // From Mertens' 3rd theorem
-        double unknowns_after_sieve = 1;
-        const double gamma = 0.577215665;
-        unknowns_after_sieve = 1 / (log(SIEVE_RANGE) * exp(gamma));
+        double unknowns_after_sieve = 1 / (log(SIEVE_RANGE) * exp(GAMMA));
 
         double prob_prime = 1 / (K_log + log(M));
-        double prob_prime_coprime = 1;
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
+        double prob_prime_coprime = 1;
         for (size_t pi = 0; small_primes[pi] <= P; pi++) {
             if (D % small_primes[pi] != 0) {
                 prob_prime_coprime *= (1 - 1.0/small_primes[pi]);
@@ -586,8 +626,8 @@ void prime_gap_search(const struct Config config) {
         // For small primes that we don't do trick things with.
         for (const auto& pr : prime_and_remainder) {
             const uint64_t modulo = (pr.second * m) % pr.first;
-//            const auto& [prime, remainder] = prime_and_remainder[pi];
-//            const uint64_t modulo = (remainder * m) % prime;
+            //            const auto& [prime, remainder] = prime_and_remainder[pi];
+            //            const uint64_t modulo = (remainder * m) % prime;
 
             for (size_t d = modulo; d < SIEVE_LENGTH; d += pr.first) {
                 composite[0][d] = true;
@@ -627,10 +667,10 @@ void prime_gap_search(const struct Config config) {
                     composite[0][modulo] = true;
                 } else {
                     // Don't have to deal with 0 case anymore.
-                    int64_t first_negative = prime - modulo;
-                    assert( first_negative < SIEVE_LENGTH); // Bad next m!
+                    int64_t first_positive = prime - modulo;
+                    assert( first_positive < SIEVE_LENGTH); // Bad next m!
                     // Just before a multiple
-                    composite[1][first_negative] = true;
+                    composite[1][first_positive] = true;
                 }
             }
 
@@ -685,25 +725,25 @@ void prime_gap_search(const struct Config config) {
         }
 
         if ( (s_tests == 1 || s_tests == 10 || s_tests == 100 || s_tests == 500 || s_tests == 1000) ||
-             (s_tests % 5000 == 0) || (mi == mi_last) ) {
+                (s_tests % 5000 == 0) || (mi == mi_last) ) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
 
             printf("\t%ld %4d <- unknowns -> %-4d\n",
-                m, unknown_l, unknown_u);
+                    m, unknown_l, unknown_u);
 
             if (mi <= 10) continue;
 
             // Stats!
             printf("\t    tests     %-10ld (%.2f/sec)  %.0f seconds elapsed\n",
-                s_tests, s_tests / secs, secs);
+                    s_tests, s_tests / secs, secs);
             printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
-                s_total_unknown, s_total_unknown / ((double) s_tests),
-                100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
-                100.0 * s_t_unk_low / s_total_unknown,
-                100.0 * s_t_unk_hgh / s_total_unknown);
+                    s_total_unknown, s_total_unknown / ((double) s_tests),
+                    100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
+                    100.0 * s_t_unk_low / s_total_unknown,
+                    100.0 * s_t_unk_hgh / s_total_unknown);
             printf("\t    large prime remaining: %d (avg/test: %ld)\n",
-                s_large_primes_rem, s_large_primes_tested / s_tests);
+                    s_large_primes_rem, s_large_primes_tested / s_tests);
         }
     }
 
@@ -715,6 +755,247 @@ void prime_gap_search(const struct Config config) {
     // ----- cleanup
 
     delete[] large_prime_queue;
+    mpz_clear(K);
+    mpz_clear(test);
+}
+
+void prime_gap_parallel(const struct Config config) {
+    const uint64_t M = config.mstart;
+    const uint64_t M_inc = config.minc;
+    const uint64_t P = config.p;
+    const uint64_t D = config.d;
+    const float min_merit = config.minmerit;
+
+    const uint32_t SIEVE_LENGTH = config.sieve_length;
+    const uint32_t SL = SIEVE_LENGTH;
+
+    const uint64_t SIEVE_RANGE = config.sieve_range;
+
+    // SIEVE_SMALL deals with all primes that can mark off two items in SIEVE_LENGTH.
+    assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
+
+    mpz_t test;
+    mpz_init(test);
+
+    // ----- Merit Stuff
+    mpz_t K;
+    mpz_init(K);
+    mpz_primorial_ui(K, P);
+    assert( 0 == mpz_tdiv_q_ui(K, K, D) );
+    assert( mpz_cmp_ui(K, 1) > 0); // K <= 1 ?!?
+
+    int K_digits = mpz_sizeinbase(K, 10);
+    float K_log;
+    {
+        long exp;
+        double mantis = mpz_get_d_2exp(&exp, K);
+        K_log = log(mantis) + log(2) * exp;
+        float m_log = log(M);
+        int K_bits   = mpz_sizeinbase(K, 2);
+
+        printf("K = %d bits, %d digits, log(K) = %.2f\n",
+                K_bits, K_digits, K_log);
+        printf("Min Gap ~= %d (for merit > %.1f)\n\n",
+                (int) (min_merit * (K_log + m_log)), min_merit);
+    }
+
+    // ----- Save Output file
+    std::ofstream unknown_file;
+    if (config.save_unknowns) {
+        std::string fn =
+            std::to_string(M) + "_" +
+            std::to_string(P) + "_" +
+            std::to_string(D) + "_" +
+            std::to_string(M_inc) + "_s" +
+            std::to_string(config.sieve_length) + "_l" +
+            std::to_string(config.sieve_range / 1'000'000) + "M" +
+            ".txt";
+        printf("\tSaving unknowns to '%s'\n", fn.c_str());
+        unknown_file.open(fn, std::ios::out);
+        assert( unknown_file.is_open() ); // Can't open save_unknowns file
+    }
+
+    // ----- Generate primes for P
+    vector<uint32_t> P_primes = get_sieve_primes(P);
+    assert( P_primes.back() == P);
+
+    // ----- Sieve stats
+    double prob_prime = 1 / (K_log + log(M));
+    {
+        double unknowns_after_sieve = 1 / (log(SIEVE_RANGE) * exp(GAMMA));
+        double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
+
+        double prob_prime_coprime = 1;
+        for (uint32_t prime : P_primes) {
+            if (D % prime != 0) {
+                prob_prime_coprime *= (1 - 1.0/prime);
+            }
+        }
+
+        int count_coprime = SL-1;
+        for (size_t i = 1; i < SL; i++) {
+            for (uint32_t prime : P_primes) {
+                if (prime > P) break;
+                if ((i % prime) == 0 && (D % prime) != 0) {
+                    count_coprime -= 1;
+                    break;
+                }
+            }
+        }
+        double chance_coprime_composite = 1 - prob_prime / prob_prime_coprime;
+        double prob_gap_shorter_hypothetical = pow(chance_coprime_composite, count_coprime);
+
+        // count_coprime already includes some parts of unknown_after_sieve
+        printf("\t%.3f%% of sieve(%u) should be unknown (%ldM) ~= %.0f\n",
+                100 * unknowns_after_sieve,
+                SIEVE_LENGTH, SIEVE_RANGE/1'000'000,
+                count_coprime * (unknowns_after_sieve / prob_prime_coprime));
+        printf("\t%.3f%% of %d digit numbers are prime\n",
+                100 * prob_prime, K_digits);
+        printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
+                100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
+        printf("\t~2x%.1f = %.1f PRP tests per m\n",
+                1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
+        printf("\tsieve_length=%d is insufficient ~%.2f%% of time\n",
+                SIEVE_LENGTH, 100 * prob_gap_shorter_hypothetical);
+        cout << endl;
+    }
+
+    // ----- Allocate memory
+    uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH - 1;
+
+    vector<char> composite[M_inc];
+    for (size_t i = 0; i < M_inc; i++) {
+        composite[i].resize(SIEVE_INTERVAL, 0);
+    };
+
+    // Used for various stats
+    auto  s_start_t = high_resolution_clock::now();
+    auto  s_interval_t = high_resolution_clock::now();
+    long  s_total_unknowns = SIEVE_INTERVAL * M_inc;
+    long  s_small_primes_tested = 0;
+    long  s_large_primes_tested = 0;
+    uint64_t  s_next_print = 0;
+    uint64_t  next_mult = 10000;
+    double s_prp_needed = 1 / prob_prime;
+
+    size_t pi = 0;
+    get_sieve_primes_segmented_lambda(SIEVE_RANGE, [&](const uint64_t prime) {
+        pi += 1;
+
+        // Big improvement over surround_prime is reusing this for each m.
+        const uint64_t base_r = mpz_fdiv_ui(K, prime);
+
+        if (prime <= SIEVE_SMALL) {
+            for (uint64_t mi = 0; mi < M_inc; mi++) {
+                uint64_t m = M + mi;
+
+                // Move out of loop.
+                uint64_t modulo = (base_r * m) % prime;
+                modulo += prime - (SIEVE_LENGTH % prime);
+                if (modulo >= prime) modulo -= prime;
+                uint32_t first = prime - modulo - 1;
+
+                if (0) {
+                    mpz_mul_ui(test, K, m);
+                    mpz_sub_ui(test, test, SIEVE_LENGTH-1);
+                    mpz_add_ui(test, test, first);
+                    uint64_t mod = mpz_fdiv_ui(test, prime);
+                    assert( mod == 0 );
+                }
+
+                // could go by 2*prime if guarentee first is odd.
+                for (size_t d = first; d < SIEVE_INTERVAL; d += prime) {
+                    composite[mi][d] = true;
+                    s_small_primes_tested += 1;
+                }
+            }
+        } else {
+            modulo_search_euclid_all(M, D, M_inc, SL, prime, base_r, [&](const uint64_t mi) {
+                // TODO validate no overflow
+                uint64_t first = (base_r * (M + mi) + (SL-1)) % prime;
+                assert( first < SIEVE_INTERVAL );
+                first = SIEVE_INTERVAL - first - 1;
+                assert( 0 <= first && first < SIEVE_INTERVAL );
+
+                if (0) {
+                    mpz_mul_ui(test, K, M + mi);
+                    mpz_sub_ui(test, test, SIEVE_LENGTH-1);
+                    mpz_add_ui(test, test, first);
+                    uint64_t mod = mpz_fdiv_ui(test, prime);
+                    assert( mod == 0 );
+                }
+
+                composite[mi][first] = true;
+                s_large_primes_tested += 1;
+            });
+        }
+
+        if (prime >= s_next_print) {
+            if (s_next_print == 20 * next_mult) next_mult *= 5;
+            s_next_print += next_mult;
+
+            auto   s_stop_t = high_resolution_clock::now();
+            double     secs = duration<double>(s_stop_t - s_start_t).count();
+            double int_secs = duration<double>(s_stop_t - s_interval_t).count();
+
+            double unknowns_after_sieve = 1 / (log(prime) * exp(GAMMA));
+            double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
+
+
+            uint64_t t_total_unknowns = 0;
+            for (size_t i = 0; i < M_inc; i++) {
+                t_total_unknowns += std::count(composite[i].begin(), composite[i].end(), false);
+            }
+            uint64_t saved_prp = s_total_unknowns - t_total_unknowns;
+            double skipped_prp = M_inc * (s_prp_needed - 1/prob_prime_after_sieve);
+
+            printf("%10ld %5.2f/%-6.1f seconds |", prime, int_secs, secs);
+            printf(" %ld primes used (avg/m: %.1f) \n",
+                s_large_primes_tested,
+                1.0 * s_large_primes_tested / M_inc);
+            printf("\tunknowns %ld (avg: %.2f) (%.3f%%) |",
+                t_total_unknowns,
+                1.0 * t_total_unknowns / M_inc,
+                100.0 * t_total_unknowns / (SIEVE_INTERVAL * M_inc));
+            printf(" ~ 2x %.2f PRP/m (%ld composites ~= %4.1f skipped PRP => %.1f PRP/seconds)\n",
+                1 / prob_prime_after_sieve,
+                saved_prp,
+                skipped_prp,
+                1.0 * skipped_prp / int_secs);
+
+            s_total_unknowns = t_total_unknowns;
+            s_interval_t = s_stop_t;
+            s_prp_needed = 1 / prob_prime_after_sieve;
+        }
+    });
+
+    if (config.save_unknowns) {
+        for (uint64_t mi = 0; mi < M_inc; mi++) {
+            size_t unknown_l = std::count(
+                composite[mi].begin(),
+                composite[mi].begin() + SL, false);
+            size_t unknown_u = std::count(
+                composite[mi].begin() + SL,
+                composite[mi].begin() + SIEVE_INTERVAL, false);
+
+            unknown_file << mi << " : -" << unknown_l << " +" << unknown_u << " |";
+            for (int d = 0; d <= 1; d++) {
+                char prefix = "-+"[d];
+
+                for (size_t i = 1; i < SL; i++) {
+                    if (!composite[mi][(SL-1) + (d == 0 ? -1 : 1) * i]) {
+                        unknown_file << " " << prefix << i;
+                    }
+                }
+                if (d == 0) {
+                    unknown_file << " |";
+                }
+            }
+            unknown_file << "\n";
+        }
+    }
+
     mpz_clear(K);
     mpz_clear(test);
 }

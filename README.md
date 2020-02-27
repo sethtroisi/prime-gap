@@ -20,7 +20,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [ ] Verify `sieve_length` math with d > 1
     * [ ] Find worst m % d, and calculate from that?
   * [ ] Option to output m with gcd(m, d) != 1
-  * [ ] Consider inverting the problem and keeping all composites in memory (and immediately marking mi off)
+  * [x] Consider inverting the problem and keeping all composites in memory (and immediately marking mi off)
     * Printing at each 1B primes tells you PRP tests saved / time taken.
     * No large startup cost.
     * [ ] Ctrl-c then just writes out the results at that point.
