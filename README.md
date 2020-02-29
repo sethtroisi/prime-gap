@@ -21,9 +21,10 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
     * [ ] Find worst m % d, and calculate from that?
   * [ ] Option to output m with gcd(m, d) != 1
   * [x] Consider inverting the problem and keeping all composites in memory (and immediately marking mi off)
-    * Printing at each 1B primes tells you PRP tests saved / time taken.
     * No large startup cost.
+    * [ ] check GCD with P# to avoid writting to main memory.
     * [ ] Ctrl-c then just writes out the results at that point.
+    * [x] Printing at each 1B primes tells you PRP tests saved / time taken.
   * [ ] Allow for long mi by using bucketed `large_prime_queue`
     * [x] Store remainder and prime in same array
     * [x] don't store pi for large primes (just pass around the pair)

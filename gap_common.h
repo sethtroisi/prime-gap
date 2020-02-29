@@ -33,6 +33,8 @@ struct Config {
 
     bool run_prp = true;
     bool save_unknowns = false;
+
+    bool method2 = false;
 };
 
 extern std::map<uint64_t,uint64_t> common_primepi;

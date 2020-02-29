@@ -240,6 +240,8 @@ Config argparse(int argc, char* argv[]) {
         {"sieve-only",    no_argument,       0,   6  },
         {"save-unknowns", no_argument,       0,   7  },
 
+        {"method2",       no_argument,       0,   8  },
+
         {"help",          no_argument,       0,  'h' },
         {0,               0,                 0,   0  }
     };
@@ -282,6 +284,9 @@ Config argparse(int argc, char* argv[]) {
                 break;
             case 7:
                 config.save_unknowns = true;
+                break;
+            case 8:
+                config.method2 = true;
                 break;
 
             case 0:
