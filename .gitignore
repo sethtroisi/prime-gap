@@ -1,12 +1,18 @@
 
 gap_search
+gap_stats
 gap_test
 pfgw64
+pfgw.ini
+pfgw.log
 
+gaps.db
 prime-gaps.db
 
 data/
 *M.txt
+*M.m2.txt
 *M.txt.log
 *M.txt.png
+*M.txt.stats
 
