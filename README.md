@@ -14,12 +14,12 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [x] Generate expected length
 * gap\_stats.cpp
   * [ ] Calc record chance
-  * [x] load merit from prime-gap.db
+  * [ ] Save to prime-gap.db
+  * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_search.cpp
-  * [ ] Estimate initial large prime remaining
-  * [ ] Verify `sieve_length` math with d > 1
-    * [ ] Find worst m % d, and calculate from that?
+  * [x] Verify `sieve_length` math with d > 1
+    * [x] Calculate `sieve_length` for all (m % d)
   * [ ] Option to output m with gcd(m, d) != 1
   * [x] (Method2) keeping all composites in memory (and immediately marking mi off)
     * No large startup cost.

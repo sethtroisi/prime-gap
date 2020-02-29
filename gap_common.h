@@ -46,6 +46,12 @@ Config argparse(int argc, char* argv[]);
 
 uint32_t gcd(uint32_t a, uint32_t b);
 
+double prop_gap_larger(
+    const struct Config& config,
+    double prob_prime,
+    double *prob_prime_coprime,
+    size_t *count_coprime);
+
 vector<uint32_t> get_sieve_primes(uint32_t n);
 vector<uint64_t> get_sieve_primes_segmented(uint64_t n);
 void             get_sieve_primes_segmented_lambda(uint64_t n, std::function<void (uint64_t)> lambda);

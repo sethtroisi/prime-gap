@@ -60,6 +60,34 @@ uint32_t gcd(uint32_t a, uint32_t b) {
 }
 
 
+double prop_gap_larger(
+        const struct Config& config, double prob_prime,
+        double *prob_prime_coprime, size_t *count_coprime) {
+    vector<uint32_t> P_primes = get_sieve_primes(config.p);
+    assert( P_primes.back() == config.p );
+
+    *prob_prime_coprime = 1;
+    for (uint32_t prime : P_primes) {
+        if (config.d % prime != 0) {
+            *prob_prime_coprime *= (1 - 1.0/prime);
+        }
+    }
+
+    *count_coprime = config.sieve_length-1;
+    for (size_t i = 1; i < config.sieve_length; i++) {
+        for (uint32_t prime : P_primes) {
+            if (prime > config.p) break;
+            if ((i % prime) == 0 && (config.d % prime) != 0) {
+                *count_coprime -= 1;
+                break;
+            }
+        }
+    }
+    double chance_coprime_composite = 1 - prob_prime / *prob_prime_coprime;
+    return pow(chance_coprime_composite, *count_coprime);
+}
+
+
 vector<uint32_t> get_sieve_primes(uint32_t n) {
     vector<uint32_t> primes = {2};
     vector<bool> is_prime((n+1) >> 1, true);

@@ -21,6 +21,7 @@
 #include <fstream>
 #include <functional>
 #include <iostream>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -31,6 +32,7 @@
 using std::cout;
 using std::endl;
 using std::pair;
+using std::map;
 using std::vector;
 using namespace std::chrono;
 
@@ -88,76 +90,106 @@ void set_defaults(struct Config& config) {
     }
 
     float logK;
-    {
-        mpz_t K;
-        mpz_init(K);
+    mpz_t K;
 
+    {
+        mpz_init(K);
         mpz_primorial_ui(K, config.p);
         assert( 0 == mpz_tdiv_q_ui(K, K, config.d) );
         long exp;
         double mantis = mpz_get_d_2exp(&exp, K);
         logK = log(config.mstart) + log(mantis) + log(2) * exp;
-        mpz_clear(K);
     }
 
     if (config.sieve_length == 0) {
+        double prob_prime_coprime = 1 / (logK + log(config.mstart));
         // factors of K = p#/d
         vector<uint32_t> K_primes = get_sieve_primes(config.p);
         {
-            int td = config.d;
-            while (td > 1) {
-                bool change = false;
-                for (size_t pi = 0; pi <= K_primes.size(); pi++) {
-                    if (td % K_primes[pi] == 0) {
-                        td /= K_primes[pi];
-                        K_primes.erase(K_primes.begin() + pi);
-                        change = true;
-                        // Indexes are messed changes so do easy thing.
-                        break;
-                    }
+            for (size_t pi = K_primes.size()-1; ; pi--) {
+                prob_prime_coprime /= 1 - 1.0 / K_primes[pi];
+                if (config.d % K_primes[pi] == 0) {
+                    K_primes.erase(K_primes.begin() + pi);
                 }
-                assert( change ); // d is not made up of primes <= p.
+                if (pi == 0) break;
             }
         }
-
-        // Prob prime is slightly higher in practice
-        double prob_prime_coprime = 1 / logK;
-        for (int prime : K_primes) {
-            prob_prime_coprime /= (1 - 1.0/prime);
-        }
-        printf("\tprob_prime_coprime: %.5f\n", prob_prime_coprime);
 
         // K = #p/d
         // only numbers K+i has no factor <= p
         //      => (K+i, i) == 1
         //      => only relatively prime i
-        // p is generally large enough that SL <= p*p
-        //      => i is prime (not two product of two primes > p)
-        //          or
-        //         i is composite of factors in d
-        assert( config.p > 51 );
+        //
+        // factors of d are hard because they depend on m*K
+        //  some of these m are worse than others so use worst m
+
+
+        assert( config.p >= 503 );
 
         // Search till chance of shorter gap is small.
         {
-            size_t P = config.p;
-            int count_coprime = 0;
-            for (size_t tSL = 1; tSL <= P*P; tSL += 1) {
-                count_coprime += 1;
+            assert( config.d <= 30030 );
+
+            uint32_t base = mpz_fdiv_ui(K, config.d);
+
+            // count of (m*K) % d over all m
+            vector<uint32_t> count_by_mod_d(config.d, 0);
+            {
+                for (uint64_t mi = 0; mi < config.minc; mi++) {
+                    uint64_t m = config.mstart + mi;
+                    if (gcd(m, config.d) == 1) {
+                        uint32_t center = (m * base) % config.d;
+                        uint32_t center_down = (config.d - center) % config.d;
+
+                        // distance heading up
+                        count_by_mod_d[ center ] += 1;
+                        // distance heading up
+                        count_by_mod_d[ center_down ] += 1;
+                    }
+                }
+            }
+
+            // Note: By averaging over counts prob_larger could be improve here.
+            map<uint32_t, uint32_t> coprime_by_mod_d;
+            for (size_t i = 0; i < config.d; i++) {
+                if (count_by_mod_d[i] > 0) {
+                    coprime_by_mod_d[i] = 0;
+                }
+            }
+
+            for (size_t tSL = 1; ; tSL += 1) {
+                bool all_divisible = false;
                 for (int prime : K_primes) {
                     if ((tSL % prime) == 0) {
-                        count_coprime -= 1;
+                        all_divisible = true;
                         break;
                     }
                 }
+                if (all_divisible) continue;
 
-                // Assume each coprime is independent (not quite true)
-                double prob_gap_shorter = pow(1 - prob_prime_coprime, count_coprime);
+                // check if tSL is divisible for all center mods
+                for (auto& coprime_counts : coprime_by_mod_d) {
+                    const auto center = coprime_counts.first;
+                    // if some factor in d will mark this off don't count it
+                    if (gcd(center + tSL, config.d) == 1) {
+                        coprime_counts.second += 1;
+                    }
+                }
+
+                // Find the smallest number of coprimes
+                uint32_t min_coprime = tSL;
+                for (auto& coprime_counts : coprime_by_mod_d) {
+                    min_coprime = std::min(min_coprime, coprime_counts.second);
+                }
+
+                // Assume each coprime is independent
+                double prob_gap_shorter = pow(1 - prob_prime_coprime, min_coprime);
 
                 // This seems to balance PRP fallback and sieve_size
                 if (prob_gap_shorter <= 0.008) {
                     config.sieve_length = tSL;
                     printf("AUTO SET: sieve length (coprime: %d, prob_gap longer %.2f%%): %ld\n",
-                        count_coprime, 100 * prob_gap_shorter, tSL);
+                        min_coprime, 100 * prob_gap_shorter, tSL);
                     break;
                 }
             }
@@ -195,6 +227,7 @@ void set_defaults(struct Config& config) {
             logK, config.sieve_range);
     }
 
+    mpz_clear(K);
 }
 
 
@@ -408,42 +441,24 @@ double prob_prime_and_stats(
     double unknowns_after_sieve = 1 / (log(config.sieve_range) * exp(GAMMA));
     double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
-    double prob_prime_coprime = 1;
-    assert( primes.back() >= config.p );
-    for (uint32_t prime : primes) {
-        if (prime > config.p) break;
-
-        if (config.d % prime != 0) {
-            prob_prime_coprime *= (1 - 1.0/prime);
-        }
-    }
-
-    int count_coprime = config.sieve_length-1;
-    for (size_t i = 1; i < config.sieve_length; i++) {
-        for (uint32_t prime : primes) {
-            if (prime > config.p) break;
-            if ((i % prime) == 0 && (config.d % prime) != 0) {
-                count_coprime -= 1;
-                break;
-            }
-        }
-    }
-    double chance_coprime_composite = 1 - prob_prime / prob_prime_coprime;
-    double prob_gap_shorter_hypothetical = pow(chance_coprime_composite, count_coprime);
+    size_t count_coprime = 0;
+    double prob_prime_coprime = 0;
+    double prob_gap_hypothetical = prop_gap_larger(
+        config, prob_prime, &prob_prime_coprime, &count_coprime);
 
     // count_coprime already includes some parts of unknown_after_sieve
-    printf("\t%.3f%% of interval(%u) should be unknown (%ldM) ~= %.0f\n",
+    printf("\t%.0f left from %.3f%% of %u interval with %ldM sieve\n",
+            count_coprime * (unknowns_after_sieve / prob_prime_coprime),
             100 * unknowns_after_sieve,
-            config.sieve_length, config.sieve_range/1'000'000,
-            count_coprime * (unknowns_after_sieve / prob_prime_coprime));
+            config.sieve_length, config.sieve_range/1'000'000);
     printf("\t%.3f%% of %d digit numbers are prime\n",
             100 * prob_prime, K_digits);
     printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
             100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
     printf("\t~2x%.1f = %.1f PRP tests per m\n",
             1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
-    printf("\tsieve_length=%d is insufficient ~%.2f%% of time\n",
-            config.sieve_length, 100 * prob_gap_shorter_hypothetical);
+    printf("\tsieve_length=%d is insufficient ~~%.3f%% of time\n",
+            config.sieve_length, 100 * prob_gap_hypothetical);
     cout << endl;
 
     return prob_prime;
