@@ -62,8 +62,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // TODO potentially parse P,D,minc,... from fn.
-
     printf("\n");
     printf("Testing m * %d#/%d, m = %d + [0, %d)\n",
         config.p, config.d, config.mstart, config.minc);
@@ -81,7 +79,7 @@ int main(int argc, char* argv[]) {
 
 
 void prime_gap_test(const struct Config config) {
-    const long M = config.mstart;
+    const long M_start = config.mstart;
     const long M_inc = config.minc;
     const long P = config.p;
     const long D = config.d;
@@ -102,7 +100,7 @@ void prime_gap_test(const struct Config config) {
         long exp;
         double mantis = mpz_get_d_2exp(&exp, K);
         K_log = log(mantis) + log(2) * exp;
-        float m_log = log(M);
+        float m_log = log(M_start);
         int K_bits   = mpz_sizeinbase(K, 2);
 
         printf("K = %d bits, %d digits, log(K) = %.2f\n",
@@ -115,7 +113,7 @@ void prime_gap_test(const struct Config config) {
     assert( config.save_unknowns );
     std::ifstream unknown_file;
         std::string fn =
-            std::to_string(M) + "_" +
+            std::to_string(M_start) + "_" +
             std::to_string(P) + "_" +
             std::to_string(D) + "_" +
             std::to_string(M_inc) + "_s" +
@@ -151,10 +149,9 @@ void prime_gap_test(const struct Config config) {
     {
         assert( config.sieve_range >= 1e6 );
         //From Mertens' 3rd theorem
-        double gamma = 0.577215665;
-        double unknowns_after_sieve = 1 / (log(config.sieve_range) * exp(gamma));
+        double unknowns_after_sieve = 1 / (log(config.sieve_range) * exp(GAMMA));
 
-        double prob_prime = 1 / (K_log + log(M));
+        double prob_prime = 1 / (K_log + log(M_start));
         double prob_prime_coprime = 1;
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
@@ -195,7 +192,7 @@ void prime_gap_test(const struct Config config) {
 
 
     // ----- Main sieve loop.
-    cout << "\nStarting m=" << M << "\n" << endl;
+    cout << "\nStarting m=" << M_start << "\n" << endl;
 
     // vector<bool> uses bit indexing which is ~5% slower.
     vector<char> composite[2] = {
@@ -217,8 +214,10 @@ void prime_gap_test(const struct Config config) {
     long  s_best_merit_interval_m = 0;
 
     for (int mi = 0; mi < M_inc; mi++) {
-        long m = M + mi;
-        // TODO if gcd(m, d) != 1 continue?
+        long m = M_start + mi;
+        if (gcd(m, D) > 1) {
+            continue;
+        }
 
         // Reset sieve array to all composite.
         std::fill_n(composite[0].begin(), SIEVE_LENGTH, 1);

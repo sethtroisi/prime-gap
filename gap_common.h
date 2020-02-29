@@ -20,6 +20,8 @@
 
 using std::vector;
 
+const double GAMMA = 0.577215665;
+
 struct Config {
     int valid   = 0;
     uint64_t mstart  = 0;
@@ -41,6 +43,9 @@ extern std::map<uint64_t,uint64_t> common_primepi;
 
 void show_usage(char* name);
 Config argparse(int argc, char* argv[]);
+
+uint32_t gcd(uint32_t a, uint32_t b);
+
 vector<uint32_t> get_sieve_primes(uint32_t n);
 vector<uint64_t> get_sieve_primes_segmented(uint64_t n);
 void             get_sieve_primes_segmented_lambda(uint64_t n, std::function<void (uint64_t)> lambda);

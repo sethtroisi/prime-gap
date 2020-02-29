@@ -38,8 +38,6 @@ using namespace std::chrono;
 // method2 seems very sensative and is controlled elsewhere.
 #define SIEVE_SMALL       200'000
 
-const double GAMMA = 0.577215665;
-
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config config);
 void prime_gap_parallel(const struct Config config);
@@ -167,7 +165,6 @@ void set_defaults(struct Config& config) {
         assert( config.sieve_length > 100 ); // Something went wrong above.
     }
 
-
     if (config.sieve_range == 0) {
         // each additional numbers removes unknowns / prime
         // and takes log2(prime / sieve_length) time
@@ -201,12 +198,6 @@ void set_defaults(struct Config& config) {
 }
 
 
-uint32_t gcd(uint32_t a, uint32_t b) {
-    if (b == 0) return a;
-    return gcd(b, a % b);
-}
-
-
 uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
     // A + p must not overflow.
     assert( A + p > p );
@@ -220,6 +211,7 @@ uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
         }
     }
 }
+
 
 uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t r) {
     // min i : l <= (a * i) % p <= l
@@ -249,6 +241,7 @@ uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t
     assert( mult < p );
     return mult;
 }
+
 
 uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
     // min i : l <= (a * i) % p <= l
@@ -382,6 +375,7 @@ std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
            suffix;
 }
 
+
 void K_stats(
         const struct Config& config,
         mpz_t &K, int *K_digits, double *K_log) {
@@ -457,7 +451,7 @@ double prob_prime_and_stats(
 
 
 void prime_gap_search(const struct Config config) {
-    const uint64_t M = config.mstart;
+    const uint64_t M_start = config.mstart;
     const uint64_t M_inc = config.minc;
     const uint64_t P = config.p;
     const uint64_t D = config.d;
@@ -560,14 +554,14 @@ void prime_gap_search(const struct Config config) {
             //
             //  (prime - shift) <= base_r * mi < (prime - shift) + 2 * SL mod prime
             uint64_t mi = modulo_search_euclid_gcd(
-                    M, D, M_inc, SL, prime, base_r);
+                    M_start, D, M_inc, SL, prime, base_r);
 
             // signals mi > M_inc
             if (mi == M_inc) return;
 
             assert (mi < M_inc);
 
-            __int128 mult = (__int128) base_r * (M + mi) + (SL - 1);
+            __int128 mult = (__int128) base_r * (M_start + mi) + (SL - 1);
             assert( mult % prime < (2*SL-1) );
 
             //assert ( gcd(M + mi, D) == 1 );
@@ -605,10 +599,8 @@ void prime_gap_search(const struct Config config) {
         printf("\n\tSetup took %.1f seconds\n", secs);
     }
 
-
-
     // ----- Main sieve loop.
-    cout << "\nStarting m=" << M << "\n" << endl;
+    cout << "\nStarting m=" << M_start << "\n" << endl;
 
     // vector<bool> uses bit indexing which is ~5% slower.
     vector<char> composite[2] = {
@@ -631,7 +623,7 @@ void prime_gap_search(const struct Config config) {
     assert( mi_last > 0 );
 
     for (uint64_t mi = 0; mi < M_inc; mi++) {
-        uint64_t m = M + mi;
+        uint64_t m = M_start + mi;
         bool good_m = gcd(m, D) == 1;
 
         if (!good_m) {
@@ -700,14 +692,14 @@ void prime_gap_search(const struct Config config) {
             {
                 uint64_t start = mi + 1;
                 uint64_t next_mi = start + modulo_search_euclid_gcd(
-                        M + start, D, M_inc - start, SL, prime, remainder);
+                        M_start + start, D, M_inc - start, SL, prime, remainder);
                 if (next_mi == M_inc) continue;
 
                 //assert( (remainder * (M + next_mi) + (SL - 1)) % prime < (2*SL-1) );
-                __int128 mult = (__int128) remainder * (M + next_mi) + (SL - 1);
+                __int128 mult = (__int128) remainder * (M_start + next_mi) + (SL - 1);
                 assert ( mult % prime <= (2 * SL - 1) );
 
-                //assert ( gcd(M + next_mi, D) == 1 );
+                //assert ( gcd(M_start + next_mi, D) == 1 );
 
                 large_prime_queue[next_mi].push_back(pr);
                 s_large_primes_rem += 1;
@@ -963,7 +955,6 @@ void prime_gap_parallel(const struct Config config) {
 
             double unknowns_after_sieve = 1 / (log(prime) * exp(GAMMA));
             double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
-
 
             uint64_t t_total_unknowns = 0;
             for (size_t i = 0; i < M_inc; i++) {

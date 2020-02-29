@@ -54,6 +54,12 @@ std::map<uint64_t,uint64_t> common_primepi = {
 };
 
 
+uint32_t gcd(uint32_t a, uint32_t b) {
+    if (b == 0) return a;
+    return gcd(b, a % b);
+}
+
+
 vector<uint32_t> get_sieve_primes(uint32_t n) {
     vector<uint32_t> primes = {2};
     vector<bool> is_prime((n+1) >> 1, true);

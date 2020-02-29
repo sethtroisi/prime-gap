@@ -33,7 +33,8 @@ using std::endl;
 using std::vector;
 using namespace std::chrono;
 
-const double GAMMA = 0.577215665;
+// Limits the size of record list
+const uint32_t MAX_GAP = 1'000'000;
 
 void prime_gap_stats(const struct Config config);
 
@@ -62,8 +63,7 @@ int main(int argc, char* argv[]) {
 
 
 vector<double> get_record_gaps() {
-    // TODO pull out 500'000 as MAX_GAP
-    vector<double> records(500'000, 0.0);
+    vector<double> records(MAX_GAP, 0.0);
 
     // TODO accept db file as param.
 
@@ -81,8 +81,8 @@ vector<double> get_record_gaps() {
     /* Execute SQL statement */
     rc = sqlite3_exec(db, sql, [](void* recs, int argc, char **argv, char **azColName)->int {
         uint64_t gap = atol(argv[0]);
-        if (gap < 500'000) {
-            (*static_cast<vector<double>*>(recs))[atol(argv[0])] = atof(argv[1]);
+        if (gap < MAX_GAP) {
+            (*static_cast<vector<double>*>(recs))[gap] = atof(argv[1]);
         }
         return 0;
     }, (void*)&records, &zErrMsg);
@@ -94,11 +94,6 @@ vector<double> get_record_gaps() {
     sqlite3_close(db);
 
     return records;
-}
-
-uint32_t gcd(uint32_t a, uint32_t b) {
-    if (b == 0) return a;
-    return gcd(b, a % b);
 }
 
 

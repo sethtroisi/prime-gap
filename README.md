@@ -14,8 +14,8 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [x] Generate expected length
 * gap\_stats.cpp
   * [ ] Calc record chance
-  * [ ] load merit from prime-gap.db
-  * [ ] Load from unknown\_fn
+  * [x] load merit from prime-gap.db
+  * [x] Load from unknown\_fn
 * gap\_search.cpp
   * [ ] Estimate initial large prime remaining
   * [ ] Verify `sieve_length` math with d > 1
