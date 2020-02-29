@@ -82,7 +82,8 @@ vector<double> get_record_gaps() {
     rc = sqlite3_exec(db, sql, [](void* recs, int argc, char **argv, char **azColName)->int {
         uint64_t gap = atol(argv[0]);
         if (gap < MAX_GAP) {
-            (*static_cast<vector<double>*>(recs))[gap] = atof(argv[1]);
+            // Recover log(startprime)
+            (*static_cast<vector<double>*>(recs))[gap] = gap / atof(argv[1]);
         }
         return 0;
     }, (void*)&records, &zErrMsg);
@@ -104,6 +105,7 @@ std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
            std::to_string(config.minc) + "_s" +
            std::to_string(config.sieve_length) + "_l" +
            std::to_string(config.sieve_range / 1'000'000) + "M" +
+           (config.method2 ? ".m2" : "") +
            suffix;
 }
 
@@ -145,15 +147,6 @@ void prime_gap_stats(const struct Config config) {
     assert( unknown_file.is_open() ); // Can't open save_unknowns file
     assert( unknown_file.good() );    // Can't open save_unknowns file
 
-    std::ofstream unknown_stat_file;
-    fn = gen_unknown_fn(config, ".txt.stats");
-    printf("\tSaving stats to '%s'\n", fn.c_str());
-    unknown_stat_file.open(fn, std::ios::out);
-    assert( unknown_stat_file.is_open() ); // Can't open save_unknowns file
-
-    // ----- Get Record Prime Gaps
-    vector<double> records = get_record_gaps();
-
     // ----- Merit Stuff
     mpz_t K;
     mpz_init(K);
@@ -165,6 +158,30 @@ void prime_gap_stats(const struct Config config) {
     double K_log;
     K_stats(config, K, &K_digits, &K_log);
 
+    // ----- Get Record Prime Gaps
+    vector<double> records = get_record_gaps();
+    // Smallest gap that would be a record with m*P#/d
+    uint32_t min_record_gap = 0;
+    double smallest_log = K_log + log(M_start);
+    {
+        for (size_t g = 2; min_record_gap == 0 && g < MAX_GAP; g += 2) {
+            if (records[g] > smallest_log) {
+                min_record_gap = g;
+            }
+        }
+        assert( min_record_gap > 0 );
+        printf("Min Record Gap: %d merit %.2f would improve to %.3f\n",
+            min_record_gap,
+            min_record_gap / records[min_record_gap],
+            min_record_gap / smallest_log);
+
+        if (min_record_gap > 2 * SIEVE_LENGTH) {
+            printf("\tCan't determine record prob, 2 * sieve_length < min_record_gap");
+        }
+        cout << endl;
+    }
+
+
     // ----- Generate primes for P
     vector<uint32_t> P_primes = get_sieve_primes(P);
     assert( P_primes.back() == P);
@@ -172,10 +189,10 @@ void prime_gap_stats(const struct Config config) {
     // ----- Sieve stats
     double prob_prime_after_sieve;
     {
-        double prob_prime = 1 / (K_log + log(config.mstart));
+        double prob_prime = 1 / smallest_log;
         double unknowns_after_sieve = 1 / (log(config.sieve_range) * exp(GAMMA));
         prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
-        cout << "prob_prime_after: " << prob_prime_after_sieve << endl;
+        cout << "prob_prime_after_sieve: " << prob_prime_after_sieve << endl;
     }
 
     // Prob 0th, 1st, 2nd is prime
@@ -250,18 +267,21 @@ void prime_gap_stats(const struct Config config) {
             }
         }
 
+        // Note slightly different from smallest_log
         double log_merit = K_log + log(m);
 
         double prob_record = 0;
         double prob_seen = 0;
+        // TODO if 2*SL < min_record_gap just skip this.
         for (size_t i = 0; i < unknown_low.size(); i++) {
             for (size_t j = 0; j < unknown_high.size(); j++) {
                 double prob_joint = prob_prime_nth[i+1] * prob_prime_nth[j+1];
                 prob_seen += prob_joint;
 
                 uint32_t gap = abs(unknown_low[i]) + abs(unknown_high[j]);
-                if ((records[gap] - 0.01) <= gap / log_merit) {
-//                    cout << "\t" << gap << " " << records[gap] << " would be " << gap / log_merit << endl;
+                if ((records[gap] - 0.01) > log_merit) {
+//                    printf("\tgap: %d curr: %5.2f, would be %5.3f (%.6f%%)\n",
+//                        gap, gap / records[gap], gap / log_merit, 100.0 * prob_joint);
                     prob_record += prob_joint;
                 }
             }
@@ -270,7 +290,7 @@ void prime_gap_stats(const struct Config config) {
         probs_seen.push_back(prob_seen);
         probs_record.push_back(prob_record);
 
-        if (prob_record) {
+        if (prob_record > 0) {
 //            printf("%5ld (%ld) | %.5f %.6f\n", m, s_tests, prob_seen, prob_record);
         }
     }

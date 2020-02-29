@@ -15,6 +15,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
 * gap\_stats.cpp
   * [ ] Calc record chance
   * [ ] Save to prime-gap.db
+  * [ ] drop directory from `unknown-filename`
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_search.cpp

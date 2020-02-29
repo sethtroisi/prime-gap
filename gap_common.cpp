@@ -339,6 +339,11 @@ Config argparse(int argc, char* argv[]) {
 
                     config.sieve_range = atol(t) * 1'000'000;
                     t = std::strchr(t, 'M');
+
+                    if (t[3] == '2') {
+                        config.method2 = true;
+                    }
+
                     assert( std::strcmp(t, "M.txt") == 0 || std::strcmp(t, "M.m2.txt") == 0 );
                 }
                 break;
