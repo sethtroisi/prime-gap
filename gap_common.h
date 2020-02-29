@@ -22,14 +22,14 @@ using std::vector;
 
 struct Config {
     int valid   = 0;
-    int mstart  = 0;
-    int minc    = 0;
-    int p       = 0;
-    int d       = 0;
+    uint64_t mstart  = 0;
+    uint64_t minc    = 0;
+    uint32_t p       = 0;
+    uint32_t d       = 0;
     float minmerit = 12;
 
-    unsigned int sieve_length = 0;
-    unsigned long sieve_range  = 0;
+    uint32_t sieve_length = 0;
+    uint64_t sieve_range  = 0;
 
     bool run_prp = true;
     bool save_unknowns = false;

@@ -66,7 +66,7 @@ int main(int argc, char* argv[]) {
     }
 
     printf("\n");
-    printf("Testing m * %d#/%d, m = %d + [0, %d)\n",
+    printf("Testing m * %u#/%u, m = %ld + [0, %ld)\n",
         config.p, config.d, config.mstart, config.minc);
 
     printf("\n");
@@ -371,6 +371,58 @@ void modulo_search_euclid_all(
 }
 
 
+// Todo float => double for K_log
+double prob_prime_and_stats(
+        const struct Config& config,
+        double K_log, int K_digits,
+        vector<uint32_t> &primes) {
+    double prob_prime = 1 / (K_log + log(config.mstart));
+
+    // From Mertens' 3rd theorem
+    double unknowns_after_sieve = 1 / (log(config.sieve_range) * exp(GAMMA));
+    double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
+
+    double prob_prime_coprime = 1;
+    assert( primes.back() >= config.p );
+    for (uint32_t prime : primes) {
+        if (prime > config.p) break;
+
+        if (config.d % prime != 0) {
+            prob_prime_coprime *= (1 - 1.0/prime);
+        }
+    }
+
+    int count_coprime = config.sieve_length-1;
+    for (size_t i = 1; i < config.sieve_length; i++) {
+        for (uint32_t prime : primes) {
+            if (prime > config.p) break;
+            if ((i % prime) == 0 && (config.d % prime) != 0) {
+                count_coprime -= 1;
+                break;
+            }
+        }
+    }
+    double chance_coprime_composite = 1 - prob_prime / prob_prime_coprime;
+    double prob_gap_shorter_hypothetical = pow(chance_coprime_composite, count_coprime);
+
+    // count_coprime already includes some parts of unknown_after_sieve
+    printf("\t%.3f%% of interval(%u) should be unknown (%ldM) ~= %.0f\n",
+            100 * unknowns_after_sieve,
+            config.sieve_length, config.sieve_range/1'000'000,
+            count_coprime * (unknowns_after_sieve / prob_prime_coprime));
+    printf("\t%.3f%% of %d digit numbers are prime\n",
+            100 * prob_prime, K_digits);
+    printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
+            100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
+    printf("\t~2x%.1f = %.1f PRP tests per m\n",
+            1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
+    printf("\tsieve_length=%d is insufficient ~%.2f%% of time\n",
+            config.sieve_length, 100 * prob_gap_shorter_hypothetical);
+    cout << endl;
+
+    return prob_prime;
+}
+
 
 void prime_gap_search(const struct Config config) {
     const uint64_t M = config.mstart;
@@ -426,59 +478,19 @@ void prime_gap_search(const struct Config config) {
     }
 
     // ----- Generate primes under SIEVE_RANGE.
-    vector<uint64_t> small_primes = get_sieve_primes_segmented(SIEVE_SMALL);
+    vector<uint32_t> small_primes = get_sieve_primes(SIEVE_SMALL);
     const size_t SIEVE_SMALL_PRIME_PI = small_primes.size();
-    // SIEVE_SMALL deals with all primes that can mark off two items in SIEVE_LENGTH.
-    assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
-    printf("\tUsing %'ld primes for SIEVE_SMALL(%'d)\n\n",
-        SIEVE_SMALL_PRIME_PI, SIEVE_SMALL);
-    assert( small_primes[SIEVE_SMALL_PRIME_PI-1] < SIEVE_SMALL);
-    assert( small_primes[SIEVE_SMALL_PRIME_PI-1] + 200 > SIEVE_SMALL);
-
-    // ----- Sieve stats
     {
-        // From Mertens' 3rd theorem
-        double unknowns_after_sieve = 1 / (log(SIEVE_RANGE) * exp(GAMMA));
-
-        double prob_prime = 1 / (K_log + log(M));
-        double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
-
-        double prob_prime_coprime = 1;
-        for (size_t pi = 0; small_primes[pi] <= P; pi++) {
-            if (D % small_primes[pi] != 0) {
-                prob_prime_coprime *= (1 - 1.0/small_primes[pi]);
-            }
-        }
-
-        int count_coprime = SL-1;
-        for (size_t i = 1; i < SL; i++) {
-            for (uint64_t prime : small_primes) {
-                if (prime > P) break;
-                if ((i % prime) == 0 && (D % prime) != 0) {
-                    count_coprime -= 1;
-                    break;
-                }
-            }
-        }
-        double chance_coprime_composite = 1 - prob_prime / prob_prime_coprime;
-        double prob_gap_shorter_hypothetical = pow(chance_coprime_composite, count_coprime);
-
-        // count_coprime already includes some parts of unknown_after_sieve
-        printf("\t%.3f%% of sieve(%u) should be unknown (%ldM) ~= %.0f\n",
-            100 * unknowns_after_sieve,
-            SIEVE_LENGTH, SIEVE_RANGE/1'000'000,
-            count_coprime * (unknowns_after_sieve / prob_prime_coprime));
-        printf("\t%.3f%% of %d digit numbers are prime\n",
-            100 * prob_prime, K_digits);
-        printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
-            100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
-        printf("\t~2x%.1f = %.1f PRP tests per m\n",
-            1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
-        printf("\tsieve_length=%d is insufficient ~%.2f%% of time\n",
-            SIEVE_LENGTH, 100 * prob_gap_shorter_hypothetical);
-        cout << endl;
+        // SIEVE_SMALL deals with all primes that can mark off two items in SIEVE_LENGTH.
+        assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
+        printf("\tUsing %'ld primes for SIEVE_SMALL(%'d)\n\n",
+            SIEVE_SMALL_PRIME_PI, SIEVE_SMALL);
+        assert( small_primes[SIEVE_SMALL_PRIME_PI-1] < SIEVE_SMALL);
+        assert( small_primes[SIEVE_SMALL_PRIME_PI-1] + 200 > SIEVE_SMALL);
     }
 
+    // ----- Sieve stats
+    prob_prime_and_stats(config, K_log, K_digits, small_primes);
 
     // ----- Allocate memory for a handful of utility functions.
     auto  s_setup_t = high_resolution_clock::now();
@@ -522,7 +534,7 @@ void prime_gap_search(const struct Config config) {
             // Big improvement over surround_prime is reusing this for each m.
             const uint64_t base_r = mpz_fdiv_ui(K, prime);
 
-            if (prime <= small_primes.back()) {
+            if (prime <= SIEVE_SMALL) {
                 prime_and_remainder.emplace_back(prime, base_r);
                 pr_pi += 1;
                 return;
@@ -823,46 +835,7 @@ void prime_gap_parallel(const struct Config config) {
     assert( P_primes.back() == P);
 
     // ----- Sieve stats
-    double prob_prime = 1 / (K_log + log(M_start));
-    {
-        double unknowns_after_sieve = 1 / (log(SIEVE_RANGE) * exp(GAMMA));
-        double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
-
-        double prob_prime_coprime = 1;
-        for (uint32_t prime : P_primes) {
-            if (D % prime != 0) {
-                prob_prime_coprime *= (1 - 1.0/prime);
-            }
-        }
-
-        int count_coprime = SL-1;
-        for (size_t i = 1; i < SL; i++) {
-            for (uint32_t prime : P_primes) {
-                if (prime > P) break;
-                if ((i % prime) == 0 && (D % prime) != 0) {
-                    count_coprime -= 1;
-                    break;
-                }
-            }
-        }
-        double chance_coprime_composite = 1 - prob_prime / prob_prime_coprime;
-        double prob_gap_shorter_hypothetical = pow(chance_coprime_composite, count_coprime);
-
-        // count_coprime already includes some parts of unknown_after_sieve
-        printf("\t%.3f%% of sieve(%u) should be unknown (%ldM) ~= %.0f\n",
-                100 * unknowns_after_sieve,
-                SIEVE_LENGTH, SIEVE_RANGE/1'000'000,
-                count_coprime * (unknowns_after_sieve / prob_prime_coprime));
-        printf("\t%.3f%% of %d digit numbers are prime\n",
-                100 * prob_prime, K_digits);
-        printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
-                100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
-        printf("\t~2x%.1f = %.1f PRP tests per m\n",
-                1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
-        printf("\tsieve_length=%d is insufficient ~%.2f%% of time\n",
-                SIEVE_LENGTH, 100 * prob_gap_shorter_hypothetical);
-        cout << endl;
-    }
+    double prob_prime = prob_prime_and_stats(config, K_log, K_digits, P_primes);
 
     // ----- Allocate memory
     uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH - 1;
