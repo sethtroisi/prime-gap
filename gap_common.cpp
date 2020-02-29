@@ -16,6 +16,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <getopt.h>
 #include <iostream>
 #include <map>
@@ -204,6 +205,9 @@ void show_usage(char* name) {
     cout << "  -d <p>" << endl;
     cout << "  --mstart <start>" << endl;
     cout << "  --minc   <int>" << endl;
+    cout << "OR" << endl;
+    cout << "  --unknown-filename <filename>" << endl;
+    cout << "    parse p, d, mstart, minc, sieve-length, sieve-range from filename" << endl;
     cout << "[OPTIONALLY]" << endl;
     cout << "  --minmerit <minmerit>" << endl;
     cout << "    only display prime gaps with merit >= minmerit" << endl;
@@ -215,7 +219,7 @@ void show_usage(char* name) {
     cout << "  --sieve-only" << endl;
     cout << "    only sieve ranges, don't run PRP. useful for benchmarking" << endl;
     cout << "  --save-unknowns" << endl;
-    cout << "    save unknowns to be PRPed to a temp file (p_d_mstart_minc_sieve_range.txt)" << endl;
+    cout << "    save not-composites to a temp file (p_d_mstart_minc_sieve_range.txt)" << endl;
     cout << "    where they can be processed in a 2nd pass." << endl;
     cout << "  -h, --help" << endl;
     cout << "    print this help message" << endl;
@@ -228,22 +232,24 @@ Config argparse(int argc, char* argv[]) {
     // TODO add print_interval option.
 
     static struct option long_options[] = {
-        {"mstart",        required_argument, 0,   1  },
-        {"minc",          required_argument, 0,   2  },
-        {"p",             required_argument, 0,  'p' },
-        {"d",             required_argument, 0,  'd' },
+        {"mstart",           required_argument, 0,   1  },
+        {"minc",             required_argument, 0,   2  },
+        {"p",                required_argument, 0,  'p' },
+        {"d",                required_argument, 0,  'd' },
 
-        {"sieve-length",  required_argument, 0,   4  },
-        {"sieve-range",   required_argument, 0,   5  },
+        {"unknown-filename", required_argument, 0,  'u' },
 
-        {"min-merit",     required_argument, 0,   3  },
-        {"sieve-only",    no_argument,       0,   6  },
-        {"save-unknowns", no_argument,       0,   7  },
+        {"sieve-length",     required_argument, 0,   4  },
+        {"sieve-range",      required_argument, 0,   5  },
 
-        {"method2",       no_argument,       0,   8  },
+        {"min-merit",        required_argument, 0,   3  },
+        {"sieve-only",       no_argument,       0,   6  },
+        {"save-unknowns",    no_argument,       0,   7  },
 
-        {"help",          no_argument,       0,  'h' },
-        {0,               0,                 0,   0  }
+        {"method2",          no_argument,       0,   8  },
+
+        {"help",             no_argument,       0,  'h' },
+        {0,                  0,                 0,   0  }
     };
 
     Config config;
@@ -267,6 +273,40 @@ Config argparse(int argc, char* argv[]) {
                 break;
             case 2:
                 config.minc = atoi(optarg);
+                break;
+
+            case 'u':
+                {
+                    char* t = optarg;
+                    assert(*t != 0);
+                    assert( std::count(t, t + strlen(t), '_')  == 5);
+
+                    config.mstart = atol(t);
+                    t = std::strchr(t, '_');
+                    t++;
+
+                    config.p = atoi(t);
+                    t = std::strchr(t, '_');
+                    t++;
+
+                    config.d = atoi(t);
+                    t = std::strchr(t, '_');
+                    t++;
+
+                    config.minc = atol(t);
+                    t = std::strchr(t, '_');
+                    assert( t[0] == '_' && t[1] == 's' );
+                    t += 2;
+
+                    config.sieve_length = atoi(t);
+                    t = std::strchr(t, '_');
+                    assert( t[0] == '_' && t[1] == 'l' );
+                    t += 2;
+
+                    config.sieve_range = atol(t) * 1'000'000;
+                    t = std::strchr(t, 'M');
+                    assert( std::strcmp(t, "M.txt") == 0 || std::strcmp(t, "M.m2.txt") == 0 );
+                }
                 break;
 
             case 3:

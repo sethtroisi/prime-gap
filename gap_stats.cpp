@@ -42,7 +42,6 @@ int main(int argc, char* argv[]) {
         __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
 
     Config config = argparse(argc, argv);
-    // TODO load from unknown_fn
 
     if (config.save_unknowns == 0) {
         cout << "Must set --save-unknowns" << endl;
