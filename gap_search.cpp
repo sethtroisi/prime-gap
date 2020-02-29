@@ -34,7 +34,8 @@ using std::pair;
 using std::vector;
 using namespace std::chrono;
 
-// Tweaking this doesn't seem to change speed much.
+// Tweaking this doesn't seem to method1 much.
+// method2 seems very sensative and is controlled elsewhere.
 #define SIEVE_SMALL       200'000
 
 const double GAMMA = 0.577215665;
@@ -371,11 +372,42 @@ void modulo_search_euclid_all(
 }
 
 
+std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
+    return std::to_string(config.mstart) + "_" +
+           std::to_string(config.p) + "_" +
+           std::to_string(config.d) + "_" +
+           std::to_string(config.minc) + "_s" +
+           std::to_string(config.sieve_length) + "_l" +
+           std::to_string(config.sieve_range / 1'000'000) + "M" +
+           suffix;
+}
+
+void K_stats(
+        const struct Config& config,
+        mpz_t &K, int *K_digits, double *K_log) {
+    *K_digits = mpz_sizeinbase(K, 10);
+
+    long exp;
+    double mantis = mpz_get_d_2exp(&exp, K);
+    *K_log = log(mantis) + log(2) * exp;
+
+    double m_log = log(config.mstart);
+    int K_bits   = mpz_sizeinbase(K, 2);
+    printf("K = %d bits, %d digits, log(K) = %.2f\n",
+        K_bits, *K_digits, *K_log);
+    printf("Min Gap ~= %d (for merit > %.1f)\n\n",
+        (int) (config.minmerit * (*K_log + m_log)), config.minmerit);
+}
+
+
 // Todo float => double for K_log
 double prob_prime_and_stats(
-        const struct Config& config,
-        double K_log, int K_digits,
-        vector<uint32_t> &primes) {
+        const struct Config& config, mpz_t &K, vector<uint32_t> &primes) {
+
+    int K_digits;
+    double K_log;
+    K_stats(config, K, &K_digits, &K_log);
+
     double prob_prime = 1 / (K_log + log(config.mstart));
 
     // From Mertens' 3rd theorem
@@ -429,7 +461,6 @@ void prime_gap_search(const struct Config config) {
     const uint64_t M_inc = config.minc;
     const uint64_t P = config.p;
     const uint64_t D = config.d;
-    const float min_merit = config.minmerit;
 
     const unsigned int SIEVE_LENGTH = config.sieve_length;
     const unsigned int SL = SIEVE_LENGTH;
@@ -446,32 +477,10 @@ void prime_gap_search(const struct Config config) {
     assert( 0 == mpz_tdiv_q_ui(K, K, D) );
     assert( mpz_cmp_ui(K, 1) > 0); // K <= 1 ?!?
 
-    int K_digits = mpz_sizeinbase(K, 10);
-    float K_log;
-    {
-        long exp;
-        double mantis = mpz_get_d_2exp(&exp, K);
-        K_log = log(mantis) + log(2) * exp;
-        float m_log = log(M);
-        int K_bits   = mpz_sizeinbase(K, 2);
-
-        printf("K = %d bits, %d digits, log(K) = %.2f\n",
-            K_bits, K_digits, K_log);
-        printf("Min Gap ~= %d (for merit > %.1f)\n\n",
-            (int) (min_merit * (K_log + m_log)), min_merit);
-    }
-
     // ----- Save Output file
     std::ofstream unknown_file;
     if (config.save_unknowns) {
-        std::string fn =
-            std::to_string(M) + "_" +
-            std::to_string(P) + "_" +
-            std::to_string(D) + "_" +
-            std::to_string(M_inc) + "_s" +
-            std::to_string(config.sieve_length) + "_l" +
-            std::to_string(config.sieve_range / 1'000'000) + "M" +
-            ".txt";
+        std::string fn = gen_unknown_fn(config, ".txt");
         printf("\tSaving unknowns to '%s'\n", fn.c_str());
         unknown_file.open(fn, std::ios::out);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
@@ -490,7 +499,7 @@ void prime_gap_search(const struct Config config) {
     }
 
     // ----- Sieve stats
-    prob_prime_and_stats(config, K_log, K_digits, small_primes);
+    prob_prime_and_stats(config, K, small_primes);
 
     // ----- Allocate memory for a handful of utility functions.
     auto  s_setup_t = high_resolution_clock::now();
@@ -777,7 +786,6 @@ void prime_gap_parallel(const struct Config config) {
     const uint64_t M_inc = config.minc;
     const uint64_t P = config.p;
     const uint64_t D = config.d;
-    const float min_merit = config.minmerit;
 
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     const uint32_t SL = SIEVE_LENGTH;
@@ -799,32 +807,10 @@ void prime_gap_parallel(const struct Config config) {
     assert( 0 == mpz_tdiv_q_ui(K, K, D) );
     assert( mpz_cmp_ui(K, 1) > 0); // K <= 1 ?!?
 
-    int K_digits = mpz_sizeinbase(K, 10);
-    float K_log;
-    {
-        long exp;
-        double mantis = mpz_get_d_2exp(&exp, K);
-        K_log = log(mantis) + log(2) * exp;
-        float m_log = log(M_start);
-        int K_bits   = mpz_sizeinbase(K, 2);
-
-        printf("K = %d bits, %d digits, log(K) = %.2f\n",
-                K_bits, K_digits, K_log);
-        printf("Min Gap ~= %d (for merit > %.1f)\n\n",
-                (int) (min_merit * (K_log + m_log)), min_merit);
-    }
-
     // ----- Save Output file
     std::ofstream unknown_file;
     if (config.save_unknowns) {
-        std::string fn =
-            std::to_string(M_start) + "_" +
-            std::to_string(P) + "_" +
-            std::to_string(D) + "_" +
-            std::to_string(M_inc) + "_s" +
-            std::to_string(config.sieve_length) + "_l" +
-            std::to_string(config.sieve_range / 1'000'000) + "M" +
-            ".m2.txt";
+        std::string fn = gen_unknown_fn(config, ".m2.txt");
         printf("\tSaving unknowns to '%s'\n", fn.c_str());
         unknown_file.open(fn, std::ios::out);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
@@ -835,7 +821,7 @@ void prime_gap_parallel(const struct Config config) {
     assert( P_primes.back() == P);
 
     // ----- Sieve stats
-    double prob_prime = prob_prime_and_stats(config, K_log, K_digits, P_primes);
+    double prob_prime = prob_prime_and_stats(config, K, P_primes);
 
     // ----- Allocate memory
     uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH - 1;
