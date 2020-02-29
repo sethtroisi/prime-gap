@@ -12,18 +12,20 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [x] Autoscale printing to every X seconds
   * [x] Describe distribution
   * [x] Generate expected length
-* gap\_test.cpp
+* gap\_stats.cpp
   * [ ] Calc record chance
   * [ ] load merit from prime-gap.db
+  * [ ] Load from unknown\_fn
 * gap\_search.cpp
   * [ ] Estimate initial large prime remaining
   * [ ] Verify `sieve_length` math with d > 1
     * [ ] Find worst m % d, and calculate from that?
   * [ ] Option to output m with gcd(m, d) != 1
-  * [x] Consider inverting the problem and keeping all composites in memory (and immediately marking mi off)
+  * [x] (Method2) keeping all composites in memory (and immediately marking mi off)
     * No large startup cost.
-    * [ ] check GCD with P# to avoid writting to main memory.
+    * [ ] Do all primes for small ms (to get better memory access patterns)
     * [ ] Ctrl-c then just writes out the results at that point.
+    * [x] (didn't help) check GCD with P# to avoid writting to main memory.
     * [x] Printing at each 1B primes tells you PRP tests saved / time taken.
   * [ ] Allow for long mi by using bucketed `large_prime_queue`
     * [x] Store remainder and prime in same array

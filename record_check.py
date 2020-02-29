@@ -74,6 +74,7 @@ def print_record_gaps(args, gaps):
             num_gaps, min_merit, max_merit))
 
         print ("Checking", len(gaps), "gaps against records")
+        records = 0
         for gap in gaps:
                 size = gap[0]
                 new_merit = gap[1]
@@ -81,8 +82,9 @@ def print_record_gaps(args, gaps):
                     'SELECT merit,primedigits,startprime FROM gaps WHERE'
                     ' gapsize=?', (size,)).fetchone()
                 if (not existing) or (new_merit > existing[0] - 1e-4):
-                    print ("\tRecord! Gap={}, merit={} (old: {})\n\t\t| {}".format(
-                        size, new_merit, existing, gap[3]))
+                    records += 1
+                    print ("\tRecord {:2d} | {}\n\t\tGap={}, merit={} (old: {})".format(
+                        records, gap[3], size, new_merit, existing))
 
 
 def search_logs(args):
