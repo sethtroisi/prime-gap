@@ -41,6 +41,8 @@ struct Config {
 
 extern std::map<uint64_t,uint64_t> common_primepi;
 
+std::string gen_unknown_fn(const struct Config& config, std::string suffix);
+
 void show_usage(char* name);
 Config argparse(int argc, char* argv[]);
 

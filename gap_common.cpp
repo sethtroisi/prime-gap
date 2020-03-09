@@ -262,6 +262,18 @@ void show_usage(char* name) {
 }
 
 
+std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
+    return std::to_string(config.mstart) + "_" +
+           std::to_string(config.p) + "_" +
+           std::to_string(config.d) + "_" +
+           std::to_string(config.minc) + "_s" +
+           std::to_string(config.sieve_length) + "_l" +
+           std::to_string(config.sieve_range / 1'000'000) + "M" +
+           (config.method2 ? ".m2" : "") +
+           suffix;
+}
+
+
 Config argparse(int argc, char* argv[]) {
     // TODO add print_interval option.
 

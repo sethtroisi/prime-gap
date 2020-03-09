@@ -397,17 +397,6 @@ void modulo_search_euclid_all(
 }
 
 
-std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
-    return std::to_string(config.mstart) + "_" +
-           std::to_string(config.p) + "_" +
-           std::to_string(config.d) + "_" +
-           std::to_string(config.minc) + "_s" +
-           std::to_string(config.sieve_length) + "_l" +
-           std::to_string(config.sieve_range / 1'000'000) + "M" +
-           suffix;
-}
-
-
 void K_stats(
         const struct Config& config,
         mpz_t &K, int *K_digits, double *K_log) {
@@ -816,7 +805,7 @@ void prime_gap_parallel(const struct Config config) {
     // ----- Save Output file
     std::ofstream unknown_file;
     if (config.save_unknowns) {
-        std::string fn = gen_unknown_fn(config, ".m2.txt");
+        std::string fn = gen_unknown_fn(config, ".txt");
         printf("\tSaving unknowns to '%s'\n", fn.c_str());
         unknown_file.open(fn, std::ios::out);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file

@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
     }
 
     printf("\n");
-    printf("Testing m * %d#/%d, m = %d + [0, %d)\n",
+    printf("Testing m * %d#/%d, m = %ld + [0, %ld)\n",
         config.p, config.d, config.mstart, config.minc);
 
     printf("\n");
@@ -112,14 +112,8 @@ void prime_gap_test(const struct Config config) {
     // ----- Open Output file
     assert( config.save_unknowns );
     std::ifstream unknown_file;
-        std::string fn =
-            std::to_string(M_start) + "_" +
-            std::to_string(P) + "_" +
-            std::to_string(D) + "_" +
-            std::to_string(M_inc) + "_s" +
-            std::to_string(config.sieve_length) + "_l" +
-            std::to_string(config.sieve_range / 1'000'000) + "M" +
-            ".txt";
+    {
+        std::string fn = gen_unknown_fn(config, ".txt");
         printf("\tSaving unknowns to '%s'\n", fn.c_str());
         unknown_file.open(fn, std::ios::in);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
