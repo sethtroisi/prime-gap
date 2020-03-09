@@ -38,7 +38,7 @@ using namespace std::chrono;
 
 // Tweaking this doesn't seem to method1 much.
 // method2 seems very sensative and is controlled elsewhere.
-#define SIEVE_SMALL       200'000
+#define SIEVE_SMALL       400'000
 
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config config);
@@ -802,15 +802,6 @@ void prime_gap_parallel(const struct Config config) {
     assert( 0 == mpz_tdiv_q_ui(K, K, D) );
     assert( mpz_cmp_ui(K, 1) > 0); // K <= 1 ?!?
 
-    // ----- Save Output file
-    std::ofstream unknown_file;
-    if (config.save_unknowns) {
-        std::string fn = gen_unknown_fn(config, ".txt");
-        printf("\tSaving unknowns to '%s'\n", fn.c_str());
-        unknown_file.open(fn, std::ios::out);
-        assert( unknown_file.is_open() ); // Can't open save_unknowns file
-    }
-
     // ----- Generate primes for P
     vector<uint32_t> P_primes = get_sieve_primes(P);
     assert( P_primes.back() == P);
@@ -820,17 +811,6 @@ void prime_gap_parallel(const struct Config config) {
 
     // ----- Allocate memory
     uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH - 1;
-
-    vector<char> coprime_composite(SIEVE_INTERVAL, false);
-    for (uint32_t prime : P_primes) {
-        if (D % prime != 0) {
-            int first = (SIEVE_LENGTH-1) % prime;
-            assert ( ((SIEVE_LENGTH-1) - first) % prime == 0 );
-            for (size_t d = first; d < SIEVE_INTERVAL; d += prime) {
-                coprime_composite[d] = true;
-            }
-        }
-    }
 
     vector<int32_t> m_reindex(M_inc, -1);
     size_t valid_ms = 0;
@@ -843,23 +823,40 @@ void prime_gap_parallel(const struct Config config) {
         }
     }
 
+    // which [i] are coprime to K
+    vector<char> coprime_composite(SIEVE_INTERVAL, 1);
+    // reindex composite[m][i]
+    vector<uint32_t> i_reindex(SIEVE_INTERVAL, 0);
+    {
+        coprime_composite[0] = 0;
+        for (uint32_t prime : P_primes) {
+            if (D % prime != 0) {
+                int first = (SIEVE_LENGTH-1) % prime;
+                assert ( ((SIEVE_LENGTH-1) - first) % prime == 0 );
+                for (size_t d = first; d < SIEVE_INTERVAL; d += prime) {
+                    coprime_composite[d] = 0;
+                }
+            }
+        }
+
+        size_t count = 1;
+        for (size_t i = 0; i < SIEVE_INTERVAL; i++) {
+            if (coprime_composite[i] > 0) {
+                i_reindex[i] = count++;
+            }
+        }
+    }
+    const size_t count_coprime = *std::max_element(i_reindex.begin(), i_reindex.end());
+
     // <bool> is slower than <char>, but uses 1/8th the memory.
     vector<bool> composite[valid_ms];
     {
-        auto  s_interval_t = high_resolution_clock::now();
         for (size_t i = 0; i < valid_ms; i++) {
             // Improve this setup.
-            composite[i].resize(SIEVE_INTERVAL, true);
-            for (size_t d = 0; d < SIEVE_INTERVAL; d++) {
-                if (coprime_composite[d] == false) {
-                    composite[i][d] = false;
-                }
-            }
+            composite[i].resize(count_coprime+1, false);
         };
-        auto   s_stop_t = high_resolution_clock::now();
-        double int_secs = duration<double>(s_stop_t - s_interval_t).count();
-        printf("coprime setup took %.1f (valid coprime m %ld of %ld)\n",
-            int_secs, valid_ms, M_inc);
+        printf("coprime m %ld/%ld, coprime i %ld/%d\n",
+            valid_ms, M_inc, count_coprime/2, SIEVE_LENGTH);
     }
 
     // Used for various stats
@@ -909,7 +906,8 @@ void prime_gap_parallel(const struct Config config) {
 
                     if (lowIsEven ^ evenFromCenter) {
                         // Same parity (divisible by 2) move to next prime
-                        assert( (first >= SIEVE_INTERVAL) || (composite[mii][first] > 0) );
+                        assert( (first >= SIEVE_INTERVAL) ||
+                                (composite[mii][i_reindex[first]] > 0) );
                         first += prime;
                     }
 
@@ -918,7 +916,7 @@ void prime_gap_parallel(const struct Config config) {
                 }
 
                 for (size_t d = first; d < SIEVE_INTERVAL; d += shift) {
-                    composite[mii][d] = true;
+                    composite[mii][i_reindex[d]] = true;
                     s_small_primes_tested += 1;
                 }
             }
@@ -931,7 +929,7 @@ void prime_gap_parallel(const struct Config config) {
                 first = SIEVE_INTERVAL - first - 1;
                 assert( 0 <= first && first < SIEVE_INTERVAL );
 
-                if (coprime_composite[first] == true) {
+                if (!coprime_composite[first]) {
                     return;
                 }
                 int32_t mii = m_reindex[mi];
@@ -947,7 +945,7 @@ void prime_gap_parallel(const struct Config config) {
                     assert( mod == 0 );
                 }
 
-                composite[mii][first] = true;
+                composite[mii][i_reindex[first]] = true;
                 s_large_primes_tested += 1;
             });
         }
@@ -960,7 +958,7 @@ void prime_gap_parallel(const struct Config config) {
                 }
                 s_next_print += next_mult;
                 if (s_next_print >= SIEVE_RANGE) {
-                    // Would be nice to have a prev prime :)
+                    // Would be nice to have a prev prime.
                     s_next_print = SIEVE_RANGE - 50;
                 }
             }
@@ -1000,6 +998,15 @@ void prime_gap_parallel(const struct Config config) {
     });
 
     if (config.save_unknowns) {
+        // ----- Save Output file
+        std::ofstream unknown_file;
+        if (config.save_unknowns) {
+            std::string fn = gen_unknown_fn(config, ".txt");
+            printf("\tSaving unknowns to '%s'\n", fn.c_str());
+            unknown_file.open(fn, std::ios::out);
+            assert( unknown_file.is_open() ); // Can't open save_unknowns file
+        }
+
         for (uint64_t mi = 0; mi < M_inc; mi++) {
             if (gcd(M_start + mi, D) > 1) {
                 continue;
@@ -1010,16 +1017,17 @@ void prime_gap_parallel(const struct Config config) {
             const auto& comp = composite[mii];
 
             size_t unknown_l = std::count(
-                comp.begin(),       comp.begin() + SL, false);
+                comp.begin(),       comp.begin() + count_coprime/2, false);
             size_t unknown_u = std::count(
-                comp.begin() + SL,  comp.begin() + 2*SL-1, false);
+                comp.begin() + count_coprime/2,  comp.end(), false);
 
             unknown_file << mi << " : -" << unknown_l << " +" << unknown_u << " |";
             for (int d = 0; d <= 1; d++) {
                 char prefix = "-+"[d];
 
                 for (size_t i = 1; i < SL; i++) {
-                    if (!comp[(SL-1) + (d == 0 ? -1 : 1) * i]) {
+                    int a = (SL-1) + (2*d -1) * i;
+                    if (!comp[i_reindex[a]]) {
                         unknown_file << " " << prefix << i;
                     }
                 }

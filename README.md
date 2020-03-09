@@ -24,9 +24,9 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [ ] Option to output m with gcd(m, d) != 1
   * [x] (Method2) keeping all composites in memory (and immediately marking mi off)
     * No large startup cost.
-    * [ ] Use reindex\_m trick to reduce number size of composites
     * [ ] Consider calculating skipped PRP based on index (earlier is 1.0, end of sieve is 0.005)
     * [ ] Ctrl-c then just writes out the results at that point.
+    * [x] Use reindex\_m trick to reduce number size of composites
     * [x] Do all primes for small ms (to get better memory access patterns)
     * [x] (didn't help) check GCD with P# to avoid writting to main memory.
     * [x] Printing at each 1B primes tells you PRP tests saved / time taken.
