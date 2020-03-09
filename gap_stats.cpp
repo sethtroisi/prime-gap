@@ -63,6 +63,7 @@ int main(int argc, char* argv[]) {
 
 
 vector<float> get_record_gaps() {
+    // TODO technically this should be INF.
     vector<float> records(MAX_GAP, 0.0);
 
     // TODO accept db file as param.
@@ -212,26 +213,20 @@ void run_gap_file(
         // When prime is > SL (prob ~1e-4) how to figure out prob_record?
         //      for i, determine avg gap between
 
-        //float prob_record_upper_bound = 0;
+        prob_seen = (1 - prob_great_nth[unknown_high.size()]) *
+                    (1 - prob_great_nth[unknown_low.size()]);
 
-        // TODO if 2*SL < min_record_gap just skip this.
+        size_t min_j = unknown_high.size() - 1;
         for (size_t i = 0; i < unknown_low.size(); i++) {
-            float prob_i = prob_prime_nth[i+1];
-            if (unknown_low[i] + unknown_high.back() < min_record_gap) {
-                float prob_any_j = 1 - prob_great_nth[unknown_high.size()];
-                prob_seen += prob_i * prob_any_j;
-                continue;
+            uint32_t gap_low = unknown_low[i];
+            while ((min_j > 0) && (gap_low + unknown_high[min_j] > min_record_gap)) {
+                min_j -= 1;
             }
 
-            for (size_t j = 0; j < unknown_high.size(); j++) {
-                float prob_joint = prob_i * prob_prime_nth[j+1];
-                prob_seen += prob_joint;
-
-
-                uint32_t gap = abs(unknown_low[i]) + abs(unknown_high[j]);
-                if ((records[gap] - 0.01) > log_merit) {
-//                    printf("\tgap: %d curr: %5.2f, would be %5.3f (%.6f%%)\n",
-//                        gap, gap / records[gap], gap / log_merit, 100.0 * prob_joint);
+            for (size_t j = min_j; j < unknown_high.size(); j++) {
+                uint32_t gap = gap_low + unknown_high[j];
+                if (records[gap] > log_merit) {
+                    float prob_joint = prob_prime_nth[i+1] * prob_prime_nth[j+1];
                     prob_record += prob_joint;
                 }
             }
@@ -257,9 +252,10 @@ void run_gap_file(
         double p_record = prob_record + prob_record_estimate;
         if (p_record > max_p_record) {
             max_p_record = p_record;
-            printf("%5ld unknowns: %3ld, %3ld | prob record: %.2e (%.2e + %.2e)\n",
+            printf("%5ld unknowns: %3ld, %3ld | prob record: %.2e (%.2e + %.2e), %.7f\n",
                 m, unknown_low.size(), unknown_high.size(),
-                p_record, prob_record, prob_record_estimate);
+                p_record, prob_record, prob_record_estimate,
+                prob_seen);
         }
 
         probs_seen.push_back(prob_seen);
@@ -292,7 +288,6 @@ void prime_gap_stats(const struct Config config) {
     mpz_primorial_ui(K, P);
     assert( 0 == mpz_tdiv_q_ui(K, K, D) );
     assert( mpz_cmp_ui(K, 1) > 0); // K <= 1 ?!?
-    gmp_printf("%Zd\n", K);
 
     int K_digits;
     float K_log;
@@ -313,11 +308,14 @@ void prime_gap_stats(const struct Config config) {
                 }
             }
         }
+        printf("\tFound %ld possible record gaps", min_record_gaps.size());
         assert( min_record_gaps.size() );
         if (min_record_gaps.front() > 2 * SIEVE_LENGTH) {
             printf("\tCan't determine record prob, 2 * sieve_length < min_record_gap");
         }
         cout << endl;
+
+        assert( is_sorted(min_record_gaps.begin(), min_record_gaps.end()) );
     }
 
 
@@ -431,7 +429,7 @@ void prime_gap_stats(const struct Config config) {
     }
     {
         printf("\n");
-        printf("avg seen prob:   %.6f\n",
+        printf("avg seen prob:   %.7f\n",
             std::accumulate(probs_seen.begin(), probs_seen.end(), 0.0) / probs_seen.size());
         printf("avg record prob: %.3e (max: %.2e)\n",
             std::accumulate(probs_record.begin(), probs_record.end(), 0.0) / probs_record.size(),

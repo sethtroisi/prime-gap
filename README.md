@@ -21,18 +21,20 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_search.cpp
-  * [x] Verify `sieve_length` math with d > 1
-    * [x] Calculate `sieve_length` for all (m % d)
   * [ ] Option to output m with gcd(m, d) != 1
   * [x] (Method2) keeping all composites in memory (and immediately marking mi off)
     * No large startup cost.
-    * [ ] Do all primes for small ms (to get better memory access patterns)
+    * [ ] Use reindex\_m trick to reduce number size of composites
+    * [ ] Consider calculating skipped PRP based on index (earlier is 1.0, end of sieve is 0.005)
     * [ ] Ctrl-c then just writes out the results at that point.
+    * [x] Do all primes for small ms (to get better memory access patterns)
     * [x] (didn't help) check GCD with P# to avoid writting to main memory.
     * [x] Printing at each 1B primes tells you PRP tests saved / time taken.
-  * [ ] Allow for long mi by using bucketed `large_prime_queue`
+  * Method1
     * [x] Store remainder and prime in same array
     * [x] don't store pi for large primes (just pass around the pair)
+  * [x] Verify `sieve_length` math with d > 1
+    * [x] Calculate `sieve_length` for all (m % d)
   * [x] Don't save to large\_prime\_queue[next\_mi] with (next\_mi, d) > 1
   * [x] Only store prime/remainder for primes that divide ANY mi.
   * [x] `sieve_range` > 4B
