@@ -870,7 +870,7 @@ void prime_gap_parallel(const struct Config config) {
         };
         auto   s_stop_t = high_resolution_clock::now();
         double int_secs = duration<double>(s_stop_t - s_interval_t).count();
-        printf("coprime setup took %.1f (%ld/%ld)\n",
+        printf("coprime setup took %.1f (valid coprime m %ld of %ld)\n",
             int_secs, valid_ms, M_inc);
     }
 

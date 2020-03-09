@@ -62,8 +62,8 @@ int main(int argc, char* argv[]) {
 }
 
 
-vector<double> get_record_gaps() {
-    vector<double> records(MAX_GAP, 0.0);
+vector<float> get_record_gaps() {
+    vector<float> records(MAX_GAP, 0.0);
 
     // TODO accept db file as param.
 
@@ -83,7 +83,7 @@ vector<double> get_record_gaps() {
         uint64_t gap = atol(argv[0]);
         if (gap < MAX_GAP) {
             // Recover log(startprime)
-            (*static_cast<vector<double>*>(recs))[gap] = gap / atof(argv[1]);
+            (*static_cast<vector<float>*>(recs))[gap] = gap / atof(argv[1]);
         }
         return 0;
     }, (void*)&records, &zErrMsg);
@@ -112,7 +112,7 @@ std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
 
 void K_stats(
         const struct Config& config,
-        mpz_t &K, int *K_digits, double *K_log) {
+        mpz_t &K, int *K_digits, float *K_log) {
     *K_digits = mpz_sizeinbase(K, 10);
 
     long exp;
@@ -127,6 +127,91 @@ void K_stats(
         (int) (config.minmerit * (*K_log + m_log)), config.minmerit);
 }
 
+void run_gap_file(
+        const vector<float>& records,
+        const uint32_t min_record_gap,
+        const uint64_t M_start,
+        const uint64_t M_inc,
+        const uint64_t D,
+        float K_log,
+        const vector<float>& prob_prime_nth,
+        const vector<float>& prob_great_nth,
+        std::ifstream& unknown_file,
+        vector<float>& probs_seen,
+        vector<float>& probs_record) {
+
+    for (uint64_t mi = 0; mi < M_inc; mi++) {
+        uint64_t m = M_start + mi;
+        if (gcd(m, D) != 1) {
+            continue;
+        }
+        // Reset sieve array to unknown.
+        vector<uint32_t> unknown_high, unknown_low;
+
+        int unknown_l = 0;
+        int unknown_u = 0;
+
+        // Read a line from the file
+        {
+            int mtest;
+            unknown_file >> mtest;
+            assert( mtest >= 0 );
+            if ((unsigned) mtest != mi ) {
+                cout << "Mismatched mi " << mtest << " vs " << mi << endl;
+            }
+            std::string delim;
+            unknown_file >> delim;
+            assert( delim == ":" );
+
+            unknown_file >> unknown_l;
+            unknown_l *= -1;
+            unknown_file >> unknown_u;
+
+            unknown_file >> delim;
+            assert( delim == "|" );
+
+            int c;
+            for (int k = 0; k < unknown_l; k++) {
+                unknown_file >> c;
+                unknown_low.push_back(-c);
+            }
+            unknown_file >> delim;
+            assert( delim == "|" );
+
+            for (int k = 0; k < unknown_u; k++) {
+                unknown_file >> c;
+                unknown_high.push_back(c);
+            }
+        }
+
+        // Note slightly different from smallest_log
+        float log_merit = K_log + log(m);
+
+        float prob_record = 0;
+        float prob_seen = 0;
+        // TODO if 2*SL < min_record_gap just skip this.
+        for (size_t i = 0; i < unknown_low.size(); i++) {
+            for (size_t j = 0; j < unknown_high.size(); j++) {
+                float prob_joint = prob_prime_nth[i+1] * prob_prime_nth[j+1];
+                prob_seen += prob_joint;
+
+                uint32_t gap = abs(unknown_low[i]) + abs(unknown_high[j]);
+                if ((records[gap] - 0.01) > log_merit) {
+                    printf("\tgap: %d curr: %5.2f, would be %5.3f (%.6f%%)\n",
+                        gap, gap / records[gap], gap / log_merit, 100.0 * prob_joint);
+                    prob_record += prob_joint;
+                }
+            }
+        }
+        // Do something with i > size(), j > size();
+        probs_seen.push_back(prob_seen);
+        probs_record.push_back(prob_record);
+
+        if (prob_record > 0) {
+//            printf("%5ld (%ld) | %.5f %.6f\n", m, probs_seen.size(), prob_seen, prob_record);
+        }
+    }
+}
 
 void prime_gap_stats(const struct Config config) {
     const uint64_t M_start = config.mstart;
@@ -155,14 +240,14 @@ void prime_gap_stats(const struct Config config) {
     assert( mpz_cmp_ui(K, 1) > 0); // K <= 1 ?!?
 
     int K_digits;
-    double K_log;
+    float K_log;
     K_stats(config, K, &K_digits, &K_log);
 
     // ----- Get Record Prime Gaps
-    vector<double> records = get_record_gaps();
+    vector<float> records = get_record_gaps();
     // Smallest gap that would be a record with m*P#/d
     uint32_t min_record_gap = 0;
-    double smallest_log = K_log + log(M_start);
+    float smallest_log = K_log + log(M_start);
     {
         for (size_t g = 2; min_record_gap == 0 && g < MAX_GAP; g += 2) {
             if (records[g] > smallest_log) {
@@ -213,90 +298,26 @@ void prime_gap_stats(const struct Config config) {
     // Used for various stats
     auto  s_start_t = high_resolution_clock::now();
     //long  s_total_unknown = 0;
-    long  s_tests = 0;
 
-    vector<double> probs_seen;
-    vector<double> probs_record;
+    vector<float> probs_seen;
+    vector<float> probs_record;
 //    vector<float> expected_prev;
 //    vector<float> expected_next;
 //    vector<float> expected_gap;
 
-    for (uint64_t mi = 0; mi < M_inc; mi++) {
-        uint64_t m = M_start + mi;
-        if (gcd(m, D) != 1) {
-            continue;
-        }
-        s_tests += 1;
-
-        // Reset sieve array to unknown.
-        vector<uint32_t> unknown_high, unknown_low;
-
-        int unknown_l = 0;
-        int unknown_u = 0;
-
-        // Read a line from the file
-        {
-            int mtest;
-            unknown_file >> mtest;
-            assert( mtest >= 0 );
-            if ((unsigned) mtest != mi ) {
-                cout << "Mismatched mi " << mtest << " vs " << mi << endl;
-            }
-            std::string delim;
-            unknown_file >> delim;
-            assert( delim == ":" );
-
-            unknown_file >> unknown_l;
-            unknown_l *= -1;
-            unknown_file >> unknown_u;
-
-            unknown_file >> delim;
-            assert( delim == "|" );
-
-            int c;
-            for (int k = 0; k < unknown_l; k++) {
-                unknown_file >> c;
-                unknown_low.push_back(-c);
-            }
-            unknown_file >> delim;
-            assert( delim == "|" );
-
-            for (int k = 0; k < unknown_u; k++) {
-                unknown_file >> c;
-                unknown_high.push_back(c);
-            }
-        }
-
-        // Note slightly different from smallest_log
-        double log_merit = K_log + log(m);
-
-        double prob_record = 0;
-        double prob_seen = 0;
-        // TODO if 2*SL < min_record_gap just skip this.
-        for (size_t i = 0; i < unknown_low.size(); i++) {
-            for (size_t j = 0; j < unknown_high.size(); j++) {
-                double prob_joint = prob_prime_nth[i+1] * prob_prime_nth[j+1];
-                prob_seen += prob_joint;
-
-                uint32_t gap = abs(unknown_low[i]) + abs(unknown_high[j]);
-                if ((records[gap] - 0.01) > log_merit) {
-//                    printf("\tgap: %d curr: %5.2f, would be %5.3f (%.6f%%)\n",
-//                        gap, gap / records[gap], gap / log_merit, 100.0 * prob_joint);
-                    prob_record += prob_joint;
-                }
-            }
-        }
-        // Do something with i > size(), j > size();
-        probs_seen.push_back(prob_seen);
-        probs_record.push_back(prob_record);
-
-        if (prob_record > 0) {
-//            printf("%5ld (%ld) | %.5f %.6f\n", m, s_tests, prob_seen, prob_record);
-        }
-    }
-
+    // ----- Main calculation
+    run_gap_file(
+        records,
+        min_record_gap,
+        M_start, M_inc, D,
+        K_log,
+        prob_prime_nth, prob_great_nth,
+        unknown_file,
+        probs_seen, probs_record
+    );
 
     {
+        long  s_tests = probs_seen.size();
         auto s_stop_t = high_resolution_clock::now();
         double   secs = duration<double>(s_stop_t - s_start_t).count();
         // Stats!
