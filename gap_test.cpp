@@ -79,10 +79,10 @@ int main(int argc, char* argv[]) {
 
 
 void prime_gap_test(const struct Config config) {
-    const long M_start = config.mstart;
-    const long M_inc = config.minc;
-    const long P = config.p;
-    const long D = config.d;
+    const uint64_t M_start = config.mstart;
+    const uint64_t M_inc = config.minc;
+    const uint64_t P = config.p;
+    const uint64_t D = config.d;
     const float min_merit = config.minmerit;
 
     const unsigned int SIEVE_LENGTH = config.sieve_length;
@@ -207,7 +207,7 @@ void prime_gap_test(const struct Config config) {
     float s_best_merit_interval = 0;
     long  s_best_merit_interval_m = 0;
 
-    for (int mi = 0; mi < M_inc; mi++) {
+    for (uint32_t mi = 0; mi < M_inc; mi++) {
         long m = M_start + mi;
         if (gcd(m, D) > 1) {
             continue;
@@ -221,7 +221,7 @@ void prime_gap_test(const struct Config config) {
         int unknown_u;
         // Read a line from the file
         {
-            int mtest;
+            uint32_t mtest;
             unknown_file >> mtest;
             if (mtest != mi ) {
                 cout << "Mismatched mi " << mtest << " vs " << mi << endl;
@@ -356,7 +356,7 @@ void prime_gap_test(const struct Config config) {
             mpz_clear(center); mpz_clear(ptest);
         }
 
-        int tests = mi + 1;
+        uint32_t tests = mi + 1;
         if ( (tests == 1 || tests == 10 || tests == 100 || tests == 500 || tests == 1000) ||
              (tests % 5000 == 0) || (tests == M_inc) ) {
             auto s_stop_t = high_resolution_clock::now();

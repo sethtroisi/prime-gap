@@ -99,18 +99,6 @@ vector<float> get_record_gaps() {
 }
 
 
-std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
-    return std::to_string(config.mstart) + "_" +
-           std::to_string(config.p) + "_" +
-           std::to_string(config.d) + "_" +
-           std::to_string(config.minc) + "_s" +
-           std::to_string(config.sieve_length) + "_l" +
-           std::to_string(config.sieve_range / 1'000'000) + "M" +
-           (config.method2 ? ".m2" : "") +
-           suffix;
-}
-
-
 void K_stats(
         const struct Config& config,
         const mpz_t &K, int *K_digits, float *K_log) {
@@ -155,6 +143,8 @@ void run_gap_file(
         const vector<float>& prob_great_nth,
         const vector<float>& prob_record_extended_gap,
         std::ifstream& unknown_file,
+        vector<float>& expected_prev,
+        vector<float>& expected_next,
         vector<float>& probs_seen,
         vector<float>& probs_record) {
 
@@ -232,7 +222,9 @@ void run_gap_file(
             }
         }
 
-        double prob_record_estimate = prob_record;
+
+        double e_prev = 0, e_next = 0;
+        double prob_record_estimate = 0;
         for (size_t i = 0; i < std::max(unknown_low.size(), unknown_high.size()); i++) {
             // i'th is prime, other size is >= SL
             if (i < unknown_low.size()) {
@@ -240,24 +232,29 @@ void run_gap_file(
                 float prob_j_greater = prob_great_nth[unknown_high.size()];
                 float conditional_prob = prob_record_extended_gap[unknown_low[i]];
                 prob_record_estimate += prob_i * prob_j_greater * conditional_prob;
+                e_prev += unknown_low[i] * prob_i;
             }
             if (i < unknown_high.size()) {
                 float prob_i = prob_prime_nth[i+1];
                 float prob_j_greater = prob_great_nth[unknown_low.size()];
                 float conditional_prob = prob_record_extended_gap[unknown_high[i]];
                 prob_record_estimate += prob_i * prob_j_greater * conditional_prob;
+                e_next += unknown_high[i] * prob_i;
             }
         }
 
         double p_record = prob_record + prob_record_estimate;
         if (p_record > max_p_record) {
             max_p_record = p_record;
-            printf("%5ld unknowns: %3ld, %3ld | prob record: %.2e (%.2e + %.2e), %.7f\n",
+            printf("%5ld unknowns: %3ld, %3ld | e: %.1f, %.1f | prob record: %.2e (%.2e + %.2e) | %.7f\n",
                 m, unknown_low.size(), unknown_high.size(),
+                e_prev, e_next,
                 p_record, prob_record, prob_record_estimate,
                 prob_seen);
         }
 
+        expected_prev.push_back(e_prev);
+        expected_next.push_back(e_next);
         probs_seen.push_back(prob_seen);
         probs_record.push_back(prob_record);
     }
@@ -276,11 +273,13 @@ void prime_gap_stats(const struct Config config) {
 
     // ----- Save Output file
     std::ifstream unknown_file;
-    std::string fn = gen_unknown_fn(config, ".txt");
-    printf("\tReading from '%s'\n", fn.c_str());
-    unknown_file.open(fn, std::ios::in);
-    assert( unknown_file.is_open() ); // Can't open save_unknowns file
-    assert( unknown_file.good() );    // Can't open save_unknowns file
+    {
+        std::string fn = gen_unknown_fn(config, ".txt");
+        printf("\tReading from %s'\n", fn.c_str());
+        unknown_file.open(fn, std::ios::in);
+        assert( unknown_file.is_open() ); // Can't open save_unknowns file
+        assert( unknown_file.good() );    // Can't open save_unknowns file
+    }
 
     // ----- Merit Stuff
     mpz_t K;
@@ -400,11 +399,10 @@ void prime_gap_stats(const struct Config config) {
     auto  s_start_t = high_resolution_clock::now();
     //long  s_total_unknown = 0;
 
+    vector<float> expected_prev;
+    vector<float> expected_next;
     vector<float> probs_seen;
     vector<float> probs_record;
-//    vector<float> expected_prev;
-//    vector<float> expected_next;
-//    vector<float> expected_gap;
 
     // ----- Main calculation
     printf("\n");
@@ -416,6 +414,7 @@ void prime_gap_stats(const struct Config config) {
         prob_prime_nth_sieve, prob_great_nth_sieve,
         prob_record_extended_gap,
         unknown_file,
+        expected_prev, expected_next,
         probs_seen, probs_record
     );
 

@@ -90,8 +90,8 @@ double prop_gap_larger(
 
 vector<uint32_t> get_sieve_primes(uint32_t n) {
     vector<uint32_t> primes = {2};
-    vector<bool> is_prime((n+1) >> 1, true);
     uint32_t half_n = n >> 1;
+    vector<bool> is_prime(half_n + 1, true);
 
     for (uint32_t p = 3; p <= n; p += 2) {
         if (is_prime[p >> 1]) {
@@ -109,6 +109,7 @@ vector<uint32_t> get_sieve_primes(uint32_t n) {
     }
     return primes;
 }
+
 
 // Faster because of better memory access patterns
 vector<uint64_t> get_sieve_primes_segmented(uint64_t n) {
