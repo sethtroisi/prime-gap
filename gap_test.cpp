@@ -198,14 +198,15 @@ void prime_gap_test(const struct Config config) {
 
     // Used for various stats
     auto  s_start_t = high_resolution_clock::now();
-    long  s_total_unknown = 0;
-    long  s_t_unk_low = 0;
-    long  s_t_unk_hgh = 0;
-    long  s_total_prp_tests = 0;
-    long  s_gap_out_of_sieve_prev = 0;
-    long  s_gap_out_of_sieve_next = 0;
-    float s_best_merit_interval = 0;
-    long  s_best_merit_interval_m = 0;
+    uint32_t  s_tests     = 0;
+    uint64_t  s_total_unknown = 0;
+    uint64_t  s_t_unk_low = 0;
+    uint64_t  s_t_unk_hgh = 0;
+    uint64_t  s_total_prp_tests = 0;
+    uint64_t  s_gap_out_of_sieve_prev = 0;
+    uint64_t  s_gap_out_of_sieve_next = 0;
+    float     s_best_merit_interval = 0;
+    uint64_t  s_best_merit_interval_m = 0;
 
     for (uint32_t mi = 0; mi < M_inc; mi++) {
         long m = M_start + mi;
@@ -356,9 +357,11 @@ void prime_gap_test(const struct Config config) {
             mpz_clear(center); mpz_clear(ptest);
         }
 
-        uint32_t tests = mi + 1;
-        if ( (tests == 1 || tests == 10 || tests == 100 || tests == 500 || tests == 1000) ||
-             (tests % 5000 == 0) || (tests == M_inc) ) {
+        s_tests += 1;
+        if (  true || (s_tests == 1 || s_tests == 10 || s_tests == 100 ||
+                               s_tests == 500 || s_tests == 1000) ||
+              (s_tests % 5000 == 0) ||
+              (s_tests == M_inc) ) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
 
@@ -366,24 +369,24 @@ void prime_gap_test(const struct Config config) {
                 m,
                 unknown_l, unknown_u,
                 prev_p_i, next_p_i);
-            if (mi <= 10) continue;
+//            if (mi <= 10) continue;
 
             // Stats!
             printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
-                tests, tests / secs, secs);
+                s_tests, s_tests / secs, secs);
             printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f%% <- %% -> %.2f%%\n",
-                s_total_unknown, s_total_unknown / ((double) tests),
-                100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * tests)),
+                s_total_unknown, s_total_unknown / ((double) s_tests),
+                100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
                 100.0 * s_t_unk_low / s_total_unknown,
                 100.0 * s_t_unk_hgh / s_total_unknown);
             if (config.run_prp) {
                 printf("\t    prp tests %-10ld (avg: %.2f) (%.1f tests/sec)\n",
                     s_total_prp_tests,
-                    s_total_prp_tests / (float) tests,
+                    s_total_prp_tests / (float) s_tests,
                     s_total_prp_tests / secs);
                 printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
-                    s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / tests,
-                    s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / tests);
+                    s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / s_tests,
+                    s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / s_tests);
                 printf("\t    best merit this interval: %.3f (at m=%ld)\n",
                     s_best_merit_interval, s_best_merit_interval_m);
             }
