@@ -4,6 +4,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
 
 ### TODO
 
+* [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
 * gap\_test.py
   * [ ] Store ALL results to sql
   * [ ] Starting at m > mstart
@@ -16,6 +17,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [ ] Calc record chance
   * [ ] Save to prime-gap.db
   * [ ] drop directory from `unknown-filename`
+  * [ ] Investigate only testing record gap combos
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_search.cpp

@@ -117,12 +117,11 @@ void set_defaults(struct Config& config) {
 
         // K = #p/d
         // only numbers K+i has no factor <= p
-        //      => (K+i, i) == 1
-        //      => only relatively prime i
+        //      => (K+i, i) == (K, i) == 1
+        //      => only relatively prime i's
         //
         // factors of d are hard because they depend on m*K
         //  some of these m are worse than others so use worst m
-
 
         assert( config.p >= 503 );
 
