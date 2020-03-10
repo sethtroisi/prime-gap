@@ -255,11 +255,16 @@ uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t
     }
 
     if (a <= r) {
-        uint64_t mult = (l-1) / a + 1;
-        uint64_t test = mult * a;
-        if (test <= r) {
-            return mult;
-        }
+        // next multiple of a after L <= R
+        uint32_t mult = (l-1) / a;
+        uint32_t test = mult * a;
+        if (a <= r - test)
+            return mult + 1;
+
+        // uint64_t mult = (l-1) / a + 1;
+        // uint64_t test = mult * a;
+        // if (test <= r)
+        //     return mult;
     }
 
     // reduce to simplier problem
@@ -267,6 +272,7 @@ uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t
     assert( 0 <= new_a && new_a < a );
     uint64_t k = modulo_search_euclid_small(a, new_a, l % a, r % a);
 
+    // A huge portion of all execution time is spent on this line
     uint64_t tl = k * p + l;
     uint64_t mult = (tl - 1) / a + 1;
 
