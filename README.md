@@ -6,18 +6,18 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
 
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
 * gap\_test.py
-  * [ ] Store ALL results to sql
   * [ ] Starting at m > mstart
   * [ ] Plot average tests count
   * [ ] Sort by expected gap and PRP only top X%
+  * [x] Store all results to sql
   * [x] Autoscale printing to every X seconds
   * [x] Describe distribution
   * [x] Generate expected length
 * gap\_stats.cpp
-  * [ ] Calc record chance
-  * [ ] Save to prime-gap.db
   * [ ] drop directory from `unknown-filename`
-  * [ ] Investigate only testing record gap combos
+  * [ ] Don't rewrite `partial\_results`
+  * [x] Calc record chance
+  * [x] Save expected/prob record to sql
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_search.cpp

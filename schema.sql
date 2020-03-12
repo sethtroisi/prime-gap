@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS partial_result (
         next_expected INTEGER,
         prev_expected INTEGER,
 
-        expected_merit INTEGER
+        expected_merit REAL
 );
 
 CREATE TABLE IF NOT EXISTS result (

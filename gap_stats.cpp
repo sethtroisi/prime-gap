@@ -33,6 +33,10 @@ using std::endl;
 using std::vector;
 using namespace std::chrono;
 
+
+const char records_db[] = "gaps.db";
+const char gaps_db[]    = "prime-gaps.db";
+
 // Limits the size of record list
 const uint32_t MAX_GAP = 1'000'000;
 
@@ -69,7 +73,7 @@ vector<float> get_record_gaps() {
     // TODO accept db file as param.
 
     sqlite3 *db;
-    int rc = sqlite3_open("gaps.db", &db);
+    int rc = sqlite3_open(records_db, &db);
     if( rc ) {
         printf("Can't open database: %s\n", sqlite3_errmsg(db));
         exit(1);
@@ -96,6 +100,106 @@ vector<float> get_record_gaps() {
     sqlite3_close(db);
 
     return records;
+}
+
+
+void store_stats(
+        vector<uint64_t>& M_vals,
+        const uint64_t P,
+        const uint64_t D,
+        float K_log,
+        vector<float>& expected_prev,
+        vector<float>& expected_next,
+        vector<float>& probs_seen,
+        vector<float>& probs_record) {
+
+    assert( M_vals.size() == expected_prev.size() );
+    assert( M_vals.size() == expected_next.size() );
+    assert( M_vals.size() == probs_seen.size() );
+    assert( M_vals.size() == probs_record.size() );
+
+    sqlite3 *db;
+    int rc = sqlite3_open(gaps_db, &db);
+    if( rc ) {
+        printf("Can't open database: %s\n", sqlite3_errmsg(db));
+        exit(1);
+    }
+
+    char *zErrMsg = 0;
+    if (sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &zErrMsg) != SQLITE_OK) {
+        printf("BEGIN TRANSACTION failed: %s\n", zErrMsg);
+        exit(1);
+    }
+
+    /* Create SQL statement */
+    char sql[] = "INSERT INTO partial_result VALUES(NULL, ?, ?, ?, 0, 0, ?, ?, ?)";
+
+    sqlite3_stmt *stmt;
+    /* Prepare SQL statement */
+    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
+    if (rc != SQLITE_OK) {
+        printf("Could not prepare statement: %s\n", sql);
+        exit(1);
+    }
+
+    const size_t num_rows = M_vals.size();
+    for (size_t i = 1; i <= num_rows; i++) {
+        uint64_t m = M_vals[i];
+        int e_next = expected_next[i];
+        int e_prev = expected_prev[i];
+        float e_merit = (e_next + e_prev) / (log(m) + K_log);
+
+        if ((i < 5) || (i < 500 && i % 100 == 0) || i % 2000 == 0 || i == num_rows) {
+            printf("Row: %6ld/%ld %ld, %d, %d, %.2f\n",
+                i, num_rows,
+                m, e_next, e_prev, e_merit);
+        }
+
+        int binded = 0;
+        if (binded == 0 && sqlite3_bind_int(stmt, 1, m) != SQLITE_OK)
+                binded = 1;
+
+        if (binded == 0 && sqlite3_bind_int(stmt, 2, P) != SQLITE_OK)
+            binded = 2;
+
+        if (binded == 0 && sqlite3_bind_int(stmt, 3, D) != SQLITE_OK)
+            binded = 3;
+
+        if (binded == 0 && sqlite3_bind_int(stmt, 4, e_next) != SQLITE_OK)
+            binded = 4;
+        if (binded == 0 && sqlite3_bind_int(stmt, 5, e_prev) != SQLITE_OK)
+            binded = 5;
+
+        if (binded == 0 && sqlite3_bind_double(stmt, 6, e_merit) != SQLITE_OK)
+            binded = 6;
+
+        if (binded != 0) {
+            printf("Failed to bind param %d: %s\n", binded, sqlite3_errmsg(db));
+            break;
+        }
+
+        int rc = sqlite3_step(stmt);
+        if (rc != SQLITE_DONE) {
+            // Allow BUSY with retry.
+            printf("\nCould not execute stmt (%ld): %d: %s\n", i, rc, sqlite3_errmsg(db));
+            break;
+        }
+
+        if (sqlite3_reset(stmt) != SQLITE_OK) {
+            printf("Failed to reset statement\n");
+        }
+
+        if (sqlite3_clear_bindings(stmt) != SQLITE_OK) {
+            printf("Failed to clear bindings\n");
+        }
+    }
+
+    if (sqlite3_exec(db, "END TRANSACTION", NULL, NULL, &zErrMsg) != SQLITE_OK) {
+        printf("END TRANSACTION failed: %s\n", zErrMsg);
+        exit(1);
+    }
+
+    sqlite3_close(db);
 }
 
 
@@ -143,6 +247,7 @@ void run_gap_file(
         const vector<float>& prob_great_nth,
         const vector<float>& prob_record_extended_gap,
         std::ifstream& unknown_file,
+        vector<uint64_t>& M_vals,
         vector<float>& expected_prev,
         vector<float>& expected_next,
         vector<float>& probs_seen,
@@ -253,6 +358,7 @@ void run_gap_file(
                 prob_seen);
         }
 
+        M_vals.push_back(m);
         expected_prev.push_back(e_prev);
         expected_next.push_back(e_next);
         probs_seen.push_back(prob_seen);
@@ -399,6 +505,7 @@ void prime_gap_stats(const struct Config config) {
     auto  s_start_t = high_resolution_clock::now();
     //long  s_total_unknown = 0;
 
+    vector<uint64_t> M_vals;
     vector<float> expected_prev;
     vector<float> expected_next;
     vector<float> probs_seen;
@@ -414,6 +521,7 @@ void prime_gap_stats(const struct Config config) {
         prob_prime_nth_sieve, prob_great_nth_sieve,
         prob_record_extended_gap,
         unknown_file,
+        M_vals,
         expected_prev, expected_next,
         probs_seen, probs_record
     );
@@ -436,4 +544,10 @@ void prime_gap_stats(const struct Config config) {
     }
 
     mpz_clear(K);
+
+    store_stats(
+        M_vals, P, D, K_log,
+        expected_prev, expected_next,
+        probs_seen, probs_record
+    );
 }
