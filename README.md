@@ -15,7 +15,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [x] Generate expected length
 * gap\_stats.cpp
   * [ ] drop directory from `unknown-filename`
-  * [ ] Don't rewrite `partial\_results`
+  * [x] Don't rewrite `partial\_results`
   * [x] Calc record chance
   * [x] Save expected/prob record to sql
   * [x] load merit from gap.db

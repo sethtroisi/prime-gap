@@ -41,6 +41,8 @@ const char gaps_db[]    = "prime-gaps.db";
 const uint32_t MAX_GAP = 1'000'000;
 
 void prime_gap_stats(const struct Config config);
+bool is_range_already_processed(const struct Config& config);
+
 
 int main(int argc, char* argv[]) {
     printf("\tCompiled with GMP %d.%d.%d\n\n",
@@ -62,7 +64,25 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    if (is_range_already_processed(config)) {
+        cout << "Range already processed!" << endl;
+        return 1;
+    }
+
     prime_gap_stats(config);
+}
+
+
+//---------------------------------------------------------------------------//
+
+
+sqlite3* get_db(const char* path) {
+    sqlite3 *db;
+    if (sqlite3_open(path, &db) != SQLITE_OK) {
+        printf("Can't open database(%s): %s\n", path, sqlite3_errmsg(db));
+        exit(1);
+    }
+    return db;
 }
 
 
@@ -71,20 +91,14 @@ vector<float> get_record_gaps() {
     vector<float> records(MAX_GAP, 0.0);
 
     // TODO accept db file as param.
-
-    sqlite3 *db;
-    int rc = sqlite3_open(records_db, &db);
-    if( rc ) {
-        printf("Can't open database: %s\n", sqlite3_errmsg(db));
-        exit(1);
-    }
+    sqlite3 *db = get_db(records_db);
 
     /* Create SQL statement */
     char sql[] = "SELECT gapsize, merit FROM gaps";
     char *zErrMsg = 0;
 
     /* Execute SQL statement */
-    rc = sqlite3_exec(db, sql, [](void* recs, int argc, char **argv, char **azColName)->int {
+    int rc = sqlite3_exec(db, sql, [](void* recs, int argc, char **argv, char **azColName)->int {
         uint64_t gap = atol(argv[0]);
         if (gap < MAX_GAP) {
             // Recover log(startprime)
@@ -103,11 +117,47 @@ vector<float> get_record_gaps() {
 }
 
 
+uint64_t config_hash(const struct Config& config) {
+    // Hash the config to a
+    uint64_t hash =    config.mstart;
+    hash = hash * 31 + config.minc;
+    hash = hash * 31 + config.p;
+    hash = hash * 31 + config.d;
+    hash = hash * 31 + config.sieve_length;
+    hash = hash * 31 + config.sieve_range;
+    return hash;
+}
+
+
+bool is_range_already_processed(const struct Config& config) {
+    uint64_t hash = config_hash(config);
+    char sql[200];
+    sprintf(sql, "SELECT count(*) FROM to_process_range WHERE id = %ld", hash);
+    char *zErrMsg = 0;
+
+    sqlite3 *db = get_db(gaps_db);
+
+    int count = 0;
+    int rc = sqlite3_exec(db, sql, [](void* data, int argc, char **argv, char **azColName)->int {
+        assert( argc == 1 );
+        *static_cast<int*>(data) = atoi(argv[0]);
+        return 0;
+    }, &count, &zErrMsg);
+    sqlite3_close(db);
+
+    if (rc != SQLITE_OK) {
+        printf("\nto_process_range SELECT failed %s | %d: %s\n",
+            zErrMsg, rc, sqlite3_errmsg(db));
+        exit(1);
+    }
+    return count > 0;
+}
+
+
 void store_stats(
-        vector<uint64_t>& M_vals,
-        const uint64_t P,
-        const uint64_t D,
+        const struct Config& config,
         float K_log,
+        vector<uint64_t>& M_vals,
         vector<float>& expected_prev,
         vector<float>& expected_next,
         vector<float>& probs_seen,
@@ -118,12 +168,7 @@ void store_stats(
     assert( M_vals.size() == probs_seen.size() );
     assert( M_vals.size() == probs_record.size() );
 
-    sqlite3 *db;
-    int rc = sqlite3_open(gaps_db, &db);
-    if( rc ) {
-        printf("Can't open database: %s\n", sqlite3_errmsg(db));
-        exit(1);
-    }
+    sqlite3 *db = get_db(gaps_db);
 
     char *zErrMsg = 0;
     if (sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &zErrMsg) != SQLITE_OK) {
@@ -136,7 +181,7 @@ void store_stats(
 
     sqlite3_stmt *stmt;
     /* Prepare SQL statement */
-    rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
+    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
     if (rc != SQLITE_OK) {
         printf("Could not prepare statement: %s\n", sql);
         exit(1);
@@ -159,10 +204,10 @@ void store_stats(
         if (binded == 0 && sqlite3_bind_int(stmt, 1, m) != SQLITE_OK)
                 binded = 1;
 
-        if (binded == 0 && sqlite3_bind_int(stmt, 2, P) != SQLITE_OK)
+        if (binded == 0 && sqlite3_bind_int(stmt, 2, config.p) != SQLITE_OK)
             binded = 2;
 
-        if (binded == 0 && sqlite3_bind_int(stmt, 3, D) != SQLITE_OK)
+        if (binded == 0 && sqlite3_bind_int(stmt, 3, config.d) != SQLITE_OK)
             binded = 3;
 
         if (binded == 0 && sqlite3_bind_int(stmt, 4, e_next) != SQLITE_OK)
@@ -192,6 +237,23 @@ void store_stats(
         if (sqlite3_clear_bindings(stmt) != SQLITE_OK) {
             printf("Failed to clear bindings\n");
         }
+    }
+
+    uint64_t hash = config_hash(config);
+    char sSQL[200];
+    sprintf(sSQL, "INSERT INTO to_process_range VALUES("
+                  "%ld, %ld, %ld, %d, %d, %d, %ld, %ld)",
+            hash,
+            config.mstart, config.minc,
+            config.p, config.d,
+            config.sieve_length, config.sieve_range,
+            num_rows);
+
+    rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
+    if (rc != SQLITE_OK) {
+        printf("\nto_process_range INSERT failed %d: %s\n",
+            rc, sqlite3_errmsg(db));
+        exit(1);
     }
 
     if (sqlite3_exec(db, "END TRANSACTION", NULL, NULL, &zErrMsg) != SQLITE_OK) {
@@ -546,7 +608,8 @@ void prime_gap_stats(const struct Config config) {
     mpz_clear(K);
 
     store_stats(
-        M_vals, P, D, K_log,
+        config, K_log,
+        M_vals,
         expected_prev, expected_next,
         probs_seen, probs_record
     );
