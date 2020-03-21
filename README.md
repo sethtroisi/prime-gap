@@ -5,6 +5,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
 ### TODO
 
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
+* [ ] Rename prime-gap.db
 * gap\_test.py
   * [ ] Starting at m > mstart
   * [ ] Plot average tests count

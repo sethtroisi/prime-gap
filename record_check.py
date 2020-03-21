@@ -74,7 +74,7 @@ def print_record_gaps(args, gaps):
             num_gaps, min_merit, max_merit))
 
         print ("Checking", len(gaps), "gaps against records")
-        records = 0
+        record_lines = []
         for gap in gaps:
                 size = gap[0]
                 new_merit = gap[1]
@@ -82,14 +82,21 @@ def print_record_gaps(args, gaps):
                     'SELECT merit,primedigits,startprime FROM gaps WHERE'
                     ' gapsize=?', (size,)).fetchone()
                 if (not existing) or (new_merit > existing[0] - 1e-4):
-                    records += 1
+                    record_lines.append(gap[2])
                     print ("\tRecord {:2d} | {}\n\t\tGap={}, merit={} (old: {})".format(
-                        records, gap[3], size, new_merit, existing))
+                        len(record_lines), gap[3], size, new_merit, existing))
+        if record_lines:
+            print ()
+            for line in record_lines:
+                print (line)
 
 
 def search_logs(args):
     # 32280  10.9749  5641 * 3001#/2310 -18514 to +13766
-    record_format = re.compile(r"(\d+)\s+(\d+\.\d+)\s+(\d+)\s*\*?\s*(\d+\#)(/\d+\#?)?")
+    record_format = re.compile(
+        r"(\d+)\s+(\d+\.\d+)\s+"
+        r"(\d+)\s*(\*)\s*(\d+\#)(/\d+\#?)\s+"
+        r"(-\d+)")
 
     assert os.path.exists(args.logs_directory), (
         "Logs directory ({}) doesn't exist".format(args.logs_directory))
@@ -114,7 +121,7 @@ def search_logs(args):
                 gaps.append([
                     int(match.group(1)), # gap
                     float(match.group(2)), # merit
-                    match.groups(),
+                    " ".join(match.groups()),
                     line,
                 ])
 
@@ -127,9 +134,6 @@ def search_logs(args):
 
 
 def search_db(args):
-    # 32280  10.9749  5641 * 3001#/2310 -18514 to +13766
-    record_format = re.compile(r"(\d+)\s+(\d+\.\d+)\s+(\d+)\s*\*?\s*(\d+\#)(/\d+\#?)?")
-
     assert os.path.exists(args.prime_db), (
         "Prime database ({}) doesn't exist".format(args.prime_db))
 
@@ -146,10 +150,16 @@ def search_db(args):
             'SELECT m, p, d, next_p_i, prev_p_i, merit FROM result WHERE '
             '   merit > 18 or (next_p_i + prev_p_i) > 65000').fetchall()
         for gap in existing:
+            gapsize = gap['next_p_i'] + gap['prev_p_i']
+            merit = gap['merit']
+            line = "{}  {:.3f}  {} * {}#/{} -{} to +{}".format(
+                gapsize, merit,
+                gap["m"], gap["P"], gap["D"],
+                gap["prev_p_i"], gap["next_p_i"])
+
             gaps.append((
-                gap['next_p_i'] + gap['prev_p_i'],
-                gap['merit'],
-                "",
+                gapsize, merit,
+                line,
                 ", ".join(f"{k}={gap[k]}" for k in gap.keys()),
             ))
 
