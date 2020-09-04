@@ -6,6 +6,9 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
 
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
 * [ ] Rename prime-gap.db
+* benchmarking
+  * [ ] Add benchmarks for int32/int64 `modulo_search`
+  * [ ] Add instructions to verify `modulo_search` is >80% of the time.
 * gap\_test.py
   * [ ] Starting at m > mstart
   * [ ] Plot average tests count
@@ -25,6 +28,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [ ] Option to output m with gcd(m, d) != 1
   * [x] (Method2) keeping all composites in memory (and immediately marking mi off)
     * No large startup cost.
+    * [ ] Write up of Method1 vs Method2 (from memory M2 is faster but uses more memory)
     * [ ] Consider calculating skipped PRP based on index (earlier is 1.0, end of sieve is 0.005)
     * [ ] Ctrl-c then just writes out the results at that point.
     * [x] Use reindex\_m trick to reduce number size of composites
