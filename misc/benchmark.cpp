@@ -55,28 +55,13 @@ uint32_t modulo_search_one_op(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
 //        std::function<void (uint64_t)> lambda)
 
 
-// Method 1 seems to use modulo_search_euclid_gcd (to avoid recalling)
+// Method 1 use modulo_search_euclid_gcd (_gcd avoids returns where ((M + mi), D) which are handled by a different D)
 /*
-            // solve base_r * (M + mi) + (SL - 1)) % prime < 2 * SL
-            //   0 <= (base_r * M + SL - 1) + base_r * mi < 2 * SL mod prime
-            //
-            // let shift = (base_r * M + SL - 1) % prime
-            //   0 <= shift + base_r * mi < 2 * SL mod prime
-            // add (prime - shift) to all three
-            //
-            //  (prime - shift) <= base_r * mi < (prime - shift) + 2 * SL mod prime
             uint64_t mi = modulo_search_euclid_gcd(
                     M_start, D, M_inc, SL, prime, base_r);
-
-            // signals mi > M_inc
-            if (mi == M_inc) return;
-
-            assert(mi < M_inc);
-
-            __int128 mult = (__int128) base_r * (M_start + mi) + (SL - 1);
-            assert( mult % prime < (2*SL-1) );
 */
-// Method 2 seems to use modulo_search_euclid_all (to get all
+
+// Method 2 uses modulo_search_euclid_all (using lambda return for valid mi with calling many times)
 /*
           modulo_search_euclid_all(M_start, M_inc, SL, prime, base_r, [&](const uint64_t mi) {
                 uint64_t first = (base_r * (M_start + mi) + (SL-1)) % prime;
@@ -151,22 +136,6 @@ void generate_PALR(
 // Create a type for pointer to modulo_search uint32 signature
 typedef uint32_t(*modulo_search_uint32_sig)(uint32_t p, uint32_t a, uint32_t l, uint32_t r);
 
-// uint32_t modulo_search_one_op(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
-
-// uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R)
-
-// uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t r)
-
-// uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r)
-
-// uint64_t modulo_search_euclid_gcd(
-//        uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
-//        uint64_t prime, uint64_t base_r)
-
-// void modulo_search_euclid_all(
-//        uint64_t M, uint64_t max_m, uint64_t SL,
-//        uint64_t prime, uint64_t base_r,
-//        std::function<void (uint64_t)> lambda)
 
 void benchmark_method_small(
         const char* benchmark_row, const char* ref_name,
@@ -300,7 +269,7 @@ void benchmark(int bits, size_t count) {
     auto t_setup = high_resolution_clock::now();
 
     // TODO: describe this somewhere
-    size_t SL = 50000;
+    size_t SL = 100000;
     size_t S = 2 * SL - 1;  // R - L = S
 
     vector<uint64_t> primes, A, L, R;
@@ -309,10 +278,11 @@ void benchmark(int bits, size_t count) {
 
     if (0) {
         double secs = DELTA_SINCE(t_setup);
-        fprintf(stderr, "\tBenchmark %ld x %d bits, setup %.3f seconds (%ld to %ld)\n",
+        printf("\tBenchmark %ld x %d bits, setup %.3f seconds (%ld to %ld)\n",
             primes.size(), bits,
             secs,
             primes.front(), primes.back());
+        printf("\t\t%ld to %ld\n", primes.front(), primes.back());
     }
 
     // Header
@@ -336,7 +306,6 @@ void benchmark(int bits, size_t count) {
             benchmark_row, "euclid_small", bits, count,
             primes, A, L, R, modulo_search_euclid_small);
     }
-
 
 //    for (size_t max_m : {1'000, 100'000}) {
     for (size_t max_m : {1'000}) {
@@ -368,6 +337,9 @@ void benchmark(int bits, size_t count) {
 
 int main(int argc, char **argv) {
     set<int> benchmark_sizes = {25, 30, 31, 32, 35, 40, 45};
+    //set<int> benchmark_sizes = {25, 30, 31};
+    //set<int> benchmark_sizes = {35, 40, 45};
+    //set<int> benchmark_sizes = {55};
 
     // Input validation
     assert(argc >= 2);
