@@ -26,6 +26,10 @@ uint64_t modulo_search_euclid_gcd(
         uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
         uint64_t prime, uint64_t base_r);
 
+uint64_t modulo_search_euclid_gcd2(
+        uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
+        uint64_t prime, uint64_t base_r);
+
 void modulo_search_euclid_all(
         uint64_t M, uint64_t max_m, uint64_t SL,
         uint64_t prime, uint64_t base_r,

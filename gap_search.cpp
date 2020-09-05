@@ -345,8 +345,6 @@ void prime_gap_search(const struct Config config) {
     // To save space, only save remainder for primes that divide ANY m in range.
     // This helps with memory usage when SIEVE_RANGE >> X * MINC;
 
-    // TODO only allocate 10'000 at a time, further out mi go to a waiting vector.
-    // Downside is this takes more memory (have to store pi, mi).
     std::vector<p_and_r> *large_prime_queue = new vector<p_and_r>[M_inc];
     {
         size_t pr_pi = 0;
@@ -755,6 +753,7 @@ void prime_gap_parallel(const struct Config config) {
                 }
             }
         } else {
+            // TODO use modulo_search_euclid_all when expect mulitple m, use euclid_gcd when expect 0?
             modulo_search_euclid_all(M_start, M_inc, SL, prime, base_r, [&](const uint64_t mi) {
                 // TODO validate no overflow
                 // TODO return first from lambda?

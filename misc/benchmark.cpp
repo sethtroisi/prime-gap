@@ -223,11 +223,29 @@ void benchmark_method_large(
         uint64_t base_r = A[i];
 
         uint64_t m;
-        if (method == 1) {
+        if (method == 0) {
+            uint64_t l = (A[i] + SL - 1) % p;
+            if (l <= 2*SL-2) {
+                m = 0;
+            } else {
+                l = p - l;
+                uint64_t r = l + 2*SL-2;
+                m = modulo_search_euclid(p, A[i], l, r);
+            }
+
+            uint64_t m1 = modulo_search_euclid_gcd(1, 1, m+1, SL, p, base_r);
+            uint64_t m2 = modulo_search_euclid_gcd2(1, 1, m+1, SL, p, base_r);
+
+            assert( m == m1 );
+            assert( m == m2 );
+            found++;
+
+        } else if (method == 1) {
             m = modulo_search_euclid(p, A[i], L[i], R[i]);
             found++;
             uint64_t t = ((__int128) m * A[i]) % p;
             assert( (L[i] <= t) && (t <= R[i]) );
+
         } else if (method == 2) {
             // M = 1, D = 1, max_m = 1e9
             // D = 1 mean only zero/one modulo_search.
@@ -237,6 +255,17 @@ void benchmark_method_large(
 
             uint64_t t = ((__int128) base_r * (M + m)) % p;
             assert( (t < SL) || (t + SL) > p );
+
+        } else if (method == 3) {
+            // M = 1, D = 1, max_m = 1e9
+            // D = 1 mean only zero/one modulo_search.
+            m = modulo_search_euclid_gcd2(M, 1, max_m, SL, p, base_r);
+            found++;
+            if (m == max_m) continue;
+
+            uint64_t t = ((__int128) base_r * (M + m)) % p;
+            assert( (t < SL) || (t + SL) > p );
+
         } else {
             uint64_t previous = found2;
 
@@ -314,6 +343,10 @@ void benchmark(int bits, size_t count) {
 //        cout << "max_m: " << max_m << endl;
 
         benchmark_method_large(
+            benchmark_row, "verify", bits, count,
+            SL, max_m, primes, A, L, R, 0);
+
+        benchmark_method_large(
             benchmark_row, "euclid", bits, count,
             SL, max_m, primes, A, L, R, 1);
 
@@ -321,11 +354,15 @@ void benchmark(int bits, size_t count) {
             benchmark_row, "euclid_gcd", bits, count,
             SL, max_m, primes, A, L, R, 2);
 
-        // Set max_m so ~1 per
-        size_t all_max_m = std::min(max_m, std::max((size_t) 10, primes.front() / S));
+        benchmark_method_large(
+            benchmark_row, "euclid_gcd2", bits, count,
+            SL, max_m, primes, A, L, R, 3);
+
+        // Set max_m so ~1 + 1 m per p
+        size_t all_max_m = std::min(max_m, std::max((size_t) 10, 2 * primes.front() / S));
         benchmark_method_large(
             benchmark_row, "euclid_all", bits, count,
-            SL, all_max_m, primes, A, L, R, 3);
+            SL, all_max_m, primes, A, L, R, 4);
     }
 }
 
