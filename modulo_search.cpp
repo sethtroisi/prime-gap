@@ -15,10 +15,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <cstdio>
-#include <functional>
-#include <iostream>
-#include <utility>
 
 #include "modulo_search.h"
 
@@ -32,7 +28,9 @@ uint32_t gcd(uint32_t a, uint32_t b) {
 
 uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
     // A + p must not overflow.
-    assert( A + p > p );
+    uint32_t check = p + A;
+    assert( check > p );
+    assert( check > A );
 
     uint32_t temp = 0;
     for (int i = 1; ; i++) {
@@ -46,7 +44,7 @@ uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
 
 
 uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t r) {
-    // min i : l <= (a * i) % p <= l
+    // min m : l <= (a * m) % p <= r
     if (l == 0) return 0;
 
     if (a > (p >> 1)) {
@@ -67,12 +65,13 @@ uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t
         //     return mult;
     }
 
-    // reduce to simplier problem
+    // XXX: reduce to simplier problem
     uint32_t new_a = a - (p % a);
+
     assert( 0 <= new_a && new_a < a );
     uint64_t k = modulo_search_euclid_small(a, new_a, l % a, r % a);
 
-    // A huge portion of all execution time is spent on this line
+    // XXX: A huge portion of all execution time is spent on this line
     uint64_t tl = k * p + l;
     uint64_t mult = (tl - 1) / a + 1;
 
@@ -81,17 +80,28 @@ uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t
 }
 
 
+// k1 = modulo(a1, new_a, l % a, r % a)
+//      k2 = modulo
+//      tl_inner = k * a1 + l
+//      mult = (tl_inner - 1) / new_a + 1
+//      return mult
+// tl = k1 * p + l
+//    = ((tl_inner - 1) / new_a + 1) * p + l
+// mult = (tl - 1) / new_a + 1
+//      = (((tl_inner - 1) / new_a + 1) * p + l - 1) / new_a + 1
+
+
 uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
-    // min i : l <= (a * i) % p <= l
 /*
     assert( 0 <= a && a < p );
     assert( 0 <= l && l < p );
     assert( 0 <= r && r < p );
     assert(      l <= r     );
-// */
+*/
     if (l == 0) return 0;
 
-    if (p < 0xFFFFFFFF) {
+    // Wait for 31 bits to make sure no errors with a + p
+    if (p < 0x8FFFFFFF) {
         return modulo_search_euclid_small(p, a, l, r);
     }
 
@@ -101,7 +111,6 @@ uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
         a = p - a; l = p - l; r = p - r;
     }
 
-    // check if small i works
     if (a <= r) {
         // find next multiple of a >= l
         // check if <= r
