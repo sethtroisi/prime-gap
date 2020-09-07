@@ -64,6 +64,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    // TODO Consider adding --reprocess
     if (is_range_already_processed(config)) {
         cout << "Range already processed!" << endl;
         return 1;
@@ -188,15 +189,16 @@ void store_stats(
     }
 
     const size_t num_rows = M_vals.size();
-    for (size_t i = 1; i <= num_rows; i++) {
+    for (size_t i = 0; i < num_rows; i++) {
         uint64_t m = M_vals[i];
         int e_next = expected_next[i];
         int e_prev = expected_prev[i];
         float e_merit = (e_next + e_prev) / (log(m) + K_log);
 
-        if ((i < 5) || (i < 500 && i % 100 == 0) || i % 2000 == 0 || i == num_rows) {
+        size_t r = i + 1;
+        if ((r < 5) || (r < 500 && r % 100 == 0) || (r % 2000 == 0) || r == num_rows) {
             printf("Row: %6ld/%ld %ld, %d, %d, %.2f\n",
-                i, num_rows,
+                r, num_rows,
                 m, e_next, e_prev, e_merit);
         }
 
@@ -373,6 +375,10 @@ void run_gap_file(
         prob_seen = (1 - prob_great_nth[unknown_high.size()]) *
                     (1 - prob_great_nth[unknown_low.size()]);
 
+        /**
+         * TODO could possible look only at record_gaps
+         * replace 'records[gap] > log_merit' with 'gap == records_gap[gi]' or something
+         */
         size_t min_j = unknown_high.size() - 1;
         for (size_t i = 0; i < unknown_low.size(); i++) {
             uint32_t gap_low = unknown_low[i];
@@ -410,21 +416,22 @@ void run_gap_file(
             }
         }
 
-        double p_record = prob_record + prob_record_estimate;
-        if (p_record > max_p_record) {
-            max_p_record = p_record;
-            printf("%5ld unknowns: %3ld, %3ld | e: %.1f, %.1f | prob record: %.2e (%.2e + %.2e) | %.7f\n",
-                m, unknown_low.size(), unknown_high.size(),
-                e_prev, e_next,
-                p_record, prob_record, prob_record_estimate,
-                prob_seen);
-        }
-
         M_vals.push_back(m);
         expected_prev.push_back(e_prev);
         expected_next.push_back(e_next);
         probs_seen.push_back(prob_seen);
         probs_record.push_back(prob_record);
+
+        double p_record = prob_record + prob_record_estimate;
+        if (p_record > max_p_record) {
+            max_p_record = p_record;
+            printf("M:%-6ld (line %ld)\tunknowns: %4ld, %4ld | e: %.1f, %.1f | prob record: %.2e (%.2e + %.2e) | %.7f\n",
+                m, M_vals.size(),
+                unknown_low.size(), unknown_high.size(),
+                e_prev, e_next,
+                p_record, prob_record, prob_record_estimate,
+                prob_seen);
+        }
     }
 }
 
@@ -439,7 +446,7 @@ void prime_gap_stats(const struct Config config) {
     assert( SL > 0 );
 
 
-    // ----- Save Output file
+    // ----- Read from unknown file
     std::ifstream unknown_file;
     {
         std::string fn = gen_unknown_fn(config, ".txt");
@@ -514,7 +521,7 @@ void prime_gap_stats(const struct Config config) {
         vector<float> prob_prime_nth;
         vector<float> prob_great_nth;
         prob_nth_prime(prob_prime, prob_prime_nth, prob_great_nth);
-        printf("tests for prob < 1e-16, with sieve: %ld, without: %ld\n",
+        printf("number of tests for prob < 1e-16, with sieve: %ld, without: %ld\n",
             prob_prime_nth_sieve.size(), prob_prime_nth.size());
 
         // Count of numbers [SL, SL+j] < i coprime to D
