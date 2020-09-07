@@ -16,6 +16,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <random>
 #include <set>
@@ -152,7 +153,7 @@ void generate_PALR(
 
 
 void benchmark_primorial_modulo(
-        const char* benchmark_row,
+        const char* benchmark_row, const char* filter,
         int P, int bits, size_t count,
         const vector<uint64_t> &primes) {
 
@@ -160,39 +161,42 @@ void benchmark_primorial_modulo(
     mpz_init(K);
     mpz_primorial_ui(K, P);
 
-    auto t_start = high_resolution_clock::now();
-
-    uint64_t z = 0;
-    for (auto p : primes) {
-        z += mpz_fdiv_ui(K, p);
-    }
-
-    auto time = DELTA_SINCE(t_start);
-
     auto log2 = mpz_sizeinbase(K, 2);
-    mpz_clear(K);
-
     char ref_name[50];
     sprintf(ref_name, "%d# mod <%d bit>p", P, bits);
 
-    printf(benchmark_row,
-        log2, count, ref_name,
-        primes.size(), z % 10000,
-        time, time * 1e9 / primes.size(),
-        time * freq / primes.size() / ((log2 - 1) / 64 + 1));
+    if (strstr(ref_name, filter)) {
+        auto t_start = high_resolution_clock::now();
+
+        uint64_t z = 0;
+        for (auto p : primes) {
+            z += mpz_fdiv_ui(K, p);
+        }
+
+        auto time = DELTA_SINCE(t_start);
+
+        printf(benchmark_row,
+            log2, count, ref_name,
+            primes.size(), z % 10000,
+            time, time * 1e9 / primes.size(),
+            time * freq / primes.size() / ((log2 - 1) / 64 + 1));
+    }
+
+    mpz_clear(K);
 }
 
 // Create a type for pointer to modulo_search uint32 signature
 typedef uint32_t(*modulo_search_uint32_sig)(uint32_t p, uint32_t a, uint32_t l, uint32_t r);
 
 void benchmark_method_small(
-        const char* benchmark_row, const char* ref_name,
+        const char* benchmark_row, const char* ref_name, const char* filter,
         int bits, size_t count,
         const vector<uint64_t> &primes,
         const vector<uint64_t> &A,
         const vector<uint64_t> &L,
         const vector<uint64_t> &R,
         modulo_search_uint32_sig ref_func) {
+    if (strstr(ref_name, filter) == NULL) return;
 
     assert( count <= primes.size() );
     assert( (primes.size() == A.size()) && (A.size() == L.size()) && (A.size() == R.size()) );
@@ -220,7 +224,7 @@ void benchmark_method_small(
 }
 
 void benchmark_method_large(
-        const char* benchmark_row, const char* ref_name,
+        const char* benchmark_row, const char* ref_name, const char* filter,
         int bits, size_t count,
         size_t SL, size_t max_m,
         const vector<uint64_t> &primes,
@@ -228,6 +232,7 @@ void benchmark_method_large(
         const vector<uint64_t> &L,
         const vector<uint64_t> &R,
         int method) {
+    if (strstr(ref_name, filter) == NULL) return;
 
     assert( count <= primes.size() );
     assert( (primes.size() == A.size()) && (A.size() == L.size()) && (A.size() == R.size()) );
@@ -315,7 +320,7 @@ void benchmark_method_large(
 }
 
 
-void benchmark(int bits, size_t count) {
+void benchmark(int bits, size_t count, const char* filter) {
     auto t_setup = high_resolution_clock::now();
 
     // TODO: describe this somewhere
@@ -343,17 +348,17 @@ void benchmark(int bits, size_t count) {
     if (bits < 32) {
         // Per Method benchmark
         benchmark_method_small(
-            benchmark_row, "modulo_search_one_op", bits, count,
+            benchmark_row, "modulo_search_one_op", filter, bits, count,
             primes, A, L, R, modulo_search_one_op);
 
         if (bits != 32) {
             benchmark_method_small(
-                benchmark_row, "modulo_search_brute", bits, count,
+                benchmark_row, "modulo_search_brute", filter, bits, count,
                 primes, A, L, R, modulo_search_brute);
         }
 
         benchmark_method_small(
-            benchmark_row, "modulo_search_euclid_small", bits, count,
+            benchmark_row, "modulo_search_euclid_small", filter, bits, count,
             primes, A, L, R, modulo_search_euclid_small);
     }
 
@@ -362,32 +367,35 @@ void benchmark(int bits, size_t count) {
 //        cout << "max_m: " << max_m << endl;
 
         benchmark_method_large(
-            benchmark_row, "modulo_search_verify", bits, count,
+            benchmark_row, "modulo_search_verify", filter, bits, count,
             SL, max_m, primes, A, L, R, 0);
 
         benchmark_method_large(
-            benchmark_row, "modulo_search_euclid", bits, count,
+            benchmark_row, "modulo_search_euclid", filter, bits, count,
             SL, max_m, primes, A, L, R, 1);
 
         benchmark_method_large(
-            benchmark_row, "modulo_search_euclid_gcd", bits, count,
+            benchmark_row, "modulo_search_euclid_gcd", filter, bits, count,
             SL, max_m, primes, A, L, R, 2);
 
         benchmark_method_large(
-            benchmark_row, "modulo_search_euclid_gcd2", bits, count,
+            benchmark_row, "modulo_search_euclid_gcd2", filter, bits, count,
             SL, max_m, primes, A, L, R, 3);
 
         // Set max_m so ~1 + 1 m per p
         size_t all_max_m = std::min(max_m, std::max((size_t) 10, 2 * primes.front() / S));
         benchmark_method_large(
-            benchmark_row, "modulo_search_euclid_all", bits, count,
+            benchmark_row, "modulo_search_euclid_all", filter, bits, count,
             SL, all_max_m, primes, A, L, R, 4);
     }
 
-    printf("\t|  bits x count   | method_name%15s | found    | total    | time(s) | ns/iter | cycles/limb |\n", "");
+    if (strstr("# mod < bits>p", filter) != NULL) {
+        printf("\t|  bits x count   | method_name%15s | found    | total    | time(s) | ns/iter | cycles/limb |\n", "");
+    }
     for (auto P : {503, 1009, 1999, 5003, 10007, 20011}) {
         benchmark_primorial_modulo(
-            benchmark_row, P,
+            benchmark_row, filter,
+            P,
             bits, count, primes);
     }
 }
@@ -399,15 +407,17 @@ int main(int argc, char **argv) {
     //set<int> benchmark_sizes = {55};
 
     // Input validation
-    assert(argc >= 2);
+    assert(argc == 2 || argc == 3);
 
     uint64_t count_primes = atol(argv[1]);
     assert( (count_primes > 0) && (count_primes < 1000001) );
-    for (int i = 2; i < argc; i++) {
-        int t = atoi(argv[i]);
-        assert((10 < t) && (t <= 62));
-        benchmark_sizes.insert(t);
+
+    char empty_filter[] = "";
+    char *filter = empty_filter;
+    if (argc == 3) {
+        filter = argv[2];
     }
+
 
     // Status output
     cout << "Using " << count_primes << " primes during benchmark" << endl;
@@ -419,7 +429,7 @@ int main(int argc, char **argv) {
     printf("Starting benchmarking (%1.2g Hz)\n", freq);
 
     for (int bits : benchmark_sizes)
-        benchmark(bits, count_primes);
+        benchmark(bits, count_primes, filter);
 
     return 0;
 }
