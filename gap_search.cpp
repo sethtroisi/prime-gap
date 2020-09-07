@@ -695,8 +695,8 @@ void prime_gap_parallel(const struct Config config) {
     auto  s_start_t = high_resolution_clock::now();
     auto  s_interval_t = high_resolution_clock::now();
     long  s_total_unknowns = SIEVE_INTERVAL * M_inc;
-    long  s_small_primes_tested = 0;
-    long  s_large_primes_tested = 0;
+    long  s_small_primes_factors = 0;
+    long  s_large_primes_factors = 0;
     uint64_t  s_next_print = 0;
     uint64_t  next_mult = SMALL_THRESHOLD <= 100000 ? 100000 : 1000000;
     double s_prp_needed = 1 / prob_prime;
@@ -749,7 +749,7 @@ void prime_gap_parallel(const struct Config config) {
 
                 for (size_t d = first; d < SIEVE_INTERVAL; d += shift) {
                     composite[mii][i_reindex[d]] = true;
-                    s_small_primes_tested += 1;
+                    s_small_primes_factors += 1;
                 }
             }
         } else {
@@ -779,7 +779,7 @@ void prime_gap_parallel(const struct Config config) {
                 }
 
                 composite[mii][i_reindex[first]] = true;
-                s_large_primes_tested += 1;
+                s_large_primes_factors += 1;
             });
         }
 
@@ -797,6 +797,7 @@ void prime_gap_parallel(const struct Config config) {
             }
 
             auto   s_stop_t = high_resolution_clock::now();
+            // total time, interval time
             double     secs = duration<double>(s_stop_t - s_start_t).count();
             double int_secs = duration<double>(s_stop_t - s_interval_t).count();
 
@@ -810,19 +811,20 @@ void prime_gap_parallel(const struct Config config) {
             uint64_t saved_prp = s_total_unknowns - t_total_unknowns;
             double skipped_prp = M_inc * (s_prp_needed - 1/prob_prime_after_sieve);
 
-            printf("%10ld %5.2f/%-6.1f seconds |", prime, int_secs, secs);
-            printf(" %ld primes used (avg/m: %.1f) \n",
-                s_large_primes_tested,
-                1.0 * s_large_primes_tested / M_inc);
-            printf("\tunknowns %ld (avg: %.2f) (%.3f%%)\n",
+            setlocale(LC_NUMERIC, "");
+            printf("\n%'-10ld %5.2f/%-6.1f seconds |", prime, int_secs, secs);
+            printf(" %'ld primes finished (m/prime: %.1f) \n",
+                s_large_primes_factors, 1.0 * s_large_primes_factors / M_inc);
+            printf("\tunknowns %'-9ld\t(avg/m: %.2f) (%.3f%%)\n",
                 t_total_unknowns,
                 1.0 * t_total_unknowns / valid_ms,
                 100.0 * t_total_unknowns / (SIEVE_INTERVAL * M_inc));
-            printf("\t~ 2x %.2f PRP/m (%ld new composites ~= %4.1f skipped PRP => %.1f PRP/seconds)\n",
+            printf("\t~ 2x %.2f PRP/m\t(%ld new composites ~= %4.1f skipped PRP => %.1f PRP/seconds)\n",
                 1 / prob_prime_after_sieve,
                 saved_prp,
                 skipped_prp,
                 1.0 * skipped_prp / int_secs);
+            setlocale(LC_NUMERIC, "C");
 
             s_total_unknowns = t_total_unknowns;
             s_interval_t = s_stop_t;
@@ -835,7 +837,7 @@ void prime_gap_parallel(const struct Config config) {
         std::ofstream unknown_file;
         if (config.save_unknowns) {
             std::string fn = gen_unknown_fn(config, ".txt");
-            printf("\tSaving unknowns to '%s'\n", fn.c_str());
+            printf("\n\nSaving unknowns to '%s'\n", fn.c_str());
             unknown_file.open(fn, std::ios::out);
             assert( unknown_file.is_open() ); // Can't open save_unknowns file
         }
