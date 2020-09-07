@@ -151,6 +151,14 @@ uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
     return mult;
 }
 
+
+/**
+ * find (base_r * (M + mi) + (SL - 1) <= 2 * SL - 2
+ * Skips solutions where gcd((M + mi), D) > 1
+ * returns:
+ *      0 <= mi < max_m (valid solution)
+ *      max_m (no more solutions)
+ */
 uint64_t modulo_search_euclid_gcd2(
         uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
         uint64_t prime, uint64_t base_r) {
@@ -248,8 +256,15 @@ void modulo_search_euclid_all(
     uint64_t modulo = (base_r * M) % prime;
     while (true) {
         if ( (modulo < SL) || (modulo + SL) > prime) {
+            if (mi >= max_m)
+                return;
+
             lambda(mi);
             mi += 1;
+
+            if (mi >= max_m)
+                return;
+
             modulo += base_r;
             if (modulo >= prime) modulo -= prime;
             continue;
