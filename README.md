@@ -135,6 +135,11 @@ sys	0m0.068s
 ```
 
 ```bash
+$ alias compute_stats="g++ -Wall -Werror -O3 gap_stats.cpp gap_common.cpp -lgmp -lsqlite3 -o gap_stats && time ./gap_stats"
+$ compute_stats --save-unknowns --sieve-only --unknown-filename <M_P_D_MINC_sX_lSL.txt>
+
 $ g++ -Wall -Werror -O3 -I. misc/benchmark.cpp modulo_search.cpp -lgmp -o benchmark
-
-
+$ ./benchmark 100000
+$ ./benchmark 100000 modulo_search
+$ ./benchmark 100000 "# mod"
+```
