@@ -31,7 +31,6 @@ using std::set;
 using std::vector;
 using namespace std::chrono;
 
-
 #define DELTA_SINCE(start_time) duration<double>( \
     high_resolution_clock::now() - start_time).count();
 
@@ -71,6 +70,23 @@ uint32_t modulo_search_one_op(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
           });
 */
 
+#include <thread>
+#include <x86intrin.h>
+
+// global frequency
+float freq;
+
+double approx_Hz(unsigned sleeptime) {
+    auto t_start = high_resolution_clock::now();
+    uint64_t cycles_start = __rdtsc();
+    std::this_thread::sleep_for(std::chrono::milliseconds(sleeptime));
+    uint64_t elapsed_cycles = __rdtsc() - cycles_start;
+    auto time = DELTA_SINCE(t_start);
+    auto time2 = DELTA_SINCE(t_start);
+
+    return elapsed_cycles / (time - 2 * (time2 - time));
+}
+
 
 
 /**
@@ -104,6 +120,7 @@ void generate_primes(int bits, size_t count, vector<uint64_t> &save) {
     mpz_clear(p);
 }
 
+
 void generate_PALR(
         int bits, size_t count, size_t S,
         vector<uint64_t> &primes,
@@ -133,9 +150,40 @@ void generate_PALR(
     }
 }
 
+
+void benchmark_primorial_modulo(
+        const char* benchmark_row,
+        int P, int bits, size_t count,
+        const vector<uint64_t> &primes) {
+
+    mpz_t K;
+    mpz_init(K);
+    mpz_primorial_ui(K, P);
+
+    auto t_start = high_resolution_clock::now();
+
+    uint64_t z = 0;
+    for (auto p : primes) {
+        z += mpz_fdiv_ui(K, p);
+    }
+
+    auto time = DELTA_SINCE(t_start);
+
+    auto log2 = mpz_sizeinbase(K, 2);
+    mpz_clear(K);
+
+    char ref_name[50];
+    sprintf(ref_name, "%d# mod <%d bit>p", P, bits);
+
+    printf(benchmark_row,
+        log2, count, ref_name,
+        primes.size(), z % 10000,
+        time, time * 1e9 / primes.size(),
+        time * freq / primes.size() / ((log2 - 1) / 64 + 1));
+}
+
 // Create a type for pointer to modulo_search uint32 signature
 typedef uint32_t(*modulo_search_uint32_sig)(uint32_t p, uint32_t a, uint32_t l, uint32_t r);
-
 
 void benchmark_method_small(
         const char* benchmark_row, const char* ref_name,
@@ -167,7 +215,8 @@ void benchmark_method_small(
 
     printf(benchmark_row,
         bits, count, ref_name,
-        found, found, time, time * 1e9 / count);
+        found, found, time,
+        time * 1e9 / count, time * freq / found);
 }
 
 void benchmark_method_large(
@@ -261,7 +310,8 @@ void benchmark_method_large(
 
     printf(benchmark_row,
         bits, count, ref_name,
-        found, found2, time, time * 1e9 / found2);
+        found, found2,
+        time, time * 1e9 / found2, time * freq / found2);
 }
 
 
@@ -287,23 +337,23 @@ void benchmark(int bits, size_t count) {
 
     // Header
     cout << endl;
-    const auto benchmark_row = "\t| %d x %7ld | modulo_search_%-15s | %-8ld | %-8ld | %-7.4f | %7.0f |\n";
-    printf("\t| bits x count | method_name%18s | found    | total    | time(s) | ns/iter |\n", "");
+    const auto benchmark_row = "\t| %5d x %7ld | %-26s | %-8ld | %-8ld | %-7.4f | %7.0f | %-8.1f    |\n";
+    printf("\t|  bits x count   | method_name%15s | found    | total    | time(s) | ns/iter | cycles/iter |\n", "");
 
     if (bits < 32) {
         // Per Method benchmark
         benchmark_method_small(
-            benchmark_row, "one_op", bits, count,
+            benchmark_row, "modulo_search_one_op", bits, count,
             primes, A, L, R, modulo_search_one_op);
 
         if (bits != 32) {
             benchmark_method_small(
-                benchmark_row, "brute", bits, count,
+                benchmark_row, "modulo_search_brute", bits, count,
                 primes, A, L, R, modulo_search_brute);
         }
 
         benchmark_method_small(
-            benchmark_row, "euclid_small", bits, count,
+            benchmark_row, "modulo_search_euclid_small", bits, count,
             primes, A, L, R, modulo_search_euclid_small);
     }
 
@@ -312,31 +362,38 @@ void benchmark(int bits, size_t count) {
 //        cout << "max_m: " << max_m << endl;
 
         benchmark_method_large(
-            benchmark_row, "verify", bits, count,
+            benchmark_row, "modulo_search_verify", bits, count,
             SL, max_m, primes, A, L, R, 0);
 
         benchmark_method_large(
-            benchmark_row, "euclid", bits, count,
+            benchmark_row, "modulo_search_euclid", bits, count,
             SL, max_m, primes, A, L, R, 1);
 
         benchmark_method_large(
-            benchmark_row, "euclid_gcd", bits, count,
+            benchmark_row, "modulo_search_euclid_gcd", bits, count,
             SL, max_m, primes, A, L, R, 2);
 
         benchmark_method_large(
-            benchmark_row, "euclid_gcd2", bits, count,
+            benchmark_row, "modulo_search_euclid_gcd2", bits, count,
             SL, max_m, primes, A, L, R, 3);
 
         // Set max_m so ~1 + 1 m per p
         size_t all_max_m = std::min(max_m, std::max((size_t) 10, 2 * primes.front() / S));
         benchmark_method_large(
-            benchmark_row, "euclid_all", bits, count,
+            benchmark_row, "modulo_search_euclid_all", bits, count,
             SL, all_max_m, primes, A, L, R, 4);
+    }
+
+    printf("\t|  bits x count   | method_name%15s | found    | total    | time(s) | ns/iter | cycles/limb |\n", "");
+    for (auto P : {503, 1009, 1999, 5003, 10007, 20011}) {
+        benchmark_primorial_modulo(
+            benchmark_row, P,
+            bits, count, primes);
     }
 }
 
 int main(int argc, char **argv) {
-    set<int> benchmark_sizes = {25, 30, 31, 32, 35, 40, 45};
+    set<int> benchmark_sizes = {25, 30, 31, 32, 35, 40};
     //set<int> benchmark_sizes = {25, 30, 31};
     //set<int> benchmark_sizes = {35, 40, 45};
     //set<int> benchmark_sizes = {55};
@@ -357,7 +414,9 @@ int main(int argc, char **argv) {
 
     // Benchmarking
     cout << endl;
-    cout << "Starting benchmarking" << endl;
+
+    freq = approx_Hz(250);
+    printf("Starting benchmarking (%1.2g Hz)\n", freq);
 
     for (int bits : benchmark_sizes)
         benchmark(bits, count_primes);
