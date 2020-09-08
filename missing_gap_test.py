@@ -107,27 +107,33 @@ def prime_gap_test(args):
     print("\tLoading unknowns from '{}'".format(args.unknown_filename))
     print()
 
-
-    # ----- Main sieve loop.
-    print()
-
     # Used for various stats
     s_start_t = time.time()
     s_last_print_t = time.time()
 
-    tested_m = 0
-    tested = 0
-    primes = 0
     with open(args.unknown_filename) as unknown_file:
-        for li, line in enumerate(unknown_file):
-            tested_m += 1
+        # hope this doesn't run out of memory
+        lines = (line.split(" : ") for line in unknown_file.readlines())
+        lines = sorted(((float(p), s, t) for p,s,t in lines), reverse=True)
+        print("Read {} lines with missing_gap_prob: {:.3g} to {:.3g}".format(
+            len(lines), lines[0][0], lines[-1][0]))
+        print ()
 
-            # split of the first part.
-            start, to_test = line.split(" : ")
+        tested_m = 0
+        summed_prob = 0
+        tested = 0
+        primes = 0
+        for li, line in enumerate(lines):
+            missing_gap_prob, start, to_test = line
             start = start.replace(' ', '')
 
-            print ("start: {}\t tested_m: {}, tested: {} => primes: {} | tests for this m {}".format(
-                start, tested_m, tested, primes, to_test.count('(')))
+            tested_m += 1
+            summed_prob += missing_gap_prob
+
+            print ("start: {} ({:.2g} from {:<4} pairs)\t tested_m: {}, tested: {} => primes: {}, sum(prob): {:.4f}".format(
+                start, missing_gap_prob, to_test.count('('),
+                tested_m, tested, primes, summed_prob))
+
             m, p, d = re.match(r"(\d+)\*(\d+)#\/(\d+)", start).groups()
             assert p == str(P) and d == str(D), (p, d, P, D)
 
@@ -137,20 +143,22 @@ def prime_gap_test(args):
 
             last_low = None
             last_low_status = None
-            for match in re.findall("(\d+, \d+)", to_test):
-                low, high = match.split(", ")
+            for match in re.findall("(\d+,\d+)", to_test):
+                low, high = match.split(",")
 
                 if last_low_status and low > last_low:
-                    # if last was prime then stop.
+                    # if greater than a known prime, quit.
                     break
 
                 if low != last_low or not last_low_status:
                     tested += 1
-                    last_low_status = is_prime(N - int(low), start + "-" + low)
+
                     last_low = low
+                    last_low_status = is_prime(N - int(low), start + "-" + low)
+                    if last_low_status:
+                        primes += 1
 
                 if last_low_status:
-                    primes += 1
                     if is_prime(N + int(high), start + "+" + high):
                         primes += 1
                         print("\tBOTH SIDES PRIME:", start, low, high)
