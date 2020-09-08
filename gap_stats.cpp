@@ -343,9 +343,10 @@ void run_gap_file(
         vector<float>& probs_seen,
         vector<float>& probs_record) {
 
+    size_t missing_gap_lines = 0;
+    std::string missing_fn = gen_unknown_fn(config, ".missing.txt");
     std::ofstream missing_gap_file;
     {
-        std::string missing_fn = gen_unknown_fn(config, ".missing.txt");
         printf("\tSaving missing-gaps to '%s'\n", missing_fn.c_str());
         missing_gap_file.open(missing_fn, std::ios::out);
         assert( missing_gap_file.is_open() ); // Can't open missing_gap file
@@ -482,8 +483,10 @@ void run_gap_file(
         }
 
         // TODO make this a param or percentile of distribution.
-        if (prob_is_missing_gap > 2.8e-4) {
-            printf("MISSING TESTS:%-6ld => %.2e | unknowns: %4ld, %4ld | missing tests: %4ld | \n",
+        if (prob_is_missing_gap > 3.7e-4) {
+            missing_gap_lines++;
+            printf("MISSING TESTS(%ld):%-6ld => %.2e | unknowns: %4ld, %4ld | missing tests: %4ld | \n",
+                missing_gap_lines,
                 m, prob_is_missing_gap,
                 unknown_low.size(), unknown_high.size(),
                 missing_pairs.size());
@@ -498,6 +501,7 @@ void run_gap_file(
     }
 
     missing_gap_file.close();
+    printf("Saving %ld missing-gaps tests to '%s'\n", missing_gap_lines, missing_fn.c_str());
 }
 
 void prime_gap_stats(const struct Config config) {
