@@ -621,6 +621,7 @@ void prime_gap_parallel(const struct Config config) {
 
     const uint64_t SIEVE_RANGE = config.sieve_range;
 
+    // TODO increase this when valid_ms is very small
     const uint64_t SMALL_THRESHOLD = 50 * SIEVE_LENGTH;
 
     // SMALL_THRESHOLD deals with all primes that can mark off two items in SIEVE_LENGTH.
@@ -646,16 +647,19 @@ void prime_gap_parallel(const struct Config config) {
     // ----- Allocate memory
     uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH - 1;
 
+    vector<int32_t> valid_mi;
     vector<int32_t> m_reindex(M_inc, -1);
     size_t valid_ms = 0;
     {
         for (uint64_t mi = 0; mi < M_inc; mi++) {
             if (gcd(M_start + mi, D) == 1) {
                 m_reindex[mi] = valid_ms;
+                valid_mi.push_back(mi);
                 valid_ms++;
             }
         }
     }
+    assert(valid_ms == valid_mi.size());
 
     // which [i] are coprime to K
     vector<char> coprime_composite(SIEVE_INTERVAL, 1);
@@ -700,7 +704,7 @@ void prime_gap_parallel(const struct Config config) {
     long  s_small_primes_factors = 0;
     long  s_large_primes_factors = 0;
     uint64_t  s_next_print = 0;
-    uint64_t  next_mult = SMALL_THRESHOLD <= 100000 ? 100000 : 1000000;
+    uint64_t  next_mult = SMALL_THRESHOLD <= 10000 ? 10000 : 100000;
     double s_prp_needed = 1 / prob_prime;
 
     // Note: Handling small primes here had better localized memory access
@@ -718,12 +722,11 @@ void prime_gap_parallel(const struct Config config) {
                 return;
             }
 
-            for (uint64_t mi = 0; mi < M_inc; mi++) {
+            for (uint32_t mi : valid_mi) {
                 int32_t mii = m_reindex[mi];
-                if (mii < 0) continue;
+                assert(mii >= 0);
 
                 uint64_t m = M_start + mi;
-
                 uint64_t modulo = (base_r * m) % prime;
 
                 uint32_t flip = modulo + prime - (SIEVE_LENGTH % prime);
@@ -755,8 +758,12 @@ void prime_gap_parallel(const struct Config config) {
                 }
             }
         } else {
-            // TODO use modulo_search_euclid_all when expect mulitple m, use euclid_gcd when expect 0?
             modulo_search_euclid_all(M_start, M_inc, SL, prime, base_r, [&](const uint64_t mi) {
+                int32_t mii = m_reindex[mi];
+                if (mii < 0) {
+                    return;
+                }
+
                 // TODO validate no overflow
                 // TODO return first from lambda?
                 uint64_t first = (base_r * (M_start + mi) + (SL-1)) % prime;
@@ -765,10 +772,6 @@ void prime_gap_parallel(const struct Config config) {
                 assert( 0 <= first && first < SIEVE_INTERVAL );
 
                 if (!coprime_composite[first]) {
-                    return;
-                }
-                int32_t mii = m_reindex[mi];
-                if (mii < 0) {
                     return;
                 }
 
@@ -816,7 +819,7 @@ void prime_gap_parallel(const struct Config config) {
             setlocale(LC_NUMERIC, "");
             printf("\n%'-10ld %5.2f/%-6.1f seconds |", prime, int_secs, secs);
             printf(" %'ld primes finished (m/prime: %.1f) \n",
-                pi, 1.0 * s_large_primes_factors / M_inc);
+                pi, 1.0 * s_large_primes_factors / pi);
             printf("\tunknowns %'-9ld\t(avg/m: %.2f) (%.3f%%)\n",
                 t_total_unknowns,
                 1.0 * t_total_unknowns / valid_ms,
@@ -844,10 +847,8 @@ void prime_gap_parallel(const struct Config config) {
             assert( unknown_file.is_open() ); // Can't open save_unknowns file
         }
 
-        for (uint64_t mi = 0; mi < M_inc; mi++) {
-            if (gcd(M_start + mi, D) > 1) {
-                continue;
-            }
+        for (uint64_t mi : valid_mi) {
+            assert(gcd(M_start + mi, D) == 1);
             int32_t mii = m_reindex[mi];
             assert( mii >= 0 );
 

@@ -281,7 +281,11 @@ void modulo_search_euclid_all(
         if (mi >= max_m)
             return;
 
-        // TODO can just add mi * modulo?
+        /**
+         * TODO: Can create a medium version where prime < 40 bits
+         * uint32_t mi2 = modulo_search_euclid
+         * modulo += (modulo + base_r * mi2) % prime
+         */
         __int128 mult = (__int128) base_r * (M + mi);
         modulo = mult % prime;
 
