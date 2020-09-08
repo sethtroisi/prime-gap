@@ -161,7 +161,9 @@ def prime_gap_test(args):
                 if last_low_status:
                     if is_prime(N + int(high), start + "+" + high):
                         primes += 1
+                        print("\n"*3)
                         print("\tBOTH SIDES PRIME:", start, low, high)
+                        print("\n"*3)
 
 
             s_stop_t = time.time()

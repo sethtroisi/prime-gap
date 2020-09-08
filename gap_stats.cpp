@@ -481,7 +481,8 @@ void run_gap_file(
                 prob_seen);
         }
 
-        if (prob_is_missing_gap > 1.2e-4) {
+        // TODO make this a param or percentile of distribution.
+        if (prob_is_missing_gap > 2.8e-4) {
             printf("MISSING TESTS:%-6ld => %.2e | unknowns: %4ld, %4ld | missing tests: %4ld | \n",
                 m, prob_is_missing_gap,
                 unknown_low.size(), unknown_high.size(),
