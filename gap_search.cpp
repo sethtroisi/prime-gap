@@ -67,14 +67,16 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    setlocale(LC_NUMERIC, "");
     printf("\n");
-    printf("Testing m * %u#/%u, m = %ld + [0, %ld)\n",
+    printf("Testing m * %u#/%u, m = %ld + [0, %'ld)\n",
         config.p, config.d, config.mstart, config.minc);
 
     printf("\n");
-    printf("sieve_length: 2x%d\n", config.sieve_length);
-    printf("sieve_range:  %ld\n", config.sieve_range);
+    printf("sieve_length: 2x%'d\n", config.sieve_length);
+    printf("sieve_range:  %'ld\n", config.sieve_range);
     printf("\n");
+    setlocale(LC_NUMERIC, "C");
 
     if (config.method2) {
         prime_gap_parallel(config);
@@ -791,7 +793,7 @@ void prime_gap_parallel(const struct Config config) {
                 }
                 s_next_print += next_mult;
                 if (s_next_print >= SIEVE_RANGE) {
-                    // Would be nice to have a prev prime.
+                    // TODO: Would be nice to have a prev prime.
                     s_next_print = SIEVE_RANGE - 50;
                 }
             }
@@ -814,7 +816,7 @@ void prime_gap_parallel(const struct Config config) {
             setlocale(LC_NUMERIC, "");
             printf("\n%'-10ld %5.2f/%-6.1f seconds |", prime, int_secs, secs);
             printf(" %'ld primes finished (m/prime: %.1f) \n",
-                s_large_primes_factors, 1.0 * s_large_primes_factors / M_inc);
+                pi, 1.0 * s_large_primes_factors / M_inc);
             printf("\tunknowns %'-9ld\t(avg/m: %.2f) (%.3f%%)\n",
                 t_total_unknowns,
                 1.0 * t_total_unknowns / valid_ms,

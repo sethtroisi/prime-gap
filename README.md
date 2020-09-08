@@ -19,6 +19,8 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [x] Generate expected length
 * gap\_stats.cpp
   * [ ] drop directory from `unknown-filename`
+  * [ ] More missing gaps
+  * [ ] Move missing gaps behind a flag
   * [x] Don't rewrite `partial\_results`
   * [x] Calc record chance
   * [x] Save expected/prob record to sql

@@ -30,6 +30,7 @@
 
 using std::cout;
 using std::endl;
+using std::pair;
 using std::vector;
 using namespace std::chrono;
 
@@ -39,6 +40,14 @@ const char gaps_db[]    = "prime-gaps.db";
 
 // Limits the size of record list
 const uint32_t MAX_GAP = 1'000'000;
+
+// Generated from https://primegap-list-project.github.io/lists/missing-gaps/
+const vector<uint32_t> MISSING_GAPS = {
+    113326, 115694, 116254, 117238, 117242,
+    119222, 119584, 120154, 121138, 121174,
+    121366, 121832, 122290, 122666, 122686,
+    123230, 123238, 123242, 123598, 123662
+};
 
 void prime_gap_stats(const struct Config config);
 bool is_range_already_processed(const struct Config& config);
@@ -50,10 +59,6 @@ int main(int argc, char* argv[]) {
 
     Config config = argparse(argc, argv);
 
-    if (config.save_unknowns == 0) {
-        cout << "Must set --save-unknowns" << endl;
-        return 1;
-    }
     if (config.run_prp == 1) {
         cout << "Must set --sieve-only for gap_search" << endl;
         return 1;
@@ -64,11 +69,15 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // TODO Consider adding --reprocess
-    if (is_range_already_processed(config)) {
+    if (config.save_unknowns == 0) {
+        printf("Not saving unknowns (--save-unknowns=0)\n");
+    } else if (is_range_already_processed(config)) {
         cout << "Range already processed!" << endl;
         return 1;
     }
+
+    // TODO move behind a flag
+    assert( is_sorted(MISSING_GAPS.begin(), MISSING_GAPS.end()) );
 
     prime_gap_stats(config);
 }
@@ -301,6 +310,7 @@ void prob_nth_prime(
 }
 
 void run_gap_file(
+        const struct Config config,
         const vector<float>& records,
         const vector<uint32_t> min_record_gaps,
         const uint64_t M_start,
@@ -316,6 +326,15 @@ void run_gap_file(
         vector<float>& expected_next,
         vector<float>& probs_seen,
         vector<float>& probs_record) {
+
+    std::ofstream missing_gap_file;
+    {
+        std::string missing_fn = gen_unknown_fn(config, ".missing.txt");
+        printf("\tSaving missing-gaps to '%s'\n", missing_fn.c_str());
+        missing_gap_file.open(missing_fn, std::ios::out);
+        assert( missing_gap_file.is_open() ); // Can't open missing_gap file
+        assert( missing_gap_file.good() );
+    }
 
     const uint32_t min_record_gap = min_record_gaps.front();
     float max_p_record = 0;
@@ -375,6 +394,9 @@ void run_gap_file(
         prob_seen = (1 - prob_great_nth[unknown_high.size()]) *
                     (1 - prob_great_nth[unknown_low.size()]);
 
+        float prob_is_missing_gap = 0.0;
+        vector<pair<uint32_t, uint32_t>> missing_pairs;
+
         /**
          * TODO could possible look only at record_gaps
          * replace 'records[gap] > log_merit' with 'gap == records_gap[gi]' or something
@@ -387,14 +409,27 @@ void run_gap_file(
             }
 
             for (size_t j = min_j; j < unknown_high.size(); j++) {
-                uint32_t gap = gap_low + unknown_high[j];
+                uint32_t gap_high = unknown_high[j];
+                uint32_t gap = gap_low + gap_high;
+
+                if (gap >= MISSING_GAPS.front() && gap <= MISSING_GAPS.back()) {
+                    if (std::binary_search(MISSING_GAPS.begin(), MISSING_GAPS.end(), gap)) {
+                        float prob_joint = prob_prime_nth[i+1] * prob_prime_nth[j+1];
+                        prob_is_missing_gap += prob_joint;
+                        missing_pairs.emplace_back(std::make_pair(gap_low, gap_high));
+                    }
+                }
+
+                //if (gap == 113326 || gap == 115694 || gap == 116254) {
+                //    cout << m << " " << mi << " | " << gap_low << " " << unknown_high[j] << endl;
+                //}
+
                 if (records[gap] > log_merit) {
                     float prob_joint = prob_prime_nth[i+1] * prob_prime_nth[j+1];
                     prob_record += prob_joint;
                 }
             }
         }
-
 
         double e_prev = 0, e_next = 0;
         double prob_record_estimate = 0;
@@ -432,7 +467,23 @@ void run_gap_file(
                 p_record, prob_record, prob_record_estimate,
                 prob_seen);
         }
+
+        if (prob_is_missing_gap > 3.5e-5) {
+            printf("MISSING TESTS:%-6ld => %.2e | unknowns: %4ld, %4ld | missing tests: %4ld | \n",
+                m, prob_is_missing_gap,
+                unknown_low.size(), unknown_high.size(),
+                missing_pairs.size());
+
+            // TODO Multiple same lower: (5, 102), (5, 110), (5, 200), (7, 104), ...
+            missing_gap_file << m << " * " << config.p << "#/" << config.d << " :";
+            for (auto pair : missing_pairs) {
+                missing_gap_file << " (" << pair.first << ", " << pair.second << ")";
+            }
+            missing_gap_file << endl;
+        }
     }
+
+    missing_gap_file.close();
 }
 
 void prime_gap_stats(const struct Config config) {
@@ -583,6 +634,7 @@ void prime_gap_stats(const struct Config config) {
     // ----- Main calculation
     printf("\n");
     run_gap_file(
+        config,
         records,
         min_record_gaps,
         M_start, M_inc, D,
@@ -614,10 +666,12 @@ void prime_gap_stats(const struct Config config) {
 
     mpz_clear(K);
 
-    store_stats(
-        config, K_log,
-        M_vals,
-        expected_prev, expected_next,
-        probs_seen, probs_record
-    );
+    if (config.save_unknowns) {
+        store_stats(
+            config, K_log,
+            M_vals,
+            expected_prev, expected_next,
+            probs_seen, probs_record
+        );
+    }
 }
