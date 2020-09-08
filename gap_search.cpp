@@ -700,9 +700,10 @@ void prime_gap_parallel(const struct Config config) {
     // Used for various stats
     auto  s_start_t = high_resolution_clock::now();
     auto  s_interval_t = high_resolution_clock::now();
-    long  s_total_unknowns = SIEVE_INTERVAL * M_inc;
-    long  s_small_primes_factors = 0;
-    long  s_large_primes_factors = 0;
+    long  s_total_unknowns = SIEVE_INTERVAL * valid_ms;
+    long  s_prime_factors = 0;
+    long  s_large_prime_factors = 0;
+    long  s_large_prime_factors_interval = 0;
     uint64_t  s_next_print = 0;
     uint64_t  next_mult = SMALL_THRESHOLD <= 10000 ? 10000 : 100000;
     double s_prp_needed = 1 / prob_prime;
@@ -711,8 +712,9 @@ void prime_gap_parallel(const struct Config config) {
     // But wasn't worth the extra code IMHO.
 
     size_t pi = 0;
+    size_t pi_interval = 0;
     get_sieve_primes_segmented_lambda(SIEVE_RANGE, [&](const uint64_t prime) {
-        pi += 1;
+        pi_interval += 1;
         // Big improvement over surround_prime is reusing this for each m.
         const uint64_t base_r = mpz_fdiv_ui(K, prime);
 
@@ -754,7 +756,7 @@ void prime_gap_parallel(const struct Config config) {
 
                 for (size_t d = first; d < SIEVE_INTERVAL; d += shift) {
                     composite[mii][i_reindex[d]] = true;
-                    s_small_primes_factors += 1;
+                    s_prime_factors += 1;
                 }
             }
         } else {
@@ -784,7 +786,7 @@ void prime_gap_parallel(const struct Config config) {
                 }
 
                 composite[mii][i_reindex[first]] = true;
-                s_large_primes_factors += 1;
+                s_large_prime_factors_interval += 1;
             });
         }
 
@@ -814,16 +816,23 @@ void prime_gap_parallel(const struct Config config) {
                 t_total_unknowns += std::count(composite[i].begin(), composite[i].end(), false);
             }
             uint64_t saved_prp = s_total_unknowns - t_total_unknowns;
-            double skipped_prp = M_inc * (s_prp_needed - 1/prob_prime_after_sieve);
+            double skipped_prp = valid_ms * (s_prp_needed - 1/prob_prime_after_sieve);
+
+            pi += pi_interval;
+            s_prime_factors += s_large_prime_factors_interval;
+            s_large_prime_factors += s_large_prime_factors_interval;
 
             setlocale(LC_NUMERIC, "");
-            printf("\n%'-10ld %5.2f/%-6.1f seconds |", prime, int_secs, secs);
-            printf(" %'ld primes finished (m/prime: %.1f) \n",
-                pi, 1.0 * s_large_primes_factors / pi);
-            printf("\tunknowns %'-9ld\t(avg/m: %.2f) (%.3f%%)\n",
+            printf("\n%'-10ld (prime_i: %'ld/%'ld) (seconds: %5.2f/%-6.1f)\n",
+                prime, pi_interval, pi, int_secs, secs);
+            printf("\tfactors found interval: %'ld, total: %'ld, avg m/prime interval: %.1f\n",
+                s_large_prime_factors_interval,
+                s_prime_factors,
+                1.0 * s_large_prime_factors / pi_interval);
+            printf("\tunknowns %'-9ld\t(avg/m: %.2f) (delta: %.3f%%)\n",
                 t_total_unknowns,
                 1.0 * t_total_unknowns / valid_ms,
-                100.0 * t_total_unknowns / (SIEVE_INTERVAL * M_inc));
+                100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms));
             printf("\t~ 2x %.2f PRP/m\t(%ld new composites ~= %4.1f skipped PRP => %.1f PRP/seconds)\n",
                 1 / prob_prime_after_sieve,
                 saved_prp,
@@ -834,6 +843,9 @@ void prime_gap_parallel(const struct Config config) {
             s_total_unknowns = t_total_unknowns;
             s_interval_t = s_stop_t;
             s_prp_needed = 1 / prob_prime_after_sieve;
+
+            s_large_prime_factors_interval = 0;
+            pi_interval = 0;
         }
     });
 

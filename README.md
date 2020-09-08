@@ -30,6 +30,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [ ] Option to output m with gcd(m, d) != 1
   * [x] (Method2) keeping all composites in memory (and immediately marking mi off)
     * No large startup cost.
+    * [ ] Make method2 the default
     * [ ] Write up of Method1 vs Method2 (from memory M2 is faster but uses more memory)
     * [ ] Consider calculating skipped PRP based on index (earlier is 1.0, end of sieve is 0.005)
     * [ ] Ctrl-c then just writes out the results at that point.
