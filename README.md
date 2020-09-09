@@ -102,14 +102,14 @@ On a i7-2600k single threaded.
 ## Commands
 
 ```bash
-$ g++ -Wall -Werror -O3 gap_search.cpp gap_common.cpp modulo_search.cpp -lgmp -o gap_search
+$ make gap_search
 $ time ./gap_search -p 503 -d 30030 --mstart 1000000 --minc 25000 --save-unknowns --sieve-only --sieve-range 10000
 $ sqlite3 prime-gaps.db < schema.sql
 $ time python3 gap_test.py --save-logs --min-merit=11 --plot --unknown-filename 1000000_503_30030_25000_s3181_l10000M.txt
 ```
 
 ```bash
-$ g++ -Wall -Werror -O3 gap_search.cpp gap_common.cpp modulo_search.cpp -lgmp -o gap_search
+$ make_gap_search
 # ./gap_search <params>
 $ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 5000 --save-unknowns --sieve-only --sieve-range 1000
 AUTO SET: sieve length (coprime: 1521, prob_gap longer 0.80%): 6151
@@ -138,10 +138,10 @@ sys	0m0.068s
 ```
 
 ```bash
-$ alias compute_stats="g++ -Wall -Werror -O3 gap_stats.cpp gap_common.cpp -lgmp -lsqlite3 -o gap_stats && time ./gap_stats"
-$ compute_stats --save-unknowns --sieve-only --unknown-filename <M_P_D_MINC_sX_lSL.txt>
+$ make gap_stats
+$ time ./gap_stats --save-unknowns --sieve-only --unknown-filename <M_P_D_MINC_sX_lSL.txt>
 
-$ g++ -Wall -Werror -O3 -I. misc/benchmark.cpp modulo_search.cpp -lgmp -o benchmark
+$ make benchmark
 $ ./benchmark 100000
 $ ./benchmark 100000 modulo_search
 $ ./benchmark 100000 "# mod"

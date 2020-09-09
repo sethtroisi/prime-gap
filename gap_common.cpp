@@ -22,8 +22,6 @@
 #include <map>
 #include <vector>
 
-#include <gmp.h>
-
 #include "gap_common.h"
 
 using std::cout;
@@ -432,10 +430,12 @@ Config argparse(int argc, char* argv[]) {
     }
 
     {
-        mpz_t ptest;
-        mpz_init_set_ui(ptest, config.p);
-        bool valid = 0 != mpz_probab_prime_p(ptest, 25);
-        mpz_clear(ptest);
+        // check if p is valid
+        bool valid = config.p < 1'000'0000;
+        for (int t = 2; valid && t*t <= config.p; t++) {
+            valid = (config.p % t) > 0;
+        }
+
         if (!valid) {
             config.valid = 0;
             cout << "p# not prime (p=" << config.p << ")" << endl;
