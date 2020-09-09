@@ -42,28 +42,9 @@ const char gaps_db[]    = "prime-gaps.db";
 const uint32_t MAX_GAP = 1'000'000;
 
 // Generated from https://primegap-list-project.github.io/lists/missing-gaps/
-const vector<uint32_t> MISSING_GAPS = {
-    113326, 115694, 116254, 117238, 117242,
-    119222, 119584, 120154, 121138, 121174,
-    121366, 121832, 122290, 122666, 122686,
-    123230, 123238, 123242, 123598, 123662,
-    123782, 124106, 124258, 124346, 124534,
-    124792, 125024, 125318, 125974, 126134,
-    126206, 126236, 126298, 126376, 126394,
-    126538, 126554, 126814, 127346, 127544,
-    127622, 127732, 127906, 128114, 128362,
-    128372, 128516, 128686, 128714, 128762,
-    128872, 129298, 129406, 129538, 129698,
-    129754, 129784, 130042, 130162, 130252,
-    130280, 130282, 130310, 130438, 130798,
-    130846, 130882, 130898, 131074, 131288,
-    131378, 131402, 131446, 131530, 131536,
-    131564, 131578, 131648, 131762, 131788,
-    131876, 131938, 131954, 132130, 132194,
-    132206, 132218, 132232, 132242, 132302,
-    132314, 132446, 132506, 132548, 132598,
-    132644, 132838, 132842, 132848, 132928
-};
+// Range of missing gap to search, values are loaded from records_db.
+const uint32_t MISSING_GAPS_LOW  = 113326;
+const uint32_t MISSING_GAPS_HIGH = 132928;
 
 void prime_gap_stats(const struct Config config);
 bool is_range_already_processed(const struct Config& config);
@@ -92,8 +73,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // TODO move behind a flag
-    assert( is_sorted(MISSING_GAPS.begin(), MISSING_GAPS.end()) );
+    // TODO option for saving missing gaps
 
     prime_gap_stats(config);
 }
@@ -429,10 +409,7 @@ void run_gap_file(
                 uint32_t gap_high = unknown_high[j];
                 uint32_t gap = gap_low + gap_high;
 
-                // TODO use something based on merit
-                if (gap >= MISSING_GAPS.front() &&
-                        gap <= MISSING_GAPS.back() &&
-                        records[gap] == 0.0) {
+                if (MISSING_GAPS_LOW <= gap && gap <= MISSING_GAPS_HIGH && records[gap] == 0.0) {
                     float prob_joint = prob_prime_nth[i+1] * prob_prime_nth[j+1];
                     prob_is_missing_gap += prob_joint;
                     missing_pairs.emplace_back(std::make_pair(gap_low, gap_high));
