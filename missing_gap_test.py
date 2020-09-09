@@ -138,11 +138,10 @@ def prime_gap_test(args):
             assert p == str(P) and d == str(D), (p, d, P, D)
 
             Mi = int(m)
-
             N = Mi * K
 
             last_low = None
-            last_low_status = None
+            last_low_status = False
             for match in re.findall("(\d+,\d+)", to_test):
                 low, high = match.split(",")
 
@@ -150,7 +149,7 @@ def prime_gap_test(args):
                     # if greater than a known prime, quit.
                     break
 
-                if low != last_low or not last_low_status:
+                if low != last_low:
                     tested += 1
 
                     last_low = low
