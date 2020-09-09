@@ -54,3 +54,6 @@ for test in checks.strip().split("\n"):
 
     print ("\t next_prime {}, {}   {:.1f} seconds".format(
         z == high, z - low, t2 - t1))
+    print (f"\t{test.strip()}\t => gap = {z - low}")
+    if z == high:
+        print("\n"*3)

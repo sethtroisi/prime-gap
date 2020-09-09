@@ -15,8 +15,7 @@
 # limitations under the License.
 
 import argparse
-import itertools
-import math
+import multiprocessing
 import os.path
 import re
 import subprocess
@@ -87,6 +86,67 @@ def is_prime(num, strnum):
     return gmpy2.is_prime(num)
 
 
+def test_line(data):
+    _, start, to_test = data
+
+    m, p, d = re.match(r"(\d+)\*(\d+)#\/(\d+)", start.replace(' ', '')).groups()
+    m, p, d = map(int, (m, p, d))
+    #assert p == str(P) and d == str(D), (p, d, P, D)
+
+    K = gmpy2.primorial(p)
+    K, r = divmod(K, d)
+    assert r == 0
+    N = m * K
+
+    cache = {}
+
+    # Might make more sense to use multiprocessing.Queue and
+    tested = 0
+    primes = 0
+
+    success = []
+    max_high = None
+    max_low  = None
+    last_low = None
+    last_low_status = False
+    for match in re.findall("(\d+,\d+)", to_test):
+        low, high = map(int, match.split(","))
+
+        if max_high and high > max_high:
+            continue
+
+        if max_low and low > max_low:
+            continue
+
+        if low not in cache:
+            tested += 1
+            cache[low] = is_prime(N - low, start + "-" + str(low))
+            if cache[low]:
+                max_low = low
+                primes += 1
+
+        if not cache[low]:
+            continue
+
+        if high not in cache:
+            tested += 1
+            cache[high] = is_prime(N + high, start + "+" + str(high))
+            if cache[high]:
+                max_high = high
+                primes += 1
+
+        if cache[high]:
+            # Should never be more than one success:
+            # if low,high happen in reasonable order after first pair of
+            # primes all larger intervals are invalid.
+            success.append((start, low, high))
+            print("\n"*3)
+            print("\tBOTH SIDES PRIME:", start, low, high)
+            print("\n"*3)
+
+    return data, tested, primes, success
+
+
 def prime_gap_test(args):
     P = args.p
     D = args.d
@@ -111,87 +171,70 @@ def prime_gap_test(args):
     s_start_t = time.time()
     s_last_print_t = time.time()
 
+    def print_timing(a, count):
+        secs = time.time() - s_start_t
+
+        def roundSig(n, sig):
+            return '{:g}'.format(float('{:.{p}g}'.format(n, p=sig)))
+
+        # Want 3 sig figs which is hard in python
+        if count and count < secs:
+            timing = "{} secs/test".format(roundSig(secs / count, 3))
+        else:
+            timing = "{}/sec".format(roundSig(count / secs, 3))
+
+        print("\t{:12s} {:10d} tests ({})  {:.0f} seconds elapsed".format(
+            a, count, timing, secs))
+
     with open(args.unknown_filename) as unknown_file:
         # hope this doesn't run out of memory
         lines = (line.split(" : ") for line in unknown_file.readlines())
-        lines = sorted(((float(p), s, t) for p,s,t in lines), reverse=True)
+        # TODO verify lines are sorted in gap_stats.cpp
+        # lines = sorted(((float(p), s, t) for p,s,t in lines), reverse=True)
+        lines = [(float(p), s, t) for p,s,t in lines]
         print("Read {} lines with missing_gap_prob: {:.3g} to {:.3g}".format(
             len(lines), lines[0][0], lines[-1][0]))
         print ()
 
+        success = []
         tested_m = 0
         summed_prob = 0
         tested = 0
         primes = 0
-        for li, line in enumerate(lines):
-            missing_gap_prob, start, to_test = line
-            start = start.replace(' ', '')
 
-            tested_m += 1
-            summed_prob += missing_gap_prob
+        # TODO configureable argument
+        with multiprocessing.Pool(10) as pool:
+            for li, (line, line_t, line_p, line_s) in enumerate(pool.imap(test_line, lines)):
+                missing_gap_prob, start, to_test = line
 
-            print ("start: {} ({:.2g} from {:<4} pairs)\t tested_m: {}, tested: {} => primes: {}, sum(prob): {:.4f}".format(
-                start, missing_gap_prob, to_test.count('('),
-                tested_m, tested, primes, summed_prob))
+                summed_prob += missing_gap_prob
+                tested_m += 1
 
-            m, p, d = re.match(r"(\d+)\*(\d+)#\/(\d+)", start).groups()
-            assert p == str(P) and d == str(D), (p, d, P, D)
+                tested += line_t
+                primes += line_p
+                success.extend(line_s)
 
-            Mi = int(m)
-            N = Mi * K
+                print("finished: {} ({:.2g} from {:<4} pairs)\t|".format(
+                    start, missing_gap_prob, to_test.count('(')),
+                    end = " ")
+                print("m: {}, p/t: {}/{}, sum(prob): {:.4f}".format(
+                    tested_m, primes, tested, summed_prob))
 
-            cached = {}
+                s_stop_t = time.time()
+                print_secs = s_stop_t - s_last_print_t
+                if li in (1,10,30,100,300,1000) or li % 5000 == 0 or print_secs > 240:
+                    secs = s_stop_t - s_start_t
+                    s_last_print_t = s_stop_t
 
-            max_high = None
-            max_low  = None
-            last_low = None
-            last_low_status = False
-            for match in re.findall("(\d+,\d+)", to_test):
-                low, high = match.split(",")
+                    print_timing(tested_m, tested)
 
-                if max_high and high > max_high:
-                    continue
+        # TODO print more stats at the end
+        print_timing("END: " + str(tested_m), tested)
 
-                if max_low and low > max_low:
-                    continue
-
-                if low not in cache:
-                    cache[low] = is_prime(N - int(low), start + "-" + low)
-                    if cache[low]:
-                        primes += 1
-                if not cache[low]:
-                    continue
-
-                if high not in cache:
-                    cache[high] = is_prime(N + int(high), start + "+" + high)
-                    if cache[high]:
-                        primes += 1
-
-                if cache[high]:
-                    print("\n"*3)
-                    print("\tBOTH SIDES PRIME:", start, low, high)
-                    print("\n"*3)
-
-
-            s_stop_t = time.time()
-            print_secs = s_stop_t - s_last_print_t
-            if li in (1,10,30,100,300,1000) or li % 5000 == 0 or print_secs > 240:
-                secs = s_stop_t - s_start_t
-                s_last_print_t = s_stop_t
-
-                def roundSig(n, sig):
-                    return '{:g}'.format(float('{:.{p}g}'.format(n, p=sig)))
-
-                # Want 3 sig figs which is hard in python
-                if tested and tested < secs:
-                    timing = "{} secs/test".format(roundSig(secs / tested, 3))
-                else:
-                    timing = "{}/sec".format(roundSig(tested / secs, 3))
-
-                # Stats!
-                print("\t{} {}    tests     {:<10d} ({})  {:.0f} seconds elapsed".format(
-                    li, tested_m, tested, timing, secs))
-
+        print("\n"*2)
+        for s in success:
+            print("\tBOTH SIDES PRIME:", *s)
+        print("\n"*2)
 
 if __name__ == "__main__":
     parser = get_arg_parser()
