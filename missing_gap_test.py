@@ -140,29 +140,37 @@ def prime_gap_test(args):
             Mi = int(m)
             N = Mi * K
 
+            cached = {}
+
+            max_high = None
+            max_low  = None
             last_low = None
             last_low_status = False
             for match in re.findall("(\d+,\d+)", to_test):
                 low, high = match.split(",")
 
-                if last_low_status and low > last_low:
-                    # if greater than a known prime, quit.
-                    break
+                if max_high and high > max_high:
+                    continue
 
-                if low != last_low:
-                    tested += 1
+                if max_low and low > max_low:
+                    continue
 
-                    last_low = low
-                    last_low_status = is_prime(N - int(low), start + "-" + low)
-                    if last_low_status:
+                if low not in cache:
+                    cache[low] = is_prime(N - int(low), start + "-" + low)
+                    if cache[low]:
+                        primes += 1
+                if not cache[low]:
+                    continue
+
+                if high not in cache:
+                    cache[high] = is_prime(N + int(high), start + "+" + high)
+                    if cache[high]:
                         primes += 1
 
-                if last_low_status:
-                    if is_prime(N + int(high), start + "+" + high):
-                        primes += 1
-                        print("\n"*3)
-                        print("\tBOTH SIDES PRIME:", start, low, high)
-                        print("\n"*3)
+                if cache[high]:
+                    print("\n"*3)
+                    print("\tBOTH SIDES PRIME:", start, low, high)
+                    print("\n"*3)
 
 
             s_stop_t = time.time()
