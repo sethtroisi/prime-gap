@@ -86,6 +86,9 @@ def is_prime(num, strnum):
     return gmpy2.is_prime(num)
 
 
+# Makes tested/second much more stable
+g_tested = multiprocessing.Value('i', 0)
+
 def test_line(data):
     _, start, to_test = data
 
@@ -119,6 +122,7 @@ def test_line(data):
             continue
 
         if low not in cache:
+            with g_tested.get_lock(): g_tested.value += 1
             tested += 1
             cache[low] = is_prime(N - low, start + "-" + str(low))
             if cache[low]:
@@ -129,6 +133,7 @@ def test_line(data):
             continue
 
         if high not in cache:
+            with g_tested.get_lock(): g_tested.value += 1
             tested += 1
             cache[high] = is_prime(N + high, start + "+" + str(high))
             if cache[high]:
@@ -183,7 +188,7 @@ def prime_gap_test(args):
         else:
             timing = "{}/sec".format(roundSig(count / secs, 3))
 
-        print("\t{:12s} {:10d} tests ({})  {:.0f} seconds elapsed".format(
+        print("\t{:12} {:10d} tests ({})  {:.0f} seconds elapsed".format(
             a, count, timing, secs))
 
     with open(args.unknown_filename) as unknown_file:
@@ -204,7 +209,7 @@ def prime_gap_test(args):
 
         # TODO configureable argument
         with multiprocessing.Pool(10) as pool:
-            for li, (line, line_t, line_p, line_s) in enumerate(pool.imap(test_line, lines)):
+            for li, (line, line_t, line_p, line_s) in enumerate(pool.imap_unordered(test_line, lines)):
                 missing_gap_prob, start, to_test = line
 
                 summed_prob += missing_gap_prob
@@ -217,16 +222,19 @@ def prime_gap_test(args):
                 print("finished: {} ({:.2g} from {:<4} pairs)\t|".format(
                     start, missing_gap_prob, to_test.count('(')),
                     end = " ")
-                print("m: {}, p/t: {}/{}, sum(prob): {:.4f}".format(
-                    tested_m, primes, tested, summed_prob))
+                print("m: {}/{}, p/t: {}/{}, sum(prob): {:.4f}".format(
+                    tested_m, len(lines),
+                    primes, tested,
+                    summed_prob))
 
                 s_stop_t = time.time()
                 print_secs = s_stop_t - s_last_print_t
-                if li in (1,10,30,100,300,1000) or li % 5000 == 0 or print_secs > 240:
+                if li in (1,2,5,10,20,50) or li % 100 == 0 or print_secs > 240:
                     secs = s_stop_t - s_start_t
                     s_last_print_t = s_stop_t
 
-                    print_timing(tested_m, tested)
+                    with g_tested.get_lock():
+                        print_timing(tested_m, g_tested.value)
 
         # TODO print more stats at the end
         print_timing("END: " + str(tested_m), tested)

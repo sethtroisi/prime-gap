@@ -8,9 +8,10 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
 * [ ] Rename prime-gap.db
 * [ ] missing\_gap\_verify.py & missing\_gap\_test.py
-  * [ ] Multiprocessing
   * [ ] --ignore-gaps 130898
   * [ ] tee logging by default (for premptible machines)
+  * [ ] record when no primes found (candidate for high merit?)
+  * [x] Multiprocessing
 * benchmarking
   * [ ] Add instructions to verify `modulo_search` is >80% of the time.
   * [x] Add benchmarks for int32/int64 `modulo_search`
