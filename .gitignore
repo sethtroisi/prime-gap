@@ -3,6 +3,8 @@ gap_search
 gap_stats
 gap_test
 benchmark
+*.o
+
 pfgw64
 pfgw.ini
 pfgw.log
@@ -14,6 +16,7 @@ prime-gaps.db
 data/
 *M.txt
 *M.m2.txt
+*M.*missing.txt
 *M.txt.log
 *M.txt.png
 *M.txt.stats
