@@ -4,11 +4,17 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
 
 ### TODO
 
+* [ ] python util.py (config parsing, isPrime, teelogger)
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
 * [ ] Rename prime-gap.db
+* [ ] missing\_gap\_verify.py & missing\_gap\_test.py
+  * [ ] Multiprocessing
+  * [ ] --ignore-gaps 130898
+  * [ ] tee logging by default (for premptible machines)
 * benchmarking
-  * [ ] Add benchmarks for int32/int64 `modulo_search`
   * [ ] Add instructions to verify `modulo_search` is >80% of the time.
+  * [x] Add benchmarks for int32/int64 `modulo_search`
+  * [x] Add benchmarks for `K % p`
 * gap\_test.py
   * [ ] Starting at m > mstart
   * [ ] Plot average tests count
@@ -19,8 +25,9 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [x] Generate expected length
 * gap\_stats.cpp
   * [ ] drop directory from `unknown-filename`
-  * [ ] More missing gaps
-  * [ ] Move missing gaps behind a flag
+  * [ ] Move missing gaps behind a compile flag
+    * [ ] Create two seperate Makefile targets
+  * [x] Missing gaps prob % filter
   * [x] Don't rewrite `partial\_results`
   * [x] Calc record chance
   * [x] Save expected/prob record to sql
