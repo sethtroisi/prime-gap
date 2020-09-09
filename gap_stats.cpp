@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <numeric>
 #include <queue>
 #include <tuple>
@@ -45,12 +46,14 @@ const char gaps_db[]    = "prime-gaps.db";
 
 // Limits the size of record list
 const uint32_t MAX_GAP = 1'000'000;
+const float    GAP_INF = std::numeric_limits<float>::max();   // log(starting_prime)
 
 // Generated from https://primegap-list-project.github.io/lists/missing-gaps/
 // Range of missing gap to search, values are loaded from records_db.
 const uint32_t MISSING_GAPS_LOW  = 113326;
 const uint32_t MISSING_GAPS_HIGH = 132928;
 
+// TODO make this an option (enabled or percent).
 const float MISSING_GAP_SAVE_PERCENT = 0.05;
 
 void prime_gap_stats(const struct Config config);
@@ -80,7 +83,6 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // TODO option for saving missing gaps
 
     prime_gap_stats(config);
 }
@@ -100,8 +102,7 @@ sqlite3* get_db(const char* path) {
 
 
 vector<float> get_record_gaps() {
-    // TODO technically this should be INF.
-    vector<float> records(MAX_GAP, 0.0);
+    vector<float> records(MAX_GAP, GAP_INF);
 
     // TODO accept db file as param.
     sqlite3 *db = get_db(records_db);
@@ -390,7 +391,7 @@ void run_gap_file(
         }
 
         // Note slightly different from smallest_log
-        float log_merit = K_log + log(m);
+        float log_start_prime = K_log + log(m);
 
         double prob_record = 0;
         double prob_seen = 0;
@@ -406,7 +407,7 @@ void run_gap_file(
 
         /**
          * TODO could possible look only at record_gaps
-         * replace 'records[gap] > log_merit' with 'gap == records_gap[gi]' or something
+         * replace 'records[gap] > log_start_prime' with 'gap == records_gap[gi]' or something
          */
         size_t min_j = unknown_high.size() - 1;
         for (size_t i = 0; i < unknown_low.size(); i++) {
@@ -419,21 +420,23 @@ void run_gap_file(
                 uint32_t gap_high = unknown_high[j];
                 uint32_t gap = gap_low + gap_high;
 
+                // TODO: Determine overhead if this is turned off (make make this a compile time DEFINE?)
                 if (max_missing_gaps > 0) {
-                    if (MISSING_GAPS_LOW <= gap && gap <= MISSING_GAPS_HIGH && records[gap] == 0.0) {
+                    if (MISSING_GAPS_LOW <= gap && gap <= MISSING_GAPS_HIGH && records[gap] == GAP_INF) {
                         float prob_joint = prob_prime_nth[i+1] * prob_prime_nth[j+1];
                         prob_is_missing_gap += prob_joint;
                         missing_pairs.emplace_back(std::make_pair(gap_low, gap_high));
                     }
                 }
 
-                if (records[gap] > log_merit) {
+                if (records[gap] > log_start_prime) {
                     float prob_joint = prob_prime_nth[i+1] * prob_prime_nth[j+1];
                     prob_record += prob_joint;
                 }
             }
         }
 
+        // TODO verify math as prob_record went up 10x after missing_record prob fix.
         double e_prev = 0, e_next = 0;
         double prob_record_estimate = 0;
         for (size_t i = 0; i < std::max(unknown_low.size(), unknown_high.size()); i++) {
@@ -534,6 +537,11 @@ void prime_gap_stats(const struct Config config) {
     float smallest_log = K_log + log(M_start);
     {
         for (size_t g = 2; g < MAX_GAP; g += 2) {
+            // Ignore the infintesimal odds of finding >merit 30 gap.
+            if (g / smallest_log > 30) {
+                break;
+            }
+
             if (records[g] > smallest_log) {
                 min_record_gaps.push_back(g);
                 if (min_record_gaps.size() <= 5) {
@@ -629,6 +637,7 @@ void prime_gap_stats(const struct Config config) {
             }
             prob_record_extended_gap[gap_one] = prob_record;
         }
+        printf("Prob Records considered\n");
     }
 
     // Used for various stats
