@@ -29,6 +29,8 @@ from collections import defaultdict
 
 import gmpy2
 
+import gap_utils
+
 
 class TeeLogger:
     def __init__(self, fn, sysout):
@@ -82,48 +84,6 @@ def get_arg_parser():
         help="Save logs and plots about distributions")
 
     return parser
-
-
-def verify_args(args):
-    if args.unknown_filename:
-        fn = args.unknown_filename
-        if not os.path.exists(fn):
-            print ("\"{}\" doesn't exist".format(fn))
-            sys.exit(1)
-        match = re.match(
-            "^(\d+)_(\d+)_(\d+)_(\d+)_s(\d+)_l(\d+)M.txt",
-            os.path.basename(fn))
-        if not match:
-            print ("\"{}\" doesn't match unknown file format".format(fn))
-            sys.exit(1)
-
-        ms, p, d, mi, sl, sr = map(int, match.groups())
-        args.mstart = ms
-        args.minc = mi
-        args.p = p
-        args.d = d
-        args.sieve_length = sl
-        args.sieve_range = sr
-
-    if not os.path.exists(args.prime_db):
-        print ("prime-db \"{}\" doesn't exist".format(args.prime_db))
-        sys.exit(1)
-
-    args.sieve_range *= 10 ** 6
-
-    for arg in ('mstart', 'minc', 'p', 'd', 'sieve_length', 'sieve_range'):
-        if arg not in args or args.__dict__[arg] in (None, 0):
-            print ("Missing required argument", arg)
-            sys.exit(1)
-
-    fn = "{}_{}_{}_{}_s{}_l{}M.txt".format(
-        args.mstart, args.p, args.d, args.minc,
-        args.sieve_length, args.sieve_range // 10 ** 6)
-
-    if args.unknown_filename:
-        assert fn == os.path.basename(args.unknown_filename), (fn, args.unknown_filename)
-    else:
-        args.unknown_filename = fn
 
 
 def load_existing(conn, args):
@@ -238,28 +198,13 @@ def calculate_expected_gaps(composites, SL, prob_prime_after_sieve, log_m,
     return expected_side + [p_merit]
 
 
-def openPFGW_is_prime(strn):
-    # Overhead of subprocess calls seems to be ~0.03
-    s = subprocess.getstatusoutput("./pfgw64 -e1 -q" + strn)
-    assert s[1].startswith('PFGW'), s
-    return s[0] == 0
-
-
-def is_prime(num, strnum, dist):
-    # TODO print log of which library is being used.
-    if gmpy2.num_digits(num, 2) > 5000:
-        return openPFGW_is_prime(strnum + str(dist))
-
-    return gmpy2.is_prime(num)
-
-
 def determine_next_prime_i(m, strn, K, composites, SL):
     center = m * K
     tests = 0
 
     for i in composites:
         tests += 1;
-        if is_prime(center + i, strn, i):
+        if gap_utils.is_prime(center + i, strn, i):
             next_p_i = i
             break
     else:
@@ -276,7 +221,7 @@ def determine_prev_prime_i(m, strn, K, composites, SL, primes, remainder):
     for i in composites:
         assert i < 0
         tests += 1;
-        if is_prime(center + i, strn, i):
+        if gap_utils.is_prime(center + i, strn, i):
             prev_p_i = -i
             break
     else:
@@ -289,7 +234,7 @@ def determine_prev_prime_i(m, strn, K, composites, SL, primes, remainder):
                     composite = True
                     break
             if not composite:
-                if is_prime(center - i, strn, -i):
+                if gap_utils.is_prime(center - i, strn, -i):
                     prev_p_i = i
                     break
 
@@ -614,7 +559,7 @@ def prime_gap_test(args):
 if __name__ == "__main__":
     parser = get_arg_parser()
     args = parser.parse_args()
-    verify_args(args)
+    verify_args(args, ".txt")
 
     context = contextlib.suppress()
     if args.save_logs:
