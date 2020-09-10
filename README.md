@@ -108,6 +108,29 @@ On a i7-2600k single threaded.
 | 5003  | 98624             | 173202211 | 3665           | .895 |
 
 
+## Prerequisites
+
+```bash
+$ sudo apt install libgmp-dev libmpfr-dev libmpc-dev
+$ pip install --user gmpy2=2.1.0b5
+$ sudo apt install sqlite3 libsqlite3-dev
+
+# Should probably build and install from head for faster next_prime
+```
+
+* OpenPFGW [PrimeWiki](https://www.rieselprime.de/ziki/PFGW) [SourceForge](https://sourceforge.net/projects/openpfgw/)
+  * Unpack somewhere and link binary as `pfgw64`
+  * may also need to `chmod a+x pfgw64`
+
+* [prime-gap-list](https://github.com/primegap-list-project/prime-gap-list)
+        ```bash
+        $ git clone https://github.com/primegap-list-project/prime-gap-list.git
+        $ cd prime-gap-list
+        $ sqlite3 gaps.db < allgaps.sql
+        $ cd <prime-gaps>
+        $ ln -s ../prime-gap-list/gaps.db .
+        ```
+
 ## Commands
 
 ```bash
