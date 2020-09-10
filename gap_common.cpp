@@ -247,7 +247,7 @@ void show_usage(char* name) {
     cout << "  --sieve-length" << endl;
     cout << "    how large the positive/negative sieve arrays should be" << endl;
     cout << "  --sieve-range" << endl;
-    cout << "    use primes <= sieve-range million for checking composite" << endl;
+    cout << "    use primes <= sieve-range (in millions) for checking composite" << endl;
     cout  << endl;
     cout << "  --sieve-only" << endl;
     cout << "    only sieve ranges, don't run PRP. useful for benchmarking" << endl;
@@ -427,7 +427,7 @@ Config argparse(int argc, char* argv[]) {
     if (config.sieve_range > 2'000'000'000 &&
             (config.sieve_range / config.minc > 100'000)) {
         // Helpful warning.
-        printf("sieve_range(%ldB) is probably too large",
+        printf("sieve_range(%ldB) is probably too large\n",
             config.sieve_range / 1'000'000'000);
 
     }

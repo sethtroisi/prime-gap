@@ -621,6 +621,25 @@ void prime_gap_parallel(const struct Config config) {
 
     const uint64_t SIEVE_RANGE = config.sieve_range;
 
+    // TODO: Would be nice to have a prev prime.
+    uint64_t LAST_PRIME = SIEVE_RANGE;
+    {
+        bool prime;
+        do {
+            prime = true;
+            if (LAST_PRIME % 2 == 0)
+                LAST_PRIME--;
+
+            for (uint64_t p = 3; p*p <= LAST_PRIME; p += 2) {
+                if (LAST_PRIME % p == 0) {
+                    prime = false;
+                    LAST_PRIME--;
+                    break;
+                }
+            }
+        } while (prime == false);
+    }
+
     // TODO increase this when valid_ms is very small
     const uint64_t SMALL_THRESHOLD = 50 * SIEVE_LENGTH;
 
@@ -698,6 +717,7 @@ void prime_gap_parallel(const struct Config config) {
     }
     setlocale(LC_NUMERIC, "");
     printf("sieve_range:  %'ld   small_threshold:  %'ld\n", config.sieve_range, SMALL_THRESHOLD);
+    //printf("last prime :  %'ld\n", LAST_PRIME);
     setlocale(LC_NUMERIC, "C");
 
     // Used for various stats
@@ -801,10 +821,7 @@ void prime_gap_parallel(const struct Config config) {
                     s_next_print = 0;
                 }
                 s_next_print += next_mult;
-                if (s_next_print >= SIEVE_RANGE) {
-                    // TODO: Would be nice to have a prev prime.
-                    s_next_print = SIEVE_RANGE - 50;
-                }
+                s_next_print = std::min(s_next_print, LAST_PRIME);
             }
 
             auto   s_stop_t = high_resolution_clock::now();
