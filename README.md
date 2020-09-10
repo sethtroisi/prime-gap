@@ -11,6 +11,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [ ] --ignore-gaps 130898
   * [ ] tee logging by default (for premptible machines)
   * [ ] record when no primes found (candidate for high merit?)
+  * [ ] store records in some .gitignore'd file
   * [x] Multiprocessing
 * benchmarking
   * [ ] Add instructions to verify `modulo_search` is >80% of the time.
