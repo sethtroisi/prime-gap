@@ -409,7 +409,7 @@ Config argparse(int argc, char* argv[]) {
     }
 
     uint64_t last_m = ((long) config.mstart) + config.minc;
-    if (last_m >= 0x7FFFFFFF ) {
+    if (last_m >= 1'000'000'001 ) {
         config.valid = 0;
         cout << "mstart + minc must be < 1e9" << endl;
     }
@@ -424,7 +424,8 @@ Config argparse(int argc, char* argv[]) {
         cout << "minc > 50M will use to much memory" << endl;
     }
 
-    if (config.sieve_range / minc > 100'000) {
+    if (config.sieve_range > 2'000'000'000 &&
+            (config.sieve_range / config.minc > 100'000)) {
         // Helpful warning.
         printf("sieve_range(%ldB) is probably too large",
             config.sieve_range / 1'000'000'000);

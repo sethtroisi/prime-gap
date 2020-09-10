@@ -14,7 +14,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [x] Multiprocessing
 * benchmarking
   * [ ] Add instructions to verify `modulo_search` is >80% of the time.
-  * [ ] Add int64 `modulo_search_euclid_all`
+  * [x] Add int64 `modulo_search_euclid_all`
   * [x] Add benchmarks for int32/int64 `modulo_search`
   * [x] Add benchmarks for `K % p`
 * gap\_test.py

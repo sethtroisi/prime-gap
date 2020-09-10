@@ -210,6 +210,7 @@ uint64_t modulo_search_euclid_gcd2(
     return max_m;
 }
 
+
 uint64_t modulo_search_euclid_gcd(
         uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
         uint64_t prime, uint64_t base_r) {
@@ -246,13 +247,54 @@ uint64_t modulo_search_euclid_gcd(
 }
 
 
-void modulo_search_euclid_all(
-        uint64_t M, uint64_t max_m, uint64_t SL,
+void modulo_search_euclid_all_small(
+        uint32_t M, uint32_t max_m, uint32_t SL,
+        uint64_t prime, uint64_t base_r,
+        std::function<void (uint32_t)> lambda) {
+
+    // (M + max_m) * p fits in uint64 (see gap_common.cpp)
+
+    uint32_t S = (SL - 1) << 1;  // 2 * SL - 2
+
+    uint64_t mi = 0; // mi can be incremented by value up to prime.
+    uint64_t modulo = (base_r * M + SL - 1) % prime;
+    uint64_t init = modulo;
+
+    while (true) {
+        if ( modulo <= S ) {
+            if (mi >= max_m) return;
+
+            lambda(mi);
+            mi += 1;
+
+            if (mi >= max_m) return;
+
+            modulo += base_r;
+            if (modulo >= prime) modulo -= prime;
+            continue;
+        }
+
+        /* using gcd2 optimizations */
+        uint64_t low  = prime - modulo;
+        uint64_t high = low + S;
+
+        mi += modulo_search_euclid(prime, base_r, low, high);
+        if (mi >= max_m) return;
+
+        uint64_t mult = base_r * mi + init;
+        modulo = mult % prime;
+
+        assert( modulo <= S );
+    }
+}
+
+
+void modulo_search_euclid_all_large(
+        uint32_t M, uint32_t max_m, uint64_t SL,
         uint64_t prime, uint64_t base_r,
         std::function<void (uint64_t)> lambda) {
-    uint64_t mi = 0;
 
-    // TODO validate no overflow
+    uint64_t mi = 0;
     uint64_t modulo = (base_r * M) % prime;
     while (true) {
         if ( (modulo < SL) || (modulo + SL) > prime) {
@@ -281,11 +323,6 @@ void modulo_search_euclid_all(
         if (mi >= max_m)
             return;
 
-        /**
-         * TODO: Can create a medium version where prime < 40 bits
-         * uint32_t mi2 = modulo_search_euclid
-         * modulo += (modulo + base_r * mi2) % prime
-         */
         __int128 mult = (__int128) base_r * (M + mi);
         modulo = mult % prime;
 

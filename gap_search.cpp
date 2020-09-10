@@ -253,7 +253,7 @@ void K_stats(
 
 // Todo float => double for K_log
 double prob_prime_and_stats(
-        const struct Config& config, mpz_t &K, vector<uint32_t> &primes) {
+        const struct Config& config, mpz_t &K, const vector<uint32_t> &primes) {
 
     int K_digits;
     double K_log;
@@ -611,10 +611,10 @@ void prime_gap_search(const struct Config config) {
 
 void prime_gap_parallel(const struct Config config) {
     // Method2
-    const uint64_t M_start = config.mstart;
-    const uint64_t M_inc = config.minc;
-    const uint64_t P = config.p;
-    const uint64_t D = config.d;
+    const uint32_t M_start = config.mstart;
+    const uint32_t M_inc = config.minc;
+    const uint32_t P = config.p;
+    const uint32_t D = config.d;
 
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     const uint32_t SL = SIEVE_LENGTH;
@@ -640,7 +640,7 @@ void prime_gap_parallel(const struct Config config) {
     assert( mpz_cmp_ui(K, 1) > 0); // K <= 1 ?!?
 
     // ----- Generate primes for P
-    vector<uint32_t> P_primes = get_sieve_primes(P);
+    const vector<uint32_t> P_primes = get_sieve_primes(P);
     assert( P_primes.back() == P);
 
     // ----- Sieve stats
@@ -653,7 +653,7 @@ void prime_gap_parallel(const struct Config config) {
     vector<int32_t> m_reindex(M_inc, -1);
     size_t valid_ms = 0;
     {
-        for (uint64_t mi = 0; mi < M_inc; mi++) {
+        for (uint32_t mi = 0; mi < M_inc; mi++) {
             if (gcd(M_start + mi, D) == 1) {
                 m_reindex[mi] = valid_ms;
                 valid_mi.push_back(mi);
@@ -695,13 +695,12 @@ void prime_gap_parallel(const struct Config config) {
             // Improve this setup.
             composite[i].resize(count_coprime+1, false);
         };
-        printf("coprime m %ld/%ld, coprime i %ld/%d\n",
+        printf("coprime m %ld/%d, coprime i %ld/%d\n",
             valid_ms, M_inc, count_coprime/2, SIEVE_LENGTH);
     }
 
     // Used for various stats
     auto  s_start_t = high_resolution_clock::now();
-    printf("sieve_range:  %'ld\n", config.sieve_range);
     auto  s_interval_t = high_resolution_clock::now();
     long  s_total_unknowns = SIEVE_INTERVAL * valid_ms;
     long  s_prime_factors = 0;
@@ -764,7 +763,7 @@ void prime_gap_parallel(const struct Config config) {
             }
         } else {
             // TODO sieve_range * last_m < int64 | can use euclid_all_64
-            modulo_search_euclid_all(M_start, M_inc, SL, prime, base_r, [&](const uint64_t mi) {
+            modulo_search_euclid_all_small(M_start, M_inc, SL, prime, base_r, [&](const uint32_t mi) {
                 int32_t mii = m_reindex[mi];
                 if (mii < 0) {
                     return;
@@ -827,7 +826,7 @@ void prime_gap_parallel(const struct Config config) {
             s_prime_factors += s_large_prime_factors_interval;
 
             setlocale(LC_NUMERIC, "");
-            printf("\n%'-10ld (prime_i: %'ld/%'ld) (seconds: %5.2f/%-6.1f)\n",
+            printf("\n%'-10ld (prime_i: %'ld/%'ld) (seconds: %.2f/%-.1f)\n",
                 prime, pi_interval, pi, int_secs, secs);
             printf("\tfactors found interval: %'ld, total: %'ld, avg m/large_prime interval: %.1f\n",
                 s_small_prime_factors_interval + s_large_prime_factors_interval,
