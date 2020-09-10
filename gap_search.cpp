@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
         config.p, config.d, config.mstart, config.minc);
 
     printf("\n");
-    printf("sieve_length: 2x%'d\n", config.sieve_length);
+    printf("sieve_length: 2x %'d\n", config.sieve_length);
     printf("sieve_range:  %'ld\n", config.sieve_range);
     printf("\n");
     setlocale(LC_NUMERIC, "C");
@@ -627,6 +627,8 @@ void prime_gap_parallel(const struct Config config) {
     // SMALL_THRESHOLD deals with all primes that can mark off two items in SIEVE_LENGTH.
     assert( SMALL_THRESHOLD > 2 * SIEVE_LENGTH );
 
+    printf("sieve_range:  %'ld   small_threshold:  %'ld\n", config.sieve_range, SMALL_THRESHOLD);
+
     mpz_t test;
     mpz_init(test);
 
@@ -699,10 +701,11 @@ void prime_gap_parallel(const struct Config config) {
 
     // Used for various stats
     auto  s_start_t = high_resolution_clock::now();
+    printf("sieve_range:  %'ld\n", config.sieve_range);
     auto  s_interval_t = high_resolution_clock::now();
     long  s_total_unknowns = SIEVE_INTERVAL * valid_ms;
     long  s_prime_factors = 0;
-    long  s_large_prime_factors = 0;
+    long  s_small_prime_factors_interval = 0;
     long  s_large_prime_factors_interval = 0;
     uint64_t  s_next_print = 0;
     uint64_t  next_mult = SMALL_THRESHOLD <= 10000 ? 10000 : 100000;
@@ -756,10 +759,11 @@ void prime_gap_parallel(const struct Config config) {
 
                 for (size_t d = first; d < SIEVE_INTERVAL; d += shift) {
                     composite[mii][i_reindex[d]] = true;
-                    s_prime_factors += 1;
+                    s_small_prime_factors_interval += 1;
                 }
             }
         } else {
+            // TODO sieve_range * last_m < int64 | can use euclid_all_64
             modulo_search_euclid_all(M_start, M_inc, SL, prime, base_r, [&](const uint64_t mi) {
                 int32_t mii = m_reindex[mi];
                 if (mii < 0) {
@@ -819,16 +823,16 @@ void prime_gap_parallel(const struct Config config) {
             double skipped_prp = valid_ms * (s_prp_needed - 1/prob_prime_after_sieve);
 
             pi += pi_interval;
+            s_prime_factors += s_small_prime_factors_interval;
             s_prime_factors += s_large_prime_factors_interval;
-            s_large_prime_factors += s_large_prime_factors_interval;
 
             setlocale(LC_NUMERIC, "");
             printf("\n%'-10ld (prime_i: %'ld/%'ld) (seconds: %5.2f/%-6.1f)\n",
                 prime, pi_interval, pi, int_secs, secs);
-            printf("\tfactors found interval: %'ld, total: %'ld, avg m/prime interval: %.1f\n",
-                s_large_prime_factors_interval,
+            printf("\tfactors found interval: %'ld, total: %'ld, avg m/large_prime interval: %.1f\n",
+                s_small_prime_factors_interval + s_large_prime_factors_interval,
                 s_prime_factors,
-                1.0 * s_large_prime_factors / pi_interval);
+                1.0 * s_large_prime_factors_interval / pi_interval);
             printf("\tunknowns %'-9ld\t(avg/m: %.2f) (delta: %.3f%%)\n",
                 t_total_unknowns,
                 1.0 * t_total_unknowns / valid_ms,

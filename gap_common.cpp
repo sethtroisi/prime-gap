@@ -424,9 +424,23 @@ Config argparse(int argc, char* argv[]) {
         cout << "minc > 50M will use to much memory" << endl;
     }
 
-    if (config.sieve_range > 100'000'000'000) {
+    if (config.sieve_range / minc > 100'000) {
+        // Helpful warning.
+        printf("sieve_range(%ldB) is probably too large",
+            config.sieve_range / 1'000'000'000);
+
+    }
+
+    if (config.sieve_range > 500'000'000'000) {
+        // This is kinda arbitrary.
         config.valid = 0;
-        cout << "sieve_range > 100B not supported" << endl;
+        cout << "sieve_range > 500B not supported" << endl;
+    }
+
+    uint64_t overflow = last_m * config.sieve_range;
+    if (overflow == 0 || (overflow / last_m != config.sieve_range)) {
+        config.valid = 0;
+        cout << "sieve_range * (mstart + minc) > int64" << endl;
     }
 
     {
