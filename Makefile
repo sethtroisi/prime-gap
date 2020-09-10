@@ -24,14 +24,14 @@ PROGS	 = gap_search gap_test
 	$(CC) -c -o $@ $< $(FLAGS)
 
 
-benchmark: misc/benchmark.cpp modulo_search.o
-	$(CC) -o $@ $^ $(FLAGS) -I. $(LDFLAGS)
-
 $(PROGS) : %: %.cpp $(OBJS)
 	$(CC) -o $@ $^ $(FLAGS) $(LDFLAGS)
 
 gap_stats: gap_stats.cpp gap_common.o
 	$(CC) -o $@ $^ $(FLAGS) $(LDFLAGS) -lsqlite3
+
+benchmark: misc/benchmark.cpp modulo_search.o
+	$(CC) -o $@ $^ $(FLAGS) -I. $(LDFLAGS)
 
 
 .PHONY: clean
