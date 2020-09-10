@@ -17,6 +17,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -40,6 +41,9 @@ using std::vector;
 using namespace std::chrono;
 
 typedef tuple<float,uint64_t,vector<pair<uint32_t,uint32_t>>> missing_gap_record;
+typedef priority_queue<missing_gap_record,
+                       vector<missing_gap_record>,
+                       std::greater<missing_gap_record>> min_queue_gaps;
 
 const char records_db[] = "gaps.db";
 const char gaps_db[]    = "prime-gaps.db";
@@ -92,6 +96,14 @@ int main(int argc, char* argv[]) {
 
 
 sqlite3* get_db(const char* path) {
+    {
+        std::ifstream f(path);
+        if (!f.good()) {
+            printf("database(%s) doesn't exist\n", path);
+            exit(1);
+        }
+    }
+
     sqlite3 *db;
     if (sqlite3_open(path, &db) != SQLITE_OK) {
         printf("Can't open database(%s): %s\n", path, sqlite3_errmsg(db));
@@ -330,7 +342,7 @@ void run_gap_file(
         vector<float>& expected_next,
         vector<float>& probs_seen,
         vector<float>& probs_record,
-        priority_queue<missing_gap_record>& missing_gaps_search) {
+        min_queue_gaps& missing_gaps_search) {
 
     size_t valid_m = 0;
     for (uint64_t mi = 0; mi < M_inc; mi++) {
@@ -483,11 +495,10 @@ void run_gap_file(
                     prob_is_missing_gap, p_record, prob_seen);
             }
 
-            // priority_queue has the largest (worst via -smallest) record on top
+            // priority_queue has the smallest (least likely) record on top.
             if ((missing_gaps_search.size() < max_missing_gaps) ||
-                    (-std::get<0>(missing_gaps_search.top()) < prob_is_missing_gap)) {
-                // XXX: consider pushing a unique_ptr to missing_pairs
-                missing_gaps_search.push({-prob_is_missing_gap, m, missing_pairs});
+                    (std::get<0>(missing_gaps_search.top()) < prob_is_missing_gap)) {
+                missing_gaps_search.push({prob_is_missing_gap, m, missing_pairs});
 
                 if (missing_gaps_search.size() > max_missing_gaps) {
                     missing_gaps_search.pop();
@@ -650,7 +661,7 @@ void prime_gap_stats(const struct Config config) {
     vector<float> probs_record;
 
     // <prob, m, [<low, high>, <low, high>, ...]>
-    priority_queue<missing_gap_record> missing_gaps_search;
+    min_queue_gaps missing_gaps_search;
 
     // ----- Main calculation
     printf("\n");
@@ -708,7 +719,7 @@ void prime_gap_stats(const struct Config config) {
         for (auto missing_search : missing_sorted) {
             missing_gap_lines++;
 
-            float prob  =std::get<0>(missing_search);
+            float prob = std::get<0>(missing_search);
             uint64_t m = std::get<1>(missing_search);
             printf("MISSING TESTS(%ld):%-6ld => %.2e | missing tests: %4ld\n",
                 missing_gap_lines,

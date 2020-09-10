@@ -831,7 +831,7 @@ void prime_gap_parallel(const struct Config config) {
                 prime,
                 pi_interval, pi,
                 int_secs, secs,
-                secs / valid_m);
+                secs / valid_ms);
             printf("\tfactors found interval: %'ld, total: %'ld, avg m/large_prime interval: %.1f\n",
                 s_small_prime_factors_interval + s_large_prime_factors_interval,
                 s_prime_factors,
