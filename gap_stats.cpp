@@ -353,7 +353,8 @@ void run_gap_file(
 
     // Store max(100, MISSING_GAP_SAVE_PERCENT);
     uint32_t temp = valid_m * MISSING_GAP_SAVE_PERCENT;
-    const uint32_t max_missing_gaps = temp <= 0 ? 0 : std::max(100U, temp);
+    const uint32_t MAX_MISSING_GAPS = temp <= 0 ? 0 : std::max(100U, temp);
+    printf("\tSaving %d best missing gap tests\n", MAX_MISSING_GAPS);
 
     const uint32_t min_record_gap = min_record_gaps.front();
     float max_p_record = 0;
@@ -433,7 +434,7 @@ void run_gap_file(
                 uint32_t gap = gap_low + gap_high;
 
                 // TODO: Determine overhead if this is turned off (make make this a compile time DEFINE?)
-                if (max_missing_gaps > 0) {
+                if (MAX_MISSING_GAPS > 0) {
                     if (MISSING_GAPS_LOW <= gap && gap <= MISSING_GAPS_HIGH && records[gap] == GAP_INF) {
                         float prob_joint = prob_prime_nth[i+1] * prob_prime_nth[j+1];
                         prob_is_missing_gap += prob_joint;
@@ -478,7 +479,7 @@ void run_gap_file(
         double p_record = prob_record + prob_record_estimate;
         if (p_record > max_p_record) {
             max_p_record = p_record;
-            printf("RECORD :%-6ld (line %ld)\tunknowns: %4ld, %4ld | e: %.1f, %.1f | prob record: %.2e (%.2e + %.2e) | %.7f\n",
+            printf("RECORD :%-6ld line %-5ld  unknowns: %4ld, %4ld | e: %.1f, %.1f\t| prob record: %.2e (%.2e + %.2e)\t| %.7f\n",
                 m, M_vals.size(),
                 unknown_low.size(), unknown_high.size(),
                 e_prev, e_next,
@@ -486,21 +487,21 @@ void run_gap_file(
                 prob_seen);
         }
 
-        if (max_missing_gaps > 0) {
+        if (MAX_MISSING_GAPS > 0) {
             if (prob_is_missing_gap > max_m_record) {
                 max_m_record = prob_is_missing_gap;
-                printf("MISSING:%-6ld (line %ld)\tunknowns: %4ld, %4ld |\t\t| prob missing record %.2e record: %.2e | %.7f\n",
+                printf("MISSING:%-6ld line %-5ld  unknowns: %4ld, %4ld |\t\t\t| prob record: %.2e  missing: %.2e\t| %.7f\n",
                     m, M_vals.size(),
                     unknown_low.size(), unknown_high.size(),
-                    prob_is_missing_gap, p_record, prob_seen);
+                    p_record, prob_is_missing_gap, prob_seen);
             }
 
             // priority_queue has the smallest (least likely) record on top.
-            if ((missing_gaps_search.size() < max_missing_gaps) ||
+            if ((missing_gaps_search.size() < MAX_MISSING_GAPS) ||
                     (std::get<0>(missing_gaps_search.top()) < prob_is_missing_gap)) {
                 missing_gaps_search.push({prob_is_missing_gap, m, missing_pairs});
 
-                if (missing_gaps_search.size() > max_missing_gaps) {
+                if (missing_gaps_search.size() > MAX_MISSING_GAPS) {
                     missing_gaps_search.pop();
                 }
             }
@@ -715,16 +716,17 @@ void prime_gap_stats(const struct Config config) {
         }
         std::reverse(missing_sorted.begin(), missing_sorted.end());
 
-        size_t missing_gap_lines = 0;
+        size_t i = 0;
         for (auto missing_search : missing_sorted) {
-            missing_gap_lines++;
+            i++;
 
             float prob = std::get<0>(missing_search);
             uint64_t m = std::get<1>(missing_search);
-            printf("MISSING TESTS(%ld):%-6ld => %.2e | missing tests: %4ld\n",
-                missing_gap_lines,
-                m, prob,
-                std::get<2>(missing_search).size());
+            if (i <= 10 || (i <= 100 && i % 10 == 0) ||
+                    (i % 100 == 0) || (i == missing_sorted.size())) {
+                printf("MISSING TESTS %4ld:%-6ld => %.2e | pairs: %4ld\n",
+                    i, m, prob, std::get<2>(missing_search).size());
+            }
 
             missing_gap_file << prob << " : " << m << "*" << config.p << "#/" << config.d << " :";
             for (auto pair : std::get<2>(missing_search)) {
@@ -733,7 +735,8 @@ void prime_gap_stats(const struct Config config) {
             missing_gap_file << endl;
         }
         missing_gap_file.close();
-        printf("Saving %ld missing-gaps tests to '%s'\n", missing_gap_lines, missing_fn.c_str());
+        printf("Saving %ld missing-gaps tests to '%s'\n",
+            missing_sorted.size(), missing_fn.c_str());
     }
 
     if (config.save_unknowns) {
