@@ -627,8 +627,6 @@ void prime_gap_parallel(const struct Config config) {
     // SMALL_THRESHOLD deals with all primes that can mark off two items in SIEVE_LENGTH.
     assert( SMALL_THRESHOLD > 2 * SIEVE_LENGTH );
 
-    printf("sieve_range:  %'ld   small_threshold:  %'ld\n", config.sieve_range, SMALL_THRESHOLD);
-
     mpz_t test;
     mpz_init(test);
 
@@ -695,9 +693,12 @@ void prime_gap_parallel(const struct Config config) {
             // Improve this setup.
             composite[i].resize(count_coprime+1, false);
         };
-        printf("coprime m %ld/%d, coprime i %ld/%d\n",
+        printf("coprime m:   %ld/%d, coprime i %ld/%d\n",
             valid_ms, M_inc, count_coprime/2, SIEVE_LENGTH);
     }
+    setlocale(LC_NUMERIC, "");
+    printf("sieve_range:  %'ld   small_threshold:  %'ld\n", config.sieve_range, SMALL_THRESHOLD);
+    setlocale(LC_NUMERIC, "C");
 
     // Used for various stats
     auto  s_start_t = high_resolution_clock::now();
@@ -826,8 +827,11 @@ void prime_gap_parallel(const struct Config config) {
             s_prime_factors += s_large_prime_factors_interval;
 
             setlocale(LC_NUMERIC, "");
-            printf("\n%'-10ld (prime_i: %'ld/%'ld) (seconds: %.2f/%-.1f)\n",
-                prime, pi_interval, pi, int_secs, secs);
+            printf("\n%'-10ld (prime_i: %'ld/%'ld) (seconds: %.2f/%-.1f | per m: %.2g)\n",
+                prime,
+                pi_interval, pi,
+                int_secs, secs,
+                secs / valid_m);
             printf("\tfactors found interval: %'ld, total: %'ld, avg m/large_prime interval: %.1f\n",
                 s_small_prime_factors_interval + s_large_prime_factors_interval,
                 s_prime_factors,
