@@ -179,3 +179,18 @@ $ ./benchmark 100000
 $ ./benchmark 100000 modulo_search
 $ ./benchmark 100000 "# mod"
 ```
+
+### Quick test of all functions
+```bash
+$ PARAMS="-p 907 -d 2190 --mstart 1 --minc 100 --sieve-range 100 --sieve-length 11000"
+$ make gap_search gap_stats gap_test
+$ time ./gap_search --method2 --save-unknowns --sieve-only $PARAMS
+$ time ./gap_search           --save-unknowns --sieve-only $PARAMS
+$ diff 1_907_2190_100_s11000_l100M.m2.txt 1_907_2190_100_s11000_l100M.txt > /dev/null && echo "Good" || echo "Bad!";
+$ ./gap_stats --sieve-only --unknown-filename 1_907_2190_100_s11000_l100M.m2.txt
+# Verify RECORD @ 1,7,13
+# Verify "avg seen prob:   0.9994067
+# Verify "avg record prob: 4.44e-06 (max: 7.599e-06)"
+
+# TODO gap_test.cpp, gap_test.py
+```
