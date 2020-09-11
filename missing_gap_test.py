@@ -16,9 +16,7 @@
 
 import argparse
 import multiprocessing
-import os.path
 import re
-import subprocess
 import time
 
 import gmpy2
@@ -159,7 +157,7 @@ def prime_gap_test(args):
         primes = 0
 
         # TODO configureable argument
-        with multiprocessing.Pool(10) as pool:
+        with multiprocessing.Pool(1) as pool:
             for li, (line, line_t, line_p, line_s) in enumerate(pool.imap_unordered(test_line, lines)):
                 missing_gap_prob, start, to_test = line
 
@@ -199,7 +197,7 @@ def prime_gap_test(args):
 if __name__ == "__main__":
     parser = get_arg_parser()
     args = parser.parse_args()
-    gap_utils.verify_args(args)
+    gap_utils.verify_args(args, ".missing")
 
     # TODO TeeLogger from gap_test
 
