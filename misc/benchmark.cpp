@@ -384,7 +384,7 @@ void benchmark(int bits, size_t count, const char* filter) {
     }
 
     if (strstr("# mod < bits>p", filter) != NULL) {
-        printf("\t|  bits x count   | method_name%15s | found    | total    | time(s) | ns/iter | cycles/limb |\n", "");
+        printf("\t|  bits x count   | method_name%19s | found    | total    | time(s) | ns/iter | cycles/limb |\n", "");
     }
     for (auto P : {503, 1009, 1999, 5003, 10007, 20011}) {
         benchmark_primorial_modulo(
