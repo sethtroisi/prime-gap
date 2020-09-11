@@ -193,7 +193,7 @@ AUTO SET: sieve length (coprime: 353, prob_gap longer 0.79%): 7746
 
 ```bash
 $ make gap_search
-$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 1000 --save-unknowns --sieve-only --sieve-range 1000 --method2
+$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 1000 --sieve-range 1000 --save-unknowns --method2
 AUTO SET: sieve length (coprime: 353, prob_gap longer 0.79%): 7746
 
 Testing m * 907#/210, m = 21400000 + [0, 1,000)
@@ -234,7 +234,7 @@ $ diff 21400000_907_210_1000_s7746_l1000M.txt 21400000_907_210_1000_s7746_l1000M
 
 ```bash
 $ make gap_stats
-$ time ./gap_stats --save-unknowns --sieve-only --unknown-filename <M_P_D_MINC_sX_lSL.txt>
+$ time ./gap_stats --save-unknowns --unknown-filename <M_P_D_MINC_sX_lSL.txt>
 ```
 
 
@@ -281,10 +281,10 @@ $ ./benchmark 100000 modulo_search
 ```bash
 $ PARAMS="-p 907 -d 2190 --mstart 1 --minc 100 --sieve-range 100 --sieve-length 11000"
 $ make gap_search gap_stats gap_test
-$ time ./gap_search --method2 --save-unknowns --sieve-only $PARAMS
-$ time ./gap_search           --save-unknowns --sieve-only $PARAMS
+$ time ./gap_search --method2 --save-unknowns $PARAMS
+$ time ./gap_search           --save-unknowns $PARAMS
 $ diff 1_907_2190_100_s11000_l100M.m2.txt 1_907_2190_100_s11000_l100M.txt > /dev/null && echo "Good" || echo "Bad!";
-$ ./gap_stats --sieve-only --unknown-filename 1_907_2190_100_s11000_l100M.m2.txt
+$ ./gap_stats --unknown-filename 1_907_2190_100_s11000_l100M.m2.txt
 # Verify RECORD @ 1,7,13
 # Verify "avg seen prob:   0.9994067
 # Verify "avg record prob: 4.44e-06 (max: 7.599e-06)"

@@ -251,8 +251,8 @@ void show_usage(char* name) {
     cout << "  --sieve-range" << endl;
     cout << "    use primes <= sieve-range (in millions) for checking composite" << endl;
     cout  << endl;
-    cout << "  --sieve-only" << endl;
-    cout << "    only sieve ranges, don't run PRP. useful for benchmarking" << endl;
+    cout << "  --run-prp" << endl;
+    cout << "    run PRP tests" << endl;
     cout << "  --save-unknowns" << endl;
     cout << "    save not-composites to a temp file (p_d_mstart_minc_sieve_range.txt)" << endl;
     cout << "    where they can be processed in a 2nd pass." << endl;
@@ -298,7 +298,7 @@ Config argparse(int argc, char* argv[]) {
         {"sieve-range",      required_argument, 0,   5  },
 
         {"min-merit",        required_argument, 0,   3  },
-        {"sieve-only",       no_argument,       0,   6  },
+        {"run-prp",          no_argument,       0,   6  },
         {"save-unknowns",    no_argument,       0,   7  },
 
         {"method2",          no_argument,       0,   8  },
@@ -384,7 +384,7 @@ Config argparse(int argc, char* argv[]) {
                 break;
 
             case 6:
-                config.run_prp = false;
+                config.run_prp = true;
                 break;
             case 7:
                 config.save_unknowns = true;

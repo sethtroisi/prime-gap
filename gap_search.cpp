@@ -57,10 +57,6 @@ int main(int argc, char* argv[]) {
         cout << "Must set --save-unknowns" << endl;
         return 1;
     }
-    if (config.run_prp == 1) {
-        cout << "Must set --sieve-only for gap_search" << endl;
-        return 1;
-    }
 
     if (config.valid == 0) {
         show_usage(argv[0]);

@@ -37,7 +37,7 @@ struct Config {
     uint32_t sieve_length = 0;
     uint64_t sieve_range  = 0;
 
-    bool run_prp = true;
+    bool run_prp = false;
     bool save_unknowns = false;
 
     bool method2 = false;
