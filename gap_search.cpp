@@ -242,12 +242,9 @@ void K_stats(
     double mantis = mpz_get_d_2exp(&exp, K);
     *K_log = log(mantis) + log(2) * exp;
 
-    double m_log = log(config.mstart);
     int K_bits   = mpz_sizeinbase(K, 2);
     printf("K = %d bits, %d digits, log(K) = %.2f\n",
         K_bits, *K_digits, *K_log);
-    printf("Min Gap ~= %d (for merit > %.1f)\n\n",
-        (int) (config.minmerit * (*K_log + m_log)), config.minmerit);
 }
 
 

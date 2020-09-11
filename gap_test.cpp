@@ -83,7 +83,7 @@ void prime_gap_test(const struct Config config) {
     const uint64_t M_inc = config.minc;
     const uint64_t P = config.p;
     const uint64_t D = config.d;
-    const float min_merit = config.minmerit;
+    const float min_merit = config.min_merit;
 
     const unsigned int SIEVE_LENGTH = config.sieve_length;
     const unsigned int SL = SIEVE_LENGTH;
@@ -344,6 +344,7 @@ void prime_gap_test(const struct Config config) {
 
             int gap = next_p_i + prev_p_i;
             float merit = gap / (K_log + log(m));
+
             if (merit > min_merit)  {
                 // TODO write to file.
                 printf("%d  %.4f  %ld * %ld#/%ld -%d to +%d\n",

@@ -32,7 +32,7 @@ struct Config {
     uint64_t minc    = 0;
     uint32_t p       = 0;
     uint32_t d       = 0;
-    float minmerit = 12;
+    float min_merit = 12;
 
     uint32_t sieve_length = 0;
     uint64_t sieve_range  = 0;

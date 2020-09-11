@@ -244,7 +244,7 @@ void show_usage(char* name) {
     cout << "  --unknown-filename <filename>" << endl;
     cout << "    parse p, d, mstart, minc, sieve-length, sieve-range from filename" << endl;
     cout << "[OPTIONALLY]" << endl;
-    cout << "  --minmerit <minmerit>" << endl;
+    cout << "  --min-merit <minmerit>" << endl;
     cout << "    only display prime gaps with merit >= minmerit" << endl;
     cout << "  --sieve-length" << endl;
     cout << "    how large the positive/negative sieve arrays should be" << endl;
@@ -374,7 +374,7 @@ Config argparse(int argc, char* argv[]) {
                 break;
 
             case 3:
-                config.minmerit = atof(optarg);
+                config.min_merit = atof(optarg);
                 break;
             case 4:
                 config.sieve_length = atoi(optarg);

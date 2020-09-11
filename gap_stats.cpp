@@ -306,7 +306,7 @@ void K_stats(
     printf("K = %d bits, %d digits, log(K) = %.2f\n",
         K_bits, *K_digits, *K_log);
     printf("Min Gap ~= %d (for merit > %.1f)\n\n",
-        (int) (config.minmerit * (*K_log + m_log)), config.minmerit);
+        (int) (config.min_merit * (*K_log + m_log)), config.min_merit);
 }
 
 
