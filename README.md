@@ -13,7 +13,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [ ] grouped output (every X entries)
   * [ ] tee logging by default (for premptible machines)
   * [ ] record when no primes found (candidate for high merit?)
-  * [ ] store records in some .gitignore'd file
+  * [x] store records in some .gitignore'd file
   * [x] Multiprocessing
 * benchmarking
   * [ ] Try to avoid int128 in `modulo_search_euclid` (used by `_all`)
