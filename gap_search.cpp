@@ -357,8 +357,7 @@ void prime_gap_search(const struct Config config) {
         // Print "."s during, equal in length to 'Calculat...'
         size_t print_dots = 38;
 
-        size_t expected_primes = common_primepi.count(SIEVE_RANGE) ?
-            common_primepi[SIEVE_RANGE] : 1.04 * SIEVE_RANGE / log(SIEVE_RANGE);
+        size_t expected_primes = 1.04 * SIEVE_RANGE / log(SIEVE_RANGE);
 
         long first_m_sum = 0;
         double expected_large_primes = 0;
@@ -416,7 +415,6 @@ void prime_gap_search(const struct Config config) {
             printf("\tPrimePi(%ld) = %ld\n", SIEVE_RANGE, pi);
         } else {
             printf("\tPrimePi(%ld) = %ld guessed %ld\n", SIEVE_RANGE, pi, expected_primes);
-            assert(common_primepi.count(SIEVE_RANGE) == 0);
         }
 
         printf("\t%ld primes not needed (%.1f%%)\n",

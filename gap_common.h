@@ -14,10 +14,12 @@
 
 #pragma once
 
-#include <vector>
 #include <functional>
 #include <map>
+#include <vector>
 
+
+using std::map;
 using std::vector;
 
 const double GAMMA = 0.577215665;
@@ -38,8 +40,6 @@ struct Config {
 
     bool method2 = false;
 };
-
-extern std::map<uint64_t,uint64_t> common_primepi;
 
 std::string gen_unknown_fn(const struct Config& config, std::string suffix);
 
