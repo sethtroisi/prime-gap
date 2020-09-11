@@ -109,12 +109,12 @@ void prime_gap_test(const struct Config config) {
             (int) (min_merit * (K_log + m_log)), min_merit);
     }
 
-    // ----- Open Output file
+    // ----- Open unknown input file
     assert( config.save_unknowns );
     std::ifstream unknown_file;
     {
         std::string fn = gen_unknown_fn(config, ".txt");
-        printf("\tSaving unknowns to '%s'\n", fn.c_str());
+        printf("\tReading unknowns from '%s'\n", fn.c_str());
         unknown_file.open(fn, std::ios::in);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
         assert( unknown_file.good() );    // Can't open save_unknowns file

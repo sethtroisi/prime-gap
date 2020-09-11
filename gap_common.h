@@ -16,10 +16,12 @@
 
 #include <functional>
 #include <map>
+#include <string>
 #include <vector>
 
 
 using std::map;
+using std::string;
 using std::vector;
 
 const double GAMMA = 0.577215665;
@@ -39,6 +41,8 @@ struct Config {
     bool save_unknowns = false;
 
     bool method2 = false;
+
+    string unknown_filename;
 };
 
 std::string gen_unknown_fn(const struct Config& config, std::string suffix);

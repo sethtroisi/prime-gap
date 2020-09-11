@@ -20,12 +20,14 @@
 #include <getopt.h>
 #include <iostream>
 #include <map>
+#include <string>
 #include <vector>
 
 #include "gap_common.h"
 
 using std::cout;
 using std::endl;
+using std::string;
 using std::vector;
 
 
@@ -262,6 +264,14 @@ void show_usage(char* name) {
 
 
 std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
+    if (!config.unknown_filename.empty()) {
+        // If trying to read the unknown_fn can cause issue (with having dropped basename)
+        // handled specially in gap_stats / gap_test
+        string t = config.unknown_filename;
+        assert( 0 == t.compare(t.size() - 4, 4, ".txt") );
+        return t.replace(t.size() - 4, 4, suffix);
+    }
+
     return std::to_string(config.mstart) + "_" +
            std::to_string(config.p) + "_" +
            std::to_string(config.d) + "_" +
@@ -324,6 +334,12 @@ Config argparse(int argc, char* argv[]) {
                 {
                     char* t = optarg;
                     assert(*t != 0);
+
+                    config.unknown_filename = t;
+
+                    // Don't consider directory for validation.
+                    t = basename(t);
+
                     assert( std::count(t, t + strlen(t), '_')  == 5);
 
                     config.mstart = atol(t);
@@ -351,9 +367,7 @@ Config argparse(int argc, char* argv[]) {
                     config.sieve_range = atol(t) * 1'000'000;
                     t = std::strchr(t, 'M');
 
-                    if (t[3] == '2') {
-                        config.method2 = true;
-                    }
+                    config.method2 = (t[3] == '2');
 
                     assert( std::strcmp(t, "M.txt") == 0 || std::strcmp(t, "M.m2.txt") == 0 );
                 }

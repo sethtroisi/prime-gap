@@ -27,9 +27,9 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
   * [x] Describe distribution
   * [x] Generate expected length
 * gap\_stats.cpp
-  * [ ] drop directory from `unknown-filename`
   * [ ] Move missing gaps behind a compile flag
     * [ ] Create two seperate Makefile targets
+  * [x] drop directory from `unknown-filename`
   * [x] Missing gaps prob % filter
   * [x] Don't rewrite `partial\_results`
   * [x] Calc record chance
