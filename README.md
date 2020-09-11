@@ -279,15 +279,18 @@ $ ./benchmark 100000 modulo_search
 
 ### Quick test of all functions
 ```bash
-$ PARAMS="-p 907 -d 2190 --mstart 1 --minc 100 --sieve-range 100 --sieve-length 11000"
+$ PARAMS="-p 907 -d 2190 --mstart 1 --minc 200 --sieve-range 100 --sieve-length 11000"
 $ make gap_search gap_stats gap_test
 $ time ./gap_search --method2 --save-unknowns $PARAMS
 $ time ./gap_search           --save-unknowns $PARAMS
-$ diff 1_907_2190_100_s11000_l100M.m2.txt 1_907_2190_100_s11000_l100M.txt > /dev/null && echo "Good" || echo "Bad!";
-$ ./gap_stats --unknown-filename 1_907_2190_100_s11000_l100M.m2.txt
-# Verify RECORD @ 1,7,13
-# Verify "avg seen prob:   0.9994067
-# Verify "avg record prob: 4.44e-06 (max: 7.599e-06)"
+$ md5sum 1_907_2190_200_s11000_l100M.{txt,m2.txt}
+080309453b4310e0310a4fb4d1779ffe  1_907_2190_200_s11000_l100M.txt
+080309453b4310e0310a4fb4d1779ffe  1_907_2190_200_s11000_l100M.m2.txt
+
+$ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
+# Verify RECORD @ 1,7,13,101,137
+# Verify "avg seen prob:   0.9994038
+# Verify "avg record prob: 4.54e-06 (max: 8.123e-06)"
 
 # TODO gap_test.cpp, gap_test.py
 ```
