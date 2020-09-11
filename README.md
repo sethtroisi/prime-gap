@@ -143,72 +143,90 @@ $ sudo apt install sqlite3 libsqlite3-dev
 
 #### Method1 vs Method2
 
-`gap_search` parameter `--method2` which changes how the sieve is performed.
+`gap_search` parameter `--method2` changes how the sieve is performed.
 
 ```bash
 $ make gap_search
-$ time ./gap_search [--method2] -p 503 -d 30030 --mstart 1000000 --minc 1000 --save-unknowns --sieve-only --sieve-range 1000
+$ time ./gap_search [--method2] -p <p> -d <d> --mstart <m_start> --minc <m_inc> --sieve-range <SL>M [--sieve-length <SL>] --save-unknowns
 ```
 
-**Method1** performs a large initial setup phase which finds the first `mi` that each prime divides before starting any sieving.
-Each `mi` is then processed in order, looking at small primes and only the large primes that divide a number in the sieve interval.
+**Method1** performs a large initial setup phase to find the first `mi` that each `prime` divides before starting any sieving.
+Each `mi` is then processed in order, looking at small primes and only those large primes that divide a number in the sieve interval.
+
+Half the time will be spent watching dots cross this screen.
+```
+        Calculating first m each prime divides
+	......................................
+```
+
 
 **Method2** inverts this process and keeps all sieve intervals in memory at the same time.
 Primes are iterated in order and all sieve intervals are handled simultaneously.
+
 Status output is significantly nicer in Method2. Stats are computed at regular intervals giving better insight into `--sieve-range`.
 
-In practice I always suggest Method2, the only downside seems to be slightly more memory. Method1 is mostly used to validate results.
+In practice Method2 is better, the only downside would be more memory use for small values of `--sieve-range`. Method1 is mostly used to validate results.
 
 ```bash
 $ make gap_search
-$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 5000 --save-unknowns --sieve-only --sieve-range 1000
+$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 1000 --sieve-range 1000 --save-unknowns
 AUTO SET: sieve length (coprime: 353, prob_gap longer 0.79%): 7746
-...
-        21400037  127 <- unknowns -> 120
-            tests     10         (257.62/sec)  0 seconds elapsed
-            unknowns  2353       (avg: 235.30), 98.48% composite  50.36 <- % -> 49.64%
-            large prime remaining: 4400229 (avg/test: 7338)
-        21400433  120 <- unknowns -> 110
-            tests     100        (261.09/sec)  0 seconds elapsed
-            unknowns  23530      (avg: 235.30), 98.48% composite  49.88 <- % -> 50.12%
-            large prime remaining: 4130914 (avg/test: 7347)
-        21402181  121 <- unknowns -> 107
-            tests     500        (270.10/sec)  2 seconds elapsed
-            unknowns  117692     (avg: 235.38), 98.48% composite  49.81 <- % -> 50.19%
-            large prime remaining: 2839408 (avg/test: 7342)
-        21404371  119 <- unknowns -> 117
-            tests     1000       (288.24/sec)  3 seconds elapsed
-            unknowns  235709     (avg: 235.71), 98.48% composite  49.84 <- % -> 50.16%
-            large prime remaining: 831741 (avg/test: 7340)
 
-real    0m22.424s
-user    0m22.356s
-sys     0m0.068s
-$
+	Calculating first m each prime divides
+	......................................
+	PrimePi(1000000000) = 50847534 guessed 50185140
+	Setup took 16.8 seconds
+...
+	21400037  127 <- unknowns -> 120
+	    valid m   10         (316.95/sec, with setup per m: 1.7)  0 seconds elapsed
+	    unknowns  2353       (avg: 235.30), 98.48% composite  50.36 <- % -> 49.64%
+	    large prime remaining: 1196058 (avg/test: 7338)
+	21400433  120 <- unknowns -> 110
+	    valid m   100        (333.38/sec, with setup per m: 0.17)  0 seconds elapsed
+	    unknowns  23530      (avg: 235.30), 98.48% composite  49.88 <- % -> 50.12%
+	    large prime remaining: 768403 (avg/test: 7347)
+	21400999  142 <- unknowns -> 110
+	    valid m   230        (369.18/sec, with setup per m: 0.076)  1 seconds elapsed
+	    unknowns  54176      (avg: 235.55), 98.48% composite  49.91 <- % -> 50.09%
+	    large prime remaining: 0 (avg/test: 7349)
 ```
 
 ```bash
 $ make gap_search
-$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 5000 --save-unknowns --sieve-only --sieve-range 1000 --method2
+$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 1000 --save-unknowns --sieve-only --sieve-range 1000 --method2
+AUTO SET: sieve length (coprime: 353, prob_gap longer 0.79%): 7746
 
-100,003    (prime_i: 9,592/9,593) (seconds: 0.27/0.3 | per m: 0.00026)
-	factors found interval: 19,450,638, total: 28,304,316, avg m/large_prime interval: 0.0
-	unknowns 484,174  	(avg/m: 423.60) (delta: 2.734%)
-	~ 2x 42.85 PRP/m	(1399490 new composites ~= 764449.9 skipped PRP => 2784403.7 PRP/seconds)
+Testing m * 907#/210, m = 21400000 + [0, 1,000)
 
-1,000,003  (prime_i: 36,960/78,499) (seconds: 0.29/1.3 | per m: 0.0011)
-	factors found interval: 20,674,342, total: 130,158,153, avg m/large_prime interval: 6.5
-	unknowns 404,012  	(avg/m: 353.47) (delta: 2.282%)
-	~ 2x 35.70 PRP/m	(21207 new composites ~= 2155.6 skipped PRP => 7315.1 PRP/seconds)
+coprime m:   230/1000, coprime i 2058/7746
+sieve_range:  1,000,000,000   small_threshold:  387,300
 
-999,999,937 (prime_i: 24,491,666/50,847,534) (seconds: 8.26/20.9 | per m: 0.018)
-	factors found interval: 20,592,889, total: 438,561,307, avg m/large_prime interval: 0.0
-	unknowns 269,510  	(avg/m: 235.79) (delta: 1.522%)
-	~ 2x 23.80 PRP/m	(9367 new composites ~= 941.5 skipped PRP => 114.0 PRP/seconds)
+2          (primes 1/1)	(seconds: 0.00/0.0 | per m: 1.6e-05)
+	factors  1,781,580 		(interval: 1,781,580, avg m/large_prime interval: 0.0)
+	unknowns   379,040/230  	(avg/m: 1648.00) (composite: 89.36% +89.362%)
+	~ 2x 711.66 PRP/m		(3183890 new composites ~= 38390.6 skipped PRP => 10536271.7 PRP/seconds)
+
+100,003    (primes 9,592/9,593)	(seconds: 0.06/0.1 | per m: 0.00028)
+	factors  3,913,349 		(interval: 2,131,769, avg m/large_prime interval: 0.0)
+	unknowns    97,222/230  	(avg/m: 422.70) (composite: 97.27% +7.910%)
+	~ 2x 42.85 PRP/m		(281818 new composites ~= 153826.3 skipped PRP => 2497147.8 PRP/seconds)
+
+1,000,003  (primes 36,960/78,499)	(seconds: 0.07/0.3 | per m: 0.0013)
+	factors  4,178,373 		(interval: 48,639, avg m/large_prime interval: 1.3)
+	unknowns    81,125/230  	(avg/m: 352.72) (composite: 97.72% +0.119%)
+	~ 2x 35.70 PRP/m		(4243 new composites ~= 433.8 skipped PRP => 6632.5 PRP/seconds)
+
+...
+
+999,999,937 (primes 24,491,666/50,847,534)	(seconds: 8.40/17.6 | per m: 0.076)
+	factors  4,562,430 		(interval: 32,262, avg m/large_prime interval: 0.0)
+	unknowns    54,176/230  	(avg/m: 235.55) (composite: 98.48% +0.052%)
+	~ 2x 23.80 PRP/m		(1856 new composites ~= 189.5 skipped PRP => 22.6 PRP/seconds)
+
 ```
 
-```
-$ diff 21400000_907_210_5000_s7746_l1000M.m2.txt 21400000_907_210_5000_s7746_l1000M.txt
+```bash
+$ diff 21400000_907_210_1000_s7746_l1000M.txt 21400000_907_210_1000_s7746_l1000M.m2.txt
 <empty>
 ```
 

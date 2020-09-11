@@ -449,9 +449,9 @@ void prime_gap_search(const struct Config config) {
     long  s_t_unk_hgh = 0;
     long  s_large_primes_tested = 0;
 
-    uint64_t mi_last = M_inc - 1;
-    for (; mi_last > 0 && gcd(mi_last, D) > 1; mi_last -= 1);
-    assert( mi_last > 0 );
+    uint64_t last_mi = M_inc - 1;
+    for (; last_mi > 0 && gcd(M_start + last_mi, D) > 1; last_mi -= 1);
+    assert(last_mi > 0 && last_mi < M_inc);
 
     for (uint64_t mi = 0; mi < M_inc; mi++) {
         uint64_t m = M_start + mi;
@@ -570,9 +570,10 @@ void prime_gap_search(const struct Config config) {
         }
 
         if ( (s_tests == 1 || s_tests == 10 || s_tests == 100 || s_tests == 500 || s_tests == 1000) ||
-                (s_tests % 5000 == 0) || (mi == mi_last) ) {
+                (s_tests % 5000 == 0) || (mi == last_mi) ) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
+            double g_secs = duration<double>(s_stop_t - s_setup_t).count();
 
             printf("\t%ld %4d <- unknowns -> %-4d\n",
                     m, unknown_l, unknown_u);
@@ -580,8 +581,8 @@ void prime_gap_search(const struct Config config) {
             if (mi <= 10) continue;
 
             // Stats!
-            printf("\t    tests     %-10ld (%.2f/sec)  %.0f seconds elapsed\n",
-                    s_tests, s_tests / secs, secs);
+            printf("\t    valid m   %-10ld (%.2f/sec, with setup per m: %.2g)  %.0f seconds elapsed\n",
+                    s_tests, s_tests / secs, g_secs / s_tests, secs);
             printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
                     s_total_unknown, s_total_unknown / ((double) s_tests),
                     100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
@@ -839,20 +840,21 @@ void prime_gap_parallel(const struct Config config) {
             s_prime_factors += s_large_prime_factors_interval;
 
             setlocale(LC_NUMERIC, "");
-            printf("\n%'-10ld (prime_i: %'ld/%'ld) (seconds: %.2f/%-.1f | per m: %.2g)\n",
+            printf("\n%'-10ld (primes %'ld/%'ld)\t(seconds: %.2f/%-.1f | per m: %.2g)\n",
                 prime,
                 pi_interval, pi,
                 int_secs, secs,
                 secs / valid_ms);
-            printf("\tfactors found interval: %'ld, total: %'ld, avg m/large_prime interval: %.1f\n",
-                s_small_prime_factors_interval + s_large_prime_factors_interval,
+            printf("\tfactors  %'9ld \t\t(interval: %'ld, avg m/large_prime interval: %.1f)\n",
                 s_prime_factors,
+                s_small_prime_factors_interval + s_large_prime_factors_interval,
                 1.0 * s_large_prime_factors_interval / pi_interval);
-            printf("\tunknowns %'-9ld\t(avg/m: %.2f) (delta: %.3f%%)\n",
-                t_total_unknowns,
+            printf("\tunknowns %'9ld/%-5ld\t(avg/m: %.2f) (composite: %.2f%% +%.3f%%)\n",
+                t_total_unknowns, valid_ms,
                 1.0 * t_total_unknowns / valid_ms,
-                100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms));
-            printf("\t~ 2x %.2f PRP/m\t(%ld new composites ~= %4.1f skipped PRP => %.1f PRP/seconds)\n",
+                100.0 - 100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms),
+                100.0 * saved_prp / (SIEVE_INTERVAL * valid_ms));
+            printf("\t~ 2x %.2f PRP/m\t\t(%ld new composites ~= %4.1f skipped PRP => %.1f PRP/seconds)\n",
                 1 / prob_prime_after_sieve,
                 saved_prp,
                 skipped_prp,
@@ -863,10 +865,13 @@ void prime_gap_parallel(const struct Config config) {
             s_interval_t = s_stop_t;
             s_prp_needed = 1 / prob_prime_after_sieve;
 
+            s_small_prime_factors_interval = 0;
             s_large_prime_factors_interval = 0;
             pi_interval = 0;
         }
     });
+
+    // TODO assert s_prime_factors is close to (2 * SL * valid_m) * (log(log(SL)) + M_c)
 
     if (config.save_unknowns) {
         // ----- Save Output file
