@@ -345,8 +345,8 @@ void prob_combined_gap(
 void read_unknown_line(
         uint64_t mi,
         std::ifstream& unknown_file,
-        vector<uint32_t>& unknown_high,
-        vector<uint32_t>& unknown_low) {
+        vector<uint32_t>& unknown_low,
+        vector<uint32_t>& unknown_high) {
 
     int unknown_l = 0;
     int unknown_u = 0;
@@ -409,15 +409,14 @@ void run_gap_file(
 
     const uint32_t min_record_gap = poss_record_gaps.front();
 
-    // Store max(100, MISSING_GAP_SAVE_PERCENT);
     size_t valid_m = 0;
     for (uint64_t mi = 0; mi < M_inc; mi++) {
         if (gcd(M_start + mi, D) == 1) {
             valid_m += 1;
         }
     }
-    uint32_t temp = valid_m * MISSING_GAP_SAVE_PERCENT;
-    const uint32_t MAX_MISSING_GAPS = temp <= 0 ? 0 : std::max(100U, temp);
+    const uint32_t MAX_MISSING_GAPS = MISSING_GAP_SAVE_PERCENT == 0 ?
+        0 : std::max(100, (int) (valid_m * MISSING_GAP_SAVE_PERCENT));
     printf("\tSaving %d best missing gap tests\n", MAX_MISSING_GAPS);
 
     // sum prob_record_inside sieve
@@ -823,6 +822,7 @@ void prime_gap_stats(const struct Config config) {
                     i, m, prob, std::get<2>(missing_search).size());
             }
 
+            // TODO joining items would save 2-3x space
             missing_gap_file << prob << " : " << m << "*" << config.p << "#/" << config.d << " :";
             for (auto pair : std::get<2>(missing_search)) {
                 missing_gap_file << " (" << pair.first << "," << pair.second << ")";
