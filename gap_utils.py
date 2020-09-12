@@ -64,8 +64,8 @@ def openPFGW_is_prime(strn):
 
 def is_prime(num, strnum, dist):
     # TODO print log of which library is being used.
-    if gmpy2.num_digits(num, 2) > 5000:
-        return openPFGW_is_prime(strnum + str(dist))
+    #if gmpy2.num_digits(num, 2) > 5000:
+    #    return openPFGW_is_prime(strnum + str(dist))
 
     return gmpy2.is_prime(num)
 

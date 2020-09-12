@@ -8,11 +8,11 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
 * [ ] Rename prime-gap.db
 * [ ] missing\_gap\_verify.py & missing\_gap\_test.py
-  * [ ] --ignore-gaps 130898
   * [ ] --skip-till-m mi (for resuming)
-  * [ ] grouped output (every X entries)
+  * [ ] grouped output of BOTH PRIME (every X entries)
   * [ ] tee logging by default (for premptible machines)
   * [ ] record when no primes found (candidate for high merit?)
+  * [x] --ignore-gaps 130898
   * [x] store records in some .gitignore'd file
   * [x] Multiprocessing
 * benchmarking
