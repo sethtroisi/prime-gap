@@ -45,7 +45,6 @@ CREATE TABLE IF NOT EXISTS credits (
         Add to `result`
 */
 
-
 CREATE TABLE IF NOT EXISTS to_process_range(
         id      INTEGER PRIMARY KEY,
 
@@ -76,6 +75,26 @@ CREATE TABLE IF NOT EXISTS partial_result (
         expected_merit REAL
 );
 
+CREATE TABLE IF NOT EXISTS missing_gap_result (
+        mgrid     INTEGER PRIMARY KEY,
+
+        m INTEGER,
+        P INTEGER,
+        D INTEGER,
+
+        /*
+          Some fractions of unknown numbers were tested.
+          found_{next,prev}_p were the first prime found.
+          0 means none of next_p_test tests were prime.
+          See missing_gap_test.py
+        */
+        found_prev_p_i INTEGER,
+        found_next_p_i INTEGER,
+
+        prev_p_tests INTEGER,
+        next_p_tests INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS result (
         rid     INTEGER PRIMARY KEY,
 
@@ -87,7 +106,6 @@ CREATE TABLE IF NOT EXISTS result (
         merit REAL
 );
 
-
-CREATE INDEX IF NOT EXISTS pres_m_p_d ON partial_result(m,P,D);
-CREATE INDEX IF NOT EXISTS  res_m_p_d ON         result(m,P,D);
-
+CREATE INDEX IF NOT EXISTS  pres_m_p_d ON     partial_result(m,P,D);
+CREATE INDEX IF NOT EXISTS mgapr_m_p_d ON missing_gap_result(m,P,D);
+CREATE INDEX IF NOT EXISTS   res_m_p_d ON             result(m,P,D);
