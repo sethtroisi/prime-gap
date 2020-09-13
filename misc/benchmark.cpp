@@ -334,6 +334,9 @@ void benchmark(int bits, size_t count, const char* filter) {
     cout << endl;
     const auto benchmark_row = "\t| %5d x %7ld | %-30s | %-8ld | %-8ld | %-7.4f | %7.0f | %-8.1f    |\n";
     printf("\t|  bits x count   | method_name%19s | found    | total    | time(s) | ns/iter | cycles/iter |\n", "");
+    auto padding = "-------------------------------------------------";
+    printf("\t|%.17s|%.32s|%.10s|%.10s|%.9s|%.9s|%.13s|\n",
+        padding, padding, padding, padding, padding, padding, padding);
 
     if (bits < 32) {
         // Per Method benchmark
@@ -385,6 +388,8 @@ void benchmark(int bits, size_t count, const char* filter) {
 
     if (strstr("# mod < bits>p", filter) != NULL) {
         printf("\t|  bits x count   | method_name%19s | found    | total    | time(s) | ns/iter | cycles/limb |\n", "");
+        printf("\t|%.17s|%.32s|%.10s|%.10s|%.9s|%.9s|%.13s|\n",
+            padding, padding, padding, padding, padding, padding, padding);
     }
     for (auto P : {503, 1009, 1999, 5003, 10007, 20011}) {
         benchmark_primorial_modulo(
