@@ -1,7 +1,27 @@
 # Combined Sieve - a new program to find prime gaps.
 
-This is the combination of a couple of ideas I had while working on gmp `mpz_prevprime`.
+A fast prime gap searching suite
 
+# Table of Contents
+
+- [Combined Sieve - a new program to find prime gaps.](#combined-sieve---a-new-program-to-find-prime-gaps)
+  * [Tools](#tools)
+    + [Gap Search (Sieve many `m * p#/d`)](#gap-search-sieve-many-m--pd)
+      - [Method1 vs Method2](#method1-vs-method2)
+    + [Gap Stats](#gap-stats)
+    + [Gap Test](#gap-test)
+    + [Benchmark](#benchmark)
+  * [Benchmarks](#benchmarks)
+  * [Setup](#setup)
+  * [Notes](#notes)
+    + [Quick test of all functions](#quick-test-of-all-functions)
+    + [TODO](#todo)
+    + [TODONE](#todone)
+
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+
+
+## Tools
 
 ### Gap Search (Sieve many `m * p#/d`)
 
@@ -170,6 +190,13 @@ $ sqlite3 prime-gap-search.db < schema.sql
         $ ln -s ../prime-gap-list/gaps.db .
         ```
 
+## Notes
+
+* Anecdotally `gap_search` is ~8% faster when using `CC=clang++-11`
+* OpenPFGW [PrimeWiki](https://www.rieselprime.de/ziki/PFGW) [SourceForge](https://sourceforge.net/projects/openpfgw/)
+  * Unpack somewhere and link binary as `pfgw64`
+  * may also need to `chmod a+x pfgw64`
+
 ### Quick test of all functions
 ```bash
 $ PARAMS="-p 907 -d 2190 --mstart 1 --minc 200 --sieve-range 100 --sieve-length 11000"
@@ -187,13 +214,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
 
 # TODO gap_test.cpp, gap_test.py
 ```
-
-### Final Notes
-
-* Anecdotally `gap_search` is ~8% faster when using `CC=clang++-11`
-* OpenPFGW [PrimeWiki](https://www.rieselprime.de/ziki/PFGW) [SourceForge](https://sourceforge.net/projects/openpfgw/)
-  * Unpack somewhere and link binary as `pfgw64`
-  * may also need to `chmod a+x pfgw64`
 
 ### TODO
 
