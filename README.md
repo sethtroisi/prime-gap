@@ -115,7 +115,6 @@ More benchmarks are present in [BENCHMARKS.md](BENCHMARKS.md)
 ```bash
 $ make benchmark
 $ ./benchmark 100000
-$ ./benchmark 100000 "# mod"
 ...
 	|  bits x count   | method_name                    | found    | total    | time(s) | ns/iter | cycles/limb |
 	|   694 x  100000 | 503# mod <40 bit>p             | 100000   | 6088     | 0.0045  |      45 | 14.0        |
@@ -126,6 +125,7 @@ $ ./benchmark 100000 "# mod"
 	| 28588 x  100000 | 20011# mod <40 bit>p           | 100000   | 2854     | 0.0477  |     477 | 3.6         |
 
 $ ./benchmark 100000 modulo_search
+...
 	|  bits x count   | method_name                    | found    | total    | time(s) | ns/iter | cycles/iter |
 	|    25 x  100000 | modulo_search_one_op           | 1033     | 100000   | 0.0020  |      20 | 68.8        |
 	|    25 x  100000 | modulo_search_brute            | 100000   | 100000   | 0.0316  |     316 | 1071.8      |
@@ -137,84 +137,7 @@ $ ./benchmark 100000 modulo_search
 	|    25 x  100000 | modulo_search_euclid_all_small | 86763    | 292490   | 0.0277  |      95 | 321.5       |
 	|    25 x  100000 | modulo_search_euclid_all_large | 86763    | 292490   | 0.0295  |     101 | 342.5       |
 ...
-	|  bits x count   | method_name                    | found    | total    | time(s) | ns/iter | cycles/iter |
-	|    40 x  100000 | modulo_search_verify           | 100000   | 100000   | 0.0289  |     289 | 981.2       |
-	|    40 x  100000 | modulo_search_euclid           | 100000   | 100000   | 0.0089  |      89 | 301.3       |
-	|    40 x  100000 | modulo_search_euclid_gcd       | 100000   | 100000   | 0.0108  |     108 | 365.1       |
-	|    40 x  100000 | modulo_search_euclid_gcd2      | 100000   | 100000   | 0.0093  |      93 | 315.8       |
-	|    40 x  100000 | modulo_search_euclid_all_small | 10       | 102484   | 0.0110  |     108 | 365.7       |
-	|    40 x  100000 | modulo_search_euclid_all_large | 10       | 102484   | 0.0110  |     107 | 364.6       |
 ```
-
-### TODO
-
-* [ ] python util.py (config parsing, isPrime, teelogger)
-* [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
-* [ ] Rename prime-gap.db
-* [ ] missing\_gap\_verify.py & missing\_gap\_test.py
-  * [ ] --skip-till-m mi (for resuming)
-  * [ ] grouped output of BOTH PRIME (every X entries)
-  * [ ] tee logging by default (for premptible machines)
-  * [ ] record when no primes found (candidate for high merit?)
-  * [x] --ignore-gaps 130898
-  * [x] store records in some .gitignore'd file
-  * [x] Multiprocessing
-* README.md
-  * [ ] Add commands for benchmarking
-  * [ ] Fill out gap test section
-  * [x] Split out some benchmarking
-* benchmarking
-  * [ ] Try to avoid int128 in `modulo_search_euclid` (used by `_all`)
-  * [ ] Make sure `max_a` is working as intended.
-  * [ ] Add instructions to verify `modulo_search` is >80% of the time.
-  * [x] Add int64 `modulo_search_euclid_all`
-  * [x] Add benchmarks for int32/int64 `modulo_search`
-  * [x] Add benchmarks for `K % p`
-* gap\_test.py
-  * [ ] Starting at m > mstart
-  * [ ] Plot average tests count
-  * [ ] Sort by expected gap and PRP only top X%
-  * [ ] Option to toggle between OpenPFGW and gmp
-  * [x] Store all results to sql
-  * [x] Autoscale printing to every X seconds
-  * [x] Describe distribution
-  * [x] Generate expected length
-* gap\_stats.cpp
-  * [ ] Move missing gaps behind a compile flag
-    * [ ] Create two seperate Makefile targets
-  * [x] drop directory from `unknown-filename`
-  * [x] Missing gaps prob % filter
-  * [x] Don't rewrite `partial\_results`
-  * [x] Calc record chance
-  * [x] Save expected/prob record to sql
-  * [x] load merit from gap.db
-  * [x] Load from unknown\_fn
-* gap\_search.cpp
-  * [ ] Option to output m with gcd(m, d) != 1
-  * [x] (Method2) keeping all composites in memory (and immediately marking mi off)
-    * [ ] Make method2 the default
-    * [ ] Consider calculating skipped PRP based on index (earlier is 1.0, end of sieve is 0.005)
-    * [ ] Ctrl-c then just writes out the results at that point.
-    * [x] Look at Method1 vs Method2 writeup and understand why outputs seem different
-    * [x] Use reindex\_m trick to reduce number size of composites
-    * [x] Do all primes for small ms (to get better memory access patterns)
-    * [x] check GCD with P# to avoid writting to main memory. (didn't work)
-    * [x] Printing at each 1B primes tells you PRP tests saved / time taken.
-    * [x] Write up of Method1 vs Method2 (from memory M2 is faster but uses more memory)
-  * Method1
-    * [x] Store remainder and prime in same array
-    * [x] don't store pi for large primes (just pass around the pair)
-  * [x] Verify `sieve_length` math with d > 1
-    * [x] Calculate `sieve_length` for all (m % d)
-  * [x] Don't save to large\_prime\_queue[next\_mi] with (next\_mi, d) > 1
-  * [x] Only store prime/remainder for primes that divide ANY mi.
-  * [x] `sieve_range` > 4B
-  * [x] Dynamic `sieve_length`
-  * [x] Dynamic `sieve_range`
-* record\_check.py
-  * [x] Read from sql db
-* double\_check.py
-  * [ ] run ecm on random unknowns and verify factors found > sieve limit
 
 ## Benchmarks
 
@@ -264,3 +187,84 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
 ### Final Notes
 
 * Anecdotally `gap_search` is ~8% faster when using `CC=clang++-11`
+
+### TODO
+
+* [ ] python util.py (config parsing, isPrime, teelogger)
+* [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
+* [ ] Rename prime-gap.db
+* missing\_gap\_verify.py & missing\_gap\_test.py
+  * [ ] --skip-till-m mi (for resuming)
+  * [ ] grouped output of BOTH PRIME (every X entries)
+  * [ ] tee logging by default (for premptible machines)
+  * [ ] record when no primes found (candidate for high merit?)
+* README.md
+  * [ ] Add commands for benchmarking
+  * [ ] Fill out gap test section
+* benchmarking
+  * [ ] Try to avoid int128 in `modulo_search_euclid` (used by `_all`)
+  * [ ] Make sure `max_a` is working as intended.
+  * [ ] Add instructions to verify `modulo_search` is >80% of the time.
+* gap\_test.py
+  * [ ] Starting at m > mstart
+  * [ ] Plot average tests count
+  * [ ] Sort by expected gap and PRP only top X%
+  * [ ] Option to toggle between OpenPFGW and gmp
+* gap\_stats.cpp
+  * [ ] Move missing gaps behind a compile flag
+    * [ ] Create two seperate Makefile targets
+* gap\_search.cpp
+  * [ ] Option to output m with gcd(m, d) != 1
+  * (Method2)
+    * [ ] Make method2 the default
+    * [ ] Consider calculating skipped PRP based on index (earlier is 1.0, end of sieve is 0.005)
+    * [ ] Ctrl-c then just writes out the results at that point.
+* double\_check.py
+  * [ ] run ecm on random unknowns and verify factors found > sieve limit
+
+### TODONE
+
+* README.md
+  * [x] Split out some benchmarking
+* gap\_search.cpp
+  * Method2 (all composites in memory)
+    * [x] Look at Method1 vs Method2 writeup and understand why outputs seem different
+    * [x] Use reindex\_m trick to reduce number size of composites
+    * [x] Do all primes for small ms (to get better memory access patterns)
+    * [x] check GCD with P# to avoid writting to main memory. (didn't work)
+    * [x] Printing at each 1B primes tells you PRP tests saved / time taken.
+    * [x] Write up of Method1 vs Method2 (from memory M2 is faster but uses more memory)
+  * Method1
+    * [x] Store remainder and prime in same array
+    * [x] don't store pi for large primes (just pass around the pair)
+  * [x] Verify `sieve_length` math with d > 1
+    * [x] Calculate `sieve_length` for all (m % d)
+  * [x] Don't save to large\_prime\_queue[next\_mi] with (next\_mi, d) > 1
+  * [x] Only store prime/remainder for primes that divide ANY mi.
+  * [x] `sieve_range` > 4B
+  * [x] Dynamic `sieve_length`
+  * [x] Dynamic `sieve_range`
+* gap\_stats.cpp
+  * [x] drop directory from `unknown-filename`
+  * [x] Missing gaps prob % filter
+  * [x] Don't rewrite `partial\_results`
+  * [x] Calc record chance
+  * [x] Save expected/prob record to sql
+  * [x] load merit from gap.db
+  * [x] Load from unknown\_fn
+* gap\_test.py
+  * [x] Store all results to sql
+  * [x] Autoscale printing to every X seconds
+  * [x] Describe distribution
+  * [x] Generate expected length
+* missing\_gap\_verify.py & missing\_gap\_test.py
+  * [x] --ignore-gaps 130898
+  * [x] store records in some .gitignore'd file
+  * [x] Multiprocessing
+* benchmarking
+  * [x] Add int64 `modulo_search_euclid_all`
+  * [x] Add benchmarks for int32/int64 `modulo_search`
+  * [x] Add benchmarks for `K % p`
+* record\_check.py
+  * [x] Read from sql db
+
