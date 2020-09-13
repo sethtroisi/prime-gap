@@ -458,7 +458,9 @@ void run_gap_file(
                 min_j -= 1;
             }
 
-            for (size_t j = min_j; j < unknown_high.size(); j++) {
+            size_t max_j = std::min(unknown_high.size(), prob_combined.size() - i);
+
+            for (size_t j = min_j; j < max_j; j++) {
                 uint32_t gap_high = unknown_high[j];
                 uint32_t gap = gap_low + gap_high;
 
@@ -473,8 +475,8 @@ void run_gap_file(
                     }
                 }
 
-                assert(i + j < prob_combined.size());   // TODO: can break at this point
                 if (records[gap] > log_start_prime) {
+                    assert(i + j < prob_combined.size());
                     prob_record += prob_combined[i+j];
                 }
             }

@@ -461,7 +461,7 @@ Config argparse(int argc, char* argv[]) {
     {
         // check if p is valid
         bool valid = config.p < 1'000'0000;
-        for (int t = 2; valid && t*t <= config.p; t++) {
+        for (size_t t = 2; valid && t*t <= config.p; t++) {
             valid = (config.p % t) > 0;
         }
 
