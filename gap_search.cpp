@@ -302,15 +302,6 @@ void prime_gap_search(const struct Config config) {
     assert( 0 == mpz_tdiv_q_ui(K, K, D) );
     assert( mpz_cmp_ui(K, 1) > 0); // K <= 1 ?!?
 
-    // ----- Save Output file
-    std::ofstream unknown_file;
-    if (config.save_unknowns) {
-        std::string fn = gen_unknown_fn(config, ".txt");
-        printf("\tSaving unknowns to '%s'\n", fn.c_str());
-        unknown_file.open(fn, std::ios::out);
-        assert( unknown_file.is_open() ); // Can't open save_unknowns file
-    }
-
     // ----- Generate primes under SIEVE_RANGE.
     vector<uint32_t> small_primes = get_sieve_primes(SIEVE_SMALL);
     const size_t SIEVE_SMALL_PRIME_PI = small_primes.size();
@@ -546,6 +537,15 @@ void prime_gap_search(const struct Config config) {
 
         // Save unknowns
         if (config.save_unknowns) {
+            // ----- Open and Save to Output file
+            std::ofstream unknown_file;
+            if (config.save_unknowns) {
+                std::string fn = gen_unknown_fn(config, ".txt");
+                printf("\tSaving unknowns to '%s'\n", fn.c_str());
+                unknown_file.open(fn, std::ios::out);
+                assert( unknown_file.is_open() ); // Can't open save_unknowns file
+            }
+
 
             unknown_file << mi;
             unknown_file << " : -" << unknown_l << " +" << unknown_u << " |";
@@ -633,6 +633,7 @@ void prime_gap_parallel(const struct Config config) {
     }
 
     // TODO increase this when valid_ms is very small
+    // TODO seems not well calibrated right now, lower to 40x?
     const uint64_t SMALL_THRESHOLD = 50 * SIEVE_LENGTH;
 
     // SMALL_THRESHOLD deals with all primes that can mark off two items in SIEVE_LENGTH.
@@ -871,7 +872,7 @@ void prime_gap_parallel(const struct Config config) {
     // TODO assert s_prime_factors is close to (2 * SL * valid_m) * (log(log(SL)) + M_c)
 
     if (config.save_unknowns) {
-        // ----- Save Output file
+        // ----- Open and Save to Output file
         std::ofstream unknown_file;
         if (config.save_unknowns) {
             std::string fn = gen_unknown_fn(config, ".txt");
