@@ -1,8 +1,9 @@
 # Combined Sieve - a new program to find prime gaps.
 
-This is the combination of a couple of ideas I had while working on gmp mpz\_prevprime.
+This is the combination of a couple of ideas I had while working on gmp `mpz_prevprime`.
 
-## Gap Search (Sieve many `m * p#/d`)
+
+### Gap Search (Sieve many `m * p#/d`)
 
 #### Method1 vs Method2
 
@@ -10,7 +11,7 @@ This is the combination of a couple of ideas I had while working on gmp mpz\_pre
 
 ```bash
 $ make gap_search
-$ time ./gap_search [--method2] -p <p> -d <d> --mstart <m_start> --minc <m_inc> --sieve-range <SL>M [--sieve-length <SL>] --save-unknowns
+$ time ./gap_search [--method2] -p <p> -d <d> --mstart <m_start> --minc <m_inc> --sieve-range <SR>M [--sieve-length <SR>] --save-unknowns
 ```
 
 **Method1** performs a large initial setup phase to find the first `mi` that each `prime` divides before starting any sieving.
@@ -28,7 +29,7 @@ Primes are iterated in order and all sieve intervals are handled simultaneously.
 
 Status output is significantly nicer in Method2. Stats are computed at regular intervals giving better insight into `--sieve-range`.
 
-In practice Method2 is better, the only downside would be more memory use for small values of `--sieve-range`. Method1 is mostly used to validate results.
+In practice Method2 is better. Method1 is only used to validate results.
 
 ```bash
 $ make gap_search
@@ -93,20 +94,22 @@ $ diff 21400000_907_210_1000_s7746_l1000M.txt 21400000_907_210_1000_s7746_l1000M
 <empty>
 ```
 
-## Gap Stats
+### Gap Stats
 
 ```bash
 $ make gap_stats
-$ time ./gap_stats --save-unknowns --unknown-filename <M_P_D_MINC_sX_lSL.txt>
+$ time ./gap_stats --save-unknowns --unknown-filename "<M>_<P>_<D>_<MINC>_s<SL>_l<SR>M.txt"
 ```
 
-## Gap Test
+### Gap Test
 
 TODO
 
 ### Benchmark
 
 80%+ of the time is spent in `modulo_search_euclid` so it's important to optimize this function.
+
+More benchmarks are present in [BENCHMARKS.md](BENCHMARKS.md)
 
 **TODO**: Updated after `max_a` fix in benchmark
 ```bash
@@ -157,9 +160,9 @@ $ ./benchmark 100000 modulo_search
   * [x] store records in some .gitignore'd file
   * [x] Multiprocessing
 * README.md
-  * [ ] Split out some benchmarking
   * [ ] Add commands for benchmarking
   * [ ] Fill out gap test section
+  * [x] Split out some benchmarking
 * benchmarking
   * [ ] Try to avoid int128 in `modulo_search_euclid` (used by `_all`)
   * [ ] Make sure `max_a` is working as intended.
@@ -171,6 +174,7 @@ $ ./benchmark 100000 modulo_search
   * [ ] Starting at m > mstart
   * [ ] Plot average tests count
   * [ ] Sort by expected gap and PRP only top X%
+  * [ ] Option to toggle between OpenPFGW and gmp
   * [x] Store all results to sql
   * [x] Autoscale printing to every X seconds
   * [x] Describe distribution
@@ -188,10 +192,10 @@ $ ./benchmark 100000 modulo_search
 * gap\_search.cpp
   * [ ] Option to output m with gcd(m, d) != 1
   * [x] (Method2) keeping all composites in memory (and immediately marking mi off)
-    * [ ] Look at Method1 vs Method2 writeup and understand why outputs seem different
     * [ ] Make method2 the default
     * [ ] Consider calculating skipped PRP based on index (earlier is 1.0, end of sieve is 0.005)
     * [ ] Ctrl-c then just writes out the results at that point.
+    * [x] Look at Method1 vs Method2 writeup and understand why outputs seem different
     * [x] Use reindex\_m trick to reduce number size of composites
     * [x] Do all primes for small ms (to get better memory access patterns)
     * [x] check GCD with P# to avoid writting to main memory. (didn't work)
@@ -212,51 +216,9 @@ $ ./benchmark 100000 modulo_search
 * double\_check.py
   * [ ] run ecm on random unknowns and verify factors found > sieve limit
 
-## gap\_search && gap\_test
-On a i7-2600k single threaded.
+## Benchmarks
 
-###
-
-| Pn   | P#    | M/second  | PRP/second |
-|------|-------|-----------|------------|
-| 96   | 503   | 86        | 2081       |
-| 169  | 1009  | 12        | 560        |
-| 303  | 1999  | 1.03      | 92.7       |
-| 670  | 5003  | 24s/test  | 9.40       |
-| 1230 | 10007 | 154s/test | 2.81       |
-
-### Memory use
-
-| P#    | SL   | M\_inc   | Memory(MB) | Time(s) | PRP/prime |
-|-------|------|----------|------------|---------|-----------|
-| 10007 |  1e9 | 80,000   | 1149       | 1040    | 268       |
-| 10007 |  2e9 | 80,000   | 2075       | 1176    | 260       |
-| 10007 |  4e9 | 80,000   | 3350       | 1333    | 252       |
-| 10007 |  8e9 | 80,000   | 4913       | 1488    | 244       |
-| 10007 | 16e9 | 80,000   | 6507       | 1813    | 236       |
-| 10007 | 32e9 | 80,000   | 8544       | 2327    | 230       |
-
-## Pgsurround.pl benchmark
-On a i7-2600k single threaded.
-
-### Pgsurround.pl
-
-| Pn   | P#    | M/second      | Estimated PRP/second (TO VERIFY) |
-|------|-------|---------------|----------------------------------|
-| 96   | 503   | 77.26         | 3575                             |
-| 169  | 1009  | 8.68          | 690                              |
-| 303  | 1999  | 0.759         | 103.5                            |
-| 670  | 5003  | 0.0655        | 19.08                            |
-
-### Just sieving
-
-|  P#   | Width (merit 20)  | Depth     | avg\_remaining | QPS  |
-|-------|-------------------|-----------|----------------|------|
-| 503   | 9792              | 116490    | 703            | 1693 |
-| 1009  | 19456             | 811588    | 1123           | 223  |
-| 1999  | 38976             | 8660119   | 1812           | 20.9 |
-| 5003  | 98624             | 173202211 | 3665           | .895 |
-
+See [BENCHMARKS.md](BENCHMARKS.md)
 
 ## Prerequisites
 
@@ -280,7 +242,6 @@ $ sudo apt install sqlite3 libsqlite3-dev
         $ cd <prime-gaps>
         $ ln -s ../prime-gap-list/gaps.db .
         ```
-
 
 ### Quick test of all functions
 ```bash

@@ -704,11 +704,12 @@ void prime_gap_parallel(const struct Config config) {
             // Improve this setup.
             composite[i].resize(count_coprime+1, false);
         };
-        printf("coprime m:   %ld/%d, coprime i %ld/%d\n",
-            valid_ms, M_inc, count_coprime/2, SIEVE_LENGTH);
+        printf("coprime m    %ld/%d,  coprime i %ld/%d,  ~%'ldMB\n",
+            valid_ms, M_inc, count_coprime/2, SIEVE_LENGTH,
+            valid_ms * count_coprime / 8 / 1024 / 1024);
     }
     setlocale(LC_NUMERIC, "");
-    printf("sieve_range:  %'ld   small_threshold:  %'ld\n", config.sieve_range, SMALL_THRESHOLD);
+    printf("sieve_range: %'ld   small_threshold:  %'ld\n", config.sieve_range, SMALL_THRESHOLD);
     //printf("last prime :  %'ld\n", LAST_PRIME);
     setlocale(LC_NUMERIC, "C");
 
@@ -850,7 +851,7 @@ void prime_gap_parallel(const struct Config config) {
                 1.0 * t_total_unknowns / valid_ms,
                 100.0 - 100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms),
                 100.0 * saved_prp / (SIEVE_INTERVAL * valid_ms));
-            printf("\t~ 2x %.2f PRP/m\t\t(%ld new composites ~= %4.1f skipped PRP => %.1f PRP/seconds)\n",
+            printf("\t~ 2x %.2f PRP/m\t\t(%ld new composites ~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
                 1 / prob_prime_after_sieve,
                 saved_prp,
                 skipped_prp,
