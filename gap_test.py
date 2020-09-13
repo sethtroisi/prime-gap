@@ -15,15 +15,10 @@
 # limitations under the License.
 
 import argparse
-import contextlib
 import itertools
-import logging
 import math
-import os.path
 import re
 import sqlite3
-import subprocess
-import sys
 import time
 from collections import defaultdict
 
@@ -31,25 +26,6 @@ import gmpy2
 
 import gap_utils
 
-
-class TeeLogger:
-    def __init__(self, fn, sysout):
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)-15s %(levelname)s: %(message)s",
-            handlers=[
-                logging.StreamHandler(sys.stdout),
-                logging.FileHandler(fn, mode="w"),
-            ]
-        )
-        self.logger = logging.getLogger()
-
-    def write(self, msg):
-        if msg and not msg.isspace():
-            self.logger.info(msg)
-
-    def flush(self):
-        self.logger.flush()
 
 
 def get_arg_parser():
@@ -559,15 +535,9 @@ def prime_gap_test(args):
 if __name__ == "__main__":
     parser = get_arg_parser()
     args = parser.parse_args()
-    verify_args(args, ".txt")
+    gap_utils.verify_args(args, ".txt")
 
-    context = contextlib.suppress()
-    if args.save_logs:
-        assert args.unknown_filename
-        log_fn = args.unknown_filename + '.log'
-        assert not os.path.exists(log_fn), "{} already exists!".format(log_fn)
-        context = contextlib.redirect_stdout(TeeLogger(log_fn, sys.stdout))
-
-    with context:
+    # TeeLogger context if args.save_logs
+    with gap_utils.logger_context(args):
         prime_gap_test(args)
 

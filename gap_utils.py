@@ -1,12 +1,49 @@
+import contextlib
+import logging
 import os
 import re
+import subprocess
+import sys
 
 import gmpy2
-import subprocess
 
 
 UNKNOWN_FILENAME_RE = re.compile(
     "^(\d+)_(\d+)_(\d+)_(\d+)_s(\d+)_l(\d+)M(.m2)?(?:.missing)?.txt")
+
+
+
+class TeeLogger:
+    def __init__(self, fn, sysout):
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)-15s %(levelname)s: %(message)s",
+            handlers=[
+                logging.StreamHandler(sys.stdout),
+                logging.FileHandler(fn, mode="w"),
+            ]
+        )
+        self.logger = logging.getLogger()
+
+    def write(self, msg):
+        if msg and not msg.isspace():
+            self.logger.info(msg)
+
+    def flush(self):
+        self.logger.flush()
+
+
+def logger_context(args):
+    # contextlib.nullcontext() requires python 3.7
+    context = contextlib.suppress()
+    if args.save_logs:
+        assert args.unknown_filename
+        log_fn = args.unknown_filename + '.log'
+        assert not os.path.exists(log_fn), "{} already exists!".format(log_fn)
+        print("Saving logs to '{}'".format(log_fn))
+        context = contextlib.redirect_stdout(TeeLogger(log_fn, sys.stdout))
+
+    return context
 
 
 def verify_args(args, fn_extension):

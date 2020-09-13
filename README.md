@@ -190,13 +190,11 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
 
 ### TODO
 
-* [ ] python util.py (config parsing, isPrime, teelogger)
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
 * [ ] Rename prime-gap.db
 * missing\_gap\_verify.py & missing\_gap\_test.py
   * [ ] --skip-till-m mi (for resuming)
   * [ ] grouped output of BOTH PRIME (every X entries)
-  * [ ] tee logging by default (for premptible machines)
   * [ ] record when no primes found (candidate for high merit?)
 * README.md
   * [ ] Add commands for benchmarking
@@ -258,6 +256,8 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
   * [x] Describe distribution
   * [x] Generate expected length
 * missing\_gap\_verify.py & missing\_gap\_test.py
+  * [x] tee logging (for preemptible machines)
+  * [x] gap\_utils.py (config parsing, isPrime, teelogger)
   * [x] --ignore-gaps 130898
   * [x] store records in some .gitignore'd file
   * [x] Multiprocessing
@@ -267,4 +267,3 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
   * [x] Add benchmarks for `K % p`
 * record\_check.py
   * [x] Read from sql db
-
