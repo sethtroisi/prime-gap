@@ -5,6 +5,7 @@ gap_test
 benchmark
 *.o
 
+pfgw
 pfgw64
 pfgw.ini
 pfgw.log

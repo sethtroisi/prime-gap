@@ -35,14 +35,21 @@ class TeeLogger:
 
 def logger_context(args):
     # contextlib.nullcontext() requires python 3.7
-    context = contextlib.suppress()
-    if args.save_logs:
-        assert args.unknown_filename
-        log_fn = args.unknown_filename + '.log'
-        assert not os.path.exists(log_fn), "{} already exists!".format(log_fn)
-        print("Saving logs to '{}'".format(log_fn))
-        context = contextlib.redirect_stdout(TeeLogger(log_fn, sys.stdout))
+    if not args.save_logs:
+        context = contextlib.suppress()
 
+    assert args.unknown_filename
+    log_fn_base = args.unknown_filename + '.log'
+    for num in range(0, 5):
+        log_fn = log_fn_base
+        if num > 0:
+            log_fn += "." + str(num)
+
+        if not os.path.exists(log_fn):
+            print("Saving logs to '{}'".format(log_fn))
+            return contextlib.redirect_stdout(TeeLogger(log_fn, sys.stdout))
+
+    assert False, "log file '{}' already exists x5".format(log_fn_base)
     return context
 
 
@@ -90,6 +97,22 @@ def verify_args(args, fn_extension):
         assert basename.startswith(fn), (fn, args.unknown_filename)
     else:
         args.unknown_filename = fn
+
+
+def K_and_stats(args):
+    P = args.p
+    D = args.d
+
+    assert P <= 80000
+    K = gmpy2.primorial(P)
+    K, r = divmod(K, D)
+    assert r == 0
+
+    K_digits = gmpy2.num_digits(K, 10)
+    K_bits   = gmpy2.num_digits(K, 2)
+    K_log    = float(gmpy2.log(K))
+
+    return K, K_digits, K_bits, K_log
 
 
 def openPFGW_is_prime(strn):

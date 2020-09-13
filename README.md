@@ -155,9 +155,9 @@ $ sudo apt install libgmp10
 
 $ sudo apt install libgmp-dev libmpfr-dev libmpc-dev
 $ sudo apt install sqlite3 libsqlite3-dev
-$ pip install --user gmpy2=2.1.0b5
+$ pip install --user gmpy2=2.1.0b5 tqdm
 
-$ sqlite3 prime-gaps-search.db < schema.sql
+$ sqlite3 prime-gap-search.db < schema.sql
 
 ```
 
@@ -198,11 +198,9 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
 ### TODO
 
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
-* missing\_gap\_verify.py & missing\_gap\_test.py
-  * [ ] --skip-till-m mi (for resuming)
+* [ ] rename `next_p_i` to `next_p` in schema.sql
+* gap\_utils.py
   * [ ] Option for gmp vs OpenPFGW
-  * [ ] grouped output of BOTH PRIME (every X entries)
-  * [ ] record when no primes found (candidate for high merit?)
 * README.md
   * [ ] Add commands for benchmarking
   * [ ] Fill out gap test section
@@ -262,6 +260,9 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
   * [x] Describe distribution
   * [x] Generate expected length
 * missing\_gap\_verify.py & missing\_gap\_test.py
+  * [x] load/save from DB file.
+  * [x] grouped output of BOTH PRIME (every X entries)
+  * [x] record stats about prime found (potential candidate for high merit?)
   * [x] tee logging (for preemptible machines)
   * [x] gap\_utils.py (config parsing, isPrime, teelogger)
   * [x] --ignore-gaps 130898

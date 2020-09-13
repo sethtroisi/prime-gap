@@ -82,14 +82,18 @@ CREATE TABLE IF NOT EXISTS missing_gap_result (
         P INTEGER,
         D INTEGER,
 
+        prob_missing_gap REAL,
+
         /*
           Some fractions of unknown numbers were tested.
-          found_{next,prev}_p were the first prime found.
-          0 means none of next_p_test tests were prime.
-          See missing_gap_test.py
+
+          test_{next,prev}_p:
+              the first prime FOUND, it's possible maybe even likely that a
+              prime closer to N exists.
+              0 means none of next_p_test tests were prime.
         */
-        found_prev_p_i INTEGER,
-        found_next_p_i INTEGER,
+        test_prev_p INTEGER,
+        test_next_p INTEGER,
 
         prev_p_tests INTEGER,
         next_p_tests INTEGER
