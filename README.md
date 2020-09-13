@@ -20,6 +20,10 @@ Each `mi` is then processed in order, looking at small primes and only those lar
 Half the time will be spent watching dots cross this screen.
 ```
         Calculating first m each prime divides
+        .
+(later)
+        .........
+(eventually)
 	......................................
 ```
 
@@ -143,19 +147,19 @@ $ ./benchmark 100000 modulo_search
 
 See [BENCHMARKS.md](BENCHMARKS.md)
 
-## Prerequisites
+## Setup
 
 ```bash
+# Should probably build and install gmp head for faster next_prime
+$ sudo apt install libgmp10
+
 $ sudo apt install libgmp-dev libmpfr-dev libmpc-dev
-$ pip install --user gmpy2=2.1.0b5
 $ sudo apt install sqlite3 libsqlite3-dev
+$ pip install --user gmpy2=2.1.0b5
 
-# Should probably build and install from head for faster next_prime
+$ sqlite3 prime-gaps-search.db < schema.sql
+
 ```
-
-* OpenPFGW [PrimeWiki](https://www.rieselprime.de/ziki/PFGW) [SourceForge](https://sourceforge.net/projects/openpfgw/)
-  * Unpack somewhere and link binary as `pfgw64`
-  * may also need to `chmod a+x pfgw64`
 
 * [prime-gap-list](https://github.com/primegap-list-project/prime-gap-list)
         ```bash
@@ -187,13 +191,16 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
 ### Final Notes
 
 * Anecdotally `gap_search` is ~8% faster when using `CC=clang++-11`
+* OpenPFGW [PrimeWiki](https://www.rieselprime.de/ziki/PFGW) [SourceForge](https://sourceforge.net/projects/openpfgw/)
+  * Unpack somewhere and link binary as `pfgw64`
+  * may also need to `chmod a+x pfgw64`
 
 ### TODO
 
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
-* [ ] Rename prime-gap.db
 * missing\_gap\_verify.py & missing\_gap\_test.py
   * [ ] --skip-till-m mi (for resuming)
+  * [ ] Option for gmp vs OpenPFGW
   * [ ] grouped output of BOTH PRIME (every X entries)
   * [ ] record when no primes found (candidate for high merit?)
 * README.md
@@ -215,7 +222,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
   * [ ] Option to output m with gcd(m, d) != 1
   * (Method2)
     * [ ] Make method2 the default
-    * [ ] Consider calculating skipped PRP based on index (earlier is 1.0, end of sieve is 0.005)
     * [ ] Ctrl-c then just writes out the results at that point.
 * double\_check.py
   * [ ] run ecm on random unknowns and verify factors found > sieve limit
@@ -267,3 +273,5 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
   * [x] Add benchmarks for `K % p`
 * record\_check.py
   * [x] Read from sql db
+* Project level
+  * [x] Rename prime-gap.db to prime-gap-search.db

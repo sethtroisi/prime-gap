@@ -35,10 +35,12 @@ def get_arg_parser():
     parser.add_argument('--logs-directory', type=str,
         help="directory of logs")
 
-    parser.add_argument('--prime-db', type=str,
+    parser.add_argument('--search-db', type=str,
+        default="prime-gap-search.db"
         help="Prime database from gap_test")
 
     parser.add_argument('--prime-gaps-db', type=str, required=True,
+        default="gaps.db",
         help="Prime gap database see github.com/primegap-list-project/prime-gap-list")
 
     return parser
@@ -134,11 +136,11 @@ def search_logs(args):
 
 
 def search_db(args):
-    assert os.path.exists(args.prime_db), (
-        "Prime database ({}) doesn't exist".format(args.prime_db))
+    assert os.path.exists(args.search_db), (
+        "Prime Search database ({}) doesn't exist".format(args.search_db))
 
     gaps = []
-    with sqlite3.connect(args.prime_db) as conn:
+    with sqlite3.connect(args.search_db) as conn:
         conn.row_factory = sqlite3.Row
 
         num_gaps = conn.execute('SELECT COUNT(*) FROM result').fetchone()[0]
@@ -178,7 +180,7 @@ if __name__ == "__main__":
 
     if args.logs_directory:
         search_logs(args)
-    elif args.prime_db:
+    elif args.search_db:
         search_db(args)
     else:
         print ("Must pass --logs-directory or --prime-db")

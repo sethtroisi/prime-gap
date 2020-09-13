@@ -46,7 +46,7 @@ typedef priority_queue<missing_gap_record,
                        std::greater<missing_gap_record>> min_queue_gaps;
 
 const char records_db[] = "gaps.db";
-const char gaps_db[]    = "prime-gaps.db";
+const char gaps_db[]    = "prime-gap-search.db";
 
 // Limits the size of record list
 const uint32_t MAX_GAP = 1'000'000;

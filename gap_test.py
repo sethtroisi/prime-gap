@@ -40,9 +40,9 @@ def get_arg_parser():
     parser.add_argument('--sieve-range',  type=int,
         help="Use primes <= sieve-range for checking composite (must match gap_search param)")
 
-    parser.add_argument('--prime-db', type=str,
-        default="prime-gaps.db",
-        help="Prime sqlite database")
+    parser.add_argument('--search-db', type=str,
+        default="prime-gap-search.db"
+        help="Prime database from gap_test")
 
     parser.add_argument('--unknown-filename', type=str,
         help="determine mstart, minc, p, d, sieve-length, and sieve-range"
@@ -250,8 +250,11 @@ def prime_gap_test(args):
     print()
     unknown_file = open(args.unknown_filename, "r")
 
-    # ----- Open Prime-DB
-    conn = sqlite3.connect(args.prime_db)
+    # ----- Open Prime-Gaps-DB
+    assert os.path.exists(args.search_db), (
+        "Prime Search database ({}) doesn't exist".format(args.search_db))
+
+    conn = sqlite3.connect(args.search_db)
     conn.row_factory = sqlite3.Row
     existing = load_existing(conn, args)
     print (f"Found {len(existing)} existing results")
