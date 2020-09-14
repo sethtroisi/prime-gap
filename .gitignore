@@ -11,8 +11,7 @@ pfgw.ini
 pfgw.log
 pfgw-prime.log
 
-gaps.db
-prime-gaps.db
+*.db
 
 data/
 *M.txt
