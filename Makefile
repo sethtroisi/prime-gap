@@ -24,6 +24,8 @@ PROGS	 = gap_search gap_test
 	$(CC) -c -o $@ $< $(FLAGS)
 
 
+all: $(PROGS) gap_stats benchmark
+
 $(PROGS) : %: %.cpp $(OBJS)
 	$(CC) -o $@ $^ $(FLAGS) $(LDFLAGS)
 
