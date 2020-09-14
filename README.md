@@ -65,18 +65,22 @@ AUTO SET: sieve length (coprime: 353, prob_gap longer 0.79%): 7746
 	PrimePi(1000000000) = 50847534 guessed 50185140
 	Setup took 16.8 seconds
 ...
-	21400037  127 <- unknowns -> 120
-	    valid m   10         (316.95/sec, with setup per m: 1.7)  0 seconds elapsed
-	    unknowns  2353       (avg: 235.30), 98.48% composite  50.36 <- % -> 49.64%
-	    large prime remaining: 1196058 (avg/test: 7338)
-	21400433  120 <- unknowns -> 110
-	    valid m   100        (333.38/sec, with setup per m: 0.17)  0 seconds elapsed
-	    unknowns  23530      (avg: 235.30), 98.48% composite  49.88 <- % -> 50.12%
-	    large prime remaining: 768403 (avg/test: 7347)
-	21400999  142 <- unknowns -> 110
-	    valid m   230        (369.18/sec, with setup per m: 0.076)  1 seconds elapsed
-	    unknowns  54176      (avg: 235.55), 98.48% composite  49.91 <- % -> 50.09%
-	    large prime remaining: 0 (avg/test: 7349)
+	21400003  102 <- unknowns -> 122
+	    intervals 1          (326.87/sec, with setup per m: 17)  0 seconds elapsed
+	    unknowns  224        (avg: 224.00), 98.54% composite  45.54 <- % -> 54.46%
+	    large prime remaining: 1226493 (avg/test: 7470)
+	21400037  127 <- unknowns -> 119
+	    intervals 10         (332.96/sec, with setup per m: 1.7)  0 seconds elapsed
+	    unknowns  2328       (avg: 232.80), 98.48% composite  50.47 <- % -> 49.53%
+	    large prime remaining: 1186700 (avg/test: 7272)
+	21400433  119 <- unknowns -> 108
+	    intervals 100        (349.03/sec, with setup per m: 0.17)  0 seconds elapsed
+	    unknowns  23193      (avg: 231.93), 98.49% composite  49.90 <- % -> 50.10%
+	    large prime remaining: 762206 (avg/test: 7279)
+	21400999  140 <- unknowns -> 107
+	    intervals 230        (398.46/sec, with setup per m: 0.074)  1 seconds elapsed
+	    unknowns  53383      (avg: 232.10), 98.49% composite  49.92 <- % -> 50.08%
+	    large prime remaining: 0 (avg/test: 7280)
 ```
 
 ```bash
@@ -114,7 +118,7 @@ sieve_range:  1,000,000,000   small_threshold:  387,300
 ```
 
 ```bash
-$ diff 21400000_907_210_1000_s7746_l1000M.txt 21400000_907_210_1000_s7746_l1000M.m1.txt
+$ diff 21400000_907_210_1000_s7674_l1000M.txt 21400000_907_210_1000_s7674_l1000M.m1.txt
 <empty>
 ```
 
@@ -206,7 +210,7 @@ $ sqlite3 prime-gap-search.db < schema.sql
 ```bash
 $ PARAMS="-p 907 -d 2190 --mstart 1 --minc 200 --sieve-range 100 --sieve-length 11000"
 $ make gap_search gap_stats gap_test
-$ time ./gap_search --method2 --save-unknowns $PARAMS
+$ time ./gap_search --method1 --save-unknowns $PARAMS
 $ time ./gap_search           --save-unknowns $PARAMS
 $ md5sum 1_907_2190_200_s11000_l100M.{txt,m1.txt}
 080309453b4310e0310a4fb4d1779ffe  1_907_2190_200_s11000_l100M.txt

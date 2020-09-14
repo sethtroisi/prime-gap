@@ -262,6 +262,7 @@ double prob_prime_and_stats(
         config, prob_prime, &prob_prime_coprime, &count_coprime);
 
     if (config.verbose >= 2) {
+        printf("\n");
         printf("\tavg %.0f left from %.3f%% of %u interval with %ldM sieve\n",
                 count_coprime * (unknowns_after_sieve / prob_prime_coprime),
                 100 * unknowns_after_sieve,
@@ -346,7 +347,7 @@ void prime_gap_search(const struct Config config) {
         // Print "."s during, equal in length to 'Calculat...'
         size_t print_dots = 38;
 
-        size_t expected_primes = 1.04 * SIEVE_RANGE / log(SIEVE_RANGE);
+        size_t expected_primes = 1.01 * SIEVE_RANGE / log(SIEVE_RANGE);
 
         long first_m_sum = 0;
         double expected_large_primes = 0;
