@@ -144,7 +144,7 @@ def calculate_expected_gaps(composites, SL, prob_prime_after_sieve, log_m,
         expected_length += (SL + log_m) * prob_gap_longer
         expected_side.append(expected_length)
 
-    # TODO really slow
+    # TODO really slow, gap_test.cpp much faster.
     # TODO lookup best merit of every gap.
     p_merit = 0
     for prob_i, lower in zip(probs, composites[0]):
@@ -502,19 +502,24 @@ def prime_gap_test(args):
 
         # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
         fig3.add_subplot(gs[2, 1])
+
         items = sorted(
             list(itertools.zip_longest(p_gap_merit, s_experimental_gap, fillvalue=0)),
             reverse=True)
         p_gap_merit_sorted, gap_real = zip(*items)
 
         tests = list(range(1, len(p_gap_merit_sorted)+1))
+        # Theoretical
         sum_p = np.cumsum(p_gap_merit_sorted)
         large_gap = np.cumsum(np.array(gap_real) > min_merit_gap)
 
-        plt.plot(tests, sum_p)
-        plt.plot(tests, large_gap)
+        plt.plot(tests, sum_p, label="P(gap > min_merit)")
+        plt.plot(tests, large_gap, label="Count gap > min_merit")
         plt.xlabel("tests")
         plt.ylabel(f"Sum(P(gap > min_merit({min_merit})))")
+
+        # TODO(P(record))
+        # TODO(P(gap > X))
 
         if args.save_logs:
             plt.savefig(args.unknown_filename + ".png", dpi=1080//8)

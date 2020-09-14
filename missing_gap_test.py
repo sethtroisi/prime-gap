@@ -308,7 +308,7 @@ def prime_gap_test(args):
                     for success in successes[s_last_success_count:]:
                         print("\t", success)
                     print("\n"*2)
-
+                    s_last_success_count = len(successes)
 
     # TODO print more stats at the end
     print_count_timing(s_start_t, "END: " + str(li + 1), tested)
