@@ -42,6 +42,8 @@ struct Config {
 
     bool method2 = false;
 
+    int verbose = 2;
+
     string unknown_filename;
 };
 

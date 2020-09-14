@@ -256,6 +256,9 @@ void show_usage(char* name) {
     cout << "  --save-unknowns" << endl;
     cout << "    save not-composites to a temp file (p_d_mstart_minc_sieve_range.txt)" << endl;
     cout << "    where they can be processed in a 2nd pass." << endl;
+    cout << endl;
+    cout << "  -q, --quiet" << endl;
+    cout << "    suppress some status output (twice for more suppression)" << endl;
     cout << "  -h, --help" << endl;
     cout << "    print this help message" << endl;
     cout << endl;
@@ -303,6 +306,7 @@ Config argparse(int argc, char* argv[]) {
 
         {"method2",          no_argument,       0,   8  },
 
+        {"quiet",            no_argument,       0,  'q' },
         {"help",             no_argument,       0,  'h' },
         {0,                  0,                 0,   0  }
     };
@@ -312,11 +316,16 @@ Config argparse(int argc, char* argv[]) {
 
     int option_index = 0;
     char c;
-    while ((c = getopt_long(argc, argv, "hp:d:", long_options, &option_index)) >= 0) {
+    while ((c = getopt_long(argc, argv, "qhp:d:", long_options, &option_index)) >= 0) {
         switch (c) {
             case 'h':
                 show_usage(argv[0]);
                 exit(0);
+
+            case 'q':
+                config.verbose--;
+                break;
+
             case 'p':
                 config.p = atoi(optarg);
                 break;

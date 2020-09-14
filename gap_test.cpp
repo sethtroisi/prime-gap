@@ -36,13 +36,15 @@ void prime_gap_test(const struct Config config);
 
 
 int main(int argc, char* argv[]) {
-    printf("\tCompiled with GMP %d.%d.%d\n\n",
-        __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
-
     Config config = argparse(argc, argv);
     if (config.valid == 0) {
         show_usage(argv[0]);
         return 1;
+    }
+
+    if (config.verbose >= 2) {
+        printf("\tCompiled with GMP %d.%d.%d\n\n",
+            __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
     }
 
     if (config.sieve_length == 0) {
@@ -54,11 +56,6 @@ int main(int argc, char* argv[]) {
     if (config.sieve_range == 0) {
         cout << "Must set sieve-length for " << argv[0] << endl;
         show_usage(argv[0]);
-        return 1;
-    }
-
-    if (config.save_unknowns == 0) {
-        cout << "Must set --save-unknowns" << endl;
         return 1;
     }
 
@@ -110,7 +107,6 @@ void prime_gap_test(const struct Config config) {
     }
 
     // ----- Open unknown input file
-    assert( config.save_unknowns );
     std::ifstream unknown_file;
     {
         std::string fn = gen_unknown_fn(config, ".txt");
@@ -359,7 +355,7 @@ void prime_gap_test(const struct Config config) {
         }
 
         s_tests += 1;
-        if (  true || (s_tests == 1 || s_tests == 10 || s_tests == 100 ||
+        if ( false || (s_tests == 1 || s_tests == 10 || s_tests == 100 ||
                                s_tests == 500 || s_tests == 1000) ||
               (s_tests % 5000 == 0) ||
               (s_tests == M_inc) ) {
@@ -370,30 +366,31 @@ void prime_gap_test(const struct Config config) {
                 m,
                 unknown_l, unknown_u,
                 prev_p_i, next_p_i);
-//            if (mi <= 10) continue;
 
             // Stats!
-            printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
-                s_tests, s_tests / secs, secs);
-            printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f%% <- %% -> %.2f%%\n",
-                s_total_unknown, s_total_unknown / ((double) s_tests),
-                100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
-                100.0 * s_t_unk_low / s_total_unknown,
-                100.0 * s_t_unk_hgh / s_total_unknown);
-            if (config.run_prp) {
-                printf("\t    prp tests %-10ld (avg: %.2f) (%.1f tests/sec)\n",
-                    s_total_prp_tests,
-                    s_total_prp_tests / (float) s_tests,
-                    s_total_prp_tests / secs);
-                printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
-                    s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / s_tests,
-                    s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / s_tests);
-                printf("\t    best merit this interval: %.3f (at m=%ld)\n",
-                    s_best_merit_interval, s_best_merit_interval_m);
-            }
+            if (config.verbose > 0) {
+                printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
+                    s_tests, s_tests / secs, secs);
+                printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f%% <- %% -> %.2f%%\n",
+                    s_total_unknown, s_total_unknown / ((double) s_tests),
+                    100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
+                    100.0 * s_t_unk_low / s_total_unknown,
+                    100.0 * s_t_unk_hgh / s_total_unknown);
+                if (config.run_prp) {
+                    printf("\t    prp tests %-10ld (avg: %.2f) (%.1f tests/sec)\n",
+                        s_total_prp_tests,
+                        s_total_prp_tests / (float) s_tests,
+                        s_total_prp_tests / secs);
+                    printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
+                        s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / s_tests,
+                        s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / s_tests);
+                    printf("\t    best merit this interval: %.3f (at m=%ld)\n",
+                        s_best_merit_interval, s_best_merit_interval_m);
+                }
 
-            s_best_merit_interval = 0;
-            s_best_merit_interval_m = -1;
+                s_best_merit_interval = 0;
+                s_best_merit_interval_m = -1;
+            }
         }
     }
 

@@ -65,10 +65,13 @@ bool is_range_already_processed(const struct Config& config);
 
 
 int main(int argc, char* argv[]) {
-    printf("\tCompiled with GMP %d.%d.%d\n\n",
-        __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
 
     Config config = argparse(argc, argv);
+
+    if (config.verbose >= 3) {
+        printf("\tCompiled with GMP %d.%d.%d\n\n",
+            __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
+    }
 
     if (config.valid == 0) {
         show_usage(argv[0]);

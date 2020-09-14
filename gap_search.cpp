@@ -47,10 +47,13 @@ void prime_gap_parallel(const struct Config config);
 
 
 int main(int argc, char* argv[]) {
-    printf("\tCompiled with GMP %d.%d.%d\n\n",
-        __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
-
     Config config = argparse(argc, argv);
+
+    if (config.verbose >= 2) {
+        printf("\tCompiled with GMP %d.%d.%d\n\n",
+            __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
+    }
+
     set_defaults(config);
 
     if (config.save_unknowns == 0) {
@@ -64,14 +67,17 @@ int main(int argc, char* argv[]) {
     }
 
     setlocale(LC_NUMERIC, "");
-    printf("\n");
-    printf("Testing m * %u#/%u, m = %ld + [0, %'ld)\n",
-        config.p, config.d, config.mstart, config.minc);
-
-    printf("\n");
-    printf("sieve_length: 2x %'d\n", config.sieve_length);
-    printf("sieve_range:  %'ld\n", config.sieve_range);
-    printf("\n");
+    if (config.verbose >= 0) {
+        printf("\n");
+        printf("Testing m * %u#/%u, m = %ld + [0, %'ld)\n",
+            config.p, config.d, config.mstart, config.minc);
+    }
+    if (config.verbose >= 2) {
+        printf("\n");
+        printf("sieve_length: 2x %'d\n", config.sieve_length);
+        printf("sieve_range:  %'ld\n", config.sieve_range);
+        printf("\n");
+    }
     setlocale(LC_NUMERIC, "C");
 
     if (config.method2) {
@@ -221,8 +227,10 @@ void set_defaults(struct Config& config) {
             config.sieve_range =   1'000'000'000;
         }
 
-        printf("AUTO SET: sieve range (log(t) = ~%.0f): %ld\n",
-            logK, config.sieve_range);
+        if (config.verbose >= 0) {
+            printf("AUTO SET: sieve range (log(t) = ~%.0f): %ld\n",
+                logK, config.sieve_range);
+        }
     }
 
     mpz_clear(K);
@@ -238,9 +246,11 @@ void K_stats(
     double mantis = mpz_get_d_2exp(&exp, K);
     *K_log = log(mantis) + log(2) * exp;
 
-    int K_bits   = mpz_sizeinbase(K, 2);
-    printf("K = %d bits, %d digits, log(K) = %.2f\n",
-        K_bits, *K_digits, *K_log);
+    if (config.verbose >= 1) {
+        int K_bits   = mpz_sizeinbase(K, 2);
+        printf("K = %d bits, %d digits, log(K) = %.2f\n",
+            K_bits, *K_digits, *K_log);
+    }
 }
 
 
@@ -263,19 +273,21 @@ double prob_prime_and_stats(
     double prob_gap_hypothetical = prop_gap_larger(
         config, prob_prime, &prob_prime_coprime, &count_coprime);
 
-    printf("\tavg %.0f left from %.3f%% of %u interval with %ldM sieve\n",
-            count_coprime * (unknowns_after_sieve / prob_prime_coprime),
-            100 * unknowns_after_sieve,
-            config.sieve_length, config.sieve_range/1'000'000);
-    printf("\t%.3f%% of %d digit numbers are prime\n",
-            100 * prob_prime, K_digits);
-    printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
-            100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
-    printf("\t~2x%.1f = %.1f PRP tests per m\n",
-            1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
-    printf("\tsieve_length=%d is insufficient ~~%.3f%% of time\n",
-            config.sieve_length, 100 * prob_gap_hypothetical);
-    cout << endl;
+    if (config.verbose >= 1) {
+        printf("\tavg %.0f left from %.3f%% of %u interval with %ldM sieve\n",
+                count_coprime * (unknowns_after_sieve / prob_prime_coprime),
+                100 * unknowns_after_sieve,
+                config.sieve_length, config.sieve_range/1'000'000);
+        printf("\t%.3f%% of %d digit numbers are prime\n",
+                100 * prob_prime, K_digits);
+        printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
+                100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
+        printf("\t~2x%.1f = %.1f PRP tests per m\n",
+                1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
+        printf("\tsieve_length=%d is insufficient ~~%.3f%% of time\n",
+                config.sieve_length, 100 * prob_gap_hypothetical);
+        cout << endl;
+    }
 
     return prob_prime;
 }
@@ -308,8 +320,10 @@ void prime_gap_search(const struct Config config) {
     {
         // SIEVE_SMALL deals with all primes that can mark off two items in SIEVE_LENGTH.
         assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
-        printf("\tUsing %'ld primes for SIEVE_SMALL(%'d)\n\n",
-            SIEVE_SMALL_PRIME_PI, SIEVE_SMALL);
+        if (config.verbose >= 1) {
+            printf("\tUsing %'ld primes for SIEVE_SMALL(%'d)\n\n",
+                SIEVE_SMALL_PRIME_PI, SIEVE_SMALL);
+        }
         assert( small_primes[SIEVE_SMALL_PRIME_PI-1] < SIEVE_SMALL);
         assert( small_primes[SIEVE_SMALL_PRIME_PI-1] + 200 > SIEVE_SMALL);
     }
@@ -393,23 +407,20 @@ void prime_gap_search(const struct Config config) {
         });
         cout << endl;
 
-        printf("\tSum of m1: %ld\n", first_m_sum);
-        setlocale(LC_NUMERIC, "");
-        if (expected_primes == pi) {
-            printf("\tPrimePi(%ld) = %ld\n", SIEVE_RANGE, pi);
-        } else {
-            printf("\tPrimePi(%ld) = %ld guessed %ld\n", SIEVE_RANGE, pi, expected_primes);
-        }
-
-        printf("\t%ld primes not needed (%.1f%%)\n",
-            (pi - SIEVE_SMALL_PRIME_PI) - pr_pi,
-            100 - (100.0 * pr_pi / (pi - SIEVE_SMALL_PRIME_PI)));
-        printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
-            expected_large_primes,
-            (2 * SL - 1) * (log(log(SIEVE_RANGE)) - log(log(SIEVE_SMALL))));
-        setlocale(LC_NUMERIC, "C");
-
         assert(prime_and_remainder.size() == small_primes.size());
+        if (config.verbose >= 1) {
+            printf("\tSum of m1: %ld\n", first_m_sum);
+            setlocale(LC_NUMERIC, "");
+            printf("\tPrimePi(%ld) = %ld guessed %ld\n", SIEVE_RANGE, pi, expected_primes);
+
+            printf("\t%ld primes not needed (%.1f%%)\n",
+                (pi - SIEVE_SMALL_PRIME_PI) - pr_pi,
+                100 - (100.0 * pr_pi / (pi - SIEVE_SMALL_PRIME_PI)));
+            printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
+                expected_large_primes,
+                (2 * SL - 1) * (log(log(SIEVE_RANGE)) - log(log(SIEVE_SMALL))));
+            setlocale(LC_NUMERIC, "C");
+        }
     }
     {
         auto  s_stop_t = high_resolution_clock::now();
@@ -565,8 +576,9 @@ void prime_gap_search(const struct Config config) {
             unknown_file << "\n";
         }
 
-        if ( (s_tests == 1 || s_tests == 10 || s_tests == 100 || s_tests == 500 || s_tests == 1000) ||
-                (s_tests % 5000 == 0) || (mi == last_mi) ) {
+        if (config.verbose >= 0 &&
+                ((s_tests == 1 || s_tests == 10 || s_tests == 100 || s_tests == 500 || s_tests == 1000) ||
+                 (s_tests % 5000 == 0) || (mi == last_mi)) ) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
             double g_secs = duration<double>(s_stop_t - s_setup_t).count();
@@ -574,18 +586,18 @@ void prime_gap_search(const struct Config config) {
             printf("\t%ld %4d <- unknowns -> %-4d\n",
                     m, unknown_l, unknown_u);
 
-            if (mi <= 10) continue;
-
-            // Stats!
-            printf("\t    valid m   %-10ld (%.2f/sec, with setup per m: %.2g)  %.0f seconds elapsed\n",
-                    s_tests, s_tests / secs, g_secs / s_tests, secs);
-            printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
-                    s_total_unknown, s_total_unknown / ((double) s_tests),
-                    100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
-                    100.0 * s_t_unk_low / s_total_unknown,
-                    100.0 * s_t_unk_hgh / s_total_unknown);
-            printf("\t    large prime remaining: %d (avg/test: %ld)\n",
-                    s_large_primes_rem, s_large_primes_tested / s_tests);
+            if (config.verbose >= 1) {
+                // Stats!
+                printf("\t    valid m   %-10ld (%.2f/sec, with setup per m: %.2g)  %.0f seconds elapsed\n",
+                        s_tests, s_tests / secs, g_secs / s_tests, secs);
+                printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
+                        s_total_unknown, s_total_unknown / ((double) s_tests),
+                        100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
+                        100.0 * s_t_unk_low / s_total_unknown,
+                        100.0 * s_t_unk_hgh / s_total_unknown);
+                printf("\t    large prime remaining: %d (avg/test: %ld)\n",
+                        s_large_primes_rem, s_large_primes_tested / s_tests);
+            }
         }
     }
 
@@ -705,14 +717,18 @@ void prime_gap_parallel(const struct Config config) {
             // Improve this setup.
             composite[i].resize(count_coprime+1, false);
         };
-        printf("coprime m    %ld/%d,  coprime i %ld/%d,  ~%'ldMB\n",
-            valid_ms, M_inc, count_coprime/2, SIEVE_LENGTH,
-            valid_ms * count_coprime / 8 / 1024 / 1024);
+        if (config.verbose >= 1) {
+            printf("coprime m    %ld/%d,  coprime i %ld/%d,  ~%'ldMB\n",
+                valid_ms, M_inc, count_coprime/2, SIEVE_LENGTH,
+                valid_ms * count_coprime / 8 / 1024 / 1024);
+        }
     }
-    setlocale(LC_NUMERIC, "");
-    printf("sieve_range: %'ld   small_threshold:  %'ld\n", config.sieve_range, SMALL_THRESHOLD);
-    //printf("last prime :  %'ld\n", LAST_PRIME);
-    setlocale(LC_NUMERIC, "C");
+    if (config.verbose >= 1) {
+        setlocale(LC_NUMERIC, "");
+        printf("sieve_range: %'ld   small_threshold:  %'ld\n", config.sieve_range, SMALL_THRESHOLD);
+        //printf("last prime :  %'ld\n", LAST_PRIME);
+        setlocale(LC_NUMERIC, "C");
+    }
 
     // Used for various stats
     auto  s_start_t = high_resolution_clock::now();
@@ -838,25 +854,32 @@ void prime_gap_parallel(const struct Config config) {
             s_prime_factors += s_large_prime_factors_interval;
 
             setlocale(LC_NUMERIC, "");
-            printf("\n%'-10ld (primes %'ld/%'ld)\t(seconds: %.2f/%-.1f | per m: %.2g)\n",
-                prime,
-                pi_interval, pi,
-                int_secs, secs,
-                secs / valid_ms);
-            printf("\tfactors  %'9ld \t\t(interval: %'ld, avg m/large_prime interval: %.1f)\n",
-                s_prime_factors,
-                s_small_prime_factors_interval + s_large_prime_factors_interval,
-                1.0 * s_large_prime_factors_interval / pi_interval);
-            printf("\tunknowns %'9ld/%-5ld\t(avg/m: %.2f) (composite: %.2f%% +%.3f%%)\n",
-                t_total_unknowns, valid_ms,
-                1.0 * t_total_unknowns / valid_ms,
-                100.0 - 100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms),
-                100.0 * saved_prp / (SIEVE_INTERVAL * valid_ms));
-            printf("\t~ 2x %.2f PRP/m\t\t(%ld new composites ~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
-                1 / prob_prime_after_sieve,
-                saved_prp,
-                skipped_prp,
-                1.0 * skipped_prp / int_secs);
+            if (config.verbose >= 0) {
+                printf("\n%'-10ld (primes %'ld/%'ld)\t(seconds: %.2f/%-.1f | per m: %.2g)\n",
+                    prime,
+                    pi_interval, pi,
+                    int_secs, secs,
+                    secs / valid_ms);
+            }
+
+            if (config.verbose >= 2) {
+                printf("\tfactors  %'9ld \t\t(interval: %'ld, avg m/large_prime interval: %.1f)\n",
+                    s_prime_factors,
+                    s_small_prime_factors_interval + s_large_prime_factors_interval,
+                    1.0 * s_large_prime_factors_interval / pi_interval);
+                printf("\tunknowns %'9ld/%-5ld\t(avg/m: %.2f) (composite: %.2f%% +%.3f%%)\n",
+                    t_total_unknowns, valid_ms,
+                    1.0 * t_total_unknowns / valid_ms,
+                    100.0 - 100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms),
+                    100.0 * saved_prp / (SIEVE_INTERVAL * valid_ms));
+            }
+            if (config.verbose >= 1) {
+                printf("\t~ 2x %.2f PRP/m\t\t(%ld new composites ~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
+                    1 / prob_prime_after_sieve,
+                    saved_prp,
+                    skipped_prp,
+                    1.0 * skipped_prp / int_secs);
+            }
             setlocale(LC_NUMERIC, "C");
 
             s_total_unknowns = t_total_unknowns;
