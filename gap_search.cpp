@@ -586,7 +586,7 @@ void prime_gap_search(const struct Config config) {
             printf("\t%ld %4d <- unknowns -> %-4d\n",
                     m, unknown_l, unknown_u);
 
-            if (config.verbose >= 1) {
+            if (config.verbose >= 1 || (mi == last_mi)) {
                 // Stats!
                 printf("\t    valid m   %-10ld (%.2f/sec, with setup per m: %.2g)  %.0f seconds elapsed\n",
                         s_tests, s_tests / secs, g_secs / s_tests, secs);
@@ -853,8 +853,10 @@ void prime_gap_parallel(const struct Config config) {
             s_prime_factors += s_small_prime_factors_interval;
             s_prime_factors += s_large_prime_factors_interval;
 
+            bool is_last = (prime == LAST_PRIME);
+
             setlocale(LC_NUMERIC, "");
-            if (config.verbose >= 0) {
+            if ((config.verbose >= 0) || is_last ) {
                 printf("\n%'-10ld (primes %'ld/%'ld)\t(seconds: %.2f/%-.1f | per m: %.2g)\n",
                     prime,
                     pi_interval, pi,
@@ -862,7 +864,7 @@ void prime_gap_parallel(const struct Config config) {
                     secs / valid_ms);
             }
 
-            if (config.verbose >= 2) {
+            if ((config.verbose >= 2) || is_last ) {
                 printf("\tfactors  %'9ld \t\t(interval: %'ld, avg m/large_prime interval: %.1f)\n",
                     s_prime_factors,
                     s_small_prime_factors_interval + s_large_prime_factors_interval,
@@ -873,7 +875,7 @@ void prime_gap_parallel(const struct Config config) {
                     100.0 - 100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms),
                     100.0 * saved_prp / (SIEVE_INTERVAL * valid_ms));
             }
-            if (config.verbose >= 1) {
+            if ((config.verbose >= 1) || is_last) {
                 printf("\t~ 2x %.2f PRP/m\t\t(%ld new composites ~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
                     1 / prob_prime_after_sieve,
                     saved_prp,
@@ -897,7 +899,7 @@ void prime_gap_parallel(const struct Config config) {
     if (config.save_unknowns) {
         // ----- Open and Save to Output file
         std::ofstream unknown_file;
-        if (config.save_unknowns) {
+        {
             std::string fn = gen_unknown_fn(config, ".txt");
             printf("\n\nSaving unknowns to '%s'\n", fn.c_str());
             unknown_file.open(fn, std::ios::out);
