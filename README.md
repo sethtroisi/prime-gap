@@ -193,9 +193,14 @@ $ sqlite3 prime-gap-search.db < schema.sql
 ## Notes
 
 * Anecdotally `gap_search` is ~8% faster when using `CC=clang++-11`
-* OpenPFGW [PrimeWiki](https://www.rieselprime.de/ziki/PFGW) [SourceForge](https://sourceforge.net/projects/openpfgw/)
+* There is some support for using OpenPFGW [PrimeWiki](https://www.rieselprime.de/ziki/PFGW) [SourceForge](https://sourceforge.net/projects/openpfgw/)
   * Unpack somewhere and link binary as `pfgw64`
   * may also need to `chmod a+x pfgw64`
+  * modify `is_prime` in gap\_utils.py
+* Multiple layers of verification of `gap_search`
+  * Can compare `--method1` result with `--method2`
+  * `misc/double_check.py` double checks using `ecm`, if factor found number shouldn't appear in unknown-file.txt
+    * `python misc/double_check.py --unknown-filename <unknown_filen> -c 10`
 
 ### Quick test of all functions
 ```bash
@@ -231,7 +236,8 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
   * [ ] Add instructions to verify `modulo_search` is >80% of the time.
   * [ ] Redo prime-time with user time (because pfgw uses more than 1 thread)
 * gap\_test.py
-  * [ ] Starting at m > mstart
+  * [ ] Rename composite = [[], []] to unknowns
+  * [ ] Option to starting at m > mstart
   * [ ] Plot Prob(record)
   * [ ] Plot P(gap > min\_merit) and P(record) sorted and unsorted.
   * [ ] Plot average tests count
@@ -248,8 +254,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
     * [ ] Ctrl-c then just writes out the results at that point.
 * prime-gap-search.db
   * A plan for how to clean up [partially] finished ranges
-* double\_check.py
-  * [ ] run ecm on random unknowns and verify factors found > sieve limit
 
 ### TODONE
 
@@ -257,6 +261,8 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
   * [x] Add commands for benchmarking
   * [x] Fill out gap test section
   * [x] Split out some benchmarking
+* Project level
+  * [x] Rename prime-gap.db to prime-gap-search.db
 * gap\_search.cpp
   * Method2 (all composites in memory)
     * [x] Look at Method1 vs Method2 writeup and understand why outputs seem different
@@ -303,5 +309,5 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
   * [x] Add benchmarks for `K % p`
 * record\_check.py
   * [x] Read from sql db
-* Project level
-  * [x] Rename prime-gap.db to prime-gap-search.db
+* double\_check.py
+  * [x] run ecm on random unknowns and verify factors found > sieve limit
