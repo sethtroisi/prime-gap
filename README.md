@@ -219,17 +219,21 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
 
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
 * [ ] rename `next_p_i` to `next_p` in schema.sql
+* [ ] Rename `gap_search` to `combined_sieve`
+* [ ] config.verbose in gap\_search, gap\_stats, gap\_test
 * gap\_utils.py
   * [ ] Option for gmp vs OpenPFGW
 * README.md
-  * [ ] Add commands for benchmarking
-  * [ ] Fill out gap test section
+  * [ ] gap\_test.py vs gap\_test.cpp
 * benchmarking
   * [ ] Try to avoid int128 in `modulo_search_euclid` (used by `_all`)
   * [ ] Make sure `max_a` is working as intended.
   * [ ] Add instructions to verify `modulo_search` is >80% of the time.
+  * [ ] Redo prime-time with user time (because pfgw uses more than 1 thread)
 * gap\_test.py
   * [ ] Starting at m > mstart
+  * [ ] Plot Prob(record)
+  * [ ] Plot P(gap > min\_merit) and P(record) sorted and unsorted.
   * [ ] Plot average tests count
   * [ ] Sort by expected gap and PRP only top X%
   * [ ] Option to toggle between OpenPFGW and gmp
@@ -240,13 +244,18 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
   * [ ] Option to output m with gcd(m, d) != 1
   * (Method2)
     * [ ] Make method2 the default
+    * [ ] Estimate PRP/s and include in status.
     * [ ] Ctrl-c then just writes out the results at that point.
+* prime-gap-search.db
+  * A plan for how to clean up [partially] finished ranges
 * double\_check.py
   * [ ] run ecm on random unknowns and verify factors found > sieve limit
 
 ### TODONE
 
 * README.md
+  * [x] Add commands for benchmarking
+  * [x] Fill out gap test section
   * [x] Split out some benchmarking
 * gap\_search.cpp
   * Method2 (all composites in memory)
