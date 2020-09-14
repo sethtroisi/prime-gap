@@ -3,7 +3,8 @@
 - [Benchmarks](#benchmarks)
   * [Microbenchmarks](#microbenchmarks)
   * [`gap_search --method2`](#gap_search-method2)
-  * [`gap_test` (old numbers)](#gap_test-old-numbers)
+  * [`gap_test`](#gap_test)
+  * [Other Tools](#other-tools)
   * [`Pgsurround.pl` benchmark](#pgsurroundpl-benchmark)
     + [`Pgsurround.pl`](#pgsurroundpl)
     + [Just sieving](#just-sieving)
@@ -21,6 +22,7 @@ $ make benchmark
 $ ./benchmark 100000
 $ ./benchmark 100000 "# mod"
 ```
+
 |  bits x count   | method\_name                    | found    | total    | time(s) | ns/iter | cycles/limb |
 |-----------------|---------------------------------|----------|----------|---------|---------|-------------|
 |   694 x  100000 | 503# mod <40 bit>p              | 100000   | 6088     | 0.0045  |      45 | 14.0        |
@@ -54,6 +56,7 @@ $ ./benchmark 100000 modulo_search
 |    40 x  100000 | `modulo_search_euclid_gcd2`      | 100000   | 100000   | 0.0093  |      93 | 315.8       |
 |    40 x  100000 | `modulo_search_euclid_all_small` | 10       | 102484   | 0.0110  |     108 | 365.7       |
 |    40 x  100000 | `modulo_search_euclid_all_large` | 10       | 102484   | 0.0110  |     107 | 364.6       |
+
 
 ## `gap_search` Method2
 
@@ -113,20 +116,95 @@ Method2 output
 ...
 ```
 
-TODO new `gap_tast` numbers.
-TODO `gap_stat` numbers.
-TODO `missing_gap_verify.py`
+## `gap_test`
 
-## `gap_test` (old numbers)
+```bash
+$ mkdir -p benchmark_data
+$ cd benchmark_data
+# gap_search (takes ~6 minutes)
+
+$ time for P in 503 1009; do
+echo -e "\n\nSieving $P#/3090";
+../gap_search -p $P -d 3090 --mstart 1 --minc 1000 --sieve-range 1000 --save-unknowns --method2 -qqq;
+done
+
+$ time for P in 1999 5003 10007; do
+echo -e "\n\nSieving $P#/3090";
+../gap_search -p $P -d 3090 --mstart 1 --minc 100 --sieve-range 5000 --save-unknowns --method2 -qqq;
+done
+
+$ ls -sh1tr
+188K 1_503_3090_1000_s3958_l1000M.m2.txt
+384K 1_1009_3090_1000_s8594_l1000M.m2.txt
+ 80K 1_1999_3090_100_s18322_l5000M.m2.txt
+212K 1_5003_3090_100_s48878_l5000M.m2.txt
+428K 1_10007_3090_100_s100616_l5000M.m2.txt
+
+# gap_test (takes ~30m)
+$ time for fn in `ls -tr`; do
+echo -e "\n\nProcessing $fn";
+../gap_test --run-prp --min-merit 12 --unknown-filename "$fn" -qq;
+done
+
+Processing 1_503_3090_400_s3958_l1000M.m2.txt
+7680  16.0978  77 * 503#/3090 -3072 to +4608
+6408  13.3697  701 * 503#/3090 -4534 to +1874
+6942  14.4757  919 * 503#/3090 -6926 to +16
+	997   61 <- unknowns -> 71  	 540 <- gap -> 3022
+	    tests     264        (172.33/sec)  2 seconds elapsed
+	    unknowns  32756      (avg: 124.08), 98.43% composite  50.27% <- % -> 49.73%
+	    prp tests 6460       (avg: 24.47) (4216.9 tests/sec)
+
+Processing 1_1009_3090_1000_s8594_l1000M.m2.txt
+11934  12.4149  463 * 1009#/3090 -2326 to +9608
+11946  12.4252  547 * 1009#/3090 -2880 to +9066
+16652  17.3139  767 * 1009#/3090 -8486 to +8166
+12516  13.0134  773 * 1009#/3090 -11706 to +810
+14400  14.9718  797 * 1009#/3090 -6638 to +7762
+	997  115 <- unknowns -> 126 	2974 <- gap -> 7646
+	    tests     264        (14.94/sec)  18 seconds elapsed
+	    unknowns  66293      (avg: 251.11), 98.54% composite  49.74% <- % -> 50.26%
+	    prp tests 13282      (avg: 50.31) (751.6 tests/sec)
+
+Processing 1_1999_3090_100_s18322_l5000M.m2.txt
+34776  17.9601  89 * 1999#/3090 -27994 to +6782
+	97  258 <- unknowns -> 227 	6098 <- gap -> 6646
+	    tests     26         (0.96/sec)  27 seconds elapsed
+	    unknowns  12050      (avg: 463.46), 98.74% composite  50.35% <- % -> 49.65%
+	    prp tests 2764       (avg: 106.31) (102.6 tests/sec)
+
+Processing 1_5003_3090_100_s48878_l5000M.m2.txt
+61824  12.5750  71 * 5003#/3090 -10898 to +50926
+65184  13.2580  83 * 5003#/3090 -12266 to +52918
+59728  12.1480  91 * 5003#/3090 -29242 to +30486
+	97  575 <- unknowns -> 604 	   4 <- gap -> 14832
+	    tests     26         (0.04/sec)  682 seconds elapsed
+	    unknowns  31096      (avg: 1196.00), 98.78% composite  49.61% <- % -> 50.39%
+	    prp tests 7134       (avg: 274.38) (10.5 tests/sec)
+```
+
+| P#    | M/second  | PRP/second |
+|-------|-----------|------------|
+| 503   | 172       | 4217       |
+| 1009  | 15        | 751        |
+| 1999  | 0.96      | 103        |
+| 5003  | 26s/test  | 10.5       |
+| 10007 | 270/test  | 1.9       |
 
 
-| Pn   | P#    | M/second  | PRP/second |
-|------|-------|-----------|------------|
-| 96   | 503   | 86        | 2081       |
-| 169  | 1009  | 12        | 560        |
-| 303  | 1999  | 1.03      | 92.7       |
-| 670  | 5003  | 24s/test  | 9.40       |
-| 1230 | 10007 | 154s/test | 2.81       |
+## Other Tools
+
+### `gap_stat`
+
+Slow, but still fast enough, maybe 10-20% of gap\_search based on `--sieve-range` and if searching for missing gaps or not.
+
+### `missing_gap_test.py`
+
+TODO
+
+### `missing_gap_verify.py`
+
+TODO
 
 
 ## `Pgsurround.pl` benchmark
