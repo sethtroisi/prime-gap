@@ -31,6 +31,7 @@ using std::string;
 using std::vector;
 
 
+// TODO potentially readd to gap_search
 std::map<uint64_t,uint64_t> common_primepi = {
     {    100'000'000,    5'761'455},
     {    200'000'000,   11'078'937},
@@ -59,6 +60,27 @@ uint32_t gcd(uint32_t a, uint32_t b) {
     return gcd(b, a % b);
 }
 
+
+void K_stats(
+        const struct Config& config,
+        mpz_t &K, int *K_digits, double *K_log) {
+    mpz_init(K);
+    mpz_primorial_ui(K, config.p);
+    assert(0 == mpz_tdiv_q_ui(K, K, config.d));
+    assert(mpz_cmp_ui(K, 1) > 0);  // K <= 1 ?!?
+
+    *K_digits = mpz_sizeinbase(K, 10);
+
+    long exp;
+    double mantis = mpz_get_d_2exp(&exp, K);
+    *K_log = log(mantis) + log(2) * exp;
+
+    if (config.verbose >= 2) {
+        int K_bits   = mpz_sizeinbase(K, 2);
+        printf("K = %d bits, %d digits, log(K) = %.2f\n",
+            K_bits, *K_digits, *K_log);
+    }
+}
 
 double prop_gap_larger(
         const struct Config& config, double prob_prime,
@@ -168,7 +190,7 @@ vector<uint64_t> get_sieve_primes_segmented(uint64_t n) {
 }
 
 
-bool isprime_brute(uint32_t n) {
+static bool isprime_brute(uint32_t n) {
     if ((n & 1) == 0)
         return false;
     for (uint32_t p = 3; p * p <= n; p += 2)

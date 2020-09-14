@@ -37,7 +37,7 @@ def get_arg_parser():
         help="Use primes <= sieve-range for checking composite (must match gap_search param)")
 
     parser.add_argument('--search-db', type=str,
-        default="prime-gap-search.db"
+        default="prime-gap-search.db",
         help="Prime database from gap_test")
 
     parser.add_argument('--unknown-filename', type=str,

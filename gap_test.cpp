@@ -43,8 +43,9 @@ int main(int argc, char* argv[]) {
     }
 
     if (config.verbose >= 2) {
-        printf("\tCompiled with GMP %d.%d.%d\n\n",
+        printf("Compiled with GMP %d.%d.%d\n",
             __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
+        // TODO warning about 6.2 being faster.
     }
 
     if (config.sieve_length == 0) {
@@ -59,18 +60,22 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    printf("\n");
-    printf("Testing m * %d#/%d, m = %ld + [0, %ld)\n",
-        config.p, config.d, config.mstart, config.minc);
+    if (config.verbose >= 1) {
+        printf("\n");
+        printf("Testing m * %d#/%d, m = %ld + [0, %ld)\n",
+            config.p, config.d, config.mstart, config.minc);
+    }
 
     if (config.verbose >= 2) {
+        setlocale(LC_NUMERIC, "");
         printf("\n");
-        printf("sieve_length: 2x%d\n", config.sieve_length);
-        printf("sieve_range:  %ld\n", config.sieve_range);
+        printf("sieve_length: 2x %'d\n", config.sieve_length);
+        printf("sieve_range:  %'ld\n", config.sieve_range);
         printf("\n");
 
         printf("run_prp:  %d\n", config.run_prp);
         printf("\n");
+        setlocale(LC_NUMERIC, "C");
     }
 
     prime_gap_test(config);
@@ -89,35 +94,15 @@ void prime_gap_test(const struct Config config) {
 
     // ----- Merit Stuff
     mpz_t K;
-    mpz_init(K);
-    mpz_primorial_ui(K, P);
-    assert( 0 == mpz_tdiv_q_ui(K, K, D) );
-
-    int K_digits = mpz_sizeinbase(K, 10);
-    float K_log;
+    int K_digits;
+    double K_log;
+    K_stats(config, K, &K_digits, &K_log);
     {
-        long exp;
-        double mantis = mpz_get_d_2exp(&exp, K);
-        K_log = log(mantis) + log(2) * exp;
         float m_log = log(M_start);
-        int K_bits   = mpz_sizeinbase(K, 2);
-
         if (config.verbose >= 1) {
-            printf("K = %d bits, %d digits, log(K) = %.2f\n",
-                K_bits, K_digits, K_log);
-            printf("Min Gap ~= %d (for merit > %.1f)\n\n",
+            printf("Min Gap ~= %d (for merit > %.1f)\n",
                 (int) (min_merit * (K_log + m_log)), min_merit);
         }
-    }
-
-    // ----- Open unknown input file
-    std::ifstream unknown_file;
-    {
-        std::string fn = gen_unknown_fn(config, ".txt");
-        printf("\tReading unknowns from '%s'\n", fn.c_str());
-        unknown_file.open(fn, std::ios::in);
-        assert( unknown_file.is_open() ); // Can't open save_unknowns file
-        assert( unknown_file.good() );    // Can't open save_unknowns file
     }
 
     // Used for coprme & prev_prime
@@ -171,8 +156,9 @@ void prime_gap_test(const struct Config config) {
         double chance_coprime_composite = 1 - prob_prime / prob_prime_coprime;
         double prob_gap_shorter_hypothetical = pow(chance_coprime_composite, count_coprime);
 
-        if (config.verbose >= 1) {
+        if (config.verbose >= 2) {
             // count_coprime already includes some parts of unknown_after_sieve
+            printf("\n");
             printf("\t%.3f%% of sieve should be unknown (%ldM) ~= %.0f\n",
                 100 * unknowns_after_sieve,
                 config.sieve_range/1'000'000,
@@ -185,18 +171,41 @@ void prime_gap_test(const struct Config config) {
                 1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
             printf("\tsieve_length=%d is insufficient ~%.2f%% of time\n",
                 SIEVE_LENGTH, 100 * prob_gap_shorter_hypothetical);
-            cout << endl;
         }
     }
 
-    uint64_t last_mi = M_inc - 1;
-    for (; last_mi > 0 && gcd(M_start + last_mi, D) > 1; last_mi -= 1);
-    assert(last_mi > 0 && last_mi < M_inc);
+    // ----- Open unknown input file
+    std::ifstream unknown_file;
+    {
+        std::string fn = gen_unknown_fn(config, ".txt");
+        if (config.verbose >= 1) {
+            printf("\nReading unknowns from '%s'\n", fn.c_str());
+        }
+        unknown_file.open(fn, std::ios::in);
+        assert( unknown_file.is_open() ); // Can't open save_unknowns file
+        assert( unknown_file.good() );    // Can't open save_unknowns file
+    }
 
+    uint64_t valid_ms = 0;
+    for (uint64_t mi = 0; mi < M_inc; mi++) {
+        if (gcd(M_start + mi, D) == 1) {
+            valid_ms++;
+        }
+    }
+    assert(valid_ms > 0);
+
+    uint64_t first_mi = 0;
+    for (; first_mi > 0 && gcd(M_start + first_mi, D) > 1; first_mi++);
+    assert(first_mi >= 0 && first_mi < M_inc);
+
+    uint64_t last_mi = M_inc - 1;
+    for (; last_mi > 0 && gcd(M_start + last_mi, D) > 1; last_mi--);
+    assert(last_mi > 0 && last_mi < M_inc);
 
     // ----- Main sieve loop.
     if (config.verbose >= 1) {
-        cout << "\nStarting m=" << M_start << "\n" << endl;
+        printf("\nStarting m=%ld\ttesting %ld m (%ld to %ld)\n\n",
+            M_start, valid_ms, first_mi, last_mi);
     }
 
     // vector<bool> uses bit indexing which is ~5% slower.
@@ -370,22 +379,28 @@ void prime_gap_test(const struct Config config) {
         }
 
         s_tests += 1;
-        bool is_last = mi == last_mi;
+        bool is_last = (mi == last_mi);
         if ( is_last || (s_tests == 1 || s_tests == 10 || s_tests == 100 ||
                          s_tests == 500 || s_tests == 1000)
                      || (s_tests % 5000 == 0)) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
 
-            if ( (config.verbose >= 1) || is_last ) {
-                printf("\t%ld %4d <- unknowns -> %-4d\t%4d <- gap -> %-4d\n",
+            if ((config.verbose + is_last) >= 1) {
+                printf("\tm=%ld %4d <- unknowns -> %-4d\t%4d <- gap -> %-4d\n",
                     m,
                     unknown_l, unknown_u,
                     prev_p_i, next_p_i);
 
                 // Stats!
-                printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
-                    s_tests, s_tests / secs, secs);
+                if (s_tests > secs) {
+                    printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
+                        s_tests, s_tests / secs, secs);
+                } else {
+                    printf("\t    tests     %-10d (%.2f secs/test)  %.0f seconds elapsed\n",
+                        s_tests, secs / s_tests, secs);
+                }
+
                 printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f%% <- %% -> %.2f%%\n",
                     s_total_unknown, s_total_unknown / ((double) s_tests),
                     100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
@@ -398,9 +413,11 @@ void prime_gap_test(const struct Config config) {
                         s_total_prp_tests / secs);
 
                     if (config.verbose >= 2) {
-                        printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
-                            s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / s_tests,
-                            s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / s_tests);
+                        if (s_gap_out_of_sieve_prev + s_gap_out_of_sieve_next > 0) {
+                            printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
+                                s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / s_tests,
+                                s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / s_tests);
+                        }
                         printf("\t    best merit this interval: %.3f (at m=%ld)\n",
                             s_best_merit_interval, s_best_merit_interval_m);
                     }

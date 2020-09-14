@@ -19,12 +19,16 @@
 #include <string>
 #include <vector>
 
+#include <gmp.h>
+
 
 using std::map;
 using std::string;
 using std::vector;
 
 const double GAMMA = 0.577215665;
+
+/* Arg Parsing */
 
 struct Config {
     int valid   = 0;
@@ -42,23 +46,40 @@ struct Config {
 
     bool method2 = false;
 
+    /**
+     * -1: results only
+     *  0: results & final stats
+     *  1: stats
+     *  2: stats, probs, debug
+     *  3: ???
+     */
     int verbose = 2;
 
     string unknown_filename;
 };
 
-std::string gen_unknown_fn(const struct Config& config, std::string suffix);
-
 void show_usage(char* name);
 Config argparse(int argc, char* argv[]);
 
+std::string gen_unknown_fn(const struct Config& config, std::string suffix);
+
+
+/* Random Utils */
+
 uint32_t gcd(uint32_t a, uint32_t b);
+
+void K_stats(
+        const struct Config& config,
+        mpz_t &K, int *K_digits, double *K_log);
 
 double prop_gap_larger(
     const struct Config& config,
     double prob_prime,
     double *prob_prime_coprime,
     size_t *count_coprime);
+
+
+/* Prime Stuff */
 
 vector<uint32_t> get_sieve_primes(uint32_t n);
 vector<uint64_t> get_sieve_primes_segmented(uint64_t n);

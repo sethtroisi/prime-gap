@@ -13,12 +13,12 @@
 # limitations under the License.
 
 
-OBJS     = gap_common.o modulo_search.o
-OUT	 = gap_search gap_stats gap_test benchmark
-CC	 = g++
-FLAGS	 = -Wall -Werror -O3
-LDFLAGS	 = -lgmp
-PROGS	 = gap_search gap_test
+OBJS	= gap_common.o modulo_search.o
+OUT	= gap_search gap_stats gap_test benchmark
+CC	= g++
+FLAGS	= -Wall -Werror -O3 -lgmp
+LDFLAGS	=
+PROGS	= gap_search gap_test
 
 %.o: %.cpp
 	$(CC) -c -o $@ $< $(FLAGS)
@@ -33,7 +33,7 @@ gap_stats: gap_stats.cpp gap_common.o
 	$(CC) -o $@ $^ $(FLAGS) $(LDFLAGS) -lsqlite3
 
 benchmark: misc/benchmark.cpp modulo_search.o
-	$(CC) -o $@ $^ $(FLAGS) -I. $(LDFLAGS)
+	$(CC) -o $@ $^ $(FLAGS) $(LDFLAGS) -I.
 
 
 .PHONY: clean

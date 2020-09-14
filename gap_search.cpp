@@ -192,8 +192,8 @@ void set_defaults(struct Config& config) {
                 // This seems to balance PRP fallback and sieve_size
                 if (prob_gap_shorter <= 0.008) {
                     config.sieve_length = tSL;
-                    printf("AUTO SET: sieve length (coprime: %d, prob_gap longer %.2f%%): %ld\n",
-                        min_coprime, 100 * prob_gap_shorter, tSL);
+                    printf("AUTO SET: sieve length: %ld (coprime: %d, prob_gap longer %.2f%%)\n",
+                        tSL, min_coprime, 100 * prob_gap_shorter);
                     break;
                 }
             }
@@ -234,23 +234,6 @@ void set_defaults(struct Config& config) {
     }
 
     mpz_clear(K);
-}
-
-
-void K_stats(
-        const struct Config& config,
-        mpz_t &K, int *K_digits, double *K_log) {
-    *K_digits = mpz_sizeinbase(K, 10);
-
-    long exp;
-    double mantis = mpz_get_d_2exp(&exp, K);
-    *K_log = log(mantis) + log(2) * exp;
-
-    if (config.verbose >= 1) {
-        int K_bits   = mpz_sizeinbase(K, 2);
-        printf("K = %d bits, %d digits, log(K) = %.2f\n",
-            K_bits, *K_digits, *K_log);
-    }
 }
 
 
@@ -428,6 +411,17 @@ void prime_gap_search(const struct Config config) {
         printf("\n\tSetup took %.1f seconds\n", secs);
     }
 
+
+    // ----- Open and Save to Output file
+    std::ofstream unknown_file;
+    if (config.save_unknowns) {
+        std::string fn = gen_unknown_fn(config, ".txt");
+        printf("\tSaving unknowns to '%s'\n", fn.c_str());
+        unknown_file.open(fn, std::ios::out);
+        assert( unknown_file.is_open() ); // Can't open save_unknowns file
+    }
+
+
     // ----- Main sieve loop.
     cout << "\nStarting m=" << M_start << "\n" << endl;
 
@@ -548,16 +542,6 @@ void prime_gap_search(const struct Config config) {
 
         // Save unknowns
         if (config.save_unknowns) {
-            // ----- Open and Save to Output file
-            std::ofstream unknown_file;
-            if (config.save_unknowns) {
-                std::string fn = gen_unknown_fn(config, ".txt");
-                printf("\tSaving unknowns to '%s'\n", fn.c_str());
-                unknown_file.open(fn, std::ios::out);
-                assert( unknown_file.is_open() ); // Can't open save_unknowns file
-            }
-
-
             unknown_file << mi;
             unknown_file << " : -" << unknown_l << " +" << unknown_u << " |";
 
@@ -654,18 +638,12 @@ void prime_gap_parallel(const struct Config config) {
     mpz_t test;
     mpz_init(test);
 
-    // ----- Merit Stuff
-    mpz_t K;
-    mpz_init(K);
-    mpz_primorial_ui(K, P);
-    assert( 0 == mpz_tdiv_q_ui(K, K, D) );
-    assert( mpz_cmp_ui(K, 1) > 0); // K <= 1 ?!?
-
     // ----- Generate primes for P
     const vector<uint32_t> P_primes = get_sieve_primes(P);
     assert( P_primes.back() == P);
 
-    // ----- Sieve stats
+    // ----- Sieve stats & Merit Stuff
+    mpz_t K;
     double prob_prime = prob_prime_and_stats(config, K, P_primes);
 
     // ----- Allocate memory
@@ -708,19 +686,19 @@ void prime_gap_parallel(const struct Config config) {
             }
         }
     }
-    const size_t count_coprime = *std::max_element(i_reindex.begin(), i_reindex.end());
+    const size_t count_coprime_sieve = *std::max_element(i_reindex.begin(), i_reindex.end());
 
     // <bool> is slower than <char>, but uses 1/8th the memory.
     vector<bool> composite[valid_ms];
     {
         for (size_t i = 0; i < valid_ms; i++) {
             // Improve this setup.
-            composite[i].resize(count_coprime+1, false);
+            composite[i].resize(count_coprime_sieve + 1, false);
         };
         if (config.verbose >= 1) {
             printf("coprime m    %ld/%d,  coprime i %ld/%d,  ~%'ldMB\n",
-                valid_ms, M_inc, count_coprime/2, SIEVE_LENGTH,
-                valid_ms * count_coprime / 8 / 1024 / 1024);
+                valid_ms, M_inc, count_coprime_sieve / 2, SIEVE_LENGTH,
+                valid_ms * count_coprime_sieve / 8 / 1024 / 1024);
         }
     }
     if (config.verbose >= 1) {
@@ -913,10 +891,9 @@ void prime_gap_parallel(const struct Config config) {
 
             const auto& comp = composite[mii];
 
-            size_t unknown_l = std::count(
-                comp.begin(),       comp.begin() + count_coprime/2, false);
-            size_t unknown_u = std::count(
-                comp.begin() + count_coprime/2,  comp.end(), false);
+            const size_t size_side = count_coprime_sieve / 2;
+            size_t unknown_l = std::count(comp.begin(), comp.begin() + size_side, false);
+            size_t unknown_u = std::count(comp.begin() + size_side, comp.end(), false);
 
             unknown_file << mi << " : -" << unknown_l << " +" << unknown_u << " |";
             for (int d = 0; d <= 1; d++) {
