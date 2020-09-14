@@ -94,21 +94,25 @@ void set_defaults(struct Config& config) {
         return;
     }
 
-    float logK;
     mpz_t K;
-
+    double K_log;
     {
-        mpz_init(K);
-        mpz_primorial_ui(K, config.p);
-        assert( 0 == mpz_tdiv_q_ui(K, K, config.d) );
-        long exp;
-        double mantis = mpz_get_d_2exp(&exp, K);
-        logK = log(config.mstart) + log(mantis) + log(2) * exp;
+        // Suppress log
+        int temp = config.verbose;
+        config.verbose = -1;
+
+        int K_digits;
+        K_stats(config, K, &K_digits, &K_log);
+
+        config.verbose = temp;
     }
 
     if (config.sieve_length == 0) {
-        double prob_prime_coprime = 1 / (logK + log(config.mstart));
-        // factors of K = p#/d
+        // Change that a number near K is prime
+        // GIVEN no factor of K or D => no factor of P#
+        double prob_prime_coprime = 1 / (K_log + log(config.mstart));
+
+        // factors of K = P#/D
         vector<uint32_t> K_primes = get_sieve_primes(config.p);
         {
             for (size_t pi = K_primes.size()-1; ; pi--) {
@@ -120,13 +124,13 @@ void set_defaults(struct Config& config) {
             }
         }
 
-        // K = #p/d
+        // K = #P/D
         // only numbers K+i has no factor <= p
         //      => (K+i, i) == (K, i) == 1
         //      => only relatively prime i's
         //
         // factors of d are hard because they depend on m*K
-        //  some of these m are worse than others so use worst m
+        //      some of these m are worse than others so use worst m
 
         assert( config.p >= 503 );
 
@@ -161,20 +165,22 @@ void set_defaults(struct Config& config) {
                 }
             }
 
+            // Keep increasing SL till prob_gap_shorter < 0.8%
             for (size_t tSL = 1; ; tSL += 1) {
-                bool all_divisible = false;
+                bool any_divisible = false;
                 for (int prime : K_primes) {
                     if ((tSL % prime) == 0) {
-                        all_divisible = true;
+                        any_divisible = true;
                         break;
                     }
                 }
-                if (all_divisible) continue;
+                // Result will be the same as last.
+                if (any_divisible) continue;
 
                 // check if tSL is divisible for all center mods
                 for (auto& coprime_counts : coprime_by_mod_d) {
                     const auto center = coprime_counts.first;
-                    // if some factor in d will mark this off don't count it
+                    // Some factor of d will mark this off (for these centers) don't count it.
                     if (gcd(center + tSL, config.d) == 1) {
                         coprime_counts.second += 1;
                     }
@@ -209,7 +215,7 @@ void set_defaults(struct Config& config) {
         // Potentially based on:
         //  sieve_length
         //  min_merit
-        if (logK >= 1500) {
+        if (K_log >= 1500) {
             // Largest supported number right now
             config.sieve_range = 4'000'000'000;
             // 2020-02-09 tuning notes
@@ -228,8 +234,8 @@ void set_defaults(struct Config& config) {
         }
 
         if (config.verbose >= 0) {
-            printf("AUTO SET: sieve range (log(t) = ~%.0f): %ld\n",
-                logK, config.sieve_range);
+            printf("AUTO SET: sieve range (log(K) = ~%.0f): %ld\n",
+                K_log, config.sieve_range);
         }
     }
 
@@ -237,7 +243,6 @@ void set_defaults(struct Config& config) {
 }
 
 
-// Todo float => double for K_log
 double prob_prime_and_stats(
         const struct Config& config, mpz_t &K, const vector<uint32_t> &primes) {
 
@@ -256,7 +261,7 @@ double prob_prime_and_stats(
     double prob_gap_hypothetical = prop_gap_larger(
         config, prob_prime, &prob_prime_coprime, &count_coprime);
 
-    if (config.verbose >= 1) {
+    if (config.verbose >= 2) {
         printf("\tavg %.0f left from %.3f%% of %u interval with %ldM sieve\n",
                 count_coprime * (unknowns_after_sieve / prob_prime_coprime),
                 100 * unknowns_after_sieve,
@@ -314,8 +319,9 @@ void prime_gap_search(const struct Config config) {
     // ----- Sieve stats
     prob_prime_and_stats(config, K, small_primes);
 
-    // ----- Allocate memory for a handful of utility functions.
     auto  s_setup_t = high_resolution_clock::now();
+
+    // ----- Allocate memory for a handful of utility functions.
 
     // Remainders of (p#/d) mod prime
     typedef pair<uint64_t,uint64_t> p_and_r;
@@ -326,12 +332,14 @@ void prime_gap_search(const struct Config config) {
     int s_large_primes_rem = 0;
 
     // To save space, only save remainder for primes that divide ANY m in range.
-    // This helps with memory usage when SIEVE_RANGE >> X * MINC;
-
+    // This helps with memory usage when SIEVE_RANGE >> SL * MINC;
     std::vector<p_and_r> *large_prime_queue = new vector<p_and_r>[M_inc];
     {
         size_t pr_pi = 0;
-        printf("\tCalculating first m each prime divides\n");
+        if (config.verbose >= 0) {
+            printf("\tCalculating first m each prime divides\n");
+        }
+
         // large_prime_queue size can be approximated by
         // https://en.wikipedia.org/wiki/Meissel–Mertens_constant
 
@@ -342,11 +350,14 @@ void prime_gap_search(const struct Config config) {
 
         long first_m_sum = 0;
         double expected_large_primes = 0;
-        cout << "\t";
+
+        if (config.verbose >= 0) {
+            cout << "\t";
+        }
         size_t pi = 0;
         get_sieve_primes_segmented_lambda(SIEVE_RANGE, [&](const uint64_t prime) {
             pi += 1;
-            if ((pi * print_dots) % expected_primes < print_dots) {
+            if (config.verbose >= 0 && (pi * print_dots) % expected_primes < print_dots) {
                 cout << "." << std::flush;
             }
 
@@ -388,7 +399,9 @@ void prime_gap_search(const struct Config config) {
             s_large_primes_rem += 1;
             first_m_sum += mi;
         });
-        cout << endl;
+        if (config.verbose >= 0) {
+            cout << endl;
+        }
 
         assert(prime_and_remainder.size() == small_primes.size());
         if (config.verbose >= 1) {
@@ -405,7 +418,7 @@ void prime_gap_search(const struct Config config) {
             setlocale(LC_NUMERIC, "C");
         }
     }
-    {
+    if (config.verbose >= 0) {
         auto  s_stop_t = high_resolution_clock::now();
         double   secs = duration<double>(s_stop_t - s_setup_t).count();
         printf("\n\tSetup took %.1f seconds\n", secs);
@@ -416,14 +429,16 @@ void prime_gap_search(const struct Config config) {
     std::ofstream unknown_file;
     if (config.save_unknowns) {
         std::string fn = gen_unknown_fn(config, ".txt");
-        printf("\tSaving unknowns to '%s'\n", fn.c_str());
+        printf("\nSaving unknowns to '%s'\n", fn.c_str());
         unknown_file.open(fn, std::ios::out);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
     }
 
 
     // ----- Main sieve loop.
-    cout << "\nStarting m=" << M_start << "\n" << endl;
+    if (config.verbose >= 1) {
+        cout << "\nStarting m=" << M_start << "\n" << endl;
+    }
 
     // vector<bool> uses bit indexing which is ~5% slower.
     vector<char> composite[2] = {
@@ -447,9 +462,7 @@ void prime_gap_search(const struct Config config) {
 
     for (uint64_t mi = 0; mi < M_inc; mi++) {
         uint64_t m = M_start + mi;
-        bool good_m = gcd(m, D) == 1;
-
-        if (!good_m) {
+        if (gcd(m, D) > 1) {
             assert( large_prime_queue[mi].empty() );
             continue;
         }
@@ -498,17 +511,15 @@ void prime_gap_search(const struct Config config) {
                 assert( mod == modulo );
             }
 
-            if (good_m) {
-                if (modulo < SIEVE_LENGTH) {
-                    // Just past a multiple
-                    composite[0][modulo] = true;
-                } else {
-                    // Don't have to deal with 0 case anymore.
-                    int64_t first_positive = prime - modulo;
-                    assert( first_positive < SIEVE_LENGTH); // Bad next m!
-                    // Just before a multiple
-                    composite[1][first_positive] = true;
-                }
+            if (modulo < SIEVE_LENGTH) {
+                // Just past a multiple
+                composite[0][modulo] = true;
+            } else {
+                // Don't have to deal with 0 case anymore.
+                int64_t first_positive = prime - modulo;
+                assert( first_positive < SIEVE_LENGTH); // Bad next m!
+                // Just before a multiple
+                composite[1][first_positive] = true;
             }
 
             // Find next mi where primes divides part of SIEVE
@@ -560,9 +571,11 @@ void prime_gap_search(const struct Config config) {
             unknown_file << "\n";
         }
 
-        if (config.verbose >= 0 &&
+        bool is_last = (mi == last_mi);
+
+        if ((config.verbose + is_last >= 1) &&
                 ((s_tests == 1 || s_tests == 10 || s_tests == 100 || s_tests == 500 || s_tests == 1000) ||
-                 (s_tests % 5000 == 0) || (mi == last_mi)) ) {
+                 (s_tests % 5000 == 0) || is_last) ) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
             double g_secs = duration<double>(s_stop_t - s_setup_t).count();
@@ -570,9 +583,9 @@ void prime_gap_search(const struct Config config) {
             printf("\t%ld %4d <- unknowns -> %-4d\n",
                     m, unknown_l, unknown_u);
 
-            if (config.verbose >= 1 || (mi == last_mi)) {
+            if (config.verbose + is_last >= 1) {
                 // Stats!
-                printf("\t    valid m   %-10ld (%.2f/sec, with setup per m: %.2g)  %.0f seconds elapsed\n",
+                printf("\t    intervals %-10ld (%.2f/sec, with setup per m: %.2g)  %.0f seconds elapsed\n",
                         s_tests, s_tests / secs, g_secs / s_tests, secs);
                 printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
                         s_total_unknown, s_total_unknown / ((double) s_tests),
@@ -703,7 +716,7 @@ void prime_gap_parallel(const struct Config config) {
     }
     if (config.verbose >= 1) {
         setlocale(LC_NUMERIC, "");
-        printf("sieve_range: %'ld   small_threshold:  %'ld\n", config.sieve_range, SMALL_THRESHOLD);
+        printf("sieve_range: %'ld   small_threshold:  %'ld\n\n", config.sieve_range, SMALL_THRESHOLD);
         //printf("last prime :  %'ld\n", LAST_PRIME);
         setlocale(LC_NUMERIC, "C");
     }
@@ -834,15 +847,15 @@ void prime_gap_parallel(const struct Config config) {
             bool is_last = (prime == LAST_PRIME);
 
             setlocale(LC_NUMERIC, "");
-            if ((config.verbose >= 0) || is_last ) {
-                printf("\n%'-10ld (primes %'ld/%'ld)\t(seconds: %.2f/%-.1f | per m: %.2g)\n",
+            if (config.verbose + is_last >= 1) {
+                printf("%'-10ld (primes %'ld/%'ld)\t(seconds: %.2f/%-.1f | per m: %.2g)\n",
                     prime,
                     pi_interval, pi,
                     int_secs, secs,
                     secs / valid_ms);
             }
 
-            if ((config.verbose >= 2) || is_last ) {
+            if (config.verbose + 2*is_last >= 2) {
                 printf("\tfactors  %'9ld \t\t(interval: %'ld, avg m/large_prime interval: %.1f)\n",
                     s_prime_factors,
                     s_small_prime_factors_interval + s_large_prime_factors_interval,
@@ -852,9 +865,8 @@ void prime_gap_parallel(const struct Config config) {
                     1.0 * t_total_unknowns / valid_ms,
                     100.0 - 100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms),
                     100.0 * saved_prp / (SIEVE_INTERVAL * valid_ms));
-            }
-            if ((config.verbose >= 1) || is_last) {
-                printf("\t~ 2x %.2f PRP/m\t\t(%ld new composites ~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
+
+                printf("\t~ 2x %.2f PRP/m\t\t(%ld new composites ~ %4.1f skipped PRP => %.1f PRP/seconds)\n\n",
                     1 / prob_prime_after_sieve,
                     saved_prp,
                     skipped_prp,
@@ -862,13 +874,15 @@ void prime_gap_parallel(const struct Config config) {
             }
             setlocale(LC_NUMERIC, "C");
 
-            s_total_unknowns = t_total_unknowns;
-            s_interval_t = s_stop_t;
-            s_prp_needed = 1 / prob_prime_after_sieve;
+            if (config.verbose + is_last >= 1) {
+                s_total_unknowns = t_total_unknowns;
+                s_interval_t = s_stop_t;
+                s_prp_needed = 1 / prob_prime_after_sieve;
 
-            s_small_prime_factors_interval = 0;
-            s_large_prime_factors_interval = 0;
-            pi_interval = 0;
+                s_small_prime_factors_interval = 0;
+                s_large_prime_factors_interval = 0;
+                pi_interval = 0;
+            }
         }
     });
 
@@ -879,7 +893,7 @@ void prime_gap_parallel(const struct Config config) {
         std::ofstream unknown_file;
         {
             std::string fn = gen_unknown_fn(config, ".txt");
-            printf("\n\nSaving unknowns to '%s'\n", fn.c_str());
+            printf("\nSaving unknowns to '%s'\n", fn.c_str());
             unknown_file.open(fn, std::ios::out);
             assert( unknown_file.is_open() ); // Can't open save_unknowns file
         }

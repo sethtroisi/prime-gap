@@ -60,14 +60,14 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (config.verbose >= 1) {
+    setlocale(LC_NUMERIC, "");
+    if (config.verbose >= 0) {
         printf("\n");
-        printf("Testing m * %d#/%d, m = %ld + [0, %ld)\n",
+        printf("Testing m * %d#/%d, m = %ld + [0, %'ld)\n",
             config.p, config.d, config.mstart, config.minc);
     }
 
     if (config.verbose >= 2) {
-        setlocale(LC_NUMERIC, "");
         printf("\n");
         printf("sieve_length: 2x %'d\n", config.sieve_length);
         printf("sieve_range:  %'ld\n", config.sieve_range);
@@ -75,8 +75,8 @@ int main(int argc, char* argv[]) {
 
         printf("run_prp:  %d\n", config.run_prp);
         printf("\n");
-        setlocale(LC_NUMERIC, "C");
     }
+    setlocale(LC_NUMERIC, "C");
 
     prime_gap_test(config);
 }
@@ -112,7 +112,7 @@ void prime_gap_test(const struct Config config) {
     // ----- Allocate memory for a handful of utility functions.
 
     // TODO:cleanup after prev_prime
-    // Remainders of (p#/d) mod prime
+    // Remainders of (P#/d) mod prime
     int *remainder   = (int*) malloc(sizeof(int) * primes.size());
     {
         for (size_t pi = 0; pi < primes.size(); pi++) {
@@ -367,7 +367,7 @@ void prime_gap_test(const struct Config config) {
 
             if (merit > min_merit)  {
                 // TODO write to file.
-                printf("%d  %.4f  %ld * %ld#/%ld -%d to +%d\n",
+                printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
                     gap, merit, m, P, D, prev_p_i, next_p_i);
             }
             if (merit > s_best_merit_interval) {
