@@ -44,7 +44,7 @@ struct Config {
     bool run_prp = false;
     bool save_unknowns = false;
 
-    bool method2 = false;
+    bool method1 = false;
 
     /**
      * -1: results only

@@ -71,7 +71,7 @@ def verify_args(args, fn_extension):
         args.d      = int(d)
         args.sieve_length = int(sl)
         args.sieve_range  = int(sr)
-        args.method2 = (m2 == ".m2")
+        args.method1 = (m2 == ".m1")
 
     args.sieve_range *= 10 ** 6
 
@@ -89,7 +89,7 @@ def verify_args(args, fn_extension):
     fn = "{}_{}_{}_{}_s{}_l{}M{}".format(
         args.mstart, args.p, args.d, args.minc,
         args.sieve_length, args.sieve_range // 10 ** 6,
-        ".m2" if args.method2 else "")
+        ".m1" if args.method2 else "")
     fn += fn_extension
 
     if args.unknown_filename:

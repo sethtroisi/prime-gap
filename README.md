@@ -7,7 +7,7 @@ A fast prime gap searching suite
 - [Combined Sieve - a new program to find prime gaps.](#combined-sieve---a-new-program-to-find-prime-gaps)
   * [Tools](#tools)
     + [Gap Search (Sieve many `m * p#/d`)](#gap-search-sieve-many-m--pd)
-      - [Method1 vs Method2](#method1-vs-method2)
+      - [Method1 vs Method2 (Default)](#method1-vs-method2-default)
     + [Gap Stats](#gap-stats)
     + [Gap Test](#gap-test)
     + [Benchmark](#benchmark)
@@ -25,13 +25,13 @@ A fast prime gap searching suite
 
 ### Gap Search (Sieve many `m * p#/d`)
 
-#### Method1 vs Method2
+#### Method1 vs Method2 (Default)
 
-`gap_search` parameter `--method2` changes how the sieve is performed.
+`gap_search` parameter `--method1` changes how the sieve is performed.
 
 ```bash
 $ make gap_search
-$ time ./gap_search [--method2] -p <p> -d <d> --mstart <m_start> --minc <m_inc> --sieve-range <SR>M [--sieve-length <SR>] --save-unknowns
+$ time ./gap_search [--method1] -p <p> -d <d> --mstart <m_start> --minc <m_inc> --sieve-range <SR>M [--sieve-length <SR>] --save-unknowns
 ```
 
 **Method1** performs a large initial setup phase to find the first `mi` that each `prime` divides before starting any sieving.
@@ -57,7 +57,7 @@ In practice Method2 is better. Method1 is only used to validate results.
 
 ```bash
 $ make gap_search
-$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 1000 --sieve-range 1000 --save-unknowns
+$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 1000 --sieve-range 1000 --save-unknowns --method1
 AUTO SET: sieve length (coprime: 353, prob_gap longer 0.79%): 7746
 
 	Calculating first m each prime divides
@@ -81,7 +81,7 @@ AUTO SET: sieve length (coprime: 353, prob_gap longer 0.79%): 7746
 
 ```bash
 $ make gap_search
-$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 1000 --sieve-range 1000 --save-unknowns --method2
+$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 1000 --sieve-range 1000 --save-unknowns
 AUTO SET: sieve length (coprime: 353, prob_gap longer 0.79%): 7746
 
 Testing m * 907#/210, m = 21400000 + [0, 1,000)
@@ -114,7 +114,7 @@ sieve_range:  1,000,000,000   small_threshold:  387,300
 ```
 
 ```bash
-$ diff 21400000_907_210_1000_s7746_l1000M.txt 21400000_907_210_1000_s7746_l1000M.m2.txt
+$ diff 21400000_907_210_1000_s7746_l1000M.txt 21400000_907_210_1000_s7746_l1000M.m1.txt
 <empty>
 ```
 
@@ -208,11 +208,11 @@ $ PARAMS="-p 907 -d 2190 --mstart 1 --minc 200 --sieve-range 100 --sieve-length 
 $ make gap_search gap_stats gap_test
 $ time ./gap_search --method2 --save-unknowns $PARAMS
 $ time ./gap_search           --save-unknowns $PARAMS
-$ md5sum 1_907_2190_200_s11000_l100M.{txt,m2.txt}
+$ md5sum 1_907_2190_200_s11000_l100M.{txt,m1.txt}
 080309453b4310e0310a4fb4d1779ffe  1_907_2190_200_s11000_l100M.txt
-080309453b4310e0310a4fb4d1779ffe  1_907_2190_200_s11000_l100M.m2.txt
+080309453b4310e0310a4fb4d1779ffe  1_907_2190_200_s11000_l100M.m1.txt
 
-$ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
+$ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 # Verify RECORD @ 1,7,13,101,137
 # Verify "avg seen prob:   0.9994038
 # Verify "avg record prob: 4.54e-06 (max: 8.123e-06)"
@@ -249,7 +249,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
 * gap\_search.cpp
   * [ ] Option to output m with gcd(m, d) != 1
   * (Method2)
-    * [ ] Make method2 the default
     * [ ] Estimate PRP/s and include in status.
     * [ ] Ctrl-c then just writes out the results at that point.
 * prime-gap-search.db
@@ -263,6 +262,7 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.m2.txt
   * [x] Split out some benchmarking
 * Project level
   * [x] Rename prime-gap.db to prime-gap-search.db
+  * [x] Make method2 the default
 * gap\_search.cpp
   * Method2 (all composites in memory)
     * [x] Look at Method1 vs Method2 writeup and understand why outputs seem different

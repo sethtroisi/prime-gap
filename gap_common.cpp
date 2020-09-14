@@ -303,7 +303,7 @@ std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
            std::to_string(config.minc) + "_s" +
            std::to_string(config.sieve_length) + "_l" +
            std::to_string(config.sieve_range / 1'000'000) + "M" +
-           (config.method2 ? ".m2" : "") +
+           (config.method1 ? ".m1" : "") +
            suffix;
 }
 
@@ -326,7 +326,7 @@ Config argparse(int argc, char* argv[]) {
         {"run-prp",          no_argument,       0,   6  },
         {"save-unknowns",    no_argument,       0,   7  },
 
-        {"method2",          no_argument,       0,   8  },
+        {"method1",          no_argument,       0,   8  },
 
         {"quiet",            no_argument,       0,  'q' },
         {"help",             no_argument,       0,  'h' },
@@ -398,9 +398,9 @@ Config argparse(int argc, char* argv[]) {
                     config.sieve_range = atol(t) * 1'000'000;
                     t = std::strchr(t, 'M');
 
-                    config.method2 = (t[3] == '2');
+                    config.method1 = (t[3] == '1');
 
-                    assert( std::strcmp(t, "M.txt") == 0 || std::strcmp(t, "M.m2.txt") == 0 );
+                    assert( std::strcmp(t, "M.txt") == 0 || std::strcmp(t, "M.m1.txt") == 0 );
                 }
                 break;
 
@@ -421,7 +421,7 @@ Config argparse(int argc, char* argv[]) {
                 config.save_unknowns = true;
                 break;
             case 8:
-                config.method2 = true;
+                config.method1 = true;
                 break;
 
             case 0:

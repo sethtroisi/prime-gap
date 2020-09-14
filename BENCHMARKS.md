@@ -2,7 +2,7 @@
 
 - [Benchmarks](#benchmarks)
   * [Microbenchmarks](#microbenchmarks)
-  * [`gap_search --method2`](#gap_search-method2)
+  * [`gap_search`](#gap_search)
   * [`gap_test`](#gap_test)
   * [Other Tools](#other-tools)
   * [`Pgsurround.pl` benchmark](#pgsurroundpl-benchmark)
@@ -58,13 +58,13 @@ $ ./benchmark 100000 modulo_search
 |    40 x  100000 | `modulo_search_euclid_all_large` | 10       | 102484   | 0.0110  |     107 | 364.6       |
 
 
-## `gap_search` Method2
+## `gap_search`
 
 Testing performed on a i7-2600k compiled with `gcc-7`.
 
 ```bash
 $ make gap_search
-$ PARAMS="-d 210 --mstart 1 --save-unknowns --method2"
+$ PARAMS="-d 210 --mstart 1 --save-unknowns"
 $ /usr/bin/time -v ./gap_search $PARAMS -p <P> --sieve-range <SL/1M> --minc <M_INC>
 ```
 
@@ -125,20 +125,20 @@ $ cd benchmark_data
 
 $ time for P in 503 1009; do
 echo -e "\n\nSieving $P#/3090";
-../gap_search -p $P -d 3090 --mstart 1 --minc 1000 --sieve-range 1000 --save-unknowns --method2 -qqq;
+../gap_search -p $P -d 3090 --mstart 1 --minc 1000 --sieve-range 1000 --save-unknowns -qqq;
 done
 
 $ time for P in 1999 5003 10007; do
 echo -e "\n\nSieving $P#/3090";
-../gap_search -p $P -d 3090 --mstart 1 --minc 100 --sieve-range 5000 --save-unknowns --method2 -qqq;
+../gap_search -p $P -d 3090 --mstart 1 --minc 100 --sieve-range 5000 --save-unknowns -qqq;
 done
 
 $ ls -sh1tr
-188K 1_503_3090_1000_s3958_l1000M.m2.txt
-384K 1_1009_3090_1000_s8594_l1000M.m2.txt
- 80K 1_1999_3090_100_s18322_l5000M.m2.txt
-212K 1_5003_3090_100_s48878_l5000M.m2.txt
-428K 1_10007_3090_100_s100616_l5000M.m2.txt
+188K 1_503_3090_1000_s3958_l1000M.txt
+384K 1_1009_3090_1000_s8594_l1000M.txt
+ 80K 1_1999_3090_100_s18322_l5000M.txt
+212K 1_5003_3090_100_s48878_l5000M.txt
+428K 1_10007_3090_100_s100616_l5000M.txt
 
 # gap_test (takes ~30m)
 $ time for fn in `ls -tr`; do
@@ -146,7 +146,7 @@ echo -e "\n\nProcessing $fn";
 ../gap_test --run-prp --min-merit 12 --unknown-filename "$fn" -qq;
 done
 
-Processing 1_503_3090_400_s3958_l1000M.m2.txt
+Processing 1_503_3090_400_s3958_l1000M.txt
 7680  16.0978  77 * 503#/3090 -3072 to +4608
 6408  13.3697  701 * 503#/3090 -4534 to +1874
 6942  14.4757  919 * 503#/3090 -6926 to +16
@@ -155,7 +155,7 @@ Processing 1_503_3090_400_s3958_l1000M.m2.txt
 	    unknowns  32756      (avg: 124.08), 98.43% composite  50.27% <- % -> 49.73%
 	    prp tests 6460       (avg: 24.47) (4216.9 tests/sec)
 
-Processing 1_1009_3090_1000_s8594_l1000M.m2.txt
+Processing 1_1009_3090_1000_s8594_l1000M.txt
 11934  12.4149  463 * 1009#/3090 -2326 to +9608
 11946  12.4252  547 * 1009#/3090 -2880 to +9066
 16652  17.3139  767 * 1009#/3090 -8486 to +8166
@@ -166,14 +166,14 @@ Processing 1_1009_3090_1000_s8594_l1000M.m2.txt
 	    unknowns  66293      (avg: 251.11), 98.54% composite  49.74% <- % -> 50.26%
 	    prp tests 13282      (avg: 50.31) (751.6 tests/sec)
 
-Processing 1_1999_3090_100_s18322_l5000M.m2.txt
+Processing 1_1999_3090_100_s18322_l5000M.txt
 34776  17.9601  89 * 1999#/3090 -27994 to +6782
 	97  258 <- unknowns -> 227 	6098 <- gap -> 6646
 	    tests     26         (0.96/sec)  27 seconds elapsed
 	    unknowns  12050      (avg: 463.46), 98.74% composite  50.35% <- % -> 49.65%
 	    prp tests 2764       (avg: 106.31) (102.6 tests/sec)
 
-Processing 1_5003_3090_100_s48878_l5000M.m2.txt
+Processing 1_5003_3090_100_s48878_l5000M.txt
 61824  12.5750  71 * 5003#/3090 -10898 to +50926
 65184  13.2580  83 * 5003#/3090 -12266 to +52918
 59728  12.1480  91 * 5003#/3090 -29242 to +30486

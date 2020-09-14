@@ -80,10 +80,10 @@ int main(int argc, char* argv[]) {
     }
     setlocale(LC_NUMERIC, "C");
 
-    if (config.method2) {
-        prime_gap_parallel(config);
-    } else {
+    if (config.method1) {
         prime_gap_search(config);
+    } else {
+        prime_gap_parallel(config);
     }
 }
 
