@@ -1031,6 +1031,20 @@ void prime_gap_parallel(struct Config config) {
 
                 return false;
             }
+
+            #ifdef SAVE_INCREMENTS
+            if (config.save_unknowns && prime > 1e8 && prime != LAST_PRIME) {
+                // reset unknown_filename if cached;
+                config.unknown_filename = "";
+                size_t old = config.sieve_range;
+                config.sieve_range = prime - (prime % 1'000'000);
+                save_unknowns_method2(
+                    config,
+                    valid_mi, m_reindex, i_reindex,
+                    composite);
+                config.sieve_range = old;
+            }
+            #endif // SAVE_INCREMENTS
         }
 
         return true;
