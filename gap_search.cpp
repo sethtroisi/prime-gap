@@ -661,24 +661,11 @@ void prime_gap_parallel(struct Config config) {
     mpz_t test;
     mpz_init(test);
 
-    // TODO: Would be nice to have a prev prime.
-    uint64_t LAST_PRIME = SIEVE_RANGE;
-    {
-        bool prime;
-        do {
-            prime = true;
-            if (LAST_PRIME % 2 == 0)
-                LAST_PRIME--;
+    mpz_set_ui(test, SIEVE_RANGE);
+    mpz_prevprime(test, test);
 
-            for (uint64_t p = 3; p*p <= LAST_PRIME; p += 2) {
-                if (LAST_PRIME % p == 0) {
-                    prime = false;
-                    LAST_PRIME--;
-                    break;
-                }
-            }
-        } while (prime == false);
-    }
+    uint64_t LAST_PRIME = mpz_get_ui(test);
+    assert( LAST_PRIME <= SIEVE_RANGE && LAST_PRIME + 500 > SIEVE_RANGE);
 
     // ----- Generate primes for P
     const vector<uint32_t> P_primes = get_sieve_primes(P);

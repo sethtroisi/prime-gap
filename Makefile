@@ -17,7 +17,7 @@ OBJS	= gap_common.o modulo_search.o
 OUT	= gap_search gap_stats gap_test benchmark gap_stats_missing
 CC	= g++
 CFLAGS	= -Wall -Werror -O3 -lgmp
-LDFLAGS	=
+LDFLAGS	= -L /usr/local/lib
 PROGS	= gap_search gap_test
 
 %.o: %.cpp

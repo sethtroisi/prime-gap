@@ -69,6 +69,8 @@ std::string gen_unknown_fn(const struct Config& config, std::string suffix);
 
 /* Random Utils */
 
+bool has_prev_prime_gmp();
+
 uint32_t gcd(uint32_t a, uint32_t b);
 
 void K_stats(
@@ -82,7 +84,6 @@ double prop_gap_larger(
     double prob_prime,
     double *prob_prime_coprime,
     size_t *count_coprime);
-
 
 
 /* Prime Stuff */

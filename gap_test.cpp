@@ -45,7 +45,11 @@ int main(int argc, char* argv[]) {
     if (config.verbose >= 2) {
         printf("Compiled with GMP %d.%d.%d\n",
             __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
-        // TODO warning about 6.2 being faster.
+    }
+
+    if( !has_prev_prime_gmp() ) {
+        cout << "See Notes in README.md for instructions on using dev GMPlib" << endl;
+        return 1;
     }
 
     if (config.sieve_length == 0) {
@@ -132,8 +136,9 @@ void load_and_verify_unknowns(
 }
 
 void test_interval(
-        const uint64_t m, const mpz_t &K,
-        int &s_total_prp_tests,
+        const uint64_t m, const mpz_t &K, const size_t SIEVE_LENGTH,
+        size_t &s_total_prp_tests,
+        size_t &s_gap_out_of_sieve_prev, size_t &s_gap_out_of_sieve_next,
         vector<int32_t> (&unknowns)[2],
         int &next_p, int &prev_p) {
 
@@ -158,6 +163,24 @@ void test_interval(
             next_p = high;
             break;
         }
+    }
+
+    if (prev_p == 0) {
+        s_gap_out_of_sieve_prev += 1;
+
+        mpz_sub_ui(ptest, center, SIEVE_LENGTH - 1);
+        mpz_prevprime(ptest, ptest);
+        mpz_sub(ptest, center, ptest);
+        prev_p = mpz_get_ui(ptest);
+    }
+
+    if (next_p == 0) {
+        s_gap_out_of_sieve_next += 1;
+
+        mpz_add_ui(ptest, center, SIEVE_LENGTH - 1);
+        mpz_nextprime(ptest, ptest);
+        mpz_sub(ptest, ptest, center);
+        next_p = mpz_get_ui(ptest);
     }
 
     mpz_clear(center); mpz_clear(ptest);
@@ -187,26 +210,6 @@ void prime_gap_test(const struct Config config) {
         }
     }
 
-    // Used for coprme & prev_prime
-    assert( P <= 80000 );
-    vector<uint32_t> primes = get_sieve_primes(80000);
-
-    // ----- Allocate memory for a handful of utility functions.
-
-    // TODO:cleanup after prev_prime
-    // Remainders of (P#/d) mod prime
-    int *remainder   = (int*) malloc(sizeof(int) * primes.size());
-    {
-        for (size_t pi = 0; pi < primes.size(); pi++) {
-            const long prime = primes[pi];
-
-            // Big improvement over surround_prime is reusing this for each m.
-            long mod = mpz_fdiv_ui(K, prime);
-            assert( 0 <= mod && mod < prime );
-            remainder[pi] = mod;
-        }
-    }
-
     // ----- Sieve stats
     {
         assert( config.sieve_range >= 1e6 );
@@ -217,17 +220,20 @@ void prime_gap_test(const struct Config config) {
         double prob_prime_coprime = 1;
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
-        for (size_t pi = 0; primes[pi] <= P; pi++) {
-            if (D % primes[pi] != 0) {
-                prob_prime_coprime *= (1 - 1.0/primes[pi]);
+        vector<uint32_t> primes = get_sieve_primes(P);
+        for (auto prime : primes) {
+            assert( prime <= P );
+            if (gcd(D, prime) == 1) {
+                prob_prime_coprime *= (1 - 1.0/prime);
             }
         }
 
         // TODO gcd_ui(K, i)
         size_t count_coprime = SL-1;
         for (size_t i = 1; i < SL; i++) {
-            for (int prime : primes) {
-                if ((unsigned) prime > P) break;
+            for (auto prime : primes) {
+                assert( prime <= P );
+
                 if ((i % prime) == 0 && (D % prime) != 0) {
                     count_coprime -= 1;
                     break;
@@ -249,7 +255,7 @@ void prime_gap_test(const struct Config config) {
                 100 * prob_prime, K_digits);
             printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
                 100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
-            printf("\t~2x%.1f=%.1f PRP tests per m\n",
+            printf("\t~2x%.1f ~ %.1f PRP tests per m\n",
                 1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
             printf("\tsieve_length=%d is insufficient ~%.2f%% of time\n",
                 SIEVE_LENGTH, 100 * prob_gap_shorter_hypothetical);
@@ -293,14 +299,14 @@ void prime_gap_test(const struct Config config) {
     // Used for various stats
     auto  s_start_t = high_resolution_clock::now();
     uint32_t  s_tests     = 0;
-    uint64_t  s_total_unknown = 0;
-    uint64_t  s_t_unk_low = 0;
-    uint64_t  s_t_unk_hgh = 0;
-    uint64_t  s_total_prp_tests = 0;
-    uint64_t  s_gap_out_of_sieve_prev = 0;
-    uint64_t  s_gap_out_of_sieve_next = 0;
+    size_t    s_total_unknown = 0;
+    size_t    s_t_unk_low = 0;
+    size_t    s_t_unk_hgh = 0;
+    size_t    s_total_prp_tests = 0;
+    size_t    s_gap_out_of_sieve_prev = 0;
+    size_t    s_gap_out_of_sieve_next = 0;
     float     s_best_merit_interval = 0;
-    uint64_t  s_best_merit_interval_m = 0;
+    size_t    s_best_merit_interval_m = 0;
 
     for (uint32_t mi = 0; mi < M_inc; mi++) {
         long m = M_start + mi;
@@ -324,61 +330,11 @@ void prime_gap_test(const struct Config config) {
         int prev_p = 0;
         int next_p = 0;
         if (config.run_prp) {
-            test_interval(m, K, unknowns, &prev_p, &next_p);
-
-            if (next_p == 0) {
-                s_gap_out_of_sieve_next += 1;
-                // Using fallback to slower gmp routine
-                //cout << "\tfalling back to mpz_nextprime" << endl;
-                mpz_add_ui(ptest, center, SIEVE_LENGTH - 1);
-                mpz_nextprime(ptest, ptest);
-                mpz_sub(ptest, ptest, center);
-                next_p = mpz_get_ui(ptest);
-            }
-
-            if (prev_p == 0) {
-                s_gap_out_of_sieve_prev += 1;
-                /*
-                // REALLY UGLY FALLBACK
-                cout << "\tUGLY prevprime hack" << endl;
-                mpz_sub_ui(ptest, center, 2*SIEVE_LENGTH-1);
-                mpz_nextprime(ptest, ptest);
-                if (mpz_cmp(ptest, center) > 1) {
-                    cout << m << "What!" << endl;
-                    exit(1);
-                }
-
-                while (mpz_cmp(ptest, center) < 0) {
-                    // save distance
-                    mpz_sub(center, center, ptest);
-                    prev_p = mpz_get_ui(center);
-                    mpz_add(center, center, ptest);
-                    mpz_nextprime(ptest, ptest);
-                }
-                // */
-
-                // /*
-                // Medium ugly fallback.
-                for (int i = SIEVE_LENGTH; ; i++) {
-                    bool composite = false;
-                    for (size_t pi = 0; pi < primes.size(); pi++) {
-                        const long prime = primes[pi];
-                        long modulo = (remainder[pi] * m) % prime;
-                        if (i % prime == modulo) {
-                            composite = true;
-                            break;
-                        }
-                    }
-                    if (!composite) {
-                        mpz_sub_ui(ptest, center, i);
-                        if (mpz_probab_prime_p(ptest, 25)) {
-                            prev_p = i;
-                            break;
-                        }
-                    }
-                }
-                // */
-            }
+            test_interval(
+                m, K, SIEVE_LENGTH,
+                s_total_prp_tests,
+                s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next,
+                unknowns, prev_p, next_p);
 
             assert( prev_p > 0 && next_p > 0 );
 

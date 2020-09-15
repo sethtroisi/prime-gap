@@ -236,7 +236,10 @@ $ sqlite3 prime-gap-search.db < schema.sql
   * Can add `-DGMP_VALIDATE_FACTORS=1` to `CFLAGS` in Makefile
   * `misc/double_check.py` double checks using `ecm`, if small factor found number shouldn't appear in unknown-file.txt
     * `python misc/double_check.py --unknown-filename <unknown_filen> -c 10`
-
+* Dev GMPlib | GMP 6.2.99
+  * GMP 6.2.0 hasn't yet accepted my `mpz_prevprime` patch
+    * `hg apply <patch>` from https://gmplib.org/list-archives/gmp-devel/2020-August/005851.html
+    * If you are a developer consider asking telling them that `mpz_prevprime` would be useful
 
 ### Quick test of all functions
 ```bash
@@ -262,7 +265,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 * [ ] rename `next_p_i` to `next_p` in schema.sql
 * [ ] Rename `gap_search` to `combined_sieve`
 * gap\_utils.py
-  * [ ] Option for gmp vs OpenPFGW
 * README.md
   * [ ] gap\_test.py vs gap\_test.cpp
 * gap\_search.cpp
