@@ -208,14 +208,6 @@ void prime_gap_test(const struct Config config) {
             M_start, valid_ms, first_mi, last_mi);
     }
 
-    // vector<bool> uses bit indexing which is ~5% slower.
-    vector<char> composite[2] = {
-        vector<char>(SIEVE_LENGTH, 0),
-        vector<char>(SIEVE_LENGTH, 0)
-    };
-    assert( composite[0].size() == SIEVE_LENGTH );
-    assert( composite[1].size() == SIEVE_LENGTH );
-
     // Used for various stats
     auto  s_start_t = high_resolution_clock::now();
     uint32_t  s_tests     = 0;
@@ -234,9 +226,7 @@ void prime_gap_test(const struct Config config) {
             continue;
         }
 
-        // Reset sieve array to all composite.
-        std::fill_n(composite[0].begin(), SIEVE_LENGTH, 1);
-        std::fill_n(composite[1].begin(), SIEVE_LENGTH, 1);
+        vector<int32_t> unknowns[2];
 
         int unknown_l;
         int unknown_u;
@@ -261,21 +251,21 @@ void prime_gap_test(const struct Config config) {
             int c;
             for (int k = 0; k < unknown_l; k++) {
                 unknown_file >> c;
-                composite[0][-c] = 0;
+                assert( 1 <= -c && -c < (int) SIEVE_LENGTH );
+                unknowns[0].push_back(-c);
             }
             unknown_file >> delim;
             assert( delim == "|" );
 
             for (int k = 0; k < unknown_u; k++) {
                 unknown_file >> c;
-                composite[1][c] = 0;
+                assert( 1 <= c && c < (int) SIEVE_LENGTH );
+                unknowns[1].push_back(c);
             }
         }
 
-        int unknown_l_test = std::count(composite[0].begin(), composite[0].end(), false);
-        int unknown_u_test = std::count(composite[1].begin(), composite[1].end(), false);
-        assert( unknown_l == unknown_l_test );
-        assert( unknown_u == unknown_u_test );
+        assert( (size_t) unknown_l == unknowns[0].size() );
+        assert( (size_t) unknown_u == unknowns[1].size() );
 
         s_total_unknown += unknown_l + unknown_u;
         s_t_unk_low += unknown_l;
@@ -289,22 +279,20 @@ void prime_gap_test(const struct Config config) {
             mpz_init(center); mpz_init(ptest);
             mpz_mul_ui(center, K, m);
 
-            for (unsigned int i = 1; (next_p_i == 0 || prev_p_i == 0) && i < SL; i++) {
-                if (prev_p_i == 0 && !composite[0][i]) {
-                    s_total_prp_tests += 1;
+            for (int i = 0; prev_p_i == 0 && i < unknown_l; i++) {
+                s_total_prp_tests += 1;
 
-                    mpz_sub_ui(ptest, center, i);
-                    if (mpz_probab_prime_p(ptest, 25)) {
-                        prev_p_i = i;
-                    }
+                mpz_sub_ui(ptest, center, unknowns[0][i]);
+                if (mpz_probab_prime_p(ptest, 25)) {
+                    prev_p_i = unknowns[0][i];
                 }
-                if (next_p_i == 0 && !composite[1][i]) {
-                    s_total_prp_tests += 1;
+            }
+            for (int i = 0; next_p_i == 0 && i < unknown_u; i++) {
+                s_total_prp_tests += 1;
 
-                    mpz_add_ui(ptest, center, i);
-                    if (mpz_probab_prime_p(ptest, 25)) {
-                        next_p_i = i;
-                    }
+                mpz_add_ui(ptest, center, unknowns[1][i]);
+                if (mpz_probab_prime_p(ptest, 25)) {
+                    next_p_i = unknowns[1][i];
                 }
             }
 
