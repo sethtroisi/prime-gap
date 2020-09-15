@@ -817,15 +817,17 @@ void prime_gap_parallel(struct Config config) {
             }
         } else {
             modulo_search_euclid_all_small(M_start, M_inc, SL, prime, base_r, [&](const uint32_t mi) {
-                int32_t mii = m_reindex[mi];
-                if (mii < 0) {
-                    return;
-                }
+                assert (mi < M_inc);
 
-                // TODO validate no overflow
-                // TODO return first from lambda?
+                int32_t mii = m_reindex[mi];
+                if (mii < 0)
+                    return;
+
+                // XXX: first (modulo) can be returned from modulo_search_euclid_all_small
+                // this was a +5% speedup in benchmark but didn't translate to a real speedup.
                 uint64_t first = (base_r * (M_start + mi) + (SL-1)) % prime;
                 assert( first < SIEVE_INTERVAL );
+
                 first = SIEVE_INTERVAL - first - 1;
                 assert( 0 <= first && first < SIEVE_INTERVAL );
 
