@@ -134,13 +134,15 @@ void set_defaults(struct Config& config) {
         // factors of K = P#/D
         vector<uint32_t> K_primes = get_sieve_primes(config.p);
         {
-            for (size_t pi = K_primes.size()-1; ; pi--) {
-                prob_prime_coprime /= 1 - 1.0 / K_primes[pi];
-                if (config.d % K_primes[pi] == 0) {
-                    K_primes.erase(K_primes.begin() + pi);
-                }
-                if (pi == 0) break;
+            // Adjust for prob_prime for no primes <= P
+            for (auto prime : K_primes) {
+                prob_prime_coprime /= (1 - 1.0 / prime);
             }
+
+            // Remove any factors of D
+            K_primes.erase(
+                std::remove_if(K_primes.begin(), K_primes.end(),
+                   [&](uint32_t p){ return config.d % p == 0; }));
         }
 
         // K = #P/D
@@ -200,7 +202,7 @@ void set_defaults(struct Config& config) {
                 // check if tSL is divisible for all center mods
                 for (auto& coprime_counts : coprime_by_mod_d) {
                     const auto center = coprime_counts.first;
-                    // Some factor of d will mark this off (for these centers) don't count it.
+                    // Some multiple of d will mark this off (for these centers) don't count it.
                     if (gcd(center + tSL, config.d) == 1) {
                         coprime_counts.second += 1;
                     }
@@ -255,8 +257,6 @@ double prob_prime_and_stats(
     double K_log;
     K_stats(config, K, &K_digits, &K_log);
 
-    double prob_prime = 1 / (K_log + log(config.mstart));
-
     // From Mertens' 3rd theorem
     double unknowns_after_sieve = 1 / (log(config.sieve_range) * exp(GAMMA));
     double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
@@ -283,7 +283,7 @@ double prob_prime_and_stats(
         printf("\n");
     }
 
-    return prob_prime;
+    return K_log
 }
 
 
@@ -727,15 +727,10 @@ void prime_gap_parallel(struct Config config) {
 
     // ----- Sieve stats & Merit Stuff
     mpz_t K;
-    double prob_prime = prob_prime_and_stats(config, K, P_primes);
-    double prp_time_est = -1;
-    {
-        // TODO have prob_prime_and_stats return K_log
-        long exp;
-        double mantis = mpz_get_d_2exp(&exp, K);
-        double K_log = log(mantis) + log(2) * exp;
-        prp_time_est = prp_time_estimate(K_log);
-    }
+    const double K_log = prob_prime_and_stats(config, K, P_primes);
+    const double prob_prime = 1 / (K_log + log(config.mstart));
+    const double prp_time_est = prp_time_estimate(K_log);
+
     if (config.verbose >= 2) {
         if (prp_time_est < 1) {
             printf("Estimated PRP/s %.1f\n", 1 / prp_time_est);
@@ -949,8 +944,9 @@ void prime_gap_parallel(struct Config config) {
             double     secs = duration<double>(s_stop_t - s_start_t).count();
             double int_secs = duration<double>(s_stop_t - s_interval_t).count();
 
-            double unknowns_after_sieve = 1 / (log(prime) * exp(GAMMA));
-            double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
+            //double unknowns_after_sieve = 1 / (log(prime) * exp(GAMMA));
+            //double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
+            double prob_prime_after_sieve = prob_prime * log(prime) * exp(GAMMA);
 
             uint64_t t_total_unknowns = 0;
             for (size_t i = 0; i < valid_ms; i++) {
