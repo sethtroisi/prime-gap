@@ -139,7 +139,6 @@ TODO
 
 More benchmarks are present in [BENCHMARKS.md](BENCHMARKS.md)
 
-**TODO**: Updated after `max_a` fix in benchmark
 ```bash
 $ make benchmark
 $ ./benchmark 100000
@@ -165,6 +164,37 @@ $ ./benchmark 100000 modulo_search
 	|    25 x  100000 | modulo_search_euclid_all_small | 86763    | 292490   | 0.0277  |      95 | 321.5       |
 	|    25 x  100000 | modulo_search_euclid_all_large | 86763    | 292490   | 0.0295  |     101 | 342.5       |
 ...
+
+$ ./benchmark 100000 _all
+	|  bits x count   | method_name                    | found    | total    | time(s) | ns/iter | cycles/iter |
+	|-----------------|--------------------------------|----------|----------|---------|---------|-------------|
+	|    25 x  100000 | modulo_search_euclid_all_small | 86755    | 292525   | 0.0282  |      96 | 327.1       |
+	|    25 x  100000 | modulo_search_euclid_all_large | 86755    | 292525   | 0.0308  |     105 | 357.5       |
+
+	|  bits x count   | method_name                    | found    | total    | time(s) | ns/iter | cycles/iter |
+	|-----------------|--------------------------------|----------|----------|---------|---------|-------------|
+	|    30 x  100000 | modulo_search_euclid_all_small | 18777    | 129541   | 0.0211  |     163 | 552.7       |
+	|    30 x  100000 | modulo_search_euclid_all_large | 18777    | 129541   | 0.0217  |     168 | 569.0       |
+
+	|  bits x count   | method_name                    | found    | total    | time(s) | ns/iter | cycles/iter |
+	|-----------------|--------------------------------|----------|----------|---------|---------|-------------|
+	|    31 x  100000 | modulo_search_euclid_all_small | 9755     | 115239   | 0.0206  |     179 | 606.3       |
+	|    31 x  100000 | modulo_search_euclid_all_large | 9755     | 115239   | 0.0204  |     177 | 601.4       |
+
+	|  bits x count   | method_name                    | found    | total    | time(s) | ns/iter | cycles/iter |
+	|-----------------|--------------------------------|----------|----------|---------|---------|-------------|
+	|    32 x  100000 | modulo_search_euclid_all_small | 4831     | 107701   | 0.0217  |     202 | 684.2       |
+	|    32 x  100000 | modulo_search_euclid_all_large | 4831     | 107701   | 0.0222  |     206 | 698.6       |
+
+	|  bits x count   | method_name                    | found    | total    | time(s) | ns/iter | cycles/iter |
+	|-----------------|--------------------------------|----------|----------|---------|---------|-------------|
+	|    35 x  100000 | modulo_search_euclid_all_small | 571      | 100811   | 0.0233  |     231 | 784.5       |
+	|    35 x  100000 | modulo_search_euclid_all_large | 571      | 100811   | 0.0238  |     236 | 799.3       |
+
+	|  bits x count   | method_name                    | found    | total    | time(s) | ns/iter | cycles/iter |
+	|-----------------|--------------------------------|----------|----------|---------|---------|-------------|
+	|    40 x  100000 | modulo_search_euclid_all_small | 18       | 100021   | 0.0240  |     240 | 813.5       |
+	|    40 x  100000 | modulo_search_euclid_all_large | 18       | 100021   | 0.0242  |     242 | 821.5       |
 ```
 
 ## Benchmarks
@@ -249,7 +279,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [ ] Sort by expected gap and PRP only top X%
   * [ ] Option to toggle between OpenPFGW and gmp
 * benchmarking
-  * [ ] Make sure `max_a` is working as intended.
   * [ ] Add instructions to verify `modulo\_search` is >80% of the time.
   * [ ] Redo prime-time with user time (because pfgw uses more than 1 thread)
 * gap\_stats.cpp

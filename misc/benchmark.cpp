@@ -99,10 +99,6 @@ void generate_PALR(
 
     generate_primes(bits, count, primes);
 
-    uint64_t max_a = 1UL << (63 - bits);
-    //printf("max_a: %ld, S: %ld, bits: %d\n", max_a, S, bits);
-    assert(S < max_a);
-
     std::mt19937 mt_rand(S);
     for (uint64_t p : primes) {
         assert( p > S );
@@ -112,14 +108,14 @@ void generate_PALR(
         // R = L + S
 
         uint64_t a = 0;
-        while (a == 0) a = (mt_rand() % p) % max_a;
+        while (a == 0) a = mt_rand() % p;
 
         uint64_t l = 0;
-        while (l == 0) l = (mt_rand() % (p - S)) % (max_a - S);
+        while (l < S) l = mt_rand() % (p - S);
 
         // A, L, R <= 64 - p bits
-        assert(a < max_a);
-        assert((l + S) < max_a);
+        assert(a < p);
+        assert((l + S) < p);
 
         A.push_back(a);
         L.push_back(l);
