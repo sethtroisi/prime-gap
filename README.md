@@ -11,7 +11,8 @@ A fast prime gap searching suite
     + [Gap Stats](#gap-stats)
     + [Gap Test](#gap-test)
     + [Benchmark](#benchmark)
-  * [Benchmarks](#benchmarks)
+  * [Benchmarks](#benchmarks) | [BENCHMARKS.md](BENCHMARKS.md)
+  * [Theory](#theory) | [THEORY.md](THEORY.md)
   * [Setup](#setup)
   * [Notes](#notes)
     + [Quick test of all functions](#quick-test-of-all-functions)
@@ -200,6 +201,10 @@ $ ./benchmark 100000 _all
 ## Benchmarks
 
 See [BENCHMARKS.md](BENCHMARKS.md)
+
+## Theory
+
+Theory and justifaction for some calculations in present in [THEORY.md](THEORY.md)
 
 ## Setup
 
