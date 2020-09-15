@@ -215,8 +215,8 @@ void prime_gap_test(const struct Config config) {
         assert( config.sieve_range >= 1e6 );
         //From Mertens' 3rd theorem
         double unknowns_after_sieve = 1 / (log(config.sieve_range) * exp(GAMMA));
-
-        double prob_prime = 1 / (K_log + log(M_start));
+        double N_log = K_log + log(M_start);
+        double prob_prime = 1 / N_log - 1 / (N_log * N_log);
         double prob_prime_coprime = 1;
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 

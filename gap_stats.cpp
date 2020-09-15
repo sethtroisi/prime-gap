@@ -446,7 +446,7 @@ void run_gap_file(
         vector<uint32_t> unknown_low, unknown_high;
         read_unknown_line(mi, unknown_file, unknown_low, unknown_high);
 
-        // Note slightly different from smallest_log
+        // Note slightly different from N_log
         float log_start_prime = K_log + log(m);
 
         // TODO: should this actually be (1 - prob_great_nth[size] + prob_unknown_extended)^2
@@ -628,19 +628,19 @@ void prime_gap_stats(const struct Config config) {
 
     // gap that would be a record with m*P#/d
     vector<uint32_t> poss_record_gaps;
-    float smallest_log = K_log + log(M_start);
+    float N_log = K_log + log(M_start);
     {
         for (size_t g = 2; g < MAX_GAP; g += 2) {
             // Ignore the infintesimal odds of finding >merit 35 gap.
-            if (g / smallest_log > 35) {
+            if (g / N_log > 35) {
                 break;
             }
 
-            if (records[g] > smallest_log) {
+            if (records[g] > N_log) {
                 poss_record_gaps.push_back(g);
                 if (poss_record_gaps.size() <= 2) {
                     printf("If found Gap: %ld (current: %.2f) would improve to %.3f\n",
-                        g, g / records[g], g / smallest_log);
+                        g, g / records[g], g / N_log);
                 }
             }
         }
@@ -665,7 +665,7 @@ void prime_gap_stats(const struct Config config) {
     assert( P_primes.back() == P);
 
     // ----- Sieve stats
-    const double PROB_PRIME = 1 / smallest_log;
+    const double PROB_PRIME = 1 / N_log - 1 / (N_log * N_log);
     const double UNKNOWNS_AFTER_SIEVE = 1 / (log(config.sieve_range) * exp(GAMMA));
     const double PROB_PRIME_AFTER_SIEVE = PROB_PRIME / UNKNOWNS_AFTER_SIEVE;
     {

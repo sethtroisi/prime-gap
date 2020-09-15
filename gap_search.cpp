@@ -129,7 +129,8 @@ void set_defaults(struct Config& config) {
     if (config.sieve_length == 0) {
         // Change that a number near K is prime
         // GIVEN no factor of K or D => no factor of P#
-        double prob_prime_coprime = 1 / (K_log + log(config.mstart));
+        double N_log = K_log + log(config.mstart);
+        double prob_prime_coprime = 1 / N_log - 1 / (N_log * N_log);
 
         // factors of K = P#/D
         vector<uint32_t> K_primes = get_sieve_primes(config.p);
@@ -259,6 +260,8 @@ double prob_prime_and_stats(
 
     // From Mertens' 3rd theorem
     double unknowns_after_sieve = 1 / (log(config.sieve_range) * exp(GAMMA));
+    const double N_log = K_log + log(config.mstart);
+    const double prob_prime = 1 / N_log - 1 / (N_log * N_log);
     double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
     size_t count_coprime = 0;
@@ -283,7 +286,7 @@ double prob_prime_and_stats(
         printf("\n");
     }
 
-    return K_log
+    return K_log;
 }
 
 
@@ -728,8 +731,9 @@ void prime_gap_parallel(struct Config config) {
     // ----- Sieve stats & Merit Stuff
     mpz_t K;
     const double K_log = prob_prime_and_stats(config, K, P_primes);
-    const double prob_prime = 1 / (K_log + log(config.mstart));
-    const double prp_time_est = prp_time_estimate(K_log);
+    const double N_log = K_log + log(config.mstart);
+    const double prob_prime = 1 / N_log - 1 / (N_log * N_log);
+    const double prp_time_est = prp_time_estimate(N_log);
 
     if (config.verbose >= 2) {
         if (prp_time_est < 1) {
@@ -944,8 +948,7 @@ void prime_gap_parallel(struct Config config) {
             double     secs = duration<double>(s_stop_t - s_start_t).count();
             double int_secs = duration<double>(s_stop_t - s_interval_t).count();
 
-            //double unknowns_after_sieve = 1 / (log(prime) * exp(GAMMA));
-            //double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
+            // See THEORY.md
             double prob_prime_after_sieve = prob_prime * log(prime) * exp(GAMMA);
 
             uint64_t t_total_unknowns = 0;

@@ -258,8 +258,9 @@ def prime_gap_test(args):
     remainder   = [K % prime for prime in primes]
 
     # ----- Sieve stats
+    prob_prime = 1 / M_log - 1 / (M_log * M_log)
     prob_prime_after_sieve = prob_prime_sieve_length(
-        M, D, 1 / M_log, K_digits, K_primes, SL, sieve_range)
+        M, D, 1 / prob_prime, K_digits, K_primes, SL, sieve_range)
 
     # ----- Main sieve loop.
     print("\nStarting m={}".format(M))
