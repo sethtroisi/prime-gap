@@ -17,6 +17,7 @@
 #include <chrono>
 #include <clocale>
 #include <cmath>
+#include <csignal>
 #include <cstdio>
 #include <fstream>
 #include <functional>
@@ -72,13 +73,15 @@ int main(int argc, char* argv[]) {
         printf("Testing m * %u#/%u, m = %ld + [0, %'ld)\n",
             config.p, config.d, config.mstart, config.minc);
     }
-    if (config.verbose >= 2) {
-        printf("\n");
-        printf("sieve_length: 2x %'d\n", config.sieve_length);
-        printf("sieve_range:  %'ld\n", config.sieve_range);
-        printf("\n");
-    }
     setlocale(LC_NUMERIC, "C");
+
+    if ((config.sieve_range > 2'000'000'000) &&
+            (config.sieve_range / config.minc > 100'000) &&
+            (config.p <= 10000)) {
+        printf("\tsieve_range(%ldB) is probably too large\n",
+            config.sieve_range / 1'000'000'000);
+    }
+
 
     if (config.method1) {
         prime_gap_search(config);
@@ -275,7 +278,7 @@ double prob_prime_and_stats(
                 1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
         printf("\tsieve_length=%d is insufficient ~~%.3f%% of time\n",
                 config.sieve_length, 100 * prob_gap_hypothetical);
-        cout << endl;
+        printf("\n");
     }
 
     return prob_prime;
@@ -285,7 +288,7 @@ double prob_prime_and_stats(
 void prime_gap_search(const struct Config config) {
     const uint64_t M_start = config.mstart;
     const uint64_t M_inc = config.minc;
-    const uint64_t P = config.p;
+    //const uint64_t P = config.p;
     const uint64_t D = config.d;
 
     const unsigned int SIEVE_LENGTH = config.sieve_length;
@@ -296,15 +299,24 @@ void prime_gap_search(const struct Config config) {
     mpz_t test;
     mpz_init(test);
 
-    // ----- Merit Stuff
-    mpz_t K;
-    mpz_init(K);
-    mpz_primorial_ui(K, P);
-    assert( 0 == mpz_tdiv_q_ui(K, K, D) );
-    assert( mpz_cmp_ui(K, 1) > 0); // K <= 1 ?!?
+    if (config.verbose >= 2) {
+        setlocale(LC_NUMERIC, "");
+        printf("\n");
+        printf("sieve_length: 2x %'d\n", config.sieve_length);
+        printf("sieve_range:  %'ld\n", config.sieve_range);
+        printf("\n");
+        setlocale(LC_NUMERIC, "C");
+    }
 
     // ----- Generate primes under SIEVE_RANGE.
     vector<uint32_t> small_primes = get_sieve_primes(SIEVE_SMALL);
+
+    // ----- Merit Stuff
+    mpz_t K;
+    prob_prime_and_stats(config, K, small_primes);
+
+
+    // ----- Sieve stats
     const size_t SIEVE_SMALL_PRIME_PI = small_primes.size();
     {
         // SIEVE_SMALL deals with all primes that can mark off two items in SIEVE_LENGTH.
@@ -316,9 +328,6 @@ void prime_gap_search(const struct Config config) {
         assert( small_primes[SIEVE_SMALL_PRIME_PI-1] < SIEVE_SMALL);
         assert( small_primes[SIEVE_SMALL_PRIME_PI-1] + 200 > SIEVE_SMALL);
     }
-
-    // ----- Sieve stats
-    prob_prime_and_stats(config, K, small_primes);
 
     auto  s_setup_t = high_resolution_clock::now();
 
@@ -368,7 +377,7 @@ void prime_gap_search(const struct Config config) {
             if (prime <= SIEVE_SMALL) {
                 prime_and_remainder.emplace_back(prime, base_r);
                 pr_pi += 1;
-                return;
+                return true;
             }
 
             expected_large_primes += (2.0 * SL - 1) / prime;
@@ -385,7 +394,7 @@ void prime_gap_search(const struct Config config) {
                     M_start, D, M_inc, SL, prime, base_r);
 
             // signals mi > M_inc
-            if (mi == M_inc) return;
+            if (mi == M_inc) return true;
 
             assert (mi < M_inc);
 
@@ -399,6 +408,8 @@ void prime_gap_search(const struct Config config) {
 
             s_large_primes_rem += 1;
             first_m_sum += mi;
+
+            return true;
         });
         if (config.verbose >= 0) {
             cout << endl;
@@ -579,7 +590,7 @@ void prime_gap_search(const struct Config config) {
                  (s_tests % 5000 == 0) || is_last) ) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
-            double g_secs = duration<double>(s_stop_t - s_setup_t).count();
+            double t_secs = duration<double>(s_stop_t - s_setup_t).count();
 
             printf("\t%ld %4d <- unknowns -> %-4d\n",
                     m, unknown_l, unknown_u);
@@ -587,7 +598,7 @@ void prime_gap_search(const struct Config config) {
             if (config.verbose + is_last >= 1) {
                 // Stats!
                 printf("\t    intervals %-10ld (%.2f/sec, with setup per m: %.2g)  %.0f seconds elapsed\n",
-                        s_tests, s_tests / secs, g_secs / s_tests, secs);
+                        s_tests, s_tests / secs, t_secs / s_tests, secs);
                 printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
                         s_total_unknown, s_total_unknown / ((double) s_tests),
                         100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
@@ -611,7 +622,21 @@ void prime_gap_search(const struct Config config) {
     mpz_clear(test);
 }
 
-void prime_gap_parallel(const struct Config config) {
+
+bool g_control_c = false;
+void signal_callback_handler(int signum) {
+    if (g_control_c) {
+        cout << "Caught 2nd CTRL+C stopping now." << endl;
+        exit(2);
+    } else {
+       cout << "Caught CTRL+C stopping and saving after next interval " << endl;
+       g_control_c = true;
+    }
+}
+
+
+// Would be nice to pass const but CTRL+C handler changes sieve_range
+void prime_gap_parallel(struct Config config) {
     // Method2
     const uint32_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
@@ -702,6 +727,14 @@ void prime_gap_parallel(const struct Config config) {
     }
     const size_t count_coprime_sieve = *std::max_element(i_reindex.begin(), i_reindex.end());
 
+    if (config.verbose >= 1) {
+        setlocale(LC_NUMERIC, "");
+        printf("sieve_length: 2x %'d\n", config.sieve_length);
+        printf("sieve_range: %'ld   small_threshold:  %'ld\n", config.sieve_range, SMALL_THRESHOLD);
+        //printf("last prime :  %'ld\n", LAST_PRIME);
+        setlocale(LC_NUMERIC, "C");
+    }
+
     // <bool> is slower than <char>, but uses 1/8th the memory.
     vector<bool> composite[valid_ms];
     {
@@ -713,13 +746,8 @@ void prime_gap_parallel(const struct Config config) {
             printf("coprime m    %ld/%d,  coprime i %ld/%d,  ~%'ldMB\n",
                 valid_ms, M_inc, count_coprime_sieve / 2, SIEVE_LENGTH,
                 valid_ms * count_coprime_sieve / 8 / 1024 / 1024);
+            printf("\n");
         }
-    }
-    if (config.verbose >= 1) {
-        setlocale(LC_NUMERIC, "");
-        printf("sieve_range: %'ld   small_threshold:  %'ld\n\n", config.sieve_range, SMALL_THRESHOLD);
-        //printf("last prime :  %'ld\n", LAST_PRIME);
-        setlocale(LC_NUMERIC, "C");
     }
 
     // Used for various stats
@@ -732,6 +760,9 @@ void prime_gap_parallel(const struct Config config) {
     uint64_t  s_next_print = 0;
     uint64_t  next_mult = SMALL_THRESHOLD <= 10000 ? 10000 : 100000;
     double s_prp_needed = 1 / prob_prime;
+
+    // Setup CTRL+C catcher
+    signal(SIGINT, signal_callback_handler);
 
     // Note: Handling small primes here had better localized memory access
     // But wasn't worth the extra code IMHO.
@@ -746,7 +777,7 @@ void prime_gap_parallel(const struct Config config) {
         if (prime <= SMALL_THRESHOLD) {
             // Handled by coprime_composite above
             if (D % prime != 0 && prime <= P) {
-                return;
+                return true;
             }
 
             for (uint32_t mi : valid_mi) {
@@ -785,7 +816,6 @@ void prime_gap_parallel(const struct Config config) {
                 }
             }
         } else {
-            // TODO sieve_range * last_m < int64 | can use euclid_all_64
             modulo_search_euclid_all_small(M_start, M_inc, SL, prime, base_r, [&](const uint32_t mi) {
                 int32_t mii = m_reindex[mi];
                 if (mii < 0) {
@@ -845,7 +875,7 @@ void prime_gap_parallel(const struct Config config) {
             s_prime_factors += s_small_prime_factors_interval;
             s_prime_factors += s_large_prime_factors_interval;
 
-            bool is_last = (prime == LAST_PRIME);
+            bool is_last = (prime == LAST_PRIME) || g_control_c;
 
             setlocale(LC_NUMERIC, "");
             if (config.verbose + is_last >= 1) {
@@ -856,7 +886,7 @@ void prime_gap_parallel(const struct Config config) {
                     secs / valid_ms);
             }
 
-            if (config.verbose + 2*is_last >= 2) {
+            if ((config.verbose + 2*is_last + (prime > 1e9)) >= 2) {
                 printf("\tfactors  %'9ld \t\t(interval: %'ld, avg m/large_prime interval: %.1f)\n",
                     s_prime_factors,
                     s_small_prime_factors_interval + s_large_prime_factors_interval,
@@ -884,7 +914,25 @@ void prime_gap_parallel(const struct Config config) {
                 s_large_prime_factors_interval = 0;
                 pi_interval = 0;
             }
+
+            // if is_last would truncate .sieve_range by 1 million
+            if (g_control_c && (prime != LAST_PRIME)) {
+                // NOTE: the resulting files were sieved by 1 extra prime
+                // they will differ from --sieve_range=X in a few entries
+
+                if (prime < 1'000'000) {
+                    cout << "Exit(2) from CTRL+C @ prime=" << prime << endl;
+                    exit(2);
+                }
+
+                cout << "Breaking loop from CTRL+C @ prime=" << prime << endl;
+                config.sieve_range = prime - (prime % 1'000'000);
+
+                return false;
+            }
         }
+
+        return true;
     });
 
     // TODO assert s_prime_factors is close to (2 * SL * valid_m) * (log(log(SL)) + M_c)

@@ -83,4 +83,4 @@ double prop_gap_larger(
 
 vector<uint32_t> get_sieve_primes(uint32_t n);
 vector<uint64_t> get_sieve_primes_segmented(uint64_t n);
-void             get_sieve_primes_segmented_lambda(uint64_t n, std::function<void (uint64_t)> lambda);
+void             get_sieve_primes_segmented_lambda(uint64_t n, std::function<bool (uint64_t)> lambda);

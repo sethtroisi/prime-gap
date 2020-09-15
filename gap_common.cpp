@@ -199,7 +199,7 @@ static bool isprime_brute(uint32_t n) {
     return true;
 }
 
-void get_sieve_primes_segmented_lambda(uint64_t n, std::function<void (uint64_t)> lambda) {
+void get_sieve_primes_segmented_lambda(uint64_t n, std::function<bool (uint64_t)> lambda) {
     // Large enough to be fast and still fit in L1/L2 cache.
     uint32_t BLOCKSIZE = 1 << 16;
     uint32_t ODD_BLOCKSIZE = BLOCKSIZE >> 1;
@@ -248,7 +248,9 @@ void get_sieve_primes_segmented_lambda(uint64_t n, std::function<void (uint64_t)
         }
         for (uint32_t prime = 0; prime < ODD_BLOCKSIZE; prime++) {
             if (is_prime[prime]) {
-                lambda(B + 2 * prime + 1);
+                if (!lambda(B + 2 * prime + 1)) {
+                    return;
+                }
             }
         }
     }
@@ -467,14 +469,6 @@ Config argparse(int argc, char* argv[]) {
     if (config.minc >= 50'000'000) {
         config.valid = 0;
         cout << "minc > 50M will use to much memory" << endl;
-    }
-
-    if (config.sieve_range > 2'000'000'000 &&
-            (config.sieve_range / config.minc > 100'000)) {
-        // Helpful warning.
-        printf("sieve_range(%ldB) is probably too large\n",
-            config.sieve_range / 1'000'000'000);
-
     }
 
     if (config.sieve_range > 500'000'000'000) {

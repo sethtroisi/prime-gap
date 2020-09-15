@@ -229,7 +229,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
 * [ ] rename `next_p_i` to `next_p` in schema.sql
 * [ ] Rename `gap_search` to `combined_sieve`
-* [ ] config.verbose in gap\_search, gap\_stats, gap\_test
 * gap\_utils.py
   * [ ] Option for gmp vs OpenPFGW
 * README.md
@@ -254,7 +253,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [ ] Option to output m with gcd(m, d) != 1
   * (Method2)
     * [ ] Estimate PRP/s and include in status.
-    * [ ] Ctrl-c then just writes out the results at that point.
 * prime-gap-search.db
   * A plan for how to clean up [partially] finished ranges
 
@@ -267,8 +265,10 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 * Project level
   * [x] Rename prime-gap.db to prime-gap-search.db
   * [x] Make method2 the default
+  * [x] config.verbose in gap\_search, gap\_stats, gap\_test
 * gap\_search.cpp
   * Method2 (all composites in memory)
+    * [X] Ctrl-C to quit early (but writes out the results at that point).
     * [x] Look at Method1 vs Method2 writeup and understand why outputs seem different
     * [x] Use reindex\_m trick to reduce number size of composites
     * [x] Do all primes for small ms (to get better memory access patterns)
