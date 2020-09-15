@@ -59,12 +59,12 @@ int main(int argc, char* argv[]) {
 
     if (config.save_unknowns == 0) {
         cout << "Must set --save-unknowns" << endl;
-        return 1;
+        exit(1);
     }
 
     if (config.valid == 0) {
         show_usage(argv[0]);
-        return 1;
+        exit(1);
     }
 
     setlocale(LC_NUMERIC, "");
@@ -82,6 +82,14 @@ int main(int argc, char* argv[]) {
             config.sieve_range / 1'000'000'000);
     }
 
+    if (config.save_unknowns) {
+        std::string fn = gen_unknown_fn(config, ".txt");
+        std::ifstream f(fn);
+        if (f.good()) {
+            printf("\nOutput file '%s' already exists\n", fn.c_str());
+            exit(1);
+        }
+    }
 
     if (config.method1) {
         prime_gap_search(config);
