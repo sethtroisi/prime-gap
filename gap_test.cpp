@@ -131,6 +131,39 @@ void load_and_verify_unknowns(
     assert( is_sorted(unknowns[1].begin(), unknowns[1].begin()) );
 }
 
+void test_interval(
+        const uint64_t m, const mpz_t &K,
+        int &s_total_prp_tests,
+        vector<int32_t> (&unknowns)[2],
+        int &next_p, int &prev_p) {
+
+    mpz_t center, ptest;
+    mpz_init(center); mpz_init(ptest);
+    mpz_mul_ui(center, K, m);
+
+    for (auto low : unknowns[0]) {
+        s_total_prp_tests += 1;
+
+        mpz_sub_ui(ptest, center, low);
+        if (mpz_probab_prime_p(ptest, 25)) {
+            prev_p = low;
+            break;
+        }
+    }
+    for (auto high : unknowns[1]) {
+        s_total_prp_tests += 1;
+
+        mpz_add_ui(ptest, center, high);
+        if (mpz_probab_prime_p(ptest, 25)) {
+            next_p = high;
+            break;
+        }
+    }
+
+    mpz_clear(center); mpz_clear(ptest);
+}
+
+
 void prime_gap_test(const struct Config config) {
     const uint64_t M_start = config.mstart;
     const uint64_t M_inc = config.minc;
@@ -288,41 +321,22 @@ void prime_gap_test(const struct Config config) {
         s_t_unk_hgh += unknown_u;
 
         // TODO break out to function, also count tests.
-        int prev_p_i = 0;
-        int next_p_i = 0;
+        int prev_p = 0;
+        int next_p = 0;
         if (config.run_prp) {
-            mpz_t center, ptest;
-            mpz_init(center); mpz_init(ptest);
-            mpz_mul_ui(center, K, m);
+            test_interval(m, K, unknowns, &prev_p, &next_p);
 
-            for (size_t i = 0; prev_p_i == 0 && i < unknown_l; i++) {
-                s_total_prp_tests += 1;
-
-                mpz_sub_ui(ptest, center, unknowns[0][i]);
-                if (mpz_probab_prime_p(ptest, 25)) {
-                    prev_p_i = unknowns[0][i];
-                }
-            }
-            for (size_t i = 0; next_p_i == 0 && i < unknown_u; i++) {
-                s_total_prp_tests += 1;
-
-                mpz_add_ui(ptest, center, unknowns[1][i]);
-                if (mpz_probab_prime_p(ptest, 25)) {
-                    next_p_i = unknowns[1][i];
-                }
-            }
-
-            if (next_p_i == 0) {
+            if (next_p == 0) {
                 s_gap_out_of_sieve_next += 1;
                 // Using fallback to slower gmp routine
                 //cout << "\tfalling back to mpz_nextprime" << endl;
                 mpz_add_ui(ptest, center, SIEVE_LENGTH - 1);
                 mpz_nextprime(ptest, ptest);
                 mpz_sub(ptest, ptest, center);
-                next_p_i = mpz_get_ui(ptest);
+                next_p = mpz_get_ui(ptest);
             }
 
-            if (prev_p_i == 0) {
+            if (prev_p == 0) {
                 s_gap_out_of_sieve_prev += 1;
                 /*
                 // REALLY UGLY FALLBACK
@@ -337,7 +351,7 @@ void prime_gap_test(const struct Config config) {
                 while (mpz_cmp(ptest, center) < 0) {
                     // save distance
                     mpz_sub(center, center, ptest);
-                    prev_p_i = mpz_get_ui(center);
+                    prev_p = mpz_get_ui(center);
                     mpz_add(center, center, ptest);
                     mpz_nextprime(ptest, ptest);
                 }
@@ -358,7 +372,7 @@ void prime_gap_test(const struct Config config) {
                     if (!composite) {
                         mpz_sub_ui(ptest, center, i);
                         if (mpz_probab_prime_p(ptest, 25)) {
-                            prev_p_i = i;
+                            prev_p = i;
                             break;
                         }
                     }
@@ -366,20 +380,21 @@ void prime_gap_test(const struct Config config) {
                 // */
             }
 
-            int gap = next_p_i + prev_p_i;
+            assert( prev_p > 0 && next_p > 0 );
+
+            int gap = next_p + prev_p;
             float merit = gap / (K_log + log(m));
 
             if (merit > min_merit)  {
                 // TODO write to file.
                 printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
-                    gap, merit, m, P, D, prev_p_i, next_p_i);
+                    gap, merit, m, P, D, prev_p, next_p);
             }
             if (merit > s_best_merit_interval) {
                 s_best_merit_interval = merit;
                 s_best_merit_interval_m = m;
             }
 
-            mpz_clear(center); mpz_clear(ptest);
         }
 
         s_tests += 1;
@@ -394,7 +409,7 @@ void prime_gap_test(const struct Config config) {
                 printf("\tm=%ld %4ld <- unknowns -> %-4ld\t%4d <- gap -> %-4d\n",
                     m,
                     unknown_l, unknown_u,
-                    prev_p_i, next_p_i);
+                    prev_p, next_p);
 
                 // Stats!
                 if (s_tests > secs) {
