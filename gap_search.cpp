@@ -957,6 +957,8 @@ void prime_gap_parallel(struct Config config) {
                 t_total_unknowns += std::count(composite[i].begin(), composite[i].end(), false);
             }
             uint64_t new_composites = s_total_unknowns - t_total_unknowns;
+            // TODO: make sure I'm not falling brew to
+            // https://jakevdp.github.io/blog/2018/09/13/waiting-time-paradox/
             double skipped_prp = valid_ms * (s_prp_needed - 1/prob_prime_after_sieve);
 
             pi += pi_interval;

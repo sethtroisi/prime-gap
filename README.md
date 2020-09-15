@@ -236,6 +236,131 @@ $ sqlite3 prime-gap-search.db < schema.sql
   * Can add `-DGMP_VALIDATE_FACTORS=1` to `CFLAGS` in Makefile
   * `misc/double_check.py` double checks using `ecm`, if small factor found number shouldn't appear in unknown-file.txt
     * `python misc/double_check.py --unknown-filename <unknown_filen> -c 10`
+  * skipped PRP is checked with
+```bash
+$ make gap_search DEFINES=-DSAVE_INCREMENTS
+# Saves a 100m, 200m, 300m, 400m, 500m, 1B, 2B, 3B, 4B, 5B
+$ time ./gap_search --unknown-filename 1_1999_210_2000_s4000_l5000M.txt --save-unknowns
+100,000,007 (primes 2,760,321/5,761,456)	(seconds: 0.90/2.4 | per m: 0.0053)
+	~ 2x 58.96 PRP/m		(~ 1055.9 skipped PRP => 2357.2 PRP/seconds)
+
+200,000,033 (primes 5,317,482/11,078,938)	(seconds: 1.73/4.2 | per m: 0.0091)
+	~ 2x 56.82 PRP/m		(~ 979.3 skipped PRP => 1130.0 PRP/seconds)
+
+300,000,007 (primes 5,173,388/16,252,326)	(seconds: 1.70/5.9 | per m: 0.013)
+	~ 2x 55.64 PRP/m		(~ 540.6 skipped PRP => 637.2 PRP/seconds)
+
+400,000,009 (primes 5,084,001/21,336,327)	(seconds: 1.69/7.6 | per m: 0.017)
+	~ 2x 54.84 PRP/m		(~ 370.2 skipped PRP => 437.2 PRP/seconds)
+
+500,000,003 (primes 5,019,541/26,355,868)	(seconds: 1.67/9.2 | per m: 0.02)
+	~ 2x 54.23 PRP/m		(~ 279.8 skipped PRP => 334.3 PRP/seconds)
+
+1,000,000,007 (primes 24,491,667/50,847,535)	(seconds: 8.40/17.6 | per m: 0.039)
+	~ 2x 52.41 PRP/m		(~ 830.7 skipped PRP => 197.7 PRP/seconds)
+
+2,000,000,011 (primes 47,374,753/98,222,288)	(seconds: 16.85/34.5 | per m: 0.075)
+	~ 2x 50.72 PRP/m		(~ 776.9 skipped PRP => 92.2 PRP/seconds)
+
+3,000,000,019 (primes 46,227,250/144,449,538)	(seconds: 17.60/52.1 | per m: 0.11)
+	~ 2x 49.77 PRP/m		(~ 431.6 skipped PRP => 49.1 PRP/seconds)
+
+4,000,000,007 (primes 45,512,275/189,961,813)	(seconds: 17.93/70.0 | per m: 0.15)
+	~ 2x 49.13 PRP/m		(~ 296.6 skipped PRP => 33.1 PRP/seconds)
+
+4,999,999,937 (primes 44,992,410/234,954,223)	(seconds: 18.00/88.0 | per m: 0.19)
+	~ 2x 48.63 PRP/m		(~ 224.8 skipped PRP => 25.0 PRP/seconds)
+
+real	1m28.037s
+user	1m28.030s
+sys	0m0.008s
+
+# Then testing each interval seperatly
+$ for fn in `ls -tr 1_1999*`; do echo -e "\n\nProcessing $fn"; /usr/bin/time -f "\nReal\t%E" ./gap_test --run-prp --unknown-filename "$fn" -qq; done
+
+Processing 1_1999_210_2000_s4000_l30M.txt
+	m=1999   51 <- unknowns -> 57  	 240 <- gap -> 9072
+	    tests     458        (1.03 secs/test)  472 seconds elapsed
+	    unknowns  48104      (avg: 105.03), 98.69% composite  50.16% <- % -> 49.84%
+	    prp tests 32674      (avg: 71.34) (69.2 tests/sec)
+
+Real	7:51.93
+
+Processing 1_1999_210_2000_s4000_l100M.txt
+	m=1999   51 <- unknowns -> 51  	 240 <- gap -> 9072
+	    tests     458        (1.01/sec)  454 seconds elapsed
+	    unknowns  44958      (avg: 98.16), 98.77% composite  50.18% <- % -> 49.82%
+	    prp tests 30585      (avg: 66.78) (67.4 tests/sec)
+
+Real	7:33.93
+
+Processing 1_1999_210_2000_s4000_l200M.txt
+	m=1999   49 <- unknowns -> 51  	 240 <- gap -> 9072
+	    tests     458        (1.01/sec)  455 seconds elapsed
+	    unknowns  43290      (avg: 94.52), 98.82% composite  50.22% <- % -> 49.78%
+	    prp tests 29477      (avg: 64.36) (64.7 tests/sec)
+
+Real	7:35.42
+
+Processing 1_1999_210_2000_s4000_l300M.txt
+	m=1999   45 <- unknowns -> 48  	 240 <- gap -> 9072
+	    tests     458        (1.02/sec)  450 seconds elapsed
+	    unknowns  42362      (avg: 92.49), 98.84% composite  50.18% <- % -> 49.82%
+	    prp tests 28858      (avg: 63.01) (64.1 tests/sec)
+
+Real	7:30.48
+
+Processing 1_1999_210_2000_s4000_l400M.txt
+	m=1999   45 <- unknowns -> 47  	 240 <- gap -> 9072
+	    tests     458        (1.03/sec)  445 seconds elapsed
+	    unknowns  41709      (avg: 91.07), 98.86% composite  50.20% <- % -> 49.80%
+	    prp tests 28417      (avg: 62.05) (63.8 tests/sec)
+
+Real	7:25.21
+
+Processing 1_1999_210_2000_s4000_l1000M.txt
+	m=1999   42 <- unknowns -> 44  	 240 <- gap -> 9072
+	    tests     458        (1.05/sec)  434 seconds elapsed
+	    unknowns  39892      (avg: 87.10), 98.91% composite  50.07% <- % -> 49.93%
+	    prp tests 27199      (avg: 59.39) (62.6 tests/sec)
+
+Real	7:14.16
+
+Processing 1_1999_210_2000_s4000_l2000M.txt
+	m=1999   41 <- unknowns -> 42  	 240 <- gap -> 9072
+	    tests     458        (1.07/sec)  426 seconds elapsed
+	    unknowns  38597      (avg: 84.27), 98.95% composite  50.07% <- % -> 49.93%
+	    prp tests 26310      (avg: 57.45) (61.7 tests/sec)
+
+Real	7:06.31
+
+Processing 1_1999_210_2000_s4000_l3000M.txt
+	m=1999   40 <- unknowns -> 42  	 240 <- gap -> 9072
+	    tests     458        (1.08/sec)  423 seconds elapsed
+	    unknowns  37857      (avg: 82.66), 98.97% composite  50.12% <- % -> 49.88%
+	    prp tests 25794      (avg: 56.32) (61.0 tests/sec)
+
+Real	7:03.12
+
+Processing 1_1999_210_2000_s4000_l4000M.txt
+	m=1999   40 <- unknowns -> 41  	 240 <- gap -> 9072
+	    tests     458        (1.08/sec)  423 seconds elapsed
+	    unknowns  37359      (avg: 81.57), 98.98% composite  50.11% <- % -> 49.89%
+	    prp tests 25459      (avg: 55.59) (60.2 tests/sec)
+
+Real	7:02.94
+
+Processing 1_1999_210_2000_s4000_l5000M.txt
+	m=1999   40 <- unknowns -> 40  	 240 <- gap -> 9072
+	    tests     458        (1.08/sec)  424 seconds elapsed
+	    unknowns  36992      (avg: 80.77), 98.99% composite  50.12% <- % -> 49.88%
+	    prp tests 25202      (avg: 55.03) (59.5 tests/sec)
+
+Real	7:03.66
+
+```
+
+
 * Dev GMPlib | GMP 6.2.99
   * GMP 6.2.0 hasn't yet accepted my `mpz_prevprime` patch
     * `hg apply <patch>` from https://gmplib.org/list-archives/gmp-devel/2020-August/005851.html
@@ -270,7 +395,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 * gap\_search.cpp
   * [ ] Option to output m with gcd(m, d) != 1
   * (Method2)
-    * [ ] Verify skipped PRP by testing at X and 2\*X
     * [ ] test dynamically choosing `vector<bool>` vs `vector<char>
 * gap\_test.py
   * [ ] Rename composite = [[], []] to unknowns
@@ -300,6 +424,7 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
 * gap\_search.cpp
   * Method2 (all composites in memory)
+    * [x] Verify skipped PRP by testing at X and 2\*X
     * [x] Estimate PRP/s and include in status.
     * [X] Ctrl-C to quit early (but writes out the results at that point).
     * [x] Look at Method1 vs Method2 writeup and understand why outputs seem different

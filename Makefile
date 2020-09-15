@@ -18,6 +18,7 @@ OUT	= gap_search gap_stats gap_test benchmark gap_stats_missing
 CC	= g++
 CFLAGS	= -Wall -Werror -O3 -lgmp
 LDFLAGS	= -L /usr/local/lib
+DEFINES =
 PROGS	= gap_search gap_test
 
 %.o: %.cpp
@@ -27,13 +28,13 @@ PROGS	= gap_search gap_test
 all: $(PROGS) gap_stats benchmark
 
 $(PROGS) : %: %.cpp $(OBJS)
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(DEFINES)
 
 gap_stats: gap_stats.cpp gap_common.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -lsqlite3
 
 gap_stats_missing: gap_stats.cpp gap_common.o
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -DSEARCH_MISSING_GAPS=1 -lsqlite3
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -lsqlite3 -DSEARCH_MISSING_GAPS=1
 
 benchmark: misc/benchmark.cpp modulo_search.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -I.
