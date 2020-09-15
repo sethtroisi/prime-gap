@@ -461,11 +461,7 @@ void prime_gap_search(const struct Config config) {
 
 
     // ----- Main sieve loop.
-    if (config.verbose >= 1) {
-        cout << "\nStarting m=" << M_start << "\n" << endl;
-    }
 
-    // vector<bool> uses bit indexing which is ~5% slower.
     vector<char> composite[2] = {
         vector<char>(SIEVE_LENGTH, 0),
         vector<char>(SIEVE_LENGTH, 0)
@@ -808,9 +804,10 @@ void prime_gap_parallel(struct Config config) {
      * m_reindex[mi] with (D, M + mi) > 0 are mapped to -1 (and must be handled by code)
      * i_reindex[x]  with (K, x) > 0 are mapped to 0 (and that bit is ignored)
      */
-    //
-    // <bool> is slower than <char>, but uses 1/8th the memory.
-    vector<bool> composite[valid_ms];
+
+    // <char> is faster (0-5%?) than <bool>, but uses 8x the memory.
+    // Need to change here and in `save_unknowns_method2` signature.
+    vector<bool> *composite = new vector<bool>[valid_ms];
     {
         if (config.verbose >= 1) {
             printf("coprime m    %ld/%d,  coprime i %ld/%d,  ~%'ldMB\n",
@@ -1055,6 +1052,8 @@ void prime_gap_parallel(struct Config config) {
             valid_mi, m_reindex, i_reindex,
             composite);
     }
+
+    delete[] composite;
 
     mpz_clear(K);
     mpz_clear(test);
