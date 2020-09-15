@@ -75,11 +75,14 @@ void K_stats(
         const struct Config& config,
         mpz_t &K, int *K_digits, double *K_log);
 
+double prp_time_estimate(double K_log);
+
 double prop_gap_larger(
     const struct Config& config,
     double prob_prime,
     double *prob_prime_coprime,
     size_t *count_coprime);
+
 
 
 /* Prime Stuff */

@@ -82,6 +82,19 @@ void K_stats(
     }
 }
 
+
+double prp_time_estimate(double K_log) {
+    // Estimates from:
+    // https://github.com/sethtroisi/misc-scripts/tree/master/prime-time
+    assert(K_log > 400);
+
+    // prp for primes takes ~7x this estimate is for 'hard' composite
+    return std::max(0.0001501, -1.0301e-1 + 1.576e-4 * K_log + -8.345e-9 * K_log*K_log);
+
+    // XXX: with verbose >= 2 just measure it?
+}
+
+
 double prop_gap_larger(
         const struct Config& config, double prob_prime,
         double *prob_prime_coprime, size_t *count_coprime) {
@@ -475,10 +488,10 @@ Config argparse(int argc, char* argv[]) {
         cout << "sieve_range > 500B not supported" << endl;
     }
 
-    uint64_t max_m = (1UL << 63) / config.sieve_range;
+    uint64_t max_m = (1UL << 62) / config.sieve_range;
     if (max_m <= last_m) {
         config.valid = 0;
-        cout << "sieve_range * last_m(" << last_m << ") will overflow int64" << endl;
+        cout << "sieve_range * last_m(" << last_m << ") might overflow int64" << endl;
     }
 
     {

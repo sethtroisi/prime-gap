@@ -239,7 +239,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [ ] Option to output m with gcd(m, d) != 1
   * (Method2)
     * [ ] test dynamically choosing `vector<bool>` vs `vector<char>
-    * [ ] Estimate PRP/s and include in status.
 * gap\_test.py
   * [ ] Rename composite = [[], []] to unknowns
   * [ ] Option to starting at m > mstart
@@ -269,6 +268,7 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
 * gap\_search.cpp
   * Method2 (all composites in memory)
+    * [x] Estimate PRP/s and include in status.
     * [X] Ctrl-C to quit early (but writes out the results at that point).
     * [x] Look at Method1 vs Method2 writeup and understand why outputs seem different
     * [x] Use reindex\_m trick to reduce number size of composites

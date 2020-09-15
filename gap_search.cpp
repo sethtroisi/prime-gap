@@ -687,6 +687,21 @@ void prime_gap_parallel(struct Config config) {
     // ----- Sieve stats & Merit Stuff
     mpz_t K;
     double prob_prime = prob_prime_and_stats(config, K, P_primes);
+    double prp_time_est = -1;
+    {
+        // TODO have prob_prime_and_stats return K_log
+        long exp;
+        double mantis = mpz_get_d_2exp(&exp, K);
+        double K_log = log(mantis) + log(2) * exp;
+        prp_time_est = prp_time_estimate(K_log);
+    }
+    if (config.verbose >= 2) {
+        if (prp_time_est < 1) {
+            printf("Estimated PRP/s %.1f\n", 1 / prp_time_est);
+        } else {
+            printf("Estimated secs/PRP %.1f\n", prp_time_est);
+        }
+    }
 
     // ----- Allocate memory
     uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH - 1;
@@ -919,21 +934,32 @@ void prime_gap_parallel(struct Config config) {
             }
 
             if ((config.verbose + 2*is_last + (prime > 1e9)) >= 2) {
-                printf("\tfactors  %'9ld \t\t(interval: %'ld, avg m/large_prime interval: %.1f)\n",
+                printf("\tfactors  %'9ld \t\t"
+                       "(interval: %'ld, avg m/large_prime interval: %.1f)\n",
                     s_prime_factors,
                     s_small_prime_factors_interval + s_large_prime_factors_interval,
                     1.0 * s_large_prime_factors_interval / pi_interval);
-                printf("\tunknowns %'9ld/%-5ld\t(avg/m: %.2f) (composite: %.2f%% +%.3f%%)\n",
+                printf("\tunknowns %'9ld/%-5ld\t"
+                       "(avg/m: %.2f) (composite: %.2f%% +%.3f%%)\n",
                     t_total_unknowns, valid_ms,
                     1.0 * t_total_unknowns / valid_ms,
                     100.0 - 100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms),
                     100.0 * saved_prp / (SIEVE_INTERVAL * valid_ms));
 
-                printf("\t~ 2x %.2f PRP/m\t\t(%ld new composites ~ %4.1f skipped PRP => %.1f PRP/seconds)\n\n",
+                printf("\t~ 2x %.2f PRP/m\t\t"
+                       "(%ld new composites ~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
                     1 / prob_prime_after_sieve,
                     saved_prp,
                     skipped_prp,
                     1.0 * skipped_prp / int_secs);
+
+                double run_prp_mult = int_secs / (prp_time_est * skipped_prp);
+                if (run_prp_mult > 4) {
+                    printf("\t\tEstimated ~%.1fx faster to just run PRP now (CTRL+C to stop sieving)\n",
+                        run_prp_mult);
+                }
+
+                printf("\n");
             }
             setlocale(LC_NUMERIC, "C");
 
@@ -958,6 +984,8 @@ void prime_gap_parallel(struct Config config) {
                 }
 
                 cout << "Breaking loop from CTRL+C @ prime=" << prime << endl;
+                // reset unknown_filename if cached;
+                config.unknown_filename = "";
                 config.sieve_range = prime - (prime % 1'000'000);
 
                 return false;
