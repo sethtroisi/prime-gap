@@ -480,7 +480,8 @@ void prime_gap_search(const struct Config config) {
 
     uint64_t last_mi = M_inc - 1;
     for (; last_mi > 0 && gcd(M_start + last_mi, D) > 1; last_mi -= 1);
-    assert(last_mi > 0 && last_mi < M_inc);
+    assert(last_mi >= 0 && last_mi < M_inc);
+    assert(gcd(M_start + last_mi, D) == 1);
 
     for (uint64_t mi = 0; mi < M_inc; mi++) {
         const uint64_t m = M_start + mi;
@@ -985,7 +986,7 @@ void prime_gap_parallel(struct Config config) {
 
             const auto& comp = composite[mii];
 
-            const size_t size_side = count_coprime_sieve / 2;
+            const size_t size_side = count_coprime_sieve / 2 + 1;
             size_t unknown_l = std::count(comp.begin(), comp.begin() + size_side, false);
             size_t unknown_u = std::count(comp.begin() + size_side, comp.end(), false);
 

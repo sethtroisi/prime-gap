@@ -32,6 +32,11 @@
 
 #include "gap_common.h"
 
+
+#ifndef SEARCH_MISSING_GAPS
+    #define SEARCH_MISSING_GAPS 0
+#endif
+
 using std::cout;
 using std::endl;
 using std::pair;
@@ -84,7 +89,6 @@ int main(int argc, char* argv[]) {
         cout << "Range already processed!" << endl;
         return 1;
     }
-
 
     prime_gap_stats(config);
 }
@@ -418,9 +422,14 @@ void run_gap_file(
             valid_m += 1;
         }
     }
+
+    #if SEARCH_MISSING_GAPS
     const uint32_t MAX_MISSING_GAPS = MISSING_GAP_SAVE_PERCENT == 0 ?
         0 : std::max(100, (int) (valid_m * MISSING_GAP_SAVE_PERCENT));
     printf("\tSaving %d best missing gap tests\n", MAX_MISSING_GAPS);
+
+    float max_m_record = 0;
+    #endif
 
     // sum prob_record_inside sieve
     // sum prob_record_outer (extended)
@@ -428,7 +437,6 @@ void run_gap_file(
     float sum_prob_outer = 0.0;
 
     float max_p_record = 0;
-    float max_m_record = 0;
     for (uint64_t mi = 0; mi < M_inc; mi++) {
         uint64_t m = M_start + mi;
         if (gcd(m, D) != 1) {
@@ -446,7 +454,9 @@ void run_gap_file(
                            (1 - prob_great_nth[unknown_low.size()]);
 
         double prob_record = 0;
+        #if SEARCH_MISSING_GAPS
         double prob_is_missing_gap = 0.0;
+        #endif
 
         vector<pair<uint32_t, uint32_t>> missing_pairs;
 
@@ -468,6 +478,7 @@ void run_gap_file(
                 uint32_t gap = gap_low + gap_high;
 
                 // TODO: Determine overhead if this is turned off (make make this a compile time DEFINE?)
+                #if SEARCH_MISSING_GAPS
                 if (MAX_MISSING_GAPS > 0) {
                     if (MISSING_GAPS_LOW <= gap && gap <= MISSING_GAPS_HIGH && records[gap] == GAP_INF) {
                         // TODO log min/max i+j, print approx odds given BOTH PRIME
@@ -477,6 +488,7 @@ void run_gap_file(
                         missing_pairs.emplace_back(std::make_pair(gap_low, gap_high));
                     }
                 }
+                #endif
 
                 if (records[gap] > log_start_prime) {
                     assert(i + j < prob_combined.size());
@@ -533,6 +545,7 @@ void run_gap_file(
                 prob_seen);
         }
 
+        #if SEARCH_MISSING_GAPS
         if (MAX_MISSING_GAPS > 0 && prob_is_missing_gap > 0.0) {
             if (prob_is_missing_gap > max_m_record) {
                 max_m_record = prob_is_missing_gap;
@@ -553,6 +566,7 @@ void run_gap_file(
                 }
             }
         }
+        #endif
     }
 
     {
@@ -631,11 +645,13 @@ void prime_gap_stats(const struct Config config) {
             }
         }
         assert( poss_record_gaps.size() );
-        printf("\tFound %ld possible record gaps (%d to %d)",
+        printf("\tFound %ld possible record gaps (%d to %d)\n",
             poss_record_gaps.size(), poss_record_gaps.front(), poss_record_gaps.back());
 
         if (poss_record_gaps.front() > 2 * SIEVE_LENGTH) {
+            printf("\n\n\n");
             printf("\tHard to determine record prob, 2 * sieve_length < min_record_gap");
+            printf("\n\n\n");
         }
         cout << endl;
 

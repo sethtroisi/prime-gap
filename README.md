@@ -235,11 +235,11 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [ ] Option for gmp vs OpenPFGW
 * README.md
   * [ ] gap\_test.py vs gap\_test.cpp
-* benchmarking
-  * [ ] Try to avoid int128 in `modulo_search_euclid` (used by `_all`)
-  * [ ] Make sure `max_a` is working as intended.
-  * [ ] Add instructions to verify `modulo_search` is >80% of the time.
-  * [ ] Redo prime-time with user time (because pfgw uses more than 1 thread)
+* gap\_search.cpp
+  * [ ] Option to output m with gcd(m, d) != 1
+  * (Method2)
+    * [ ] test dynamically choosing `vector<bool>` vs `vector<char>
+    * [ ] Estimate PRP/s and include in status.
 * gap\_test.py
   * [ ] Rename composite = [[], []] to unknowns
   * [ ] Option to starting at m > mstart
@@ -248,13 +248,12 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [ ] Plot average tests count
   * [ ] Sort by expected gap and PRP only top X%
   * [ ] Option to toggle between OpenPFGW and gmp
+* benchmarking
+  * [ ] Make sure `max_a` is working as intended.
+  * [ ] Add instructions to verify `modulo\_search` is >80% of the time.
+  * [ ] Redo prime-time with user time (because pfgw uses more than 1 thread)
 * gap\_stats.cpp
-  * [ ] Move missing gaps behind a compile flag
-    * [ ] Create two seperate Makefile targets
-* gap\_search.cpp
-  * [ ] Option to output m with gcd(m, d) != 1
-  * (Method2)
-    * [ ] Estimate PRP/s and include in status.
+  * [ ] Tweak logging at different verbose levels
 * prime-gap-search.db
   * A plan for how to clean up [partially] finished ranges
 
@@ -288,6 +287,7 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [x] Dynamic `sieve_length`
   * [x] Dynamic `sieve_range`
 * gap\_stats.cpp
+  * [x] Move missing gaps behind a compile flag
   * [x] drop directory from `unknown-filename`
   * [x] Missing gaps prob % filter
   * [x] Don't rewrite `partial\_results`
