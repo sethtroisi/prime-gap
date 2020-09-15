@@ -66,6 +66,14 @@ CREATE TABLE IF NOT EXISTS partial_result (
         m INTEGER,
         P INTEGER,
         D INTEGER,
+
+        /*
+          next_p_i, prev_p_i
+
+          next_prime_interval = next_p - center
+          prev_prime_interval = center - prev_p
+          gap = next_p - prev_p = next_prime_interval + prev_prime_interval
+         */
         next_p_i INTEGER,
         prev_p_i INTEGER,
 
@@ -105,6 +113,14 @@ CREATE TABLE IF NOT EXISTS result (
         m INTEGER,
         P INTEGER,
         D INTEGER,
+
+        /*
+          next_p_i, prev_p_i
+
+          next_prime_interval = next_p - center
+          prev_prime_interval = center - prev_p
+          gap = next_p - prev_p = next_prime_interval + prev_prime_interval
+         */
         next_p_i INTEGER,
         prev_p_i INTEGER,
         merit REAL

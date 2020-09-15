@@ -268,7 +268,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 ### TODO
 
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
-* [ ] rename `next_p_i` to `next_p` in schema.sql
 * [ ] Rename `gap_search` to `combined_sieve`
 * gap\_utils.py
 * README.md
