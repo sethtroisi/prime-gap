@@ -238,6 +238,7 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 * gap\_search.cpp
   * [ ] Option to output m with gcd(m, d) != 1
   * (Method2)
+    * [ ] Verify skipped PRP by testing at X and 2\*X
     * [ ] test dynamically choosing `vector<bool>` vs `vector<char>
 * gap\_test.py
   * [ ] Rename composite = [[], []] to unknowns

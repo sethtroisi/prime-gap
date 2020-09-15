@@ -915,7 +915,7 @@ void prime_gap_parallel(struct Config config) {
             for (size_t i = 0; i < valid_ms; i++) {
                 t_total_unknowns += std::count(composite[i].begin(), composite[i].end(), false);
             }
-            uint64_t saved_prp = s_total_unknowns - t_total_unknowns;
+            uint64_t new_composites = s_total_unknowns - t_total_unknowns;
             double skipped_prp = valid_ms * (s_prp_needed - 1/prob_prime_after_sieve);
 
             pi += pi_interval;
@@ -935,21 +935,21 @@ void prime_gap_parallel(struct Config config) {
 
             if ((config.verbose + 2*is_last + (prime > 1e9)) >= 2) {
                 printf("\tfactors  %'9ld \t\t"
-                       "(interval: %'ld, avg m/large_prime interval: %.1f)\n",
+                       "(interval: %'ld avg m/large_prime interval: %.1f)\n",
                     s_prime_factors,
                     s_small_prime_factors_interval + s_large_prime_factors_interval,
                     1.0 * s_large_prime_factors_interval / pi_interval);
                 printf("\tunknowns %'9ld/%-5ld\t"
-                       "(avg/m: %.2f) (composite: %.2f%% +%.3f%%)\n",
+                       "(avg/m: %.2f) (composite: %.2f%% +%.3f%% +%'ld)\n",
                     t_total_unknowns, valid_ms,
                     1.0 * t_total_unknowns / valid_ms,
                     100.0 - 100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms),
-                    100.0 * saved_prp / (SIEVE_INTERVAL * valid_ms));
+                    100.0 * new_composites / (SIEVE_INTERVAL * valid_ms),
+                    new_composites);
 
                 printf("\t~ 2x %.2f PRP/m\t\t"
-                       "(%ld new composites ~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
+                       "(~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
                     1 / prob_prime_after_sieve,
-                    saved_prp,
                     skipped_prp,
                     1.0 * skipped_prp / int_secs);
 
