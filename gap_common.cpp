@@ -31,8 +31,8 @@ using std::string;
 using std::vector;
 
 
-// TODO potentially readd to gap_search
 std::map<uint64_t,uint64_t> common_primepi = {
+    {     10'000'000,      664'579},
     {    100'000'000,    5'761'455},
     {    200'000'000,   11'078'937},
     {    400'000'000,   21'336'326},
@@ -311,8 +311,6 @@ std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
 
 
 Config argparse(int argc, char* argv[]) {
-    // TODO add print_interval option.
-
     static struct option long_options[] = {
         {"mstart",           required_argument, 0,   1  },
         {"minc",             required_argument, 0,   2  },

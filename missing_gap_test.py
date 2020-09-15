@@ -149,7 +149,6 @@ def test_line(data):
     m, p, d = parse_start(start)
     #assert p == str(P) and d == str(D), (p, d, P, D)
 
-    # Todo pass P, D, K? in init_worker
     K, r = divmod(gmpy2.primorial(p), d)
     assert r == 0
     N = m * K
@@ -212,10 +211,7 @@ def prime_gap_test(args):
     # ----- Open missing gap input file
     print("Loading unknowns from '{}'".format(args.unknown_filename))
 
-    # Refactor to load search_db
     print("Loading finished records from '{}'".format(args.search_db))
-    assert os.path.exists(args.search_db), (
-        "Prime Search database ({}) doesn't exist".format(args.search_db))
 
     conn = sqlite3.connect(args.search_db)
     conn.row_factory = sqlite3.Row
@@ -248,9 +244,12 @@ def prime_gap_test(args):
 
     skipped_lines, lines = parse_unknown_lines(args, finished)
 
-    # TODO assert lines are sorted
     print("Read {} lines ({} already processed) with missing_gap_prob: {:.3g} to {:.3g}".format(
         len(lines), skipped_lines, lines[0][0], lines[-1][0]))
+
+    probs = [line[0] for line in lines]
+    assert max(probs) == lines[0][0], "Out of order lines!"
+    assert min(probs) == lines[-1][0], "Out of order lines!"
 
     # Pass *init_args to initializer
     init_args = (test_line, args.ignore_gaps)
@@ -259,7 +258,7 @@ def prime_gap_test(args):
         for li, (prob, start, test_count, line_s, line_p, test_low, test_high, prev_p, next_p) in \
                 enumerate(pool.imap_unordered(test_line, lines)):
 
-            # TODO load gaps.db and verify this is a missing gap?
+            # XXX: load gaps.db and verify this is a missing gap?
             if prev_p and next_p:
                 succ = "BOTH PRIME: {} -{} to +{}".format(start, prev_p, next_p)
                 successes.append(succ)
@@ -279,6 +278,10 @@ def prime_gap_test(args):
             tested  += test_low + test_high
             primes  += line_p
 
+            s_stop_t = time.time()
+            secs = s_stop_t - s_start_t
+            print_secs = s_stop_t - s_last_print_t
+
             if line_s == 0:
                 pair_print = "{:<4}".format(test_count)
                 prob_print   = "{:.2e}".format(summed_prob)
@@ -289,15 +292,12 @@ def prime_gap_test(args):
             print("finished: {} ({} from {} pairs)\t|".format(
                 start, prob_print, pair_print, test_count),
                 end = " ")
-            print("m: {}/{}, p/t: {}/{}, sum(prob): {:.4f}".format(
+            print("m: {}/{}, p/t: {}/{}, sum(prob): {:.4f}  per day: {:.3f}".format(
                 li + 1, len(lines),
                 primes, tested,
-                summed_prob))
+                summed_prob, summed_prob / (secs / 86400)))
 
-            s_stop_t = time.time()
-            print_secs = s_stop_t - s_last_print_t
-            if li in (1,2,5,10,20,50) or li % 100 == 0 or print_secs > 240:
-                secs = s_stop_t - s_start_t
+            if li in (1,2,5,10,20,50, len(lines-1)) or li % 100 == 0 or print_secs > 240:
                 s_last_print_t = s_stop_t
 
                 with g_tested.get_lock():
@@ -310,11 +310,11 @@ def prime_gap_test(args):
                     print("\n"*2)
                     s_last_success_count = len(successes)
 
-    # TODO print more stats at the end
     print_count_timing(s_start_t, "END: " + str(li + 1), tested)
 
     print("\n"*2)
-    print("All successes:")
+    print("All successes ({} from {} prob):".format(
+        len(successes), summed_prob))
     for success in successes:
         print("\t", success)
     print("\n"*2)

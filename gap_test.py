@@ -241,9 +241,6 @@ def prime_gap_test(args):
     unknown_file = open(args.unknown_filename, "r")
 
     # ----- Open Prime-Gap-Search DB
-    assert os.path.exists(args.search_db), (
-        "Prime Search database ({}) doesn't exist".format(args.search_db))
-
     conn = sqlite3.connect(args.search_db)
     conn.row_factory = sqlite3.Row
     existing = load_existing(conn, args)

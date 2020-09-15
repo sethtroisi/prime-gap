@@ -136,8 +136,7 @@ def search_logs(args):
 
 
 def search_db(args):
-    assert os.path.exists(args.search_db), (
-        "Prime Search database ({}) doesn't exist".format(args.search_db))
+    assert os.path.exists(args.search_db)
 
     gaps = []
     with sqlite3.connect(args.search_db) as conn:

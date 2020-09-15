@@ -28,6 +28,9 @@ using std::vector;
 
 const double GAMMA = 0.577215665;
 
+extern std::map<uint64_t,uint64_t> common_primepi;
+
+
 /* Arg Parsing */
 
 struct Config {

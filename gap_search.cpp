@@ -222,24 +222,9 @@ void set_defaults(struct Config& config) {
         // each additional numbers removes unknowns / prime
         // and takes log2(prime / sieve_length) time
 
-        // TODO improve this.
-        // Potentially based on:
-        //  sieve_length
-        //  min_merit
+        // Not worth improving given method2 CTRL+C handling.
         if (K_log >= 1500) {
-            // Largest supported number right now
-            config.sieve_range = 4'000'000'000;
-            // 2020-02-09 tuning notes
-            //  P 1627 SL=8192
-            //      log(t) ~= 1600, ~= 4 primes in SL
-            //       100M => 620/s | 293 unknowns
-            //       200M => 549/s | 282 unknowns
-            //       400M => 480/s | 273 unknowns
-            //          81.6 PRP / test => 1.70s/test
-            //       800M => 440/s | 264 unknowns
-            //          78.6 PRP / test => 1.75s/test
-            //      1600M => 440/s | 254 unknowns
-            //          76.2 PRP / test => 1.78s/test
+            config.sieve_range =  10'000'000'000;
         } else {
             config.sieve_range =   1'000'000'000;
         }
@@ -364,7 +349,10 @@ void prime_gap_search(const struct Config config) {
         // Print "."s during, equal in length to 'Calculat...'
         size_t print_dots = 38;
 
-        size_t expected_primes = 1.01 * SIEVE_RANGE / log(SIEVE_RANGE);
+        // Lookup primepi for common sieve_range values.
+        size_t expected_primes = common_primepi.count(SIEVE_RANGE) ?
+            common_primepi[SIEVE_RANGE] :
+            1.04 * SIEVE_RANGE / log(SIEVE_RANGE);
 
         long first_m_sum = 0;
         double expected_large_primes = 0;
@@ -427,7 +415,11 @@ void prime_gap_search(const struct Config config) {
         if (config.verbose >= 1) {
             printf("\tSum of m1: %ld\n", first_m_sum);
             setlocale(LC_NUMERIC, "");
-            printf("\tPrimePi(%ld) = %ld guessed %ld\n", SIEVE_RANGE, pi, expected_primes);
+            if (pi == expected_primes) {
+                printf("\tPrimePi(%ld) = %ld\n", SIEVE_RANGE, pi);
+            } else {
+                printf("\tPrimePi(%ld) = %ld guessed %ld\n", SIEVE_RANGE, pi, expected_primes);
+            }
 
             printf("\t%ld primes not needed (%.1f%%)\n",
                 (pi - SIEVE_SMALL_PRIME_PI) - pr_pi,
@@ -746,16 +738,16 @@ void prime_gap_parallel(struct Config config) {
     // <bool> is slower than <char>, but uses 1/8th the memory.
     vector<bool> composite[valid_ms];
     {
-        for (size_t i = 0; i < valid_ms; i++) {
-            // Improve this setup.
-            composite[i].resize(count_coprime_sieve + 1, false);
-        };
         if (config.verbose >= 1) {
             printf("coprime m    %ld/%d,  coprime i %ld/%d,  ~%'ldMB\n",
                 valid_ms, M_inc, count_coprime_sieve / 2, SIEVE_LENGTH,
                 valid_ms * count_coprime_sieve / 8 / 1024 / 1024);
             printf("\n");
         }
+        for (size_t i = 0; i < valid_ms; i++) {
+            // Improve this setup (segfaults at ~0.5GB required)
+            composite[i].resize(count_coprime_sieve + 1, false);
+        };
     }
 
     // Used for various stats

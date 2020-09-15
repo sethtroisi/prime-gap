@@ -40,8 +40,9 @@ def test_records():
 
         print ("\tverified endpoints {:.2f} seconds".format(t1-t0))
 
-        # TODO because many values on the low side are not-prime prev_prime is likely to be faster.
-        # TODO if prev_prime was available, check next_prime(N) - N = h then check N - prev_prime(N) = l
+        # XXX: because many low values checked prev_prime(high) is likely to be faster.
+        # if prev_prime was available, check next_prime(N) - N = h
+        # then check N - prev_prime(N) = l
 
         z = gmpy2.next_prime(low)
         t2 = time.time()

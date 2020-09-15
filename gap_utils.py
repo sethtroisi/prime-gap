@@ -9,7 +9,7 @@ import gmpy2
 
 
 UNKNOWN_FILENAME_RE = re.compile(
-    "^(\d+)_(\d+)_(\d+)_(\d+)_s(\d+)_l(\d+)M(.m2)?(?:.missing)?.txt")
+    "^(\d+)_(\d+)_(\d+)_(\d+)_s(\d+)_l(\d+)M(.m1)?(?:.missing)?.txt")
 
 
 
@@ -75,17 +75,15 @@ def verify_args(args, fn_extension):
 
     args.sieve_range *= 10 ** 6
 
-    # TODO Should this be moved out?
-    #if not os.path.exists(args.prime_db):
-    #    print ("prime-db \"{}\" doesn't exist".format(args.prime_db))
-    #    exit(1)
+    if 'search_db' in args and args.search_db:
+        assert os.path.exists(args.search_db), (
+            "Prime Search Database ('{}') doesn't exist".format(args.search_db))
 
     for arg in ('mstart', 'minc', 'p', 'd', 'sieve_length', 'sieve_range'):
         if arg not in args or args.__dict__[arg] in (None, 0):
             print ("Missing required argument", arg)
             exit(1)
 
-    # TODO handle .M2 and .missing
     fn = "{}_{}_{}_{}_s{}_l{}M{}".format(
         args.mstart, args.p, args.d, args.minc,
         args.sieve_length, args.sieve_range // 10 ** 6,
