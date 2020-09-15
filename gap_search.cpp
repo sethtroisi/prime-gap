@@ -633,6 +633,60 @@ void prime_gap_search(const struct Config config) {
 }
 
 
+// Method 2
+
+
+void save_unknowns_method2(
+        const struct Config config,
+        const vector<int32_t> &valid_mi,
+        const vector<int32_t> &m_reindex,
+        const vector<uint32_t> &i_reindex,
+        const vector<bool> *composite) {
+
+    // ----- Open and Save to Output file
+    std::ofstream unknown_file;
+    {
+        std::string fn = gen_unknown_fn(config, ".txt");
+        printf("\nSaving unknowns to '%s'\n", fn.c_str());
+        unknown_file.open(fn, std::ios::out);
+        assert( unknown_file.is_open() ); // Can't open save_unknowns file
+    }
+
+    const uint32_t M_start = config.mstart;
+    const uint32_t D = config.d;
+    const uint32_t SL = config.sieve_length;
+
+    const size_t count_coprime_sieve = *std::max_element(i_reindex.begin(), i_reindex.end());
+
+    for (uint64_t mi : valid_mi) {
+        assert(gcd(M_start + mi, D) == 1);
+        int32_t mii = m_reindex[mi];
+        assert( mii >= 0 );
+
+        const auto& comp = composite[mii];
+
+        const size_t size_side = count_coprime_sieve / 2 + 1;
+        size_t unknown_l = std::count(comp.begin(), comp.begin() + size_side, false);
+        size_t unknown_u = std::count(comp.begin() + size_side, comp.end(), false);
+
+        unknown_file << mi << " : -" << unknown_l << " +" << unknown_u << " |";
+        for (int d = 0; d <= 1; d++) {
+            char prefix = "-+"[d];
+
+            for (size_t i = 1; i < SL; i++) {
+                int a = (SL-1) + (2*d - 1) * i;
+                if (!comp[i_reindex[a]]) {
+                    unknown_file << " " << prefix << i;
+                }
+            }
+            if (d == 0) {
+                unknown_file << " |";
+            }
+        }
+        unknown_file << "\n";
+    }
+}
+
 bool g_control_c = false;
 void signal_callback_handler(int signum) {
     if (g_control_c) {
@@ -938,9 +992,9 @@ void prime_gap_parallel(struct Config config) {
                        "(~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
                     1 / prob_prime_after_sieve,
                     skipped_prp,
-                    1.0 * skipped_prp / int_secs);
+                    2.0 * skipped_prp / int_secs);
 
-                double run_prp_mult = int_secs / (prp_time_est * skipped_prp);
+                double run_prp_mult = int_secs / (prp_time_est * 2.0 * skipped_prp);
                 if (run_prp_mult > 4) {
                     printf("\t\tEstimated ~%.1fx faster to just run PRP now (CTRL+C to stop sieving)\n",
                         run_prp_mult);
@@ -985,42 +1039,10 @@ void prime_gap_parallel(struct Config config) {
     // TODO assert s_prime_factors is close to (2 * SL * valid_m) * (log(log(SL)) + M_c)
 
     if (config.save_unknowns) {
-        // ----- Open and Save to Output file
-        std::ofstream unknown_file;
-        {
-            std::string fn = gen_unknown_fn(config, ".txt");
-            printf("\nSaving unknowns to '%s'\n", fn.c_str());
-            unknown_file.open(fn, std::ios::out);
-            assert( unknown_file.is_open() ); // Can't open save_unknowns file
-        }
-
-        for (uint64_t mi : valid_mi) {
-            assert(gcd(M_start + mi, D) == 1);
-            int32_t mii = m_reindex[mi];
-            assert( mii >= 0 );
-
-            const auto& comp = composite[mii];
-
-            const size_t size_side = count_coprime_sieve / 2 + 1;
-            size_t unknown_l = std::count(comp.begin(), comp.begin() + size_side, false);
-            size_t unknown_u = std::count(comp.begin() + size_side, comp.end(), false);
-
-            unknown_file << mi << " : -" << unknown_l << " +" << unknown_u << " |";
-            for (int d = 0; d <= 1; d++) {
-                char prefix = "-+"[d];
-
-                for (size_t i = 1; i < SL; i++) {
-                    int a = (SL-1) + (2*d - 1) * i;
-                    if (!comp[i_reindex[a]]) {
-                        unknown_file << " " << prefix << i;
-                    }
-                }
-                if (d == 0) {
-                    unknown_file << " |";
-                }
-            }
-            unknown_file << "\n";
-        }
+        save_unknowns_method2(
+            config,
+            valid_mi, m_reindex, i_reindex,
+            composite);
     }
 
     mpz_clear(K);

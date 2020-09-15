@@ -292,8 +292,8 @@ void prime_gap_test(const struct Config config) {
 
     // ----- Main sieve loop.
     if (config.verbose >= 1) {
-        printf("\nStarting m=%ld\ttesting %ld m (%ld to %ld)\n\n",
-            M_start, valid_ms, first_mi, last_mi);
+        printf("\n%ld tests M_start(%ld) + mi(%ld to %ld)\n\n",
+            valid_ms, M_start, first_mi, last_mi);
     }
 
     // Used for various stats
