@@ -82,6 +82,55 @@ int main(int argc, char* argv[]) {
 }
 
 
+void load_and_verify_unknowns(
+        const uint64_t mi,
+        const unsigned int SIEVE_LENGTH,
+        std::ifstream &unknown_file,
+        vector<int32_t> (&unknowns)[2]) {
+    int unknown_l;
+    int unknown_u;
+    // Read a line from the file
+    {
+        uint32_t mtest;
+        unknown_file >> mtest;
+        if (mtest != mi ) {
+            cout << "Mismatched mi " << mtest << " vs " << mi << endl;
+        }
+        std::string delim;
+        unknown_file >> delim;
+        assert( delim == ":" );
+
+        unknown_file >> unknown_l;
+        unknown_l *= -1;
+        unknown_file >> unknown_u;
+
+        unknown_file >> delim;
+        assert( delim == "|" );
+
+        int c;
+        for (int k = 0; k < unknown_l; k++) {
+            unknown_file >> c;
+            assert( 1 <= -c && -c < (int) SIEVE_LENGTH );
+            unknowns[0].push_back(-c);
+        }
+        unknown_file >> delim;
+        assert( delim == "|" );
+
+        for (int k = 0; k < unknown_u; k++) {
+            unknown_file >> c;
+            assert( 1 <= c && c < (int) SIEVE_LENGTH );
+            unknowns[1].push_back(c);
+        }
+    }
+
+    assert( unknown_l >= 0 && unknown_u >= 0 );
+    assert( (size_t) unknown_l == unknowns[0].size() );
+    assert( (size_t) unknown_u == unknowns[1].size() );
+
+    assert( is_sorted(unknowns[0].begin(), unknowns[0].begin()) );
+    assert( is_sorted(unknowns[1].begin(), unknowns[1].begin()) );
+}
+
 void prime_gap_test(const struct Config config) {
     const uint64_t M_start = config.mstart;
     const uint64_t M_inc = config.minc;
@@ -228,44 +277,11 @@ void prime_gap_test(const struct Config config) {
 
         vector<int32_t> unknowns[2];
 
-        int unknown_l;
-        int unknown_u;
-        // Read a line from the file
-        {
-            uint32_t mtest;
-            unknown_file >> mtest;
-            if (mtest != mi ) {
-                cout << "Mismatched mi " << mtest << " vs " << mi << endl;
-            }
-            std::string delim;
-            unknown_file >> delim;
-            assert( delim == ":" );
+        load_and_verify_unknowns(
+            mi, SIEVE_LENGTH, unknown_file, unknowns);
 
-            unknown_file >> unknown_l;
-            unknown_l *= -1;
-            unknown_file >> unknown_u;
-
-            unknown_file >> delim;
-            assert( delim == "|" );
-
-            int c;
-            for (int k = 0; k < unknown_l; k++) {
-                unknown_file >> c;
-                assert( 1 <= -c && -c < (int) SIEVE_LENGTH );
-                unknowns[0].push_back(-c);
-            }
-            unknown_file >> delim;
-            assert( delim == "|" );
-
-            for (int k = 0; k < unknown_u; k++) {
-                unknown_file >> c;
-                assert( 1 <= c && c < (int) SIEVE_LENGTH );
-                unknowns[1].push_back(c);
-            }
-        }
-
-        assert( (size_t) unknown_l == unknowns[0].size() );
-        assert( (size_t) unknown_u == unknowns[1].size() );
+        size_t unknown_l = unknowns[0].size();
+        size_t unknown_u = unknowns[1].size();
 
         s_total_unknown += unknown_l + unknown_u;
         s_t_unk_low += unknown_l;
@@ -279,7 +295,7 @@ void prime_gap_test(const struct Config config) {
             mpz_init(center); mpz_init(ptest);
             mpz_mul_ui(center, K, m);
 
-            for (int i = 0; prev_p_i == 0 && i < unknown_l; i++) {
+            for (size_t i = 0; prev_p_i == 0 && i < unknown_l; i++) {
                 s_total_prp_tests += 1;
 
                 mpz_sub_ui(ptest, center, unknowns[0][i]);
@@ -287,7 +303,7 @@ void prime_gap_test(const struct Config config) {
                     prev_p_i = unknowns[0][i];
                 }
             }
-            for (int i = 0; next_p_i == 0 && i < unknown_u; i++) {
+            for (size_t i = 0; next_p_i == 0 && i < unknown_u; i++) {
                 s_total_prp_tests += 1;
 
                 mpz_add_ui(ptest, center, unknowns[1][i]);
@@ -375,7 +391,7 @@ void prime_gap_test(const struct Config config) {
             double   secs = duration<double>(s_stop_t - s_start_t).count();
 
             if ((config.verbose + is_last) >= 1) {
-                printf("\tm=%ld %4d <- unknowns -> %-4d\t%4d <- gap -> %-4d\n",
+                printf("\tm=%ld %4ld <- unknowns -> %-4ld\t%4d <- gap -> %-4d\n",
                     m,
                     unknown_l, unknown_u,
                     prev_p_i, next_p_i);
