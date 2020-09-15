@@ -491,6 +491,7 @@ Config argparse(int argc, char* argv[]) {
         if (!valid) {
             config.valid = 0;
             cout << "p# not prime (p=" << config.p << ")" << endl;
+            exit(1);
         }
     }
 

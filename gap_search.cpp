@@ -147,6 +147,7 @@ void set_defaults(struct Config& config) {
 
         // Search till chance of shorter gap is small.
         {
+            // Code below is quite slow with larger values of d.
             assert( config.d <= 30030 );
 
             uint32_t base = mpz_fdiv_ui(K, config.d);
@@ -648,6 +649,9 @@ void prime_gap_parallel(struct Config config) {
 
     const uint64_t SIEVE_RANGE = config.sieve_range;
 
+    mpz_t test;
+    mpz_init(test);
+
     // TODO: Would be nice to have a prev prime.
     uint64_t LAST_PRIME = SIEVE_RANGE;
     {
@@ -666,16 +670,6 @@ void prime_gap_parallel(struct Config config) {
             }
         } while (prime == false);
     }
-
-    // TODO increase this when valid_ms is very small
-    // TODO seems not well calibrated right now, lower to 40x?
-    const uint64_t SMALL_THRESHOLD = 50 * SIEVE_LENGTH;
-
-    // SMALL_THRESHOLD deals with all primes that can mark off two items in SIEVE_LENGTH.
-    assert( SMALL_THRESHOLD > 2 * SIEVE_LENGTH );
-
-    mpz_t test;
-    mpz_init(test);
 
     // ----- Generate primes for P
     const vector<uint32_t> P_primes = get_sieve_primes(P);
@@ -727,10 +721,18 @@ void prime_gap_parallel(struct Config config) {
     }
     const size_t count_coprime_sieve = *std::max_element(i_reindex.begin(), i_reindex.end());
 
+    // Rough math is MULT  vs  log2(MULT) * (M_inc/valid_ms)
+    const float SMALL_MULT = std::max(8.0, log(8) * M_inc / valid_ms);
+    const uint64_t SMALL_THRESHOLD = SMALL_MULT * 2 * SIEVE_LENGTH;
+
+    // SMALL_THRESHOLD mult deal with all primes that can mark off two items in SIEVE_LENGTH.
+    assert( SMALL_THRESHOLD > 2 * SIEVE_LENGTH );
+
     if (config.verbose >= 1) {
         setlocale(LC_NUMERIC, "");
         printf("sieve_length: 2x %'d\n", config.sieve_length);
-        printf("sieve_range: %'ld   small_threshold:  %'ld\n", config.sieve_range, SMALL_THRESHOLD);
+        printf("sieve_range: %'ld   small_threshold:  %'ld (%.1f x SL)\n",
+            config.sieve_range, SMALL_THRESHOLD, 2 * SMALL_MULT);
         //printf("last prime :  %'ld\n", LAST_PRIME);
         setlocale(LC_NUMERIC, "C");
     }
@@ -801,8 +803,7 @@ void prime_gap_parallel(struct Config config) {
 
                     if (lowIsEven ^ evenFromCenter) {
                         // Same parity (divisible by 2) move to next prime
-                        assert( (first >= SIEVE_INTERVAL) ||
-                                (composite[mii][i_reindex[first]] > 0) );
+                        assert( (first >= SIEVE_INTERVAL) || (composite[mii][i_reindex[first]] > 0) );
                         first += prime;
                     }
 
@@ -851,7 +852,7 @@ void prime_gap_parallel(struct Config config) {
         if (prime >= s_next_print) {
             if (prime >= s_next_print) {
                 if (s_next_print == 5 * next_mult) {
-                    next_mult = 2 * s_next_print;
+                    next_mult = 10 * next_mult;
                     s_next_print = 0;
                 }
                 s_next_print += next_mult;
