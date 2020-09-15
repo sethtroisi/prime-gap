@@ -631,8 +631,8 @@ void prime_gap_stats(const struct Config config) {
     float smallest_log = K_log + log(M_start);
     {
         for (size_t g = 2; g < MAX_GAP; g += 2) {
-            // Ignore the infintesimal odds of finding >merit 30 gap.
-            if (g / smallest_log > 30) {
+            // Ignore the infintesimal odds of finding >merit 35 gap.
+            if (g / smallest_log > 35) {
                 break;
             }
 
@@ -723,7 +723,8 @@ void prime_gap_stats(const struct Config config) {
         vector<uint32_t> count_coprime;
         {
             uint32_t count = 0;
-            for (int i = SL; ; i++) {
+            // TODO: verify it doesn't make sense to check larger gaps.
+            for (size_t i = SL; i <= poss_record_gaps.back() ; i++) {
                 bool coprime = mpz_gcd_ui(NULL, K, i) == 1;
                 count += coprime;
                 is_coprime.push_back(coprime);
@@ -735,7 +736,7 @@ void prime_gap_stats(const struct Config config) {
             printf("Considering SL + %ld (%d coprime) after record extended gap\n",
                 count_coprime.size(), count);
             printf("\tUsing prob_greater_cutoff %.2e * %.2e\n",
-                PROB_GREATER_CUTOFF, prob_great_nth_sieve[EXPECTED_UNKNOWN]);
+                prob_great_nth[count], prob_great_nth_sieve[EXPECTED_UNKNOWN]);
             assert( count <= prob_prime_nth.size() );
         }
 
