@@ -475,10 +475,10 @@ Config argparse(int argc, char* argv[]) {
         cout << "sieve_range > 500B not supported" << endl;
     }
 
-    uint64_t overflow = last_m * config.sieve_range;
-    if (overflow == 0 || (overflow / last_m != config.sieve_range)) {
+    uint64_t max_m = (1UL << 63) / config.sieve_range;
+    if (max_m <= last_m) {
         config.valid = 0;
-        cout << "sieve_range * (mstart + minc) > int64" << endl;
+        cout << "sieve_range * last_m(" << last_m << ") will overflow int64" << endl;
     }
 
     {
@@ -498,12 +498,6 @@ Config argparse(int argc, char* argv[]) {
     if (config.d <= 0) {
         config.valid = 0;
         cout << "d must be greater than 0: " << config.d << endl;
-    }
-
-    uint64_t max_m = (1UL << 63) / config.sieve_range;
-    if (max_m <= last_m) {
-        config.valid = 0;
-        cout << "sieve_range * last_m(" << last_m << ") will overflow int64" << endl;
     }
 
     return config;

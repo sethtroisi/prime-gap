@@ -203,8 +203,10 @@ $ sqlite3 prime-gap-search.db < schema.sql
   * modify `is_prime` in gap\_utils.py
 * Multiple layers of verification of `gap_search`
   * Can compare `--method1` result with `--method2`
-  * `misc/double_check.py` double checks using `ecm`, if factor found number shouldn't appear in unknown-file.txt
+  * Can add `-DGMP_VALIDATE_FACTORS=1` to `CFLAGS` in Makefile
+  * `misc/double_check.py` double checks using `ecm`, if small factor found number shouldn't appear in unknown-file.txt
     * `python misc/double_check.py --unknown-filename <unknown_filen> -c 10`
+
 
 ### Quick test of all functions
 ```bash

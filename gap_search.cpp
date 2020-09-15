@@ -38,9 +38,17 @@ using std::map;
 using std::vector;
 using namespace std::chrono;
 
+
+
+// Validate each composite factor (slow)
+#ifndef GMP_VALIDATE_FACTORS
+    #define GMP_VALIDATE_FACTORS 0
+#endif
+
+
 // Tweaking this doesn't seem to method1 much.
-// method2 seems very sensative and is controlled elsewhere.
-#define SIEVE_SMALL       400'000
+// method2 is more sensative and set it's own.
+#define SIEVE_SMALL_METHOD1       400'000
 
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config config);
@@ -303,7 +311,7 @@ void prime_gap_search(const struct Config config) {
     }
 
     // ----- Generate primes under SIEVE_RANGE.
-    vector<uint32_t> small_primes = get_sieve_primes(SIEVE_SMALL);
+    vector<uint32_t> small_primes = get_sieve_primes(SIEVE_SMALL_METHOD1);
 
     // ----- Merit Stuff
     mpz_t K;
@@ -314,16 +322,16 @@ void prime_gap_search(const struct Config config) {
     const size_t SIEVE_SMALL_PRIME_PI = small_primes.size();
     {
         // SIEVE_SMALL deals with all primes that can mark off two items in SIEVE_LENGTH.
-        assert( SIEVE_SMALL > 2 * SIEVE_LENGTH );
+        assert( SIEVE_SMALL_METHOD1 > 2 * SIEVE_LENGTH );
         if (config.verbose >= 1) {
             printf("\tUsing %'ld primes for SIEVE_SMALL(%'d)\n\n",
-                SIEVE_SMALL_PRIME_PI, SIEVE_SMALL);
+                SIEVE_SMALL_PRIME_PI, SIEVE_SMALL_METHOD1);
         }
-        assert( small_primes[SIEVE_SMALL_PRIME_PI-1] < SIEVE_SMALL);
-        assert( small_primes[SIEVE_SMALL_PRIME_PI-1] + 200 > SIEVE_SMALL);
+        assert( small_primes[SIEVE_SMALL_PRIME_PI-1] < SIEVE_SMALL_METHOD1);
+        assert( small_primes[SIEVE_SMALL_PRIME_PI-1] + 200 > SIEVE_SMALL_METHOD1);
     }
 
-    auto  s_setup_t = high_resolution_clock::now();
+    const auto  s_setup_t = high_resolution_clock::now();
 
     // ----- Allocate memory for a handful of utility functions.
 
@@ -351,7 +359,7 @@ void prime_gap_search(const struct Config config) {
         size_t print_dots = 38;
 
         // Lookup primepi for common sieve_range values.
-        size_t expected_primes = common_primepi.count(SIEVE_RANGE) ?
+        const size_t expected_primes = common_primepi.count(SIEVE_RANGE) ?
             common_primepi[SIEVE_RANGE] :
             1.04 * SIEVE_RANGE / log(SIEVE_RANGE);
 
@@ -371,7 +379,7 @@ void prime_gap_search(const struct Config config) {
             // Big improvement over surround_prime is reusing this for each m.
             const uint64_t base_r = mpz_fdiv_ui(K, prime);
 
-            if (prime <= SIEVE_SMALL) {
+            if (prime <= SIEVE_SMALL_METHOD1) {
                 prime_and_remainder.emplace_back(prime, base_r);
                 pr_pi += 1;
                 return true;
@@ -395,8 +403,9 @@ void prime_gap_search(const struct Config config) {
 
             assert (mi < M_inc);
 
-            __int128 mult = (__int128) base_r * (M_start + mi) + (SL - 1);
-            assert( mult % prime < (2*SL-1) );
+            // (M_start + mi) * last_prime < int64 (checked in argparse)
+            uint64_t first = (base_r * (M_start + mi) + (SL-1)) % prime;
+            assert( first < (2*SL-1) );
 
             //assert ( gcd(M + mi, D) == 1 );
 
@@ -427,7 +436,7 @@ void prime_gap_search(const struct Config config) {
                 100 - (100.0 * pr_pi / (pi - SIEVE_SMALL_PRIME_PI)));
             printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
                 expected_large_primes,
-                (2 * SL - 1) * (log(log(SIEVE_RANGE)) - log(log(SIEVE_SMALL))));
+                (2 * SL - 1) * (log(log(SIEVE_RANGE)) - log(log(SIEVE_SMALL_METHOD1))));
             setlocale(LC_NUMERIC, "C");
         }
     }
@@ -474,7 +483,7 @@ void prime_gap_search(const struct Config config) {
     assert(last_mi > 0 && last_mi < M_inc);
 
     for (uint64_t mi = 0; mi < M_inc; mi++) {
-        uint64_t m = M_start + mi;
+        const uint64_t m = M_start + mi;
         if (gcd(m, D) > 1) {
             assert( large_prime_queue[mi].empty() );
             continue;
@@ -518,10 +527,9 @@ void prime_gap_search(const struct Config config) {
             // When done find next mi where prime divides a number in SIEVE.
             const uint64_t modulo = (remainder * m) % prime;
 
-            if (0) {
+            if (GMP_VALIDATE_FACTORS) {
                 mpz_mul_ui(test, K, m);
-                uint64_t mod = mpz_fdiv_ui(test, prime);
-                assert( mod == modulo );
+                assert(modulo == mpz_fdiv_ui(test, prime));
             }
 
             if (modulo < SIEVE_LENGTH) {
@@ -530,7 +538,7 @@ void prime_gap_search(const struct Config config) {
             } else {
                 // Don't have to deal with 0 case anymore.
                 int64_t first_positive = prime - modulo;
-                assert( first_positive < SIEVE_LENGTH); // Bad next m!
+                assert(first_positive < SIEVE_LENGTH); // Bad next m!
                 // Just before a multiple
                 composite[1][first_positive] = true;
             }
@@ -542,9 +550,9 @@ void prime_gap_search(const struct Config config) {
                         M_start + start, D, M_inc - start, SL, prime, remainder);
                 if (next_mi == M_inc) continue;
 
-                //assert( (remainder * (M + next_mi) + (SL - 1)) % prime < (2*SL-1) );
-                __int128 mult = (__int128) remainder * (M_start + next_mi) + (SL - 1);
-                assert ( mult % prime <= (2 * SL - 1) );
+                // (M_start + mi) * prime < int64 (checked in argparse)
+                uint64_t mult = (remainder * (M_start + next_mi) + (SL - 1)) % prime;
+                assert(mult < (2 * SL - 1));
 
                 //assert ( gcd(M_start + next_mi, D) == 1 );
 
@@ -737,6 +745,14 @@ void prime_gap_parallel(struct Config config) {
         setlocale(LC_NUMERIC, "C");
     }
 
+    /**
+     * Much space is saved via a reindexing scheme
+     * composite[mi][x] (0 <= mi < M_inc, -SL < x < SL) is reindexed to
+     *      composite[m_reindex[mi]][i_reindex[x]]
+     * m_reindex[mi] with (D, M + mi) > 0 are mapped to -1 (and must be handled by code)
+     * i_reindex[x]  with (K, x) > 0 are mapped to 0 (and that bit is ignored)
+     */
+    //
     // <bool> is slower than <char>, but uses 1/8th the memory.
     vector<bool> composite[valid_ms];
     {
@@ -748,7 +764,9 @@ void prime_gap_parallel(struct Config config) {
         }
         for (size_t i = 0; i < valid_ms; i++) {
             // Improve this setup (segfaults at ~0.5GB required)
+            // +1 reserves extra 0th entry for i_reindex[x] = 0
             composite[i].resize(count_coprime_sieve + 1, false);
+            composite[i][0] = true;
         };
     }
 
@@ -795,15 +813,25 @@ void prime_gap_parallel(struct Config config) {
 
                 uint32_t shift = prime;
                 if (prime > 2) {
-                    //bool lowIsEven = ((SIEVE_LENGTH % 2) == 0) ^ ((D % 2) == 1) || ((m % 2) == 0);
-                    //bool evenFrom = (first % 2) == 0;
+                    bool lowIsEven = ((D & 1) || ((m & 1) == 0)) == (SIEVE_LENGTH & 1);
+                    bool evenFromLow = (first & 1) == 0;
+                    bool firstIsEven = lowIsEven == evenFromLow;
 
-                    bool lowIsEven = (D & 1) || ((m & 1) == 0);
-                    bool evenFromCenter = (first & 1) == (SIEVE_LENGTH & 1);
+                    if (GMP_VALIDATE_FACTORS) {
+                        mpz_mul_ui(test, K, M_start + mi);
+                        mpz_sub_ui(test, test, SIEVE_LENGTH-1);
+                        assert( (mpz_even_p(test) > 0) == lowIsEven );
 
-                    if (lowIsEven ^ evenFromCenter) {
-                        // Same parity (divisible by 2) move to next prime
-                        assert( (first >= SIEVE_INTERVAL) || (composite[mii][i_reindex[first]] > 0) );
+                        mpz_add_ui(test, test, first);
+                        assert( (mpz_even_p(test) > 0) == firstIsEven );
+
+                        assert( 0 == mpz_fdiv_ui(test, prime) );
+                    }
+
+                    if (firstIsEven) {
+                        // divisible by 2 move to next multiple (an odd multiple)
+
+                        assert( (first >= SIEVE_INTERVAL) || (composite[mii][i_reindex[first]] == true) );
                         first += prime;
                     }
 
@@ -836,7 +864,7 @@ void prime_gap_parallel(struct Config config) {
                     return;
                 }
 
-                if (0) {
+                if (GMP_VALIDATE_FACTORS) {
                     mpz_mul_ui(test, K, M_start + mi);
                     mpz_sub_ui(test, test, SIEVE_LENGTH-1);
                     mpz_add_ui(test, test, first);
@@ -966,7 +994,7 @@ void prime_gap_parallel(struct Config config) {
                 char prefix = "-+"[d];
 
                 for (size_t i = 1; i < SL; i++) {
-                    int a = (SL-1) + (2*d -1) * i;
+                    int a = (SL-1) + (2*d - 1) * i;
                     if (!comp[i_reindex[a]]) {
                         unknown_file << " " << prefix << i;
                     }

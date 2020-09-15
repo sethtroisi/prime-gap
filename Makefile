@@ -16,24 +16,24 @@
 OBJS	= gap_common.o modulo_search.o
 OUT	= gap_search gap_stats gap_test benchmark
 CC	= g++
-FLAGS	= -Wall -Werror -O3 -lgmp
+CFLAGS	= -Wall -Werror -O3 -lgmp
 LDFLAGS	=
 PROGS	= gap_search gap_test
 
 %.o: %.cpp
-	$(CC) -c -o $@ $< $(FLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS)
 
 
 all: $(PROGS) gap_stats benchmark
 
 $(PROGS) : %: %.cpp $(OBJS)
-	$(CC) -o $@ $^ $(FLAGS) $(LDFLAGS)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 gap_stats: gap_stats.cpp gap_common.o
-	$(CC) -o $@ $^ $(FLAGS) $(LDFLAGS) -lsqlite3
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -lsqlite3
 
 benchmark: misc/benchmark.cpp modulo_search.o
-	$(CC) -o $@ $^ $(FLAGS) $(LDFLAGS) -I.
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -I.
 
 
 .PHONY: clean
