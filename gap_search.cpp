@@ -956,9 +956,7 @@ void prime_gap_parallel(struct Config config) {
                 t_total_unknowns += std::count(composite[i].begin(), composite[i].end(), false);
             }
             uint64_t new_composites = s_total_unknowns - t_total_unknowns;
-            // TODO: make sure I'm not falling brew to
-            // https://jakevdp.github.io/blog/2018/09/13/waiting-time-paradox/
-            double skipped_prp = valid_ms * (s_prp_needed - 1/prob_prime_after_sieve);
+            double skipped_prp = 2 * valid_ms * (s_prp_needed - 1/prob_prime_after_sieve);
 
             pi += pi_interval;
             s_prime_factors += s_small_prime_factors_interval;
@@ -993,19 +991,16 @@ void prime_gap_parallel(struct Config config) {
                        "(~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
                     1 / prob_prime_after_sieve,
                     skipped_prp,
-                    2.0 * skipped_prp / int_secs);
+                    skipped_prp / int_secs);
 
-                double run_prp_mult = int_secs / (prp_time_est * 2.0 * skipped_prp);
+                double run_prp_mult = int_secs / (prp_time_est * skipped_prp);
                 if (run_prp_mult > 4) {
                     printf("\t\tEstimated ~%.1fx faster to just run PRP now (CTRL+C to stop sieving)\n",
                         run_prp_mult);
                 }
 
                 printf("\n");
-            }
-            setlocale(LC_NUMERIC, "C");
 
-            if (config.verbose + is_last >= 1) {
                 s_total_unknowns = t_total_unknowns;
                 s_interval_t = s_stop_t;
                 s_prp_needed = 1 / prob_prime_after_sieve;
@@ -1014,6 +1009,7 @@ void prime_gap_parallel(struct Config config) {
                 s_large_prime_factors_interval = 0;
                 pi_interval = 0;
             }
+            setlocale(LC_NUMERIC, "C");
 
             // if is_last would truncate .sieve_range by 1 million
             if (g_control_c && (prime != LAST_PRIME)) {
