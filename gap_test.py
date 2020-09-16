@@ -171,16 +171,24 @@ def stats_plots(
     cumsum_p_sorted = np.cumsum(p_gap_merit_sorted)
 
     # Theoretical with restart
-    half, other = len(tests) // 2, len(tests) - len(tests) // 2
-    cumsum_p_sorted_restart = np.cumsum(
-        p_gap_merit_sorted[:len(tests)//2] + p_gap_merit_sorted[:other])
+    def cumsum_restarts(restarts):
+        part_size = len(tests) // (restarts + 1)
+        t = []
+        for i in range(restarts):
+            t.extend(p_gap_merit_sorted[:part_size])
+        t.extend(p_gap_merit_sorted[:len(tests) - len(t)])
+        return np.cumsum(t)
+
+    cumsum_p_restart = cumsum_restarts(1)
+    cumsum_p_restart_freq = cumsum_restarts(9)
 
     # Experimental
     cumcount_large = np.cumsum(np.array(gap_real_ord) > min_merit_gap)
 
     # Want this one below next graph
-    plt.plot(tests, cumsum_p_sorted_restart, label='P(gap > min_merit) (top 50% of two sieves)')
-    z = plt.plot(tests, cumsum_p_sorted, label='P(gap > min_merit) (sorting by best first)')
+    z3 = plt.plot(tests, cumsum_p_restart_freq, label='10 runs of top 10%')
+    z2 = plt.plot(tests, cumsum_p_restart, label='P(gap > min_merit) (top 50% of two sieves)')
+    z  = plt.plot(tests, cumsum_p_sorted, label='P(gap > min_merit) (sorting by best first)')
     plt.plot(tests, cumsum_p, label='P(gap > min_merit)')
     plt.plot(tests, cumcount_large, label='Count gap > min_merit')
     plt.xlabel(" # of m's tests")
@@ -188,14 +196,14 @@ def stats_plots(
 
     # Plot speedup at 50th percentile
     mid_t = len(tests) // 2
-    cs_p = cumsum_p[mid_t]
-    cs_ps = cumsum_p_sorted[mid_t]
-    plt.plot([tests[mid_t], tests[mid_t]], [cs_p, cs_ps], c=z[0].get_color(),
-                label="+{:.1%} by sorting".format(
-                    cs_p, cs_ps, cs_ps / cs_p - 1))
-    plt.plot([tests[-1], tests[-1]], [cumsum_p[-1], cumsum_p_sorted_restart[-1]], c=z[0].get_color(),
-                label="+{:.1%} using top 50% & sorting".format(
-                    cumsum_p_sorted_restart[-1] / cumsum_p[-1] - 1))
+
+    y = [cumsum_p[mid_t], cumsum_p_sorted[mid_t]]
+    plt.plot([tests[mid_t], tests[mid_t]], y, c=z[0].get_color(),
+                label="+{:.1%} by sorting".format(y[1] / y[0] - 1))
+
+    y = [cumsum_p[-1], cumsum_p_restart[-1]]
+    plt.plot([tests[-1], tests[-1]], y, c=z2[0].get_color(),
+                label="+{:.1%} using top 50% & sorting".format(y[1] / y[0] - 1))
 
     plt.legend(loc='upper left')
 
