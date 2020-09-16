@@ -36,7 +36,7 @@ class TeeLogger:
 def logger_context(args):
     # contextlib.nullcontext() requires python 3.7
     if not args.save_logs:
-        context = contextlib.suppress()
+        return contextlib.suppress()
 
     assert args.unknown_filename
     log_fn_base = args.unknown_filename + '.log'
@@ -64,14 +64,14 @@ def verify_args(args, fn_extension):
             print ("\"{}\" doesn't match unknown file format".format(fn))
             exit(1)
 
-        ms, p, d, mi, sl, sr, m2 = match.groups()
+        ms, p, d, mi, sl, sr, m1 = match.groups()
         args.mstart = int(ms)
         args.minc   = int(mi)
         args.p      = int(p)
         args.d      = int(d)
         args.sieve_length = int(sl)
         args.sieve_range  = int(sr)
-        args.method1 = (m2 == ".m1")
+        args.method1 = (m1 == ".m1")
 
     args.sieve_range *= 10 ** 6
 
@@ -87,7 +87,7 @@ def verify_args(args, fn_extension):
     fn = "{}_{}_{}_{}_s{}_l{}M{}".format(
         args.mstart, args.p, args.d, args.minc,
         args.sieve_length, args.sieve_range // 10 ** 6,
-        ".m1" if args.method2 else "")
+        ".m1" if args.method1 else "")
     fn += fn_extension
 
     if args.unknown_filename:

@@ -276,7 +276,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [ ] Option to output m with gcd(m, d) != 1
   * (Method2)
 * gap\_test.py
-  * [ ] Rename composite = [[], []] to unknowns
   * [ ] Option to starting at m > mstart
   * [ ] Plot Prob(record)
   * [ ] Plot P(gap > min\_merit) and P(record) sorted and unsorted.

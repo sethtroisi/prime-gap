@@ -247,7 +247,7 @@ void prime_gap_test(const struct Config config) {
         if (config.verbose >= 2) {
             // count_coprime already includes some parts of unknown_after_sieve
             printf("\n");
-            printf("\t%.3f%% of sieve should be unknown (%ldM) ~= %.0f\n",
+            printf("\t%.3f%% of SL should be unknown (%ldM) ~= %.0f\n",
                 100 * unknowns_after_sieve,
                 config.sieve_range/1'000'000,
                 count_coprime * (unknowns_after_sieve / prob_prime_coprime));

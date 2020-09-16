@@ -99,7 +99,7 @@ def prob_prime_sieve_length(M, D, prob_prime, K_digits, K_primes, SL, sieve_rang
     prob_gap_shorter_hypothetical = chance_coprime_composite ** count_coprime
 
     # count_coprime already includes some parts of unknown_after_sieve
-    print("\t{:.3f}% of sieve should be unknown ({}M) ~= {:.0f}".format(
+    print("\t{:.3f}% of SL should be unknown ({}M) ~= {:.0f}".format(
         100 * unknowns_after_sieve,
         sieve_range//1e6,
         count_coprime * (unknowns_after_sieve / prob_prime_coprime)))
@@ -260,7 +260,7 @@ def prime_gap_test(args):
     # ----- Sieve stats
     prob_prime = 1 / M_log - 1 / (M_log * M_log)
     prob_prime_after_sieve = prob_prime_sieve_length(
-        M, D, 1 / prob_prime, K_digits, K_primes, SL, sieve_range)
+        M, D, prob_prime, K_digits, K_primes, SL, sieve_range)
 
     # ----- Main sieve loop.
     print("\nStarting m={}".format(M))
@@ -301,27 +301,25 @@ def prime_gap_test(args):
 
         log_m = (K_log + math.log(m))
 
-        composite = [[], []]
+        unknowns = [[], []]
 
-        unknown_l = -1
-        unknown_u = -1
         prev_p_i = 0
         next_p_i = 0
 
         # Read a line from the file
         line = unknown_file.readline()
-        start, c_l, c_h = line.split("|")
+        start, c_l, c_h = line.split(" | ")
 
         match = re.match(r"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
         assert match, start
         mtest, unknown_l, unknown_u = map(int, match.groups())
         assert mtest == mi
 
-        composite[0] = list(map(int,c_l.strip().split(" ")))
-        composite[1] = list(map(int,c_h.strip().split(" ")))
+        unknowns[0] = list(map(int,c_l.split(" ")))
+        unknowns[1] = list(map(int,c_h.split(" ")))
 
-        unknown_l_test = len(composite[0])
-        unknown_u_test = len(composite[1])
+        unknown_l_test = len(unknowns[0])
+        unknown_u_test = len(unknowns[1])
         assert unknown_l == unknown_l_test, (unknown_l, unknown_l_test, "\t", start)
         assert unknown_u == unknown_u_test, (unknown_u, unknown_u_test, "\t", start)
 
@@ -331,7 +329,7 @@ def prime_gap_test(args):
 
         if args.save_logs or args.plots:
             e_prev, e_next, p_merit = calculate_expected_gaps(
-                composite, SL, prob_prime_after_sieve, log_m,
+                unknowns, SL, prob_prime_after_sieve, log_m,
                 p_gap_side, p_gap_comb, min_merit_gap)
             s_expected_prev.append(e_prev)
             s_expected_next.append(e_next)
@@ -347,12 +345,12 @@ def prime_gap_test(args):
                 # Used for openPFGW
                 strn = "{}*{}#/{}+".format(m, P, D)
 
-                p_tests, prev_p_i = determine_prev_prime_i(m, strn, K, composite[0],
+                p_tests, prev_p_i = determine_prev_prime_i(m, strn, K, unknowns[0],
                                                          SL, primes, remainder)
                 s_total_prp_tests += p_tests
                 s_gap_out_of_sieve_prev += prev_p_i >= SL
 
-                n_tests, next_p_i = determine_next_prime_i(m, strn, K, composite[1], SL)
+                n_tests, next_p_i = determine_next_prime_i(m, strn, K, unknowns[1], SL)
                 s_total_prp_tests += n_tests
                 s_gap_out_of_sieve_next += next_p_i >= SL
 
