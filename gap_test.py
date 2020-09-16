@@ -58,6 +58,135 @@ def get_arg_parser():
     return parser
 
 
+#---- Stats to plot ----#
+def stats_plots(
+        args,
+        min_merit_gap,
+
+        valid_m,
+        s_expected_gap,
+        s_expected_prev, s_expected_next,
+        s_experimental_gap, s_experimental_side,
+        p_gap_side, p_gap_comb, p_gap_merit
+    ):
+
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from scipy import stats
+
+    if args.run_prp:
+        slope, _, R, _, _ = stats.linregress(s_expected_gap, s_experimental_gap)
+        print ("R^2 for expected gap: {:.3f}, corr: {:.3f}".format(R**2, slope))
+
+    # Set up subplots.
+    fig3 = plt.figure(constrained_layout=True, figsize=(8, 8))
+    gs = fig3.add_gridspec(3, 2)
+
+    # TODO plot number of PRP tests per M
+
+    for plot_i, (d, label, color) in enumerate([
+            (s_expected_prev, 'prev', 'lightskyblue'),
+            (s_expected_next, 'next', 'darksalmon'),
+            (s_expected_gap,  'expected', 'seagreen'),
+            (s_experimental_side, 'next/prev gap', 'sandybrown'),
+            (s_experimental_gap, 'gap', 'peru'),
+            (p_gap_merit, f'P(gap > min_merit({args.min_merit}))', 'dodgerblue'),
+    ]):
+        if not d: continue
+
+        if plot_i == 0: # Not called again on plot_i == 1
+            fig3.add_subplot(gs[0, 0])
+        elif plot_i == 2:
+            fig3.add_subplot(gs[1, 0])
+        elif plot_i == 3:
+            fig3.add_subplot(gs[0, 1])
+        elif plot_i == 4:
+            fig3.add_subplot(gs[1, 1])
+        elif plot_i == 5:
+            fig3.add_subplot(gs[2, 0])
+
+        hist_data = np.histogram(d, bins=100, density=True)
+        plt.scatter(hist_data[1][:-1], hist_data[0], color=color,
+                    marker='o' if plot_i in (3,4) else 'x', s=8)
+        max_y = hist_data[0].max()
+
+        if plot_i == 3:
+            trend, _ = np.polyfit([mi for mi in valid_m for d in ['l','up']], d, 1)
+        else:
+            trend, _ = np.polyfit(valid_m, d, 1)
+
+        if trend > 2e-3:
+            print("\n")
+            print("NON-ZERO TREND: ", trend) # Verify that expected value doesn't vary with M.
+            print("\n")
+
+        E = np.mean(d)
+
+        if plot_i != 5:
+            plt.axvline(x=E, ymax=1.0/1.2, color=color, label=f"E({label}) = {E:.0f}")
+            plt.legend(loc='upper right')
+        else:
+            plt.legend([label])
+
+        gap_span = np.linspace(0.95 * np.percentile(d, 1), 1.05 * np.percentile(d, 99), 400)
+        if plot_i == 5:
+            gap_span = np.linspace(0, max(d) * 1.1, 400)
+
+        if 'gap' not in label:
+            mu, std = stats.norm.fit(d)
+            p = stats.norm.pdf(gap_span, mu, std)
+            plt.plot(gap_span, p, color=color)
+
+        plt.xlim(np.percentile(d, 0.01), np.percentile(d, 99.9))
+        plt.ylim(2e-5, 1.2 * max_y)
+
+    for d, color in [
+            (p_gap_side, 'blueviolet'),
+            (p_gap_comb, 'seagreen'),
+    ]:
+        if color == 'blueviolet':
+            fig3.add_subplot(gs[0, 1])
+        else:
+            fig3.add_subplot(gs[1, 1])
+
+        d_x, d_w = zip(*sorted(d.items()))
+
+        plt.hist(d_x, weights=d_w, bins=100, density=True,
+                 label='Theoretical P(gap)', color=color, alpha=0.4)
+        plt.legend(loc='upper right')
+
+    # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
+    fig3.add_subplot(gs[2, 1])
+
+    items = sorted(
+        list(itertools.zip_longest(p_gap_merit, s_experimental_gap, fillvalue=0)),
+        reverse=True)
+    p_gap_merit_sorted, gap_real = zip(*items)
+
+    tests = list(range(1, len(p_gap_merit_sorted)+1))
+    # Theoretical
+    sum_p = np.cumsum(p_gap_merit_sorted)
+    large_gap = np.cumsum(np.array(gap_real) > min_merit_gap)
+
+    plt.plot(tests, sum_p, label="P(gap > min_merit)")
+    plt.plot(tests, large_gap, label="Count gap > min_merit")
+    plt.xlabel("tests")
+    plt.ylabel(f"Sum(P(gap > min_merit({args.min_merit})))")
+
+    # TODO(P(record))
+    # TODO(P(gap > X))
+
+    if args.save_logs:
+        plt.savefig(args.unknown_filename + ".png", dpi=1080//8)
+
+    if args.plots:
+        plt.show()
+
+    plt.close()
+
+#---- gap_testing ----#
+
 def load_existing(conn, args):
     # TODO to_process_range
     rv = conn.execute(
@@ -242,7 +371,7 @@ def prime_gap_test(args):
     # ----- Open Prime-Gap-Search DB
     conn = sqlite3.connect(args.search_db)
     conn.row_factory = sqlite3.Row
-    existing = load_existing(conn, args)
+    existing = {} #load_existing(conn, args)
     print (f"Found {len(existing)} existing results")
 
     # used in next_prime
@@ -277,7 +406,7 @@ def prime_gap_test(args):
     s_best_merit_interval = 0
     s_best_merit_interval_m = 0
 
-    X = []
+    valid_m = []
     s_expected_prev = []
     s_expected_next = []
     s_expected_gap  = []
@@ -296,7 +425,7 @@ def prime_gap_test(args):
         m = M + mi
         if math.gcd(m, D) != 1: continue
 
-        X.append(m)
+        valid_m.append(m)
 
         log_m = (K_log + math.log(m))
 
@@ -362,7 +491,7 @@ def prime_gap_test(args):
 
             merit = gap / log_m
             if m not in existing:
-                save(conn, m, P, D, next_p_i, prev_p_i, merit)
+                #save(conn, m, P, D, next_p_i, prev_p_i, merit)
                 if merit > min_merit:
                     print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(
                         gap, merit, m, P, D, prev_p_i, next_p_i))
@@ -373,7 +502,7 @@ def prime_gap_test(args):
 
         s_stop_t = time.time()
         print_secs = s_stop_t - s_last_print_t
-        if len(X) in (1,10,30,100,300,1000) or len(X) % 5000 == 0 \
+        if len(valid_m) in (1,10,30,100,300,1000) or len(valid_m) % 5000 == 0 \
                 or mi == last_mi or print_secs > 1200:
             secs = s_stop_t - s_start_t
 
@@ -397,11 +526,11 @@ def prime_gap_test(args):
             print("\t    tests     {:<10d} ({})  {:.0f} seconds elapsed".format(
                 tested, timing, secs))
             print("\t    unknowns  {:<10d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
-                s_total_unknown, s_total_unknown / len(X),
-                100 * (1 - s_total_unknown / (2 * (sieve_length - 1) * len(X))),
+                s_total_unknown, s_total_unknown / len(valid_m),
+                100 * (1 - s_total_unknown / (2 * (sieve_length - 1) * len(valid_m))),
                 100 * s_t_unk_low / s_total_unknown,
                 100 * s_t_unk_hgh / s_total_unknown))
-            if tested and run_prp:
+            if tested and args.run_prp:
                 print("\t    prp tests {:<10d} (avg: {:.2f}) ({:.3f} tests/sec)".format(
                     s_total_prp_tests, s_total_prp_tests / tested, s_total_prp_tests / secs))
                 print("\t    fallback prev_gap {} ({:.1f}%), next_gap {} ({:.1f}%)".format(
@@ -414,115 +543,16 @@ def prime_gap_test(args):
             s_best_merit_interval_m = -1
 
     if args.plots or args.save_logs:
-        import numpy as np
-        import matplotlib.pyplot as plt
-        from scipy import stats
+        stats_plots(
+            args,
+            min_merit_gap,
 
-        if run_prp:
-            slope, _, R, _, _ = stats.linregress(s_expected_gap, s_experimental_gap)
-            print ("R^2 for expected gap: {:.3f}, corr: {:.3f}".format(R**2, slope))
-
-        # Set up subplots.
-        fig3 = plt.figure(constrained_layout=True, figsize=(8, 8))
-        gs = fig3.add_gridspec(3, 2)
-
-        # TODO plot number of PRP tests per M
-
-        for plot_i, (d, label, color) in enumerate([
-                (s_expected_prev, 'prev', 'lightskyblue'),
-                (s_expected_next, 'next', 'darksalmon'),
-                (s_expected_gap,  'expected', 'seagreen'),
-                (s_experimental_side, 'next/prev gap', 'sandybrown'),
-                (s_experimental_gap, 'gap', 'peru'),
-                (p_gap_merit, f'P(gap > min_merit({min_merit}))', 'dodgerblue'),
-        ]):
-            if not d: continue
-
-            if plot_i == 0: # Not called again on plot_i == 1
-                fig3.add_subplot(gs[0, 0])
-            elif plot_i == 2:
-                fig3.add_subplot(gs[1, 0])
-            elif plot_i == 3:
-                fig3.add_subplot(gs[0, 1])
-            elif plot_i == 4:
-                fig3.add_subplot(gs[1, 1])
-            elif plot_i == 5:
-                fig3.add_subplot(gs[2, 0])
-
-            hist_data = np.histogram(d, bins=100, density=True)
-            plt.scatter(hist_data[1][:-1], hist_data[0], color=color,
-                        marker='o' if plot_i in (3,4) else 'x', s=8)
-            max_y = hist_data[0].max()
-
-            if plot_i == 3:
-                trend, _ = np.polyfit([x for x in X for d in ['l','up']], d, 1)
-            else:
-                trend, _ = np.polyfit(X, d, 1)
-
-            assert trend < 2e-3, trend # Verify that expected value doesn't vary with M.
-            E = np.mean(d)
-
-            if plot_i != 5:
-                plt.axvline(x=E, ymax=1.0/1.2, color=color, label=f"E({label}) = {E:.0f}")
-                plt.legend(loc='upper right')
-            else:
-                plt.legend([label])
-
-            gap_span = np.linspace(0.95 * np.percentile(d, 1), 1.05 * np.percentile(d, 99), 400)
-            if plot_i == 5:
-                gap_span = np.linspace(0, max(d) * 1.1, 400)
-
-            if 'gap' not in label:
-                mu, std = stats.norm.fit(d)
-                p = stats.norm.pdf(gap_span, mu, std)
-                plt.plot(gap_span, p, color=color)
-
-            plt.xlim(np.percentile(d, 0.01), np.percentile(d, 99.9))
-            plt.ylim(2e-5, 1.2 * max_y)
-
-        for d, color in [
-                (p_gap_side, 'blueviolet'),
-                (p_gap_comb, 'seagreen'),
-        ]:
-            if color == 'blueviolet':
-                fig3.add_subplot(gs[0, 1])
-            else:
-                fig3.add_subplot(gs[1, 1])
-
-            d_x, d_w = zip(*sorted(d.items()))
-
-            plt.hist(d_x, weights=d_w, bins=100, density=True,
-                     label='Theoretical P(gap)', color=color, alpha=0.4)
-            plt.legend(loc='upper right')
-
-        # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
-        fig3.add_subplot(gs[2, 1])
-
-        items = sorted(
-            list(itertools.zip_longest(p_gap_merit, s_experimental_gap, fillvalue=0)),
-            reverse=True)
-        p_gap_merit_sorted, gap_real = zip(*items)
-
-        tests = list(range(1, len(p_gap_merit_sorted)+1))
-        # Theoretical
-        sum_p = np.cumsum(p_gap_merit_sorted)
-        large_gap = np.cumsum(np.array(gap_real) > min_merit_gap)
-
-        plt.plot(tests, sum_p, label="P(gap > min_merit)")
-        plt.plot(tests, large_gap, label="Count gap > min_merit")
-        plt.xlabel("tests")
-        plt.ylabel(f"Sum(P(gap > min_merit({min_merit})))")
-
-        # TODO(P(record))
-        # TODO(P(gap > X))
-
-        if args.save_logs:
-            plt.savefig(args.unknown_filename + ".png", dpi=1080//8)
-
-        if args.plots:
-            plt.show()
-
-        plt.close()
+            valid_m,
+            s_expected_gap,
+            s_expected_prev, s_expected_next,
+            s_experimental_gap, s_experimental_side,
+            p_gap_side, p_gap_comb, p_gap_merit
+        )
 
 
 if __name__ == "__main__":
