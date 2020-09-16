@@ -46,8 +46,8 @@ def get_arg_parser():
 
     parser.add_argument('--min-merit',    type=int, default=10,
         help="only display prime gaps with merit >= minmerit")
-    parser.add_argument('--sieve-only',  action='store_true',
-        help="only sieve ranges, don't run PRP. useful for benchmarking")
+    parser.add_argument('--run-prp',  action='store_true',
+        help="Run PRP, leave off to benchmarking and print some stats")
 
     parser.add_argument('--plots', action='store_true',
         help="Show plots about distributions")
@@ -180,7 +180,8 @@ def determine_next_prime_i(m, strn, K, composites, SL):
             next_p_i = i
             break
     else:
-        # Using fallback to slower gmp routine
+        # XXX: parse to version and verify > 6.2.99
+        assert gmpy2.mp_version() == 'GMP 6.2.99'
         next_p_i = int(gmpy2.next_prime(center + SL - 1) - center)
 
     return tests, next_p_i
@@ -222,8 +223,6 @@ def prime_gap_test(args):
 
     SL = sieve_length = args.sieve_length
     sieve_range = args.sieve_range
-
-    run_prp = not args.sieve_only
 
     min_merit = args.min_merit
 
@@ -336,7 +335,7 @@ def prime_gap_test(args):
             s_expected_gap.append(e_prev + e_next)
             p_gap_merit.append(p_merit)
 
-        if run_prp:
+        if args.run_prp:
 
             if m in existing:
                 prev_p_i, next_p_i = existing[m]
