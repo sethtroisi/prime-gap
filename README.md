@@ -278,7 +278,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 * gap\_test.py
   * [ ] Option to starting at m > mstart
   * [ ] Plot Prob(record)
-  * [ ] Plot P(gap > min\_merit) and P(record) sorted and unsorted.
   * [ ] Plot average tests count
   * [ ] Sort by expected gap and PRP only top X%
 * benchmarking
@@ -330,6 +329,7 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_test.py
+  * [x] Plot P(gap > min\_merit) and P(record) sorted and unsorted.
   * [x] Option to toggle between OpenPFGW and gmp (see note in benchmarking below)
   * [x] Store all results to sql
   * [x] Autoscale printing to every X seconds

@@ -81,9 +81,7 @@ def stats_plots(
 
     # Set up subplots.
     fig3 = plt.figure(constrained_layout=True, figsize=(8, 8))
-    gs = fig3.add_gridspec(3, 2)
-
-    # TODO plot number of PRP tests per M
+    gs = fig3.add_gridspec(6, 2)
 
     for plot_i, (d, label, color) in enumerate([
             (s_expected_prev, 'prev', 'lightskyblue'),
@@ -96,15 +94,15 @@ def stats_plots(
         if not d: continue
 
         if plot_i == 0: # Not called again on plot_i == 1
-            fig3.add_subplot(gs[0, 0])
+            fig3.add_subplot(gs[0:2, 0])
         elif plot_i == 2:
-            fig3.add_subplot(gs[1, 0])
+            fig3.add_subplot(gs[2:4, 0])
         elif plot_i == 3:
-            fig3.add_subplot(gs[0, 1])
+            fig3.add_subplot(gs[0:2, 1])
         elif plot_i == 4:
-            fig3.add_subplot(gs[1, 1])
+            fig3.add_subplot(gs[2:4, 1])
         elif plot_i == 5:
-            fig3.add_subplot(gs[2, 0])
+            fig3.add_subplot(gs[4:6, 0])
 
         hist_data = np.histogram(d, bins=100, density=True)
         plt.scatter(hist_data[1][:-1], hist_data[0], color=color,
@@ -146,9 +144,9 @@ def stats_plots(
             (p_gap_comb, 'seagreen'),
     ]:
         if color == 'blueviolet':
-            fig3.add_subplot(gs[0, 1])
+            fig3.add_subplot(gs[0:2, 1])
         else:
-            fig3.add_subplot(gs[1, 1])
+            fig3.add_subplot(gs[2:4, 1])
 
         d_x, d_w = zip(*sorted(d.items()))
 
@@ -156,26 +154,64 @@ def stats_plots(
                  label='Theoretical P(gap)', color=color, alpha=0.4)
         plt.legend(loc='upper right')
 
+    assert len(p_gap_merit) == len(s_experimental_gap)
+    zipped = list(itertools.zip_longest(p_gap_merit, s_experimental_gap))
+
     # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
-    fig3.add_subplot(gs[2, 1])
+    # sorted and unsorted order
+    fig3.add_subplot(gs[4:6, 1])
 
-    items = sorted(
-        list(itertools.zip_longest(p_gap_merit, s_experimental_gap, fillvalue=0)),
-        reverse=True)
-    p_gap_merit_sorted, gap_real = zip(*items)
+    p_gap_merit_sorted, _ = zip(*sorted(zipped, reverse=True))
+    p_gap_merit_ord, gap_real_ord = zip(*zipped)
 
-    tests = list(range(1, len(p_gap_merit_sorted)+1))
+    tests = list(range(1, len(p_gap_merit_ord)+1))
+
     # Theoretical
-    sum_p = np.cumsum(p_gap_merit_sorted)
-    large_gap = np.cumsum(np.array(gap_real) > min_merit_gap)
+    cumsum_p = np.cumsum(p_gap_merit_ord)
+    cumsum_p_sorted = np.cumsum(p_gap_merit_sorted)
 
-    plt.plot(tests, sum_p, label="P(gap > min_merit)")
-    plt.plot(tests, large_gap, label="Count gap > min_merit")
-    plt.xlabel("tests")
-    plt.ylabel(f"Sum(P(gap > min_merit({args.min_merit})))")
+    # Theoretical with restart
+    half, other = len(tests) // 2, len(tests) - len(tests) // 2
+    cumsum_p_sorted_restart = np.cumsum(
+        p_gap_merit_sorted[:len(tests)//2] + p_gap_merit_sorted[:other])
 
+    # Experimental
+    cumcount_large = np.cumsum(np.array(gap_real_ord) > min_merit_gap)
+
+    # Want this one below next graph
+    plt.plot(tests, cumsum_p_sorted_restart, label='P(gap > min_merit) (top 50% of two sieves)')
+    z = plt.plot(tests, cumsum_p_sorted, label='P(gap > min_merit) (sorting by best first)')
+    plt.plot(tests, cumsum_p, label='P(gap > min_merit)')
+    plt.plot(tests, cumcount_large, label='Count gap > min_merit')
+    plt.xlabel(" # of m's tests")
+    plt.ylabel(f'Sum(P(gap > min_merit)')
+
+    # Plot speedup at 50th percentile
+    mid_t = len(tests) // 2
+    cs_p = cumsum_p[mid_t]
+    cs_ps = cumsum_p_sorted[mid_t]
+    plt.plot([tests[mid_t], tests[mid_t]], [cs_p, cs_ps], c=z[0].get_color(),
+                label="+{:.1%} by sorting".format(
+                    cs_p, cs_ps, cs_ps / cs_p - 1))
+    plt.plot([tests[-1], tests[-1]], [cumsum_p[-1], cumsum_p_sorted_restart[-1]], c=z[0].get_color(),
+                label="+{:.1%} using top 50% & sorting".format(
+                    cumsum_p_sorted_restart[-1] / cumsum_p[-1] - 1))
+
+    plt.legend(loc='upper left')
+
+
+    # TODO plot number of PRP tests per M
     # TODO(P(record))
     # TODO(P(gap > X))
+
+    # Another plot needed is sieve_depth
+    # warm audiance up to time on Y axis with pause will sieving
+
+    # Another plot needed is
+    #   P(record gap) sorted vs unsorted
+    #   P(rg) sorted 50% then new gap
+
+
 
     if args.save_logs:
         plt.savefig(args.unknown_filename + ".png", dpi=1080//8)
@@ -185,7 +221,9 @@ def stats_plots(
 
     plt.close()
 
+
 #---- gap_testing ----#
+
 
 def load_existing(conn, args):
     # TODO to_process_range
