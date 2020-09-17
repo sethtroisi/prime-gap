@@ -13,40 +13,37 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/* Gap and Credit tables to match prime-gap-list */
-CREATE TABLE IF NOT EXISTS gaps(
-        gapsize INTEGER,
-        ismax BOOLEAN,
-        primecat TEXT,
-        isfirst TEXT,
-        primecert TEXT,
-        discoverer TEXT,
-        year INTEGER,
-        merit REAL,
-        primedigits INTEGER,
-        startprime BLOB
-);
-
-CREATE TABLE IF NOT EXISTS credits (
-        abbreviation TEXT,
-        name TEXT,
-        ack TEXT,
-        display TEXT
-);
+PRAGMA foreign_keys = ON;
 
 /* Used in various stages of gap_search / gap_test */
 
 /*
     Flow is:
-        Add to `to_process_range`
-            find high / low
-        Add to `partial_result`
-            find other
-        Add to `result`
+        ./gap_search -> <params>.txt
+        ./gap_stats
+                INSERT row into 'range'
+                INSERT range stats into 'range_stats'
+                INSERT stats per m into 'm_stats'
+                (if using -DSEARCH_MISSING_GAPS=1)
+                       stats per m into 'm_missing_stats'
+
+        [OPTIONAL]
+                ./missing_gap_test.py
+                        CHECK  'm_stats'
+                        INSERT 'm_missing_stats'
+                        UPDATE 'm_stats'
+                            Set next_p/prev_p (with negative to indicate bounds)
+                            Set counts on prp
+
+        ./gap_test
+                CHECK  'm_stats'
+                UPDATE 'm_stats'
+                INSERT into 'result'
 */
 
-CREATE TABLE IF NOT EXISTS to_process_range(
-        id      INTEGER PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS range(
+        /* range id */
+        rid      INTEGER PRIMARY KEY,
 
         m_start INTEGER,
         m_int   INTEGER,
@@ -56,76 +53,84 @@ CREATE TABLE IF NOT EXISTS to_process_range(
         sieve_length INTEGER,
         sieve_range INTEGER,
 
+        /* for prob_merit in m_stats */
+        min_merit INTEGER,
+
         /* rough integer of things left to process */
         num_to_processed INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS partial_result (
-        prid     INTEGER PRIMARY KEY,
-
-        m INTEGER,
-        P INTEGER,
-        D INTEGER,
-
-        /*
-          next_p_i, prev_p_i
-
-          next_prime_interval = next_p - center
-          prev_prime_interval = center - prev_p
-          gap = next_p - prev_p = next_prime_interval + prev_prime_interval
+CREATE TABLE IF NOT EXISTS range_stats (
+        /**
+         * Produced by gap_stats.py
+         *
+         * Should be Expected values over ALL m
          */
-        next_p_i INTEGER,
-        prev_p_i INTEGER,
 
-        next_expected INTEGER,
-        prev_expected INTEGER,
+        /* range id (foreign key) */
+        rid INTEGER REFERENCES range(rid) ON UPDATE CASCADE,
 
-        expected_merit REAL
+        /* map of <gap, prob> over all <low,high> pairs over all m's (in range) */
+        gap INTEGER,
+        prob FLOAT,
+
+        PRIMARY KEY (rid, gap)
 );
 
-CREATE TABLE IF NOT EXISTS missing_gap_result (
-        mgrid     INTEGER PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS m_stats (
+        rid INTEGER REFERENCES range(rid) ON UPDATE CASCADE,
 
         m INTEGER,
         P INTEGER,
         D INTEGER,
 
-        prob_missing_gap REAL,
+        /* next_p_interval, prev_p_interval (both positive) */
+        /**
+         * positive => distance to next/prev is X
+         * 0        => ???
+         * negative => X is prime but haven't checked all values less
+         */
+        next_p INTEGER,
+        prev_p INTEGER,
 
-        /*
-          Some fractions of unknown numbers were tested.
+        /* (next_p_i + prev_p_i) / log(N) */
+        merit REAL,
 
-          test_{next,prev}_p:
-              the first prime FOUND, it's possible maybe even likely that a
-              prime closer to N exists.
-              0 means none of next_p_test tests were prime.
-        */
-        test_prev_p INTEGER,
-        test_next_p INTEGER,
+        /* apriori probability of P(record gap), P(missing gap), P(merit > rid.min_merit) */
+        prob_record REAL,
+        prob_missing REAL,
+        prob_merit  REAL,
 
-        prev_p_tests INTEGER,
-        next_p_tests INTEGER
+        /* expected values useful for a number of printouts */
+        e_gap_next REAL,
+        e_gap_prev REAL,
+
+        /* updated during gap_test / missing_gap_test */
+        prp_next REAL,
+        prp_prev REAL,
+
+        test_time REAL,
+
+        PRIMARY KEY(rid, m)
 );
+
+CREATE TABLE IF NOT EXISTS m_missing_stats
+        AS SELECT * FROM m_stats WHERE 1 = 2;
 
 CREATE TABLE IF NOT EXISTS result (
-        rid     INTEGER PRIMARY KEY,
-
         m INTEGER,
         P INTEGER,
         D INTEGER,
 
-        /*
-          next_p_i, prev_p_i
-
-          next_prime_interval = next_p - center
-          prev_prime_interval = center - prev_p
-          gap = next_p - prev_p = next_prime_interval + prev_prime_interval
-         */
+        /* next_p_interval, prev_p_iinterval */
         next_p_i INTEGER,
         prev_p_i INTEGER,
-        merit REAL
+
+        merit REAL,
+
+        PRIMARY KEY(m, P, D)
 );
 
-CREATE INDEX IF NOT EXISTS  pres_m_p_d ON     partial_result(m,P,D);
-CREATE INDEX IF NOT EXISTS mgapr_m_p_d ON missing_gap_result(m,P,D);
-CREATE INDEX IF NOT EXISTS   res_m_p_d ON             result(m,P,D);
+CREATE INDEX IF NOT EXISTS    r_m_p_d ON             result(m,P,D);
+CREATE INDEX IF NOT EXISTS   ms_m_p_d ON            m_stats(m,P,D);
+CREATE INDEX IF NOT EXISTS  mms_m_p_d ON    m_missing_stats(m,P,D);

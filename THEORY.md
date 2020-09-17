@@ -5,6 +5,8 @@
     * [`--sieve_length`](#sieve_length)
     * [Skipped PRP Tests](#skipped-prp-tests)
   * [`gap_stats`](#gap_stats)
+  * [Out of order testing](#out-of-order-testing)
+
 
 # Theory
 
@@ -37,6 +39,7 @@ This section abbreviates gcd(a, b) = c as (a, b) = c
     * if `(i, K) > 1` advance to next (all `m * K + i` will be coprime)
     * All (m % D) have same count, so only consider m with (m, d) == 1
 
+
 ### Skipped PRP Tests
 
 Given `m * K` and a prime limit how many PRP tests to find the next/previous prime?
@@ -68,6 +71,7 @@ def ExpectedTests(test, m * K, old_limit, new_limit):
         # 1 / (prob_p * log(old_limit) * exp(GAMMA)) - 1 / (prob_p * log(new_limit) * exp(GAMMA)
         return 1 / (prob_p * math.exp(GAMMA)) * (1/math.log(old_limit) - 1/math.log(new_limit))
 ```
+
 
 #### Experimental evidence
 
@@ -108,10 +112,10 @@ $ time ./gap_search --unknown-filename 1_1009_210_2000_s7000_l4000M.txt --save-u
 Then testing each interval seperatly
 
 ```bash
-$ for fn in `ls -tr 1_1009*`; do echo -e "\n\nProcessing $fn"; /usr/bin/time -f "\nReal\t%E" ./gap_test --run-prp --unknown-filename "$fn" -qq; done
-
-
-
+for fn in `ls -tr 1_1009*`; do
+  echo -e "\n\nProcessing $fn";
+  /usr/bin/time -f "\nReal\t%E" ./gap_test --run-prp --unknown-filename "$fn" -qq;
+done
 ```
 
 Can compute how many real PRP tests were skipped by each increase in `--sieve-range`
@@ -123,7 +127,26 @@ Can compute how many real PRP tests were skipped by each increase in `--sieve-ra
 | 300M            | 24262      | 513             | 536                  |  4.5% |
 | 400M            | 23904      | 358             | 367                  |  2.5% |
 | 500M            | 23642      | 262             | 277                  |  5.7% |
-| 1000M = 1B      | 22856      | 786             | 823                  |  4.7% |
-| 2B              | 22050      | 806             | 770                  | -4.5% |
-| 3B              | 21645      | 405             | 427                  |  5.4% |
-| 4B              | 21388      | 257             | 294                  | 14.4% |
+| 1000M           | 22856      | 786             | 823                  |  4.7% |
+| 2000M           | 22050      | 806             | 770                  | -4.5% |
+| 3000M           | 21645      | 405             | 427                  |  5.4% |
+| 4000M           | 21388      | 257             | 294                  | 14.4% |
+
+
+## `gap_stats`
+
+TODO
+
+
+## Out of order testing
+
+Some thoughts:
+        Should store all primes into db? file?L
+        For slow tests I should store composites too
+
+        For in progress maybe store in db?
+                when would I come back and delete?
+
+        Maybe mark row with tested-all-prob-record-gaps
+                tested X pairs that could have been a record gap non were
+                but later which are record gaps could have changed

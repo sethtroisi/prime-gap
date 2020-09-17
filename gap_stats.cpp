@@ -160,7 +160,7 @@ uint64_t config_hash(const struct Config& config) {
 bool is_range_already_processed(const struct Config& config) {
     uint64_t hash = config_hash(config);
     char sql[200];
-    sprintf(sql, "SELECT count(*) FROM to_process_range WHERE id = %ld", hash);
+    sprintf(sql, "SELECT count(*) FROM range WHERE id = %ld", hash);
     char *zErrMsg = 0;
 
     sqlite3 *db = get_db(gaps_db);
@@ -174,7 +174,7 @@ bool is_range_already_processed(const struct Config& config) {
     sqlite3_close(db);
 
     if (rc != SQLITE_OK) {
-        printf("\nto_process_range SELECT failed %s | %d: %s\n",
+        printf("\nrange SELECT failed %s | %d: %s\n",
             zErrMsg, rc, sqlite3_errmsg(db));
         exit(1);
     }
@@ -270,7 +270,7 @@ void store_stats(
 
     uint64_t hash = config_hash(config);
     char sSQL[200];
-    sprintf(sSQL, "INSERT INTO to_process_range VALUES("
+    sprintf(sSQL, "INSERT INTO range VALUES("
                   "%ld, %ld, %ld, %d, %d, %d, %ld, %ld)",
             hash,
             config.mstart, config.minc,
@@ -280,7 +280,7 @@ void store_stats(
 
     rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
     if (rc != SQLITE_OK) {
-        printf("\nto_process_range INSERT failed %d: %s\n",
+        printf("\nrange INSERT failed %d: %s\n",
             rc, sqlite3_errmsg(db));
         exit(1);
     }
