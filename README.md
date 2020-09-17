@@ -11,6 +11,7 @@ A fast prime gap searching suite
     + [Gap Stats](#gap-stats)
     + [Gap Test](#gap-test)
     + [Benchmark](#benchmark)
+  * [Flow](#flow)
   * [Benchmarks](#benchmarks) | [BENCHMARKS.md](BENCHMARKS.md)
   * [Theory](#theory) | [THEORY.md](THEORY.md)
   * [Setup](#setup)
@@ -198,6 +199,26 @@ $ ./benchmark 100000 _all
 	|    40 x  100000 | modulo_search_euclid_all_large | 18       | 100021   | 0.0242  |     242 | 821.5       |
 ```
 
+## Flow
+
+1. `gap_search`
+   * Takes a set of parameters ([m\_start, m\_start + m\_inc), P#, d, sieve-length, sieve-range)
+   * Performs combined sieve algorithm
+   * Produces <PARAMS>.txt, list of all numbers near m * P#/d with no small factors.
+     * each row is `m: -count_low, +count_high | -18 -50 -80 -120 ... | +6 +10 +12 +24 ...`
+1. `gap_stats`
+   * Calculates some statistics over each range in the interval
+     * Expected gap in both directions
+     * Probability of being a record gap, of being a missing gap, of being gap > `--min-merit`
+   * Store statistics in `prime-gap-search.db`
+     * All compute prob(gap) over all m and save
+1. `gap_test` / `gap_test.py` / `missing_gap_test` --unknown-filename <PARAM>.txt
+   * Runs PRP tests on most likely m's from <PARAM>.txt
+     * Early quitting behavior stores `m_stats` table
+   * Stores results in `result` & `m_stats`
+   * `gap_test.py` can produce graphs of distribution
+
+
 ## Benchmarks
 
 See [BENCHMARKS.md](BENCHMARKS.md)
@@ -269,12 +290,18 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 
 * [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
 * [ ] Rename `gap_search` to `combined_sieve`
+* [ ] Find better name for `--sieve-length` / `--sieve-range`
 * gap\_utils.py
 * README.md
   * [ ] gap\_test.py vs gap\_test.cpp
 * gap\_search.cpp
   * [ ] Option to output m with gcd(m, d) != 1
-  * (Method2)
+* gap\_stats.cpp
+  * [ ] Tweak logging at different verbose levels
+  * [ ] Write relevant data to sqlite
+* gap\_test.cpp
+  * [ ] Read some data from sqlite
+  * [ ] Produce P(record) / hr (and upfront estimate)
 * gap\_test.py
   * [ ] Option to starting at m > mstart
   * [ ] Plot Prob(record)
@@ -282,14 +309,11 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [ ] Sort by expected gap and PRP only top X%
 * benchmarking
   * [ ] Add instructions to verify `modulo\_search` is >80% of the time.
-* gap\_stats.cpp
-  * [ ] Tweak logging at different verbose levels
-* prime-gap-search.db
-  * A plan for how to clean up [partially] finished ranges
 
 ### TODONE
 
 * README.md
+  * [x] Add Flow section based on comments in schema.sql
   * [x] Add commands for benchmarking
   * [x] Fill out gap test section
   * [x] Split out some benchmarking
@@ -350,6 +374,8 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [x] Add int64 `modulo_search_euclid_all`
   * [x] Add benchmarks for int32/int64 `modulo_search`
   * [x] Add benchmarks for `K % p`
+* prime-gap-search.db
+  * [x] A plan for how to clean up [partially] finished ranges
 * record\_check.py
   * [x] Read from sql db
 * double\_check.py
