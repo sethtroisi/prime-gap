@@ -1,6 +1,7 @@
 
 gap_search
 gap_stats
+gap_stats_missing
 gap_test
 benchmark
 *.o
