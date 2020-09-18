@@ -325,26 +325,6 @@ void store_stats(
 }
 
 
-void K_stats(
-        const struct Config& config,
-        const mpz_t &K, int *K_digits, float *K_log) {
-    *K_digits = mpz_sizeinbase(K, 10);
-
-    long exp;
-    double mantis = mpz_get_d_2exp(&exp, K);
-    *K_log = log(mantis) + log(2) * exp;
-
-    double m_log = log(config.mstart);
-    int K_bits   = mpz_sizeinbase(K, 2);
-
-    cout << endl;
-    printf("K = %d bits, %d digits, log(K) = %.2f\n",
-        K_bits, *K_digits, *K_log);
-    printf("Min Gap ~= %d (for merit > %.1f)\n\n",
-        (int) (config.min_merit * (*K_log + m_log)), config.min_merit);
-}
-
-
 /**
  * Precalculate and cache two calculations
  *
@@ -369,13 +349,90 @@ void prob_nth_prime(
 
 void prob_combined_gap(
         const double prob_prime,
-        size_t expected_unknown,
         vector<float>& prob_combined) {
     double prob = prob_prime * prob_prime;
     // Want error < 1e-9 | unknown_i * unkown_j * 1e-15 ~= 2000 * 2000 * 2.5e-6 = 1e-9
     for (; prob > 2.5e-16;) {
         prob_combined.push_back(prob);
         prob *= 1 - prob_prime;
+    }
+}
+
+
+void prob_extended_gap(
+        const struct Config& config,
+        const mpz_t &K,
+        const double PROB_PRIME,
+        const double PROB_GREATER_CUTOFF,
+        const double CUTOFF_CONTRIB,
+        vector<uint32_t>& poss_record_gaps,
+        vector<float>& prob_record_extended_gap) {
+
+    const unsigned int SL = config.sieve_length;
+
+    // Same as prob_prime_nth_sieve but not considering sieving (because outside of interval.
+    vector<float> prob_prime_nth;
+    vector<float> prob_great_nth;
+    prob_nth_prime(PROB_PRIME, prob_prime_nth, prob_great_nth);
+
+    //printf("number of tests for prob < %.2e, with sieve: %ld, without: %ld\n",
+    //    PROB_GREATER_CUTOFF,
+    //    prob_prime_nth_sieve.size(), prob_prime_nth.size());
+
+    // Count of numbers [SL, SL+j] < i coprime to D
+    // only (K, SL+i) == 1 can be prime
+    vector<bool>     is_coprime;
+    vector<uint32_t> count_coprime;
+    {
+        uint32_t count = 0;
+        // TODO: verify it doesn't make sense to check larger gaps.
+        for (size_t i = SL; i <= poss_record_gaps.back() ; i++) {
+            bool coprime = mpz_gcd_ui(NULL, K, i) == 1;
+            count += coprime;
+            is_coprime.push_back(coprime);
+            count_coprime.push_back(count);
+            if (prob_great_nth[count] < PROB_GREATER_CUTOFF) {
+                break;
+            }
+        }
+
+        if (config.verbose >= 2) {
+            printf("Considering SL + %ld (%d coprime) after record extended gap\n",
+                count_coprime.size(), count);
+            printf("\tUsing PROB_GREATER_CUTOFF %.2e * %.2e\n",
+                prob_great_nth[count], CUTOFF_CONTRIB);
+        }
+        assert( count <= prob_prime_nth.size() );
+    }
+
+    for (size_t gap_one = 1; gap_one <= SL; gap_one++) {
+        // only needed for values that can be coprime with K
+        if (mpz_gcd_ui(NULL, K, gap_one) > 1) {
+            prob_record_extended_gap[gap_one] = std::nan("");
+            continue;
+        }
+
+        double prob_record = 0;
+        for (uint32_t record_gap : poss_record_gaps ) {
+            uint32_t dist = record_gap - gap_one;
+            // TODO SL should be included in sieve_length in future.
+            if (dist < SL) continue;
+
+            uint32_t dist_after = dist - SL;
+            if (dist_after >= is_coprime.size()) break;
+
+            // dist can never be prime.
+            if (!is_coprime[dist_after]) continue;
+
+            // This is the nth possible prime after SL
+            uint32_t num_coprime = count_coprime[dist_after];
+
+            // chance of dist_after being first prime.
+            prob_record += prob_prime_nth[num_coprime];
+        }
+
+        // Prob record gap, with 1 <= gap_one <= SL, SL <= X
+        prob_record_extended_gap[gap_one] = prob_record;
     }
 }
 
@@ -652,7 +709,7 @@ void prime_gap_stats(const struct Config config) {
     std::ifstream unknown_file;
     {
         std::string fn = gen_unknown_fn(config, ".txt");
-        printf("\tReading from %s'\n", fn.c_str());
+        printf("\tReading from %s'\n\n", fn.c_str());
         unknown_file.open(fn, std::ios::in);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
         assert( unknown_file.good() );    // Can't open save_unknowns file
@@ -660,14 +717,17 @@ void prime_gap_stats(const struct Config config) {
 
     // ----- Merit Stuff
     mpz_t K;
-    mpz_init(K);
-    mpz_primorial_ui(K, P);
-    assert( 0 == mpz_tdiv_q_ui(K, K, D) );
-    assert( mpz_cmp_ui(K, 1) > 0); // K <= 1 ?!?
 
     int K_digits;
-    float K_log;
+    double K_log;
     K_stats(config, K, &K_digits, &K_log);
+
+    if (config.verbose >= 2) {
+        double m_log = log(config.mstart);
+        size_t min_gap = config.min_merit * (K_log + m_log);
+
+        printf("Min Gap ~= %ld (for merit > %.1f)\n\n", min_gap, config.min_merit);
+    }
 
     // ----- Get Record Prime Gaps
     vector<float> records = get_record_gaps();
@@ -715,7 +775,6 @@ void prime_gap_stats(const struct Config config) {
     const double UNKNOWNS_AFTER_SIEVE = 1 / (log(config.sieve_range) * exp(GAMMA));
     const double PROB_PRIME_AFTER_SIEVE = PROB_PRIME / UNKNOWNS_AFTER_SIEVE;
     {
-        cout << endl;
         printf("prob prime             : %.7f\n", PROB_PRIME);
         printf("prob prime after sieve : %.5f\n\n", PROB_PRIME_AFTER_SIEVE);
     }
@@ -728,25 +787,18 @@ void prime_gap_stats(const struct Config config) {
         prob_prime_nth_sieve, prob_great_nth_sieve);
 
 
-    size_t EXPECTED_UNKNOWN = UNKNOWNS_AFTER_SIEVE * SL;
-    assert(EXPECTED_UNKNOWN < prob_prime_nth_sieve.size());
     /* prob_combined_sieve[i+j] = prime * (1 - prime)^i * (1 - prime)^j * prime */
     vector<float> prob_combined_sieve;
     prob_combined_gap(
         PROB_PRIME_AFTER_SIEVE,
-        EXPECTED_UNKNOWN,
         prob_combined_sieve);
 
 
     // Prob record with gap[i] and other gap > SL
     vector<float> prob_record_extended_gap(SL+1, 0.0);
     {
-        // Same as above but not considering sieving done on the numbers.
-        vector<float> prob_prime_nth;
-        vector<float> prob_great_nth;
-        prob_nth_prime(PROB_PRIME, prob_prime_nth, prob_great_nth);
-        //printf("number of tests for prob < 1e-16, with sieve: %ld, without: %ld\n",
-        //    prob_prime_nth_sieve.size(), prob_prime_nth.size());
+        size_t EXPECTED_UNKNOWN = round(UNKNOWNS_AFTER_SIEVE * SL);
+        assert(EXPECTED_UNKNOWN < prob_prime_nth_sieve.size());
 
         /**
          * Doesn't need to be too large.
@@ -763,65 +815,15 @@ void prime_gap_stats(const struct Config config) {
          */
         const float PROB_GREATER_CUTOFF = 1e-10 / prob_great_nth_sieve[EXPECTED_UNKNOWN];
 
-        // Count of numbers [SL, SL+j] < i coprime to D
-        // only (K, SL+i) == 1 can be prime
-        vector<bool>     is_coprime;
-        vector<uint32_t> count_coprime;
-        {
-            uint32_t count = 0;
-            // TODO: verify it doesn't make sense to check larger gaps.
-            for (size_t i = SL; i <= poss_record_gaps.back() ; i++) {
-                bool coprime = mpz_gcd_ui(NULL, K, i) == 1;
-                count += coprime;
-                is_coprime.push_back(coprime);
-                count_coprime.push_back(count);
-                if (prob_great_nth[count] < PROB_GREATER_CUTOFF) {
-                    break;
-                }
-            }
-            printf("Considering SL + %ld (%d coprime) after record extended gap\n",
-                count_coprime.size(), count);
-            printf("\tUsing prob_greater_cutoff %.2e * %.2e\n",
-                prob_great_nth[count], prob_great_nth_sieve[EXPECTED_UNKNOWN]);
-            assert( count <= prob_prime_nth.size() );
-        }
-
         auto  s_start_t = high_resolution_clock::now();
 
-        // TODO: can this be used to turn the double for loop in run_gap_search into
-        //       two single for loops?
-
-        ///*
-        for (size_t gap_one = 1; gap_one <= SL; gap_one++) {
-            // only needed for values that can be coprime with K
-            if (mpz_gcd_ui(NULL, K, gap_one) > 1) {
-                prob_record_extended_gap[gap_one] = std::nan("");
-                continue;
-            }
-
-            double prob_record = 0;
-            for (uint32_t record_gap : poss_record_gaps ) {
-                uint32_t dist = record_gap - gap_one;
-                // TODO SL should be included in sieve_length in future.
-                if (dist < SL) continue;
-
-                uint32_t dist_after = dist - SL;
-                if (dist_after >= is_coprime.size()) break;
-
-                // dist can never be prime.
-                if (!is_coprime[dist_after]) continue;
-
-                // This is the nth possible prime after SL
-                uint32_t num_coprime = count_coprime[dist_after];
-
-                // chance of dist_after being first prime.
-                prob_record += prob_prime_nth[num_coprime];
-            }
-
-            // Prob record gap, with 1 <= gap_one <= SL, SL <= X
-            prob_record_extended_gap[gap_one] = prob_record;
-        }
-
+        prob_extended_gap(
+            config, K,
+            PROB_PRIME, PROB_GREATER_CUTOFF,
+            prob_great_nth_sieve[EXPECTED_UNKNOWN],
+            poss_record_gaps,
+            prob_record_extended_gap
+        );
 
         auto s_stop_t = high_resolution_clock::now();
         double   secs = duration<double>(s_stop_t - s_start_t).count();
