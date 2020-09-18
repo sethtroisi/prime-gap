@@ -5,6 +5,7 @@
     * [`--sieve_length`](#sieve_length)
     * [Skipped PRP Tests](#skipped-prp-tests)
   * [`gap_stats`](#gap_stats)
+  * [Choosing `--top-x-percent`](#choosing-top-x-percent)
   * [Out of order testing](#out-of-order-testing)
 
 
@@ -136,6 +137,36 @@ Can compute how many real PRP tests were skipped by each increase in `--sieve-ra
 ## `gap_stats`
 
 TODO
+
+
+## Choosing `--top-x-percent`
+
+Assumptions:
+
+* Assume that `gap_search` is linear (in practice it's faster than linear)
+* Assume that `gap_stats` is linear (it is)
+* Assume that `gap_test` is linear (it is)
+* `prob_record(m)` distribution is independant of m
+  * Technically not true because log(m) + log(K), but log(K) >> log(m) so true in practice
+
+Math:
+
+1. `gap_stats` gives us `prob_record(m)` for each m in M.
+  * `gap_test` Test records in decreasing order (most likely to be a record first)
+1. During `gap_test` keep `sum(prob_record(m))` for m's tested.
+  * `Derivative(sum(prob_record(m)), t) = prob_record(m) / time to test m`
+  * In english: Probability of finding a record given additional time spent
+1. When the derivative follows below the average value, it is more efficient to restart on a new interval.
+  * `prob_record(m) / test_time < (setup + sum_prob_record) / total_time`
+
+In Practice:
+
+1. Run `gap_sieve` for a small interval
+1. Have `gap_test` tell us reasonable `--top-x-percent`
+1. Determine how many tests we want to run
+1. Sieve `tests / --top-x-percent` m's.
+  * Maybe sieve 20% extra
+  * Always be experimenting with different values to find maximal prob/hr.
 
 
 ## Out of order testing

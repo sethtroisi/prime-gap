@@ -300,6 +300,7 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [ ] Tweak logging at different verbose levels
   * [ ] Write relevant data to sqlite
 * gap\_test.cpp
+  * [ ] `--top-x-percent` (see THEORY.md)
   * [ ] Read some data from sqlite
   * [ ] Produce P(record) / hr (and upfront estimate)
 * gap\_test.py
