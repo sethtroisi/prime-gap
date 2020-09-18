@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS range(
         rid      INTEGER PRIMARY KEY,
 
         m_start INTEGER,
-        m_int   INTEGER,
+        m_inc   INTEGER,
         P INTEGER,
         D INTEGER,
 

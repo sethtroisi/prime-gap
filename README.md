@@ -210,8 +210,8 @@ $ ./benchmark 100000 _all
    * Calculates some statistics over each range in the interval
      * Expected gap in both directions
      * Probability of being a record gap, of being a missing gap, of being gap > `--min-merit`
-   * Store statistics in `prime-gap-search.db`
-     * All compute prob(gap) over all m and save
+   * Store statistics in `m_stats` table
+   * Compute prob(gap) over all m and save in `range_stats` table
 1. `gap_test` / `gap_test.py` / `missing_gap_test` --unknown-filename <PARAM>.txt
    * Runs PRP tests on most likely m's from <PARAM>.txt
      * Early quitting behavior stores `m_stats` table

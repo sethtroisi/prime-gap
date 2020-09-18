@@ -68,6 +68,14 @@ const float MISSING_GAP_SAVE_PERCENT = 0.05;
 void prime_gap_stats(const struct Config config);
 bool is_range_already_processed(const struct Config& config);
 
+static double average_v(vector<float> &a) {
+    return std::accumulate(a.begin(), a.end(), 0.0) / a.size();
+}
+static double max_v(vector<float> &a) {
+    return *std::max_element(a.begin(), a.end());
+}
+
+
 
 int main(int argc, char* argv[]) {
 
@@ -209,8 +217,11 @@ void store_stats(
     const uint64_t rid = config_hash(config);
     const size_t num_rows = M_vals.size();
     char sSQL[200];
-    sprintf(sSQL, ("INSERT INTO range VALUES("
-                   "%ld,  %ld,%ld,  %d,%d,  %d,%ld,  %.3f,  %ld)"),
+    sprintf(sSQL, (
+        "INSERT INTO range(rid, m_start, m_inc, P, D,"
+                          "sieve_length, sieve_range,"
+                          "min_merit, num_to_processed)"
+         "VALUES(%ld,  %ld,%ld,  %d,%d,  %d,%ld,  %.3f,  %ld)"),
             rid,
             config.mstart, config.minc,
             config.p, config.d,
@@ -273,7 +284,7 @@ void store_stats(
         break;                                                              \
     }
 
-        BIND_OR_ERROR(sqlite3_bind_int, stmt, 1, rid);
+        BIND_OR_ERROR(sqlite3_bind_int64, stmt, 1, rid);
 
         // m, P, D
         BIND_OR_ERROR(sqlite3_bind_int, stmt, 2, m);
@@ -426,10 +437,13 @@ void run_gap_file(
         const vector<float>& prob_record_extended_gap,
         std::ifstream& unknown_file,
         vector<uint64_t>& M_vals,
+        /* TODO tuple<?>, pair<vector<float>, vector<float>>, ? */
         vector<float>& expected_prev,
         vector<float>& expected_next,
         vector<float>& probs_seen,
         vector<float>& probs_record,
+        vector<float>& probs_missing,
+        vector<float>& probs_highmerit,
         min_queue_gaps& missing_gaps_search) {
 
     auto  s_start_t = high_resolution_clock::now();
@@ -466,6 +480,20 @@ void run_gap_file(
         vector<uint32_t> unknown_low, unknown_high;
         read_unknown_line(mi, unknown_file, unknown_low, unknown_high);
 
+        #if SEARCH_MISSING_GAPS
+        if (config.verbose >= 2 && probs_seen.empty()) {
+            for (size_t i = 0; i < unknown_low[i]; i += 1) {
+                if (2 * unknown_low[i] > MISSING_GAPS_LOW) {
+                    printf("MISSING_GAP prob pair: ~~%.2e if both prime: ~~%.2e\n",
+                        prob_combined[2*i],
+                        prob_great_nth[2*i-2]);
+                    break;
+                }
+            }
+        }
+        #endif
+
+
         // Note slightly different from N_log
         float log_start_prime = K_log + log(m);
 
@@ -474,9 +502,7 @@ void run_gap_file(
                            (1 - prob_great_nth[unknown_low.size()]);
 
         double prob_record = 0;
-        #if SEARCH_MISSING_GAPS
         double prob_is_missing_gap = 0.0;
-        #endif
 
         vector<pair<uint32_t, uint32_t>> missing_pairs;
 
@@ -497,22 +523,19 @@ void run_gap_file(
                 uint32_t gap_high = unknown_high[j];
                 uint32_t gap = gap_low + gap_high;
 
-                // TODO: Determine overhead if this is turned off (make make this a compile time DEFINE?)
-                #if SEARCH_MISSING_GAPS
-                if (MAX_MISSING_GAPS > 0) {
-                    if (MISSING_GAPS_LOW <= gap && gap <= MISSING_GAPS_HIGH && records[gap] == GAP_INF) {
-                        // TODO log min/max i+j, print approx odds given BOTH PRIME
-
-                        // Same as  prob_prime_nth[i] * prob_prime_nth[j];
-                        prob_is_missing_gap += prob_combined[i+j];
-                        missing_pairs.emplace_back(std::make_pair(gap_low, gap_high));
-                    }
-                }
-                #endif
-
                 if (records[gap] > log_start_prime) {
                     assert(i + j < prob_combined.size());
+                    // Same as prob_prime_nth[i] * prob_prime_nth[j];
                     prob_record += prob_combined[i+j];
+
+                    if (MISSING_GAPS_LOW <= gap && gap <= MISSING_GAPS_HIGH && records[gap] == GAP_INF) {
+                        prob_is_missing_gap += prob_combined[i+j];
+
+                        #if SEARCH_MISSING_GAPS
+                        // ~10-30% overheard
+                        missing_pairs.emplace_back(std::make_pair(gap_low, gap_high));
+                        #endif
+                    }
                 }
             }
         }
@@ -543,7 +566,8 @@ void run_gap_file(
             }
         }
 
-        double p_record = prob_record + prob_record_outer;
+        // Combination of observed (0 < i, j < SL) + extended (i or j >= SL)
+        double prob_record_combined = prob_record + prob_record_outer;
 
         sum_prob_inner += prob_record;
         sum_prob_outer += prob_record_outer;
@@ -552,16 +576,17 @@ void run_gap_file(
         expected_prev.push_back(e_prev);
         expected_next.push_back(e_next);
         probs_seen.push_back(prob_seen);
-        probs_record.push_back(p_record);
+        probs_record.push_back(prob_record_combined);
+        probs_missing.push_back(prob_is_missing_gap);
 
-        if (p_record > max_p_record) {
-            max_p_record = p_record;
+        if (prob_record_combined > max_p_record) {
+            max_p_record = prob_record_combined;
             printf("RECORD :%-6ld line %-5ld  unknowns: %4ld, %4ld "
                    "| e: %.1f, %.1f\t| prob record: %.2e (%.2e + %.2e)\t| %.7f\n",
                 m, M_vals.size(),
                 unknown_low.size(), unknown_high.size(),
                 e_prev, e_next,
-                p_record, prob_record, prob_record_outer,
+                prob_record_combined, prob_record, prob_record_outer,
                 prob_seen);
         }
 
@@ -573,7 +598,7 @@ void run_gap_file(
                        "|\t\t\t| prob record: %.2e  missing: %.2e\t| %.7f\n",
                     m, M_vals.size(),
                     unknown_low.size(), unknown_high.size(),
-                    p_record, prob_is_missing_gap, prob_seen);
+                    prob_record_combined, prob_is_missing_gap, prob_seen);
             }
 
             // priority_queue has the smallest (least likely) record on top.
@@ -600,10 +625,11 @@ void run_gap_file(
     {
         cout << endl;
         printf("avg seen prob:   %.7f\n",
-            std::accumulate(probs_seen.begin(), probs_seen.end(), 0.0) / probs_seen.size());
+            average_v(probs_seen));
         printf("avg record prob: %.2e (max: %.3e)\n",
-            std::accumulate(probs_record.begin(), probs_record.end(), 0.0) / probs_record.size(),
-            *std::max_element(probs_record.begin(), probs_record.end()));
+            average_v(probs_record), max_v(probs_record));
+        printf("avg record missing: %.2e (max: %.3e)\n",
+            average_v(probs_missing), max_v(probs_missing));
         printf("prob record inner: %.5f   prob record extended: %.5f\n",
             sum_prob_inner, sum_prob_outer);
 
@@ -808,6 +834,8 @@ void prime_gap_stats(const struct Config config) {
     vector<float> expected_next;
     vector<float> probs_seen;
     vector<float> probs_record;
+    vector<float> probs_missing;
+    vector<float> probs_highmerit;
 
     // <prob, m, [<low, high>, <low, high>, ...]>
     min_queue_gaps missing_gaps_search;
@@ -826,7 +854,8 @@ void prime_gap_stats(const struct Config config) {
         unknown_file,
         M_vals,
         expected_prev, expected_next,
-        probs_seen, probs_record,
+        probs_seen,
+        probs_record, probs_missing, probs_highmerit,
         missing_gaps_search
     );
 
