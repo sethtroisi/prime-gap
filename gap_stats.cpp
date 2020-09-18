@@ -341,6 +341,11 @@ void store_stats(
         exit(1);
     }
 
+    if (config.verbose >= 0) {
+        printf("Saved %ld rows to 'm_stats' table\n",
+            num_rows);
+    }
+
     sqlite3_close(db);
 }
 
@@ -354,12 +359,14 @@ void store_stats(
  * Change that the first prime is past ith unknown
  * prod_great_nth[i] = (1 - prob_prime)^i
  */
+const double DOUBLE_NTH_PRIME_CUTOFF = 1e-13;
+
 void prob_nth_prime(
         const double prob_prime,
         vector<float>& prob_prime_nth,
         vector<float>& prob_great_nth) {
     double prob_still_prime = 1.0;
-    for (; prob_still_prime > 1e-13;) {
+    for (; prob_still_prime > DOUBLE_NTH_PRIME_CUTOFF;) {
         prob_prime_nth.push_back(prob_still_prime * prob_prime);
         prob_great_nth.push_back(prob_still_prime);
         prob_still_prime *= 1 - prob_prime;
@@ -390,10 +397,6 @@ void prob_extended_gap(
 
     const unsigned int SL = config.sieve_length;
 
-    // Same as prob_prime_nth_sieve but not considering sieving (because outside of interval.
-    vector<float> prob_prime_nth;
-    vector<float> prob_great_nth;
-
     // ----- Generate primes for P
     vector<uint32_t> K_primes = get_sieve_primes(config.p);
     assert( K_primes.back() == config.p);
@@ -406,11 +409,10 @@ void prob_extended_gap(
         }
     }
 
+    // Same as prob_prime_nth_sieve but not considering sieving (because outside of interval.
+    vector<float> prob_prime_nth;
+    vector<float> prob_great_nth;
     prob_nth_prime(prob_prime_coprime, prob_prime_nth, prob_great_nth);
-
-    //printf("number of tests for prob < %.2e, with sieve: %ld, without: %ld\n",
-    //    PROB_GREATER_CUTOFF,
-    //    prob_prime_nth_sieve.size(), prob_prime_nth.size());
 
     // Count of numbers [SL, SL+j] < i coprime to D
     // only (K, SL+i) == 1 can be prime
@@ -551,7 +553,7 @@ void run_gap_file(
     const uint32_t MAX_MISSING_GAPS = MISSING_GAP_SAVE_PERCENT == 0 ?
         0 : std::max(100, (int) (valid_m * MISSING_GAP_SAVE_PERCENT));
     if (config.verbose >= 0) {
-        printf("\n\tSaving %d best missing gap tests\n", MAX_MISSING_GAPS);
+        printf("\tSaving %d best missing gap tests\n", MAX_MISSING_GAPS);
     }
 
     float max_m_record = 0;
@@ -719,7 +721,7 @@ void run_gap_file(
         double   secs = duration<double>(s_stop_t - s_start_t).count();
         // Stats!
 
-        printf("\t%ld tests %.2f seconds (%.2f/sec)\n",
+        printf("\t%ld m's processed in %.2f seconds (%.2f/sec)\n",
             s_tests, secs, s_tests / secs);
     }
     if (config.verbose >= 2) {
@@ -752,7 +754,7 @@ void prime_gap_stats(const struct Config config) {
     {
         std::string fn = gen_unknown_fn(config, ".txt");
         if (config.verbose >= 0) {
-            printf("\tReading from %s'\n\n", fn.c_str());
+            printf("\nReading from %s'\n\n", fn.c_str());
         }
         unknown_file.open(fn, std::ios::in);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
@@ -824,7 +826,8 @@ void prime_gap_stats(const struct Config config) {
     vector<float> prob_prime_nth_sieve;
     // Prob < nth is not prime or conversely >= nth is prime.
     vector<float> prob_great_nth_sieve;
-    prob_nth_prime(PROB_PRIME_AFTER_SIEVE,
+    prob_nth_prime(
+        PROB_PRIME_AFTER_SIEVE,
         prob_prime_nth_sieve, prob_great_nth_sieve);
 
 
@@ -869,7 +872,7 @@ void prime_gap_stats(const struct Config config) {
         if (config.verbose >= 1) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
-            printf("Prob Records considered (%.2f seconds)\n", secs);
+            printf("Extended prob records considered (%.2f seconds)\n\n", secs);
         }
     }
     mpz_clear(K);
@@ -933,7 +936,7 @@ void prime_gap_stats(const struct Config config) {
             uint64_t m = std::get<1>(missing_search);
             if (i <= 10 || (i <= 100 && i % 10 == 0) ||
                     (i % 100 == 0) || (i == missing_sorted.size())) {
-                printf("MISSING TESTS %4ld:%-6ld => %.2e | pairs: %4ld\n",
+                printf("MISSING %4ld:%-6ld => %.2e | pairs: %4ld\n",
                     i, m, prob, std::get<2>(missing_search).size());
             }
 
