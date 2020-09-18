@@ -146,7 +146,7 @@ vector<float> get_record_gaps() {
 
 
 uint64_t config_hash(const struct Config& config) {
-    // Hash the config to a
+    // Hash the config to a uint64
     uint64_t hash =    config.mstart;
     hash = hash * 31 + config.minc;
     hash = hash * 31 + config.p;
@@ -160,7 +160,7 @@ uint64_t config_hash(const struct Config& config) {
 bool is_range_already_processed(const struct Config& config) {
     uint64_t hash = config_hash(config);
     char sql[200];
-    sprintf(sql, "SELECT count(*) FROM range WHERE id = %ld", hash);
+    sprintf(sql, "SELECT count(*) FROM range WHERE rid = %ld", hash);
     char *zErrMsg = 0;
 
     sqlite3 *db = get_db(gaps_db);
@@ -174,7 +174,7 @@ bool is_range_already_processed(const struct Config& config) {
     sqlite3_close(db);
 
     if (rc != SQLITE_OK) {
-        printf("\nrange SELECT failed %s | %d: %s\n",
+        printf("\nrange SELECT failed '%s' | %d: '%s'\n",
             zErrMsg, rc, sqlite3_errmsg(db));
         exit(1);
     }
@@ -198,59 +198,96 @@ void store_stats(
 
     sqlite3 *db = get_db(gaps_db);
 
+    assert( !is_range_already_processed(config) );
+
     char *zErrMsg = 0;
     if (sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &zErrMsg) != SQLITE_OK) {
         printf("BEGIN TRANSACTION failed: %s\n", zErrMsg);
         exit(1);
     }
 
-    /* Create SQL statement */
-    char sql[] = "INSERT INTO partial_result VALUES(NULL, ?, ?, ?, 0, 0, ?, ?, ?)";
+    const uint64_t rid = config_hash(config);
+    const size_t num_rows = M_vals.size();
+    char sSQL[200];
+    sprintf(sSQL, ("INSERT INTO range VALUES("
+                   "%ld,  %ld,%ld,  %d,%d,  %d,%ld,  %.3f,  %ld)"),
+            rid,
+            config.mstart, config.minc,
+            config.p, config.d,
+            config.sieve_length, config.sieve_range,
+            config.min_merit, num_rows);
 
-    sqlite3_stmt *stmt;
-    /* Prepare SQL statement */
-    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
+    int rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
     if (rc != SQLITE_OK) {
-        printf("Could not prepare statement: %s\n", sql);
+        printf("\nrange INSERT failed %d: %s\n",
+            rc, sqlite3_errmsg(db));
         exit(1);
     }
 
-    const size_t num_rows = M_vals.size();
+
+    /* Create SQL statement */
+    char insert_m_stats[] = (
+        "INSERT INTO m_stats"
+            "(rid, m, P, D, next_p, prev_p, merit,"
+            " prob_record, prob_missing, prob_merit,"
+            " e_gap_next, e_gap_prev,"
+            " prp_next, prp_prev, test_time)"
+        "VALUES"
+            "(?, ?, ?, ?, 0, 0, 0,"
+            " ?, ?, ?,"
+            " ?, ?,"
+            " 0, 0, 0)"
+    );
+
+    sqlite3_stmt *stmt;
+    /* Prepare SQL statement */
+    rc = sqlite3_prepare_v2(db, insert_m_stats, -1, &stmt, 0);
+    if (rc != SQLITE_OK) {
+        printf("Could not prepare statement: '%s'\n", insert_m_stats);
+        exit(1);
+    }
+
+    if (config.verbose >= 2) {
+        printf("\n");
+    }
+
     for (size_t i = 0; i < num_rows; i++) {
         uint64_t m = M_vals[i];
-        int e_next = expected_next[i];
-        int e_prev = expected_prev[i];
-        float e_merit = (e_next + e_prev) / (log(m) + K_log);
+
+        float e_next = expected_next[i];
+        float e_prev = expected_prev[i];
 
         size_t r = i + 1;
-        if ((r < 5) || (r < 500 && r % 100 == 0) || (r % 2000 == 0) || r == num_rows) {
-            printf("Row: %6ld/%ld %ld, %d, %d, %.2f\n",
-                r, num_rows,
-                m, e_next, e_prev, e_merit);
+        if (config.verbose >= 2 && (
+                (r <= 5) || (r < 500 && r % 100 == 0) ||
+                (r % 2000 == 0) || r == num_rows)) {
+            printf("Saving Row: %6ld/%ld %ld: %.1f, %.1f | %.1e\n",
+                r, num_rows, m,
+                e_next, e_prev, probs_record[i]);
         }
 
-        int binded = 0;
-        if (binded == 0 && sqlite3_bind_int(stmt, 1, m) != SQLITE_OK)
-                binded = 1;
 
-        if (binded == 0 && sqlite3_bind_int(stmt, 2, config.p) != SQLITE_OK)
-            binded = 2;
+#define BIND_OR_ERROR(func, stmt, index, value)                             \
+    if (func(stmt, index, value) != SQLITE_OK) {                            \
+        printf("Failed to bind param %d: %s\n", index, sqlite3_errmsg(db)); \
+        break;                                                              \
+    }
 
-        if (binded == 0 && sqlite3_bind_int(stmt, 3, config.d) != SQLITE_OK)
-            binded = 3;
+        BIND_OR_ERROR(sqlite3_bind_int, stmt, 1, rid);
 
-        if (binded == 0 && sqlite3_bind_int(stmt, 4, e_next) != SQLITE_OK)
-            binded = 4;
-        if (binded == 0 && sqlite3_bind_int(stmt, 5, e_prev) != SQLITE_OK)
-            binded = 5;
+        // m, P, D
+        BIND_OR_ERROR(sqlite3_bind_int, stmt, 2, m);
+        BIND_OR_ERROR(sqlite3_bind_int, stmt, 3, config.p);
+        BIND_OR_ERROR(sqlite3_bind_int, stmt, 4, config.d);
 
-        if (binded == 0 && sqlite3_bind_double(stmt, 6, e_merit) != SQLITE_OK)
-            binded = 6;
+        // prob_record, prob_missing, prob_merit
+        BIND_OR_ERROR(sqlite3_bind_double, stmt, 5, probs_record[i]);
+        BIND_OR_ERROR(sqlite3_bind_double, stmt, 6, probs_record[i]);
+        BIND_OR_ERROR(sqlite3_bind_double, stmt, 7, probs_record[i]);
 
-        if (binded != 0) {
-            printf("Failed to bind param %d: %s\n", binded, sqlite3_errmsg(db));
-            break;
-        }
+        // e_next, e_prev
+        BIND_OR_ERROR(sqlite3_bind_double, stmt, 8, e_next);
+        BIND_OR_ERROR(sqlite3_bind_double, stmt, 9, e_prev);
 
         int rc = sqlite3_step(stmt);
         if (rc != SQLITE_DONE) {
@@ -266,23 +303,6 @@ void store_stats(
         if (sqlite3_clear_bindings(stmt) != SQLITE_OK) {
             printf("Failed to clear bindings\n");
         }
-    }
-
-    uint64_t hash = config_hash(config);
-    char sSQL[200];
-    sprintf(sSQL, "INSERT INTO range VALUES("
-                  "%ld, %ld, %ld, %d, %d, %d, %ld, %ld)",
-            hash,
-            config.mstart, config.minc,
-            config.p, config.d,
-            config.sieve_length, config.sieve_range,
-            num_rows);
-
-    rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
-    if (rc != SQLITE_OK) {
-        printf("\nrange INSERT failed %d: %s\n",
-            rc, sqlite3_errmsg(db));
-        exit(1);
     }
 
     if (sqlite3_exec(db, "END TRANSACTION", NULL, NULL, &zErrMsg) != SQLITE_OK) {

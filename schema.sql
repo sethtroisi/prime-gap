@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS range(
         sieve_range INTEGER,
 
         /* for prob_merit in m_stats */
-        min_merit INTEGER,
+        min_merit DOUBLE,
 
         /* rough integer of things left to process */
         num_to_processed INTEGER
@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS range_stats (
          */
 
         /* range id (foreign key) */
-        rid INTEGER REFERENCES range(rid) ON UPDATE CASCADE,
+        rid INTEGER REFERENCES range(rid) ON UPDATE CASCADE ON DELETE CASCADE,
 
         /* map of <gap, prob> over all <low,high> pairs over all m's (in range) */
         gap INTEGER,
@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS range_stats (
 );
 
 CREATE TABLE IF NOT EXISTS m_stats (
-        rid INTEGER REFERENCES range(rid) ON UPDATE CASCADE,
+        rid INTEGER REFERENCES range(rid) ON UPDATE CASCADE ON DELETE CASCADE,
 
         m INTEGER,
         P INTEGER,
