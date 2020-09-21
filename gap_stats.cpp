@@ -213,6 +213,7 @@ bool is_range_already_processed(const struct Config& config) {
 void store_stats(
         const struct Config& config,
         float K_log,
+        vector<float>& prob_gap_norm,
         vector<uint64_t>& M_vals,
         vector<float>& expected_prev,
         vector<float>& expected_next,
@@ -255,8 +256,55 @@ void store_stats(
         exit(1);
     }
 
+#define BIND_OR_ERROR(func, stmt, index, value)                             \
+    if (func(stmt, index, value) != SQLITE_OK) {                            \
+        printf("Failed to bind param %d: %s\n", index, sqlite3_errmsg(db)); \
+        break;                                                              \
+    }
 
-    /* Create SQL statement */
+    /* Create SQL statement to INSERT into range_stats. */
+    char insert_range_stats[] = (
+        "INSERT INTO range_stats(rid, gap, prob) VALUES(?,?,?)"
+    );
+    sqlite3_stmt *insert_range_stmt;
+    /* Prepare SQL statement */
+    rc = sqlite3_prepare_v2(db, insert_range_stats, -1, &insert_range_stmt, 0);
+    if (rc != SQLITE_OK) {
+        printf("Could not prepare statement: '%s'\n", insert_range_stats);
+        exit(1);
+    }
+
+    for (size_t g = 2; g < prob_gap_norm.size(); g += 2) {
+        if (prob_gap_norm[g] < 1e-10) {
+            // XXX: Consider summing the misc prob at g=0.
+            continue;
+        }
+
+        BIND_OR_ERROR(sqlite3_bind_int64, insert_range_stmt, 1, rid);
+
+        BIND_OR_ERROR(sqlite3_bind_int,    insert_range_stmt, 2, g);
+        BIND_OR_ERROR(sqlite3_bind_double, insert_range_stmt, 3, prob_gap_norm[g]);
+
+        int rc = sqlite3_step(insert_range_stmt);
+        if (rc != SQLITE_DONE) {
+            // Allow BUSY with retry.
+            printf("\nCould not execute stmt (%ld): %d: %s\n", g, rc, sqlite3_errmsg(db));
+            break;
+        }
+
+        if (sqlite3_reset(insert_range_stmt) != SQLITE_OK) {
+            printf("Failed to reset statement\n");
+        }
+
+        if (sqlite3_clear_bindings(insert_range_stmt) != SQLITE_OK) {
+            printf("Failed to clear bindings\n");
+        }
+    }
+    if (config.verbose >= 0) {
+        printf("Saved %ld rows to 'gap_stats' table\n", prob_gap_norm.size());
+    }
+
+    /* Create SQL statement to INSERT into m_stats. */
     char insert_m_stats[] = (
         "INSERT INTO m_stats"
             "(rid, m, P, D, next_p, prev_p, merit,"
@@ -296,13 +344,6 @@ void store_stats(
                 r, num_rows, m,
                 e_next, e_prev, probs_record[i]);
         }
-
-
-#define BIND_OR_ERROR(func, stmt, index, value)                             \
-    if (func(stmt, index, value) != SQLITE_OK) {                            \
-        printf("Failed to bind param %d: %s\n", index, sqlite3_errmsg(db)); \
-        break;                                                              \
-    }
 
         BIND_OR_ERROR(sqlite3_bind_int64, stmt, 1, rid);
 
@@ -516,20 +557,19 @@ void read_unknown_line(
 }
 
 void run_gap_file(
+        /* input */
         const struct Config config,
+        const float K_log,
         const vector<float>& records,
-        const vector<uint32_t> poss_record_gaps,
-        const uint64_t M_start,
-        const uint64_t M_inc,
-        const uint64_t D,
-        float K_log,
+        const uint32_t min_record_gap,
         const vector<float>& prob_prime_nth,
         const vector<float>& prob_great_nth,
         const vector<float>& prob_combined,
         const vector<float>& prob_record_extended_gap,
         std::ifstream& unknown_file,
+        /* output */
+        vector<float>& prob_gap_norm,
         vector<uint64_t>& M_vals,
-        /* TODO tuple<?>, pair<vector<float>, vector<float>>, ? */
         vector<float>& expected_prev,
         vector<float>& expected_next,
         vector<float>& probs_seen,
@@ -540,18 +580,16 @@ void run_gap_file(
 
     auto  s_start_t = high_resolution_clock::now();
 
-    const uint32_t min_record_gap = poss_record_gaps.front();
-
-    size_t valid_m = 0;
-    for (uint64_t mi = 0; mi < M_inc; mi++) {
-        if (gcd(M_start + mi, D) == 1) {
-            valid_m += 1;
+    vector<uint32_t> valid_m;
+    for (uint64_t mi = 0; mi < config.minc; mi++) {
+        if (gcd(config.mstart + mi, config.d) == 1) {
+            valid_m.push_back(mi);
         }
     }
 
     #if SEARCH_MISSING_GAPS
     const uint32_t MAX_MISSING_GAPS = MISSING_GAP_SAVE_PERCENT == 0 ?
-        0 : std::max(100, (int) (valid_m * MISSING_GAP_SAVE_PERCENT));
+        0 : std::max(100, (int) (valid_m.size() * MISSING_GAP_SAVE_PERCENT));
     if (config.verbose >= 0) {
         printf("\tSaving %d best missing gap tests\n", MAX_MISSING_GAPS);
     }
@@ -559,17 +597,17 @@ void run_gap_file(
     float max_m_record = 0;
     #endif
 
+    prob_gap_norm.clear();
+    prob_gap_norm.resize(2*config.sieve_length-1, 0);
+
     // sum prob_record_inside sieve
     // sum prob_record_outer (extended)
     float sum_prob_inner = 0.0;
     float sum_prob_outer = 0.0;
 
     float max_p_record = 0;
-    for (uint64_t mi = 0; mi < M_inc; mi++) {
-        uint64_t m = M_start + mi;
-        if (gcd(m, D) != 1) {
-            continue;
-        }
+    for (uint32_t mi : valid_m) {
+        uint64_t m = config.mstart + mi;
 
         vector<uint32_t> unknown_low, unknown_high;
         read_unknown_line(mi, unknown_file, unknown_low, unknown_high);
@@ -602,10 +640,6 @@ void run_gap_file(
 
         vector<pair<uint32_t, uint32_t>> missing_pairs;
 
-        /**
-         * XXX: could possible look only at record_gaps
-         * replace 'records[gap] > log_start_prime' with 'gap == records_gap[gi]' or something
-         */
         size_t min_j = unknown_high.size() - 1;
         for (size_t i = 0; i < unknown_low.size(); i++) {
             uint32_t gap_low = unknown_low[i];
@@ -615,17 +649,22 @@ void run_gap_file(
 
             size_t max_j = std::min(unknown_high.size(), prob_combined.size() - i);
 
-            for (size_t j = min_j; j < max_j; j++) {
+            for (size_t j = 0; j < max_j; j++) {
                 uint32_t gap_high = unknown_high[j];
                 uint32_t gap = gap_low + gap_high;
 
-                if (records[gap] > log_start_prime) {
-                    assert(i + j < prob_combined.size());
+                float prob_this_gap = prob_combined[i + j];
+                prob_gap_norm[gap] += prob_this_gap;
+
+                if (j >= min_j && records[gap] > log_start_prime) {
+                    // assert(i + j < prob_combined.size());
                     // Same as prob_prime_nth[i] * prob_prime_nth[j];
-                    prob_record += prob_combined[i+j];
+
+                    prob_record += prob_this_gap;
+
 
                     if (MISSING_GAPS_LOW <= gap && gap <= MISSING_GAPS_HIGH && records[gap] == GAP_INF) {
-                        prob_is_missing_gap += prob_combined[i+j];
+                        prob_is_missing_gap += prob_this_gap;
 
                         #if SEARCH_MISSING_GAPS
                         // ~10-30% overheard
@@ -715,6 +754,11 @@ void run_gap_file(
         #endif
     }
 
+    // Normalize the probability of gap (across all m) to per m
+    for (size_t i = 0; i < prob_gap_norm.size(); i++) {
+        prob_gap_norm[i] /= valid_m.size();
+    }
+
     if (config.verbose >= 1) {
         long  s_tests = probs_seen.size();
         auto s_stop_t = high_resolution_clock::now();
@@ -726,24 +770,20 @@ void run_gap_file(
     }
     if (config.verbose >= 2) {
         cout << endl;
+        printf("prob record inside sieve: %.5f   prob outside: %.5f\n",
+            sum_prob_inner, sum_prob_outer);
+        printf("sum(prob gap): %.5f\n", average_v(prob_gap_norm) * prob_gap_norm.size());
         printf("avg seen prob:   %.7f\n",
             average_v(probs_seen));
         printf("avg record prob: %.2e (max: %.3e)\n",
             average_v(probs_record), max_v(probs_record));
         printf("avg record missing: %.2e (max: %.3e)\n",
             average_v(probs_missing), max_v(probs_missing));
-        printf("prob record inner: %.5f   prob record extended: %.5f\n",
-            sum_prob_inner, sum_prob_outer);
-
     }
 }
 
 
 void prime_gap_stats(const struct Config config) {
-    const uint64_t M_start = config.mstart;
-    const uint64_t M_inc = config.minc;
-    const uint64_t D = config.d;
-
     const unsigned int SIEVE_LENGTH = config.sieve_length;
     const unsigned int SL = SIEVE_LENGTH;
     assert( SL > 0 );
@@ -767,7 +807,7 @@ void prime_gap_stats(const struct Config config) {
     int K_digits;
     double K_log;
     K_stats(config, K, &K_digits, &K_log);
-    float N_log = K_log + log(M_start);
+    float N_log = K_log + log(config.mstart);
 
     if (config.verbose >= 2) {
         size_t min_gap = config.min_merit * N_log;
@@ -877,9 +917,14 @@ void prime_gap_stats(const struct Config config) {
     }
     mpz_clear(K);
 
+    /* Over all m values */
+    vector<float> prob_gap_norm;
+
+    /* Per m stats */
     vector<uint64_t> M_vals;
     vector<float> expected_prev;
     vector<float> expected_next;
+    /* Per m probabilities */
     vector<float> probs_seen;
     vector<float> probs_record;
     vector<float> probs_missing;
@@ -890,15 +935,16 @@ void prime_gap_stats(const struct Config config) {
 
     // ----- Main calculation
     run_gap_file(
-        config,
-        records,
-        poss_record_gaps,
-        M_start, M_inc, D,
-        K_log,
+        /* Input */
+        config, K_log,
+        records, poss_record_gaps.front(),
         prob_prime_nth_sieve, prob_great_nth_sieve,
         prob_combined_sieve,
         prob_record_extended_gap,
+        /* sieve input */
         unknown_file,
+        /* output */
+        prob_gap_norm,
         M_vals,
         expected_prev, expected_next,
         probs_seen,
@@ -919,8 +965,10 @@ void prime_gap_stats(const struct Config config) {
         for (auto missing_search : missing_sorted) {
             sum_missing_prob += std::get<0>(missing_search);
         }
-        printf("sum missing prob: %.6e (max: %.3e)\n\n",
-            sum_missing_prob, std::get<0>(missing_sorted.front()));
+        if (config.verbose >= 1) {
+            printf("sum missing prob: %.6e (max: %.3e)\n\n",
+                sum_missing_prob, std::get<0>(missing_sorted.front()));
+        }
 
         std::string missing_fn = gen_unknown_fn(config, ".missing.txt");
 
@@ -934,8 +982,9 @@ void prime_gap_stats(const struct Config config) {
 
             float prob = std::get<0>(missing_search);
             uint64_t m = std::get<1>(missing_search);
-            if (i <= 10 || (i <= 100 && i % 10 == 0) ||
-                    (i % 100 == 0) || (i == missing_sorted.size())) {
+            if ((config.verbose >= 2) && (
+                    (i <= 10 || (i <= 100 && i % 10 == 0) ||
+                                (i % 100 == 0) || (i == missing_sorted.size())))) {
                 printf("MISSING %4ld:%-6ld => %.2e | pairs: %4ld\n",
                     i, m, prob, std::get<2>(missing_search).size());
             }
@@ -948,13 +997,16 @@ void prime_gap_stats(const struct Config config) {
             missing_gap_file << endl;
         }
         missing_gap_file.close();
-        printf("\tSaved %ld missing-gaps tests to '%s'\n",
-            missing_sorted.size(), missing_fn.c_str());
+        if (config.verbose >= 0) {
+            printf("\tSaved %ld missing-gaps tests to '%s'\n",
+                missing_sorted.size(), missing_fn.c_str());
+        }
     }
 
     if (config.save_unknowns) {
         store_stats(
             config, K_log,
+            prob_gap_norm,
             M_vals,
             expected_prev, expected_next,
             probs_seen, probs_record
