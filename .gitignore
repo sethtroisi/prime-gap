@@ -1,4 +1,5 @@
 
+# Programs
 combined_sieve
 gap_stats
 gap_stats_missing
@@ -6,14 +7,8 @@ gap_test
 benchmark
 *.o
 
-pfgw
-pfgw64
-pfgw.ini
-pfgw.log
-pfgw-prime.log
-
+# data
 *.db
-
 data/
 *M.txt
 *M.m1.txt
@@ -22,4 +17,13 @@ data/
 *M.txt.png
 *M.txt.stats
 
+# PrimeForms
+pfgw
+pfgw64
+pfgw.ini
+pfgw.log
+pfgw-prime.log
+
+# Random
+__pycache__/
 .gdb_history
