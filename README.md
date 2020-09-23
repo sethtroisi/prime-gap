@@ -288,28 +288,40 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 ### TODO
 
 * [ ] Make =SL included in sieve (e.g. change \< SL to \<= SL)
+  * [ ] Verify endpoints explicitly in double\_check.py
 * [ ] Rename `gap_search` to `combined_sieve`
 * [ ] Find better name for `--sieve-length` / `--sieve-range`
-* gap\_utils.py
-  * [ ] Python version of `hash_config`?
+* [ ] avg record prob (quick test): changed by two orders of magnitude, why!
+* Flow
+  * [ ] `gap_stats_missing` always write to range?
+  * [ ] How to get sieve time into sql.range
+  * [ ] Fix `num_to_processed` name (maybe split into two fields)
+  * [ ] When does `num_processed`/`num_to_process` get updated
 * README.md
   * [ ] gap\_test.py vs gap\_test.cpp
+* gap\_utils.py
+  * [ ] Python version of `hash_config`?
 * gap\_search.cpp
   * [ ] Option to output m with gcd(m, d) != 1
 * gap\_stats.cpp
-  * [ ] Tweak logging at different verbose levels
-  * [ ] Write relevant data to sqlite
+  * [ ] Tweak logging at different verbose levels (TODO: done?)
+  * [ ] Write relevant data to sqlite (TODO: describe)
 * gap\_test.cpp
   * [ ] `--top-x-percent` (see THEORY.md)
-  * [ ] Read some data from sqlite
+  * [ ] Read some data from sqlite (TODO: describe)
   * [ ] Produce P(record) / hr (and upfront estimate)
 * gap\_test.py
   * [ ] Option to starting at m > mstart
   * [ ] Plot Prob(record)
   * [ ] Plot average tests count
   * [ ] Sort by expected gap and PRP only top X%
+* missing\_gap\_test.py
+  * [ ] Negatives for `m_missing_stats`
+  * [ ] also to `m_stats`
+* missing\_gap\_verify.py
+  * [ ] Update `m_missing_stat`
+    * [ ] Would be nice to have `gmpy2.prev_prime` so that next\_p / prev\_p are correct
 * schema.sql
-  * [ ] Fix `num_to_processed` name (maybe split into two fields)
   * [ ] `prp_next`, `prp_prev` should be INTEGER
 * benchmarking
   * [ ] Add instructions to verify `modulo\_search` is >80% of the time.
