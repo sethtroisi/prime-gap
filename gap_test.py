@@ -258,8 +258,8 @@ def prob_prime_sieve_length(M, D, prob_prime, K_digits, K_primes, SL, sieve_rang
         if D % prime != 0:
             prob_prime_coprime *= (1 - 1/prime)
 
-    count_coprime = SL-1
-    for i in range(1, SL):
+    count_coprime = SL
+    for i in range(1, SL+1):
         for prime in K_primes:
             if (i % prime) == 0 and (D % prime) != 0:
                 count_coprime -= 1
@@ -328,12 +328,15 @@ def calculate_expected_gaps(composites, SL, prob_prime_after_sieve, log_m,
             if prob_joint < 1e-8:
                 break
         else:
-            if -lower + SL >= min_merit_gap:
+            # gap = (K + SL+1) - (K - lower) = SL+1 - lower
+            if -lower + SL+1 > min_merit_gap:
                 p_merit += prob_i * prob_longer[len(composites[1])]
+
     for prob_j, upper in zip(probs, composites[1]):
-        if SL + upper > min_merit_gap:
+        if SL+1 + upper > min_merit_gap:
             p_merit += prob_j * prob_longer[len(composites[0])]
-    if 2*SL > min_merit_gap:
+
+    if 2*SL+1 > min_merit_gap:
         p_merit += prob_longer[len(composites[0])] * prob_longer[len(composites[1])]
 
     assert 0 <= p_merit <= 1.00, (p_merit, composites)
@@ -352,7 +355,8 @@ def determine_next_prime_i(m, strn, K, composites, SL):
     else:
         # XXX: parse to version and verify > 6.2.99
         assert gmpy2.mp_version() == 'GMP 6.2.99'
-        next_p_i = int(gmpy2.next_prime(center + SL - 1) - center)
+        # Double checks center + SL.
+        next_p_i = int(gmpy2.next_prime(center + SL) - center)
 
     return tests, next_p_i
 
@@ -368,6 +372,7 @@ def determine_prev_prime_i(m, strn, K, composites, SL, primes, remainder):
             prev_p_i = -i
             break
     else:
+        # Double checks center + SL.
         # Medium ugly fallback.
         for i in range(SL, 5*SL+1):
             composite = False
@@ -517,11 +522,11 @@ def prime_gap_test(args):
                 p_tests, prev_p_i = determine_prev_prime_i(m, strn, K, unknowns[0],
                                                          SL, primes, remainder)
                 s_total_prp_tests += p_tests
-                s_gap_out_of_sieve_prev += prev_p_i >= SL
+                s_gap_out_of_sieve_prev += prev_p_i > SL
 
                 n_tests, next_p_i = determine_next_prime_i(m, strn, K, unknowns[1], SL)
                 s_total_prp_tests += n_tests
-                s_gap_out_of_sieve_next += next_p_i >= SL
+                s_gap_out_of_sieve_next += next_p_i > SL
 
             assert prev_p_i > 0 and next_p_i > 0
             gap = int(next_p_i + prev_p_i)
@@ -568,7 +573,7 @@ def prime_gap_test(args):
                 tested, timing, secs))
             print("\t    unknowns  {:<10d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
                 s_total_unknown, s_total_unknown / len(valid_m),
-                100 * (1 - s_total_unknown / (2 * (sieve_length - 1) * len(valid_m))),
+                100 * (1 - s_total_unknown / ((2 * sieve_length + 1) * len(valid_m))),
                 100 * s_t_unk_low / s_total_unknown,
                 100 * s_t_unk_hgh / s_total_unknown))
             if tested and args.run_prp:

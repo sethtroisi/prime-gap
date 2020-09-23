@@ -154,7 +154,7 @@ uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
 
 
 /**
- * find (base_r * (M + mi) + (SL - 1) <= 2 * SL - 2
+ * find (base_r * (M + mi) + SL) <= 2 * SL
  * Skips solutions where gcd((M + mi), D) > 1
  * returns:
  *      0 <= mi < max_m (valid solution)
@@ -165,13 +165,13 @@ uint64_t modulo_search_euclid_gcd2(
         uint64_t prime, uint64_t base_r) {
 
     // TODO validate no overflow
-    uint32_t S = (SL - 1) << 1; // 2 * SL - 2
-    uint64_t modulo = (base_r * M + SL - 1) % prime;
+    uint64_t modulo = (base_r * M + SL) % prime;
     uint64_t init = modulo;
+    uint32_t two_SL = SL << 1;
 
     uint64_t mi = 0;
     while (true) {
-        if ( modulo <= S ) {
+        if ( modulo <= two_SL ) {
             if (gcd(D, (M + mi) % D) > 1) {
                 mi += 1;
                 if (mi >= max_m)
@@ -186,7 +186,7 @@ uint64_t modulo_search_euclid_gcd2(
 
         //assert( 0 <= modulo && modulo < prime );
         uint64_t low  = prime - modulo;
-        uint64_t high = low + S;
+        uint64_t high = low + two_SL;
         //assert( 0 <= low && high < prime );
 
         mi += modulo_search_euclid(prime, base_r, low, high);
@@ -206,7 +206,7 @@ uint64_t modulo_search_euclid_gcd2(
         uint64_t mult = base_r * mi + init;
         modulo = mult % prime;
 
-//        assert( (modulo < SL) || (modulo + SL) > prime );
+//        assert( (modulo <= SL) || (modulo + SL) >= prime );
     }
     return max_m;
 }
@@ -220,7 +220,7 @@ uint64_t modulo_search_euclid_gcd(
     // TODO validate no overflow
     uint64_t modulo = (base_r * M) % prime;
     while (mi < max_m) {
-        if ( (modulo < SL) || (modulo + SL) > prime) {
+        if ( (modulo <= SL) || (modulo + SL) >= prime) {
             if (gcd(M + mi, D) > 1) {
                 mi += 1;
                 modulo += base_r;
@@ -230,10 +230,10 @@ uint64_t modulo_search_euclid_gcd(
             return mi;
         }
 
-        uint64_t shift = modulo + (SL - 1);
+        uint64_t shift = modulo + SL;
         assert( 0 <= shift && shift < prime );
         uint64_t low  = (prime - shift);
-        uint64_t high = low + (2*SL-2);
+        uint64_t high = low + 2*SL;
         assert( 0 <= low && high < prime );
 
         uint64_t mi2 = modulo_search_euclid(prime, base_r, low, high);
@@ -242,7 +242,7 @@ uint64_t modulo_search_euclid_gcd(
         __int128 mult = (__int128) base_r * (M + mi);
         modulo = mult % prime;
 
-        assert( (modulo < SL) || (modulo + SL) > prime );
+        assert( (modulo <= SL) || (modulo + SL) >= prime );
     }
     return max_m;
 }
@@ -255,14 +255,13 @@ void modulo_search_euclid_all_small(
 
     // (M + max_m) * p fits in uint64 (see gap_common.cpp)
 
-    uint32_t S = (SL - 1) << 1;  // 2 * SL - 2
-
     uint64_t mi = 0; // mi can be incremented by value up to prime.
-    uint64_t modulo = (base_r * M + SL - 1) % prime;
+    uint64_t modulo = (base_r * M + SL) % prime;
     uint64_t init = modulo;
+    uint32_t two_SL = SL << 1;
 
     while (true) {
-        if ( modulo <= S ) {
+        if ( modulo <= two_SL ) {
             if (mi >= max_m) return;
 
             lambda(mi);
@@ -277,7 +276,7 @@ void modulo_search_euclid_all_small(
 
         /* using gcd2 optimizations */
         uint64_t low  = prime - modulo;
-        uint64_t high = low + S;
+        uint64_t high = low + two_SL;
 
         mi += modulo_search_euclid(prime, base_r, low, high);
         if (mi >= max_m) return;
@@ -285,7 +284,7 @@ void modulo_search_euclid_all_small(
         uint64_t mult = base_r * mi + init;
         modulo = mult % prime;
 
-        assert( modulo <= S );
+        assert( modulo <= two_SL );
     }
 }
 
@@ -298,7 +297,7 @@ void modulo_search_euclid_all_large(
     uint64_t mi = 0;
     uint64_t modulo = (base_r * M) % prime;
     while (true) {
-        if ( (modulo < SL) || (modulo + SL) > prime) {
+        if ( (modulo <= SL) || (modulo + SL) >= prime) {
             if (mi >= max_m)
                 return;
 
@@ -313,10 +312,10 @@ void modulo_search_euclid_all_large(
             continue;
         }
 
-        uint64_t shift = modulo + (SL - 1);
+        uint64_t shift = modulo + SL;
         assert( 0 <= shift && shift < prime );
         uint64_t low  = (prime - shift);
-        uint64_t high = low + (2*SL-2);
+        uint64_t high = low + 2 * SL;
         assert( 0 <= low && high < prime );
 
         mi += modulo_search_euclid(prime, base_r, low, high);
@@ -327,7 +326,7 @@ void modulo_search_euclid_all_large(
         __int128 mult = (__int128) base_r * (M + mi);
         modulo = mult % prime;
 
-        assert( (modulo < SL) || (modulo + SL) > prime );
+        assert( (modulo <= SL) || (modulo + SL) >= prime );
     }
 }
 

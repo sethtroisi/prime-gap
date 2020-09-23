@@ -117,8 +117,8 @@ double prop_gap_larger(
         }
     }
 
-    *count_coprime = config.sieve_length-1;
-    for (size_t i = 1; i < config.sieve_length; i++) {
+    *count_coprime = config.sieve_length;
+    for (size_t i = 1; i <= config.sieve_length; i++) {
         for (uint32_t prime : P_primes) {
             if (prime > config.p) break;
             if ((i % prime) == 0 && (config.d % prime) != 0) {

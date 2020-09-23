@@ -491,8 +491,7 @@ void prob_extended_gap(
         double prob_record = 0;
         for (uint32_t record_gap : poss_record_gaps ) {
             uint32_t dist = record_gap - gap_one;
-            // TODO SL should be included in sieve_length in future.
-            if (dist < SL) continue;
+            if (dist <= SL) continue;
 
             uint32_t dist_after = dist - SL;
             if (dist_after >= is_coprime.size()) break;
@@ -598,7 +597,7 @@ void run_gap_file(
     #endif
 
     prob_gap_norm.clear();
-    prob_gap_norm.resize(2*config.sieve_length-1, 0);
+    prob_gap_norm.resize(2*config.sieve_length+1, 0);
 
     // sum prob_record_inside sieve
     // sum prob_record_outer (extended)
@@ -701,7 +700,7 @@ void run_gap_file(
             }
         }
 
-        // Combination of observed (0 < i, j < SL) + extended (i or j >= SL)
+        // Combination of observed (0 < i, j <= SL) + extended (i or j > SL)
         double prob_record_combined = prob_record + prob_record_outer;
 
         sum_prob_inner += prob_record;
@@ -786,8 +785,7 @@ void run_gap_file(
 void prime_gap_stats(const struct Config config) {
     const unsigned int SIEVE_LENGTH = config.sieve_length;
     const unsigned int SL = SIEVE_LENGTH;
-    assert( SL > 0 );
-
+    assert( SL > 1000 );
 
     // ----- Read from unknown file
     std::ifstream unknown_file;

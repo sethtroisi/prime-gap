@@ -388,7 +388,7 @@ void prime_gap_search(const struct Config config) {
                 return true;
             }
 
-            expected_large_primes += (2.0 * SL - 1) / prime;
+            expected_large_primes += (2.0 * SL + 1) / prime;
 
             // solve base_r * (M + mi) + (SL - 1)) % prime < 2 * SL
             //   0 <= (base_r * M + SL - 1) + base_r * mi < 2 * SL mod prime
@@ -407,8 +407,8 @@ void prime_gap_search(const struct Config config) {
             assert (mi < M_inc);
 
             // (M_start + mi) * last_prime < int64 (checked in argparse)
-            uint64_t first = (base_r * (M_start + mi) + (SL-1)) % prime;
-            assert( first < (2*SL-1) );
+            uint64_t first = (base_r * (M_start + mi) + SL) % prime;
+            assert( first <= 2*SL );
 
             //assert ( gcd(M + mi, D) == 1 );
 
@@ -439,7 +439,7 @@ void prime_gap_search(const struct Config config) {
                 100 - (100.0 * pr_pi / (pi - SIEVE_SMALL_PRIME_PI)));
             printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
                 expected_large_primes,
-                (2 * SL - 1) * (log(log(SIEVE_RANGE)) - log(log(SIEVE_SMALL_METHOD1))));
+                (2 * SL + 1) * (log(log(SIEVE_RANGE)) - log(log(SIEVE_SMALL_METHOD1))));
             setlocale(LC_NUMERIC, "C");
         }
     }
@@ -463,11 +463,11 @@ void prime_gap_search(const struct Config config) {
     // ----- Main sieve loop.
 
     vector<char> composite[2] = {
-        vector<char>(SIEVE_LENGTH, 0),
-        vector<char>(SIEVE_LENGTH, 0)
+        vector<char>(SIEVE_LENGTH+1, 0),
+        vector<char>(SIEVE_LENGTH+1, 0)
     };
-    assert( composite[0].size() == SIEVE_LENGTH );
-    assert( composite[1].size() == SIEVE_LENGTH );
+    assert( composite[0].size() == SIEVE_LENGTH+1 );
+    assert( composite[1].size() == SIEVE_LENGTH+1 );
 
     // Used for various stats
     long  s_tests = 0;
@@ -490,8 +490,8 @@ void prime_gap_search(const struct Config config) {
         }
 
         // Reset sieve array to unknown.
-        std::fill_n(composite[0].begin(), SIEVE_LENGTH, 0);
-        std::fill_n(composite[1].begin(), SIEVE_LENGTH, 0);
+        std::fill_n(composite[0].begin(), SIEVE_LENGTH+1, 0);
+        std::fill_n(composite[1].begin(), SIEVE_LENGTH+1, 0);
         // center is always composite.
         composite[0][0] = composite[1][0] = 1;
 
@@ -501,13 +501,13 @@ void prime_gap_search(const struct Config config) {
             //            const auto& [prime, remainder] = prime_and_remainder[pi];
             //            const uint64_t modulo = (remainder * m) % prime;
 
-            for (size_t d = modulo; d < SIEVE_LENGTH; d += pr.first) {
+            for (size_t d = modulo; d <= SIEVE_LENGTH; d += pr.first) {
                 composite[0][d] = true;
             }
 
             // Not technically correct but fine to skip modulo == 0
             int first_negative = pr.first - modulo;
-            for (size_t d = first_negative; d < SIEVE_LENGTH; d += pr.first) {
+            for (size_t d = first_negative; d <= SIEVE_LENGTH; d += pr.first) {
                 composite[1][d] = true;
             }
         }
@@ -532,13 +532,13 @@ void prime_gap_search(const struct Config config) {
                 assert(modulo == mpz_fdiv_ui(test, prime));
             }
 
-            if (modulo < SIEVE_LENGTH) {
+            if (modulo <= SIEVE_LENGTH) {
                 // Just past a multiple
                 composite[0][modulo] = true;
             } else {
                 // Don't have to deal with 0 case anymore.
                 int64_t first_positive = prime - modulo;
-                assert(first_positive < SIEVE_LENGTH); // Bad next m!
+                assert(first_positive <= SIEVE_LENGTH);  // Bad next m!
                 // Just before a multiple
                 composite[1][first_positive] = true;
             }
@@ -551,8 +551,8 @@ void prime_gap_search(const struct Config config) {
                 if (next_mi == M_inc) continue;
 
                 // (M_start + mi) * prime < int64 (checked in argparse)
-                uint64_t mult = (remainder * (M_start + next_mi) + (SL - 1)) % prime;
-                assert(mult < (2 * SL - 1));
+                uint64_t mult = (remainder * (M_start + next_mi) + SL) % prime;
+                assert(mult < (2 * SL + 1));
 
                 //assert ( gcd(M_start + next_mi, D) == 1 );
 
@@ -580,7 +580,7 @@ void prime_gap_search(const struct Config config) {
             for (int d = 0; d <= 1; d++) {
                 char prefix = "-+"[d];
 
-                for (size_t i = 1; i < SL; i++) {
+                for (size_t i = 1; i <= SL; i++) {
                     if (!composite[d][i]) {
                         unknown_file << " " << prefix << i;
                     }
@@ -610,7 +610,7 @@ void prime_gap_search(const struct Config config) {
                         s_tests, s_tests / secs, t_secs / s_tests, secs);
                 printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
                         s_total_unknown, s_total_unknown / ((double) s_tests),
-                        100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
+                        100.0 * (1 - s_total_unknown / ((2.0 * SIEVE_LENGTH + 1) * s_tests)),
                         100.0 * s_t_unk_low / s_total_unknown,
                         100.0 * s_t_unk_hgh / s_total_unknown);
                 printf("\t    large prime remaining: %d (avg/test: %ld)\n",
@@ -664,22 +664,29 @@ void save_unknowns_method2(
 
         const auto& comp = composite[mii];
 
-        const size_t size_side = count_coprime_sieve / 2 + 1;
-        size_t unknown_l = std::count(comp.begin(), comp.begin() + size_side, false);
-        size_t unknown_u = std::count(comp.begin() + size_side, comp.end(), false);
+        // composite[0] isn't a real entry.
+        const size_t size_side = count_coprime_sieve / 2;
+        auto real_begin = comp.begin() + 1;
+        size_t unknown_l = std::count(real_begin, real_begin + size_side, false);
+        size_t unknown_u = std::count(real_begin + size_side, comp.end(), false);
 
         unknown_file << mi << " : -" << unknown_l << " +" << unknown_u << " |";
         for (int d = 0; d <= 1; d++) {
             char prefix = "-+"[d];
+            size_t found = 0;
 
-            for (size_t i = 1; i < SL; i++) {
-                int a = (SL-1) + (2*d - 1) * i;
+            for (size_t i = 1; i <= SL; i++) {
+                int a = SL + (2*d - 1) * i;
                 if (!comp[i_reindex[a]]) {
                     unknown_file << " " << prefix << i;
+                    found += 1;
                 }
             }
             if (d == 0) {
                 unknown_file << " |";
+                assert( found == unknown_l );
+            } else {
+                assert( found == unknown_u );
             }
         }
         unknown_file << "\n";
@@ -740,7 +747,8 @@ void prime_gap_parallel(struct Config config) {
     }
 
     // ----- Allocate memory
-    uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH - 1;
+    // SIEVE_INTERVAL includes endpoints [-SL ... K ... SL]
+    uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
 
     vector<int32_t> valid_mi;
     vector<int32_t> m_reindex(M_inc, -1);
@@ -757,20 +765,30 @@ void prime_gap_parallel(struct Config config) {
     assert(valid_ms == valid_mi.size());
 
     // which [i] are coprime to K
-    vector<char> coprime_composite(SIEVE_INTERVAL, 1);
+    vector<char> coprime_composite(SIEVE_INTERVAL+1, 1);
     // reindex composite[m][i]
-    vector<uint32_t> i_reindex(SIEVE_INTERVAL, 0);
+    vector<uint32_t> i_reindex(SIEVE_INTERVAL+1, 0);
     {
-        coprime_composite[0] = 0;
         for (uint32_t prime : P_primes) {
             if (D % prime != 0) {
-                int first = (SIEVE_LENGTH-1) % prime;
-                assert ( ((SIEVE_LENGTH-1) - first) % prime == 0 );
-                for (size_t d = first; d < SIEVE_INTERVAL; d += prime) {
+                uint32_t first = SIEVE_LENGTH % prime;
+                if (GMP_VALIDATE_FACTORS) {
+                    mpz_set(test, K);
+                    mpz_sub_ui(test, test, SIEVE_LENGTH);
+                    mpz_add_ui(test, test, first);
+                    assert( 0 == mpz_fdiv_ui(test, prime) );
+                }
+
+                assert( 0 <= first && first < prime );
+                assert( (SIEVE_LENGTH - first) % prime == 0 );
+
+                for (size_t d = first; d <= SIEVE_INTERVAL; d += prime) {
                     coprime_composite[d] = 0;
                 }
             }
         }
+        // Center should be marked composite by every prime.
+        assert(coprime_composite[SL] == 0);
 
         size_t count = 1;
         for (size_t i = 0; i < SIEVE_INTERVAL; i++) {
@@ -780,13 +798,14 @@ void prime_gap_parallel(struct Config config) {
         }
     }
     const size_t count_coprime_sieve = *std::max_element(i_reindex.begin(), i_reindex.end());
+    assert( count_coprime_sieve % 2 == 0 );
 
     // Rough math is MULT  vs  log2(MULT) * (M_inc/valid_ms)
     const float SMALL_MULT = std::max(8.0, log(8) * M_inc / valid_ms);
     const uint64_t SMALL_THRESHOLD = SMALL_MULT * 2 * SIEVE_LENGTH;
 
     // SMALL_THRESHOLD mult deal with all primes that can mark off two items in SIEVE_LENGTH.
-    assert( SMALL_THRESHOLD > 2 * SIEVE_LENGTH );
+    assert( SMALL_THRESHOLD > (2 * SIEVE_LENGTH + 1)  );
 
     if (config.verbose >= 1) {
         setlocale(LC_NUMERIC, "");
@@ -799,8 +818,8 @@ void prime_gap_parallel(struct Config config) {
 
     /**
      * Much space is saved via a reindexing scheme
-     * composite[mi][x] (0 <= mi < M_inc, -SL < x < SL) is reindexed to
-     *      composite[m_reindex[mi]][i_reindex[x]]
+     * composite[mi][x] (0 <= mi < M_inc, -SL <= x <= SL) is reindexed to
+     *      composite[m_reindex[mi]][i_reindex[SL + x]]
      * m_reindex[mi] with (D, M + mi) > 0 are mapped to -1 (and must be handled by code)
      * i_reindex[x]  with (K, x) > 0 are mapped to 0 (and that bit is ignored)
      */
@@ -860,19 +879,23 @@ void prime_gap_parallel(struct Config config) {
                 uint64_t m = M_start + mi;
                 uint64_t modulo = (base_r * m) % prime;
 
-                uint32_t flip = modulo + prime - (SIEVE_LENGTH % prime);
+                // flip = (m * K - SL) % prime
+                uint32_t flip = modulo + prime - ((SIEVE_LENGTH+1) % prime);
                 if (flip >= prime) flip -= prime;
+
                 uint32_t first = prime - flip - 1;
+                assert( first < prime );
 
                 uint32_t shift = prime;
                 if (prime > 2) {
-                    bool lowIsEven = ((D & 1) || ((m & 1) == 0)) == (SIEVE_LENGTH & 1);
+                    bool centerOdd = ((D & 1) == 0) && (m & 1);
+                    bool lowIsEven = centerOdd == (SIEVE_LENGTH & 1);
                     bool evenFromLow = (first & 1) == 0;
                     bool firstIsEven = lowIsEven == evenFromLow;
 
                     if (GMP_VALIDATE_FACTORS) {
                         mpz_mul_ui(test, K, M_start + mi);
-                        mpz_sub_ui(test, test, SIEVE_LENGTH-1);
+                        mpz_sub_ui(test, test, SIEVE_LENGTH);
                         assert( (mpz_even_p(test) > 0) == lowIsEven );
 
                         mpz_add_ui(test, test, first);
@@ -884,7 +907,7 @@ void prime_gap_parallel(struct Config config) {
                     if (firstIsEven) {
                         // divisible by 2 move to next multiple (an odd multiple)
 
-                        assert( (first >= SIEVE_INTERVAL) || (composite[mii][i_reindex[first]] == true) );
+                        assert( (first >= SIEVE_INTERVAL) || composite[mii][i_reindex[first]] );
                         first += prime;
                     }
 
@@ -907,22 +930,26 @@ void prime_gap_parallel(struct Config config) {
 
                 // XXX: first (modulo) can be returned from modulo_search_euclid_all_small
                 // this was a +5% speedup in benchmark but didn't translate to a real speedup.
-                uint64_t first = (base_r * (M_start + mi) + (SL-1)) % prime;
-                assert( first < SIEVE_INTERVAL );
 
-                first = SIEVE_INTERVAL - first - 1;
-                assert( 0 <= first && first < SIEVE_INTERVAL );
-
-                if (!coprime_composite[first]) {
-                    return;
-                }
+                // first = (SL - m * K) % prime
+                //     Computed as
+                // first =  2*SL - ((SL + m*K) % prime)
+                //       =  SL - m * K
+                //     Requires prime > 2*SL
+                uint64_t first = (base_r * (M_start + mi) + SL) % prime;
+                assert( first <= 2*SL );
+                first = 2*SL - first;
 
                 if (GMP_VALIDATE_FACTORS) {
                     mpz_mul_ui(test, K, M_start + mi);
-                    mpz_sub_ui(test, test, SIEVE_LENGTH-1);
+                    mpz_sub_ui(test, test, SIEVE_LENGTH);
                     mpz_add_ui(test, test, first);
                     uint64_t mod = mpz_fdiv_ui(test, prime);
                     assert( mod == 0 );
+                }
+
+                if (!coprime_composite[first]) {
+                    return;
                 }
 
                 composite[mii][i_reindex[first]] = true;

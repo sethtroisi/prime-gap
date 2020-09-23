@@ -101,7 +101,8 @@ void generate_PALR(
 
     std::mt19937 mt_rand(S);
     for (uint64_t p : primes) {
-        assert( p > S );
+        // Only need 2 * S, but assert plenty of space
+        assert( p > 4*S );
 
         // A = random number 1 to P
         // L = random number 1 to P - S
@@ -111,7 +112,7 @@ void generate_PALR(
         while (a == 0) a = mt_rand() % p;
 
         uint64_t l = 0;
-        while (l < S) l = mt_rand() % (p - S);
+        while (l <= S) l = mt_rand() % (p - S);
 
         // A, L, R <= 64 - p bits
         assert(a < p);
@@ -219,12 +220,12 @@ void benchmark_method_large(
 
         uint64_t m;
         if (method == 0) {
-            uint64_t l = (A[i] + SL - 1) % p;
-            if (l <= 2*SL-2) {
+            uint64_t l = (A[i] + SL) % p;
+            if (l <= 2*SL) {
                 m = 0;
             } else {
                 l = p - l;
-                uint64_t r = l + 2*SL-2;
+                uint64_t r = l + 2*SL;
                 m = modulo_search_euclid(p, A[i], l, r);
             }
 
@@ -249,7 +250,7 @@ void benchmark_method_large(
             if (m == max_m) continue;
 
             uint64_t t = ((__int128) base_r * (M + m)) % p;
-            assert( (t < SL) || (t + SL) > p );
+            assert( (t <= SL) || (t + SL) >= p );
 
         } else if (method == 3) {
             // M = 1, D = 1, max_m = 1e9
@@ -259,7 +260,7 @@ void benchmark_method_large(
             if (m == max_m) continue;
 
             uint64_t t = ((__int128) base_r * (M + m)) % p;
-            assert( (t < SL) || (t + SL) > p );
+            assert( (t <= SL) || (t + SL) >= p );
 
         } else if (method == 4) {
             uint64_t previous = found2;
@@ -269,7 +270,7 @@ void benchmark_method_large(
                 [&](const uint32_t mi) {
                     found2++;
                     uint64_t t = (base_r * (M + mi)) % p;
-                    assert( (t < SL) || (t + SL) > p );
+                    assert( (t <= SL) || (t + SL) >= p );
                 }
             );
             // Did we find any m for this prime?
@@ -285,7 +286,7 @@ void benchmark_method_large(
                 [&](const uint64_t mi) {
                     found2++;
                     uint64_t t = ((__int128) base_r * (M + mi)) % p;
-                    assert( (t < SL) || (t + SL) > p );
+                    assert( (t <= SL) || (t + SL) >= p );
                 }
             );
             // Did we find any m for this prime?
@@ -311,7 +312,7 @@ void benchmark(int bits, size_t count, const char* filter) {
 
     // TODO: describe this somewhere
     size_t SL = 100000;
-    size_t S = 2 * SL - 1;  // R - L = S
+    size_t S = 2 * SL + 1;  // R - L = S
 
     vector<uint64_t> primes, A, L, R;
     generate_PALR(bits, count, S, primes, A, L, R);

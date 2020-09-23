@@ -88,7 +88,7 @@ int main(int argc, char* argv[]) {
 
 void load_and_verify_unknowns(
         const uint64_t mi,
-        const unsigned int SIEVE_LENGTH,
+        const int SIEVE_LENGTH,
         std::ifstream &unknown_file,
         vector<int32_t> (&unknowns)[2]) {
     int unknown_l;
@@ -114,7 +114,7 @@ void load_and_verify_unknowns(
         int c;
         for (int k = 0; k < unknown_l; k++) {
             unknown_file >> c;
-            assert( 1 <= -c && -c < (int) SIEVE_LENGTH );
+            assert( 1 <= -c && -c <= SIEVE_LENGTH );
             unknowns[0].push_back(-c);
         }
         unknown_file >> delim;
@@ -122,7 +122,7 @@ void load_and_verify_unknowns(
 
         for (int k = 0; k < unknown_u; k++) {
             unknown_file >> c;
-            assert( 1 <= c && c < (int) SIEVE_LENGTH );
+            assert( 1 <= c && c <= SIEVE_LENGTH );
             unknowns[1].push_back(c);
         }
     }
@@ -168,7 +168,8 @@ void test_interval(
     if (prev_p == 0) {
         s_gap_out_of_sieve_prev += 1;
 
-        mpz_sub_ui(ptest, center, SIEVE_LENGTH - 1);
+        // Double checks SL which is fine.
+        mpz_sub_ui(ptest, center, SIEVE_LENGTH);
         mpz_prevprime(ptest, ptest);
         mpz_sub(ptest, center, ptest);
         prev_p = mpz_get_ui(ptest);
@@ -177,7 +178,8 @@ void test_interval(
     if (next_p == 0) {
         s_gap_out_of_sieve_next += 1;
 
-        mpz_add_ui(ptest, center, SIEVE_LENGTH - 1);
+        // Double checks SL which is fine.
+        mpz_add_ui(ptest, center, SIEVE_LENGTH);
         mpz_nextprime(ptest, ptest);
         mpz_sub(ptest, ptest, center);
         next_p = mpz_get_ui(ptest);
@@ -229,8 +231,8 @@ void prime_gap_test(const struct Config config) {
         }
 
         // TODO gcd_ui(K, i)
-        size_t count_coprime = SL-1;
-        for (size_t i = 1; i < SL; i++) {
+        size_t count_coprime = SL;
+        for (size_t i = 1; i <= SL; i++) {
             for (auto prime : primes) {
                 assert( prime <= P );
 
@@ -378,7 +380,7 @@ void prime_gap_test(const struct Config config) {
 
                 printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f%% <- %% -> %.2f%%\n",
                     s_total_unknown, s_total_unknown / ((double) s_tests),
-                    100.0 * (1 - s_total_unknown / (2.0 * (SIEVE_LENGTH - 1) * s_tests)),
+                    100.0 * (1 - s_total_unknown / ((2.0 * SIEVE_LENGTH + 1) * s_tests)),
                     100.0 * s_t_unk_low / s_total_unknown,
                     100.0 * s_t_unk_hgh / s_total_unknown);
                 if (config.run_prp) {
