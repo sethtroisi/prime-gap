@@ -2,7 +2,7 @@
 
 - [Benchmarks](#benchmarks)
   * [Microbenchmarks](#microbenchmarks)
-  * [`gap_search`](#gap_search)
+  * [`combined_sieve`](#combined_sieve)
   * [`gap_test`](#gap_test)
   * [Other Tools](#other-tools)
   * [`Pgsurround.pl` benchmark](#pgsurroundpl-benchmark)
@@ -14,7 +14,7 @@
 ## Microbenchmarks
 
 Microbenchmarks of `modulo_search_*` are included in `benchmark`.
-80%+ of `gap_search` is spent in `modulo_search_*` so optimizing this family of functions is vital.
+80%+ of `combined_sieve` is spent in `modulo_search_*` so optimizing this family of functions is vital.
 
 **TODO**: Updated after `max_a` fix in benchmark
 ```bash
@@ -58,14 +58,14 @@ $ ./benchmark 100000 modulo_search
 |    40 x  100000 | `modulo_search_euclid_all_large` | 10       | 102484   | 0.0110  |     107 | 364.6       |
 
 
-## `gap_search`
+## `combined_sieve`
 
 Testing performed on a i7-2600k compiled with `gcc-7`.
 
 ```bash
-$ make gap_search
+$ make combined_sieve
 $ PARAMS="-d 210 --mstart 1 --save-unknowns"
-$ /usr/bin/time -v ./gap_search $PARAMS -p <P> --sieve-range <SL/1M> --minc <M_INC>
+$ /usr/bin/time -v ./combined_sieve $PARAMS -p <P> --sieve-range <SL/1M> --minc <M_INC>
 ```
 
 | P#     | `--sieve-range` | `--minc` | Memory(MB) | Time(s) | time/coprime m |
@@ -94,7 +94,7 @@ This hides a number of complexity.
   * Personal preference but 1-50B is reasonable.
   * Look at output to determine optimal (based on time per PRP test)
     * Stop when skipped PRP ~ 0.5-2x the rate you can test primes.
-  * `gap_search` estimates skipped PRP/seconds AKA tests avoided from larger `--sieve-range`.
+  * `combined_sieve` estimates skipped PRP/seconds AKA tests avoided from larger `--sieve-range`.
     * `gap_stats` allows testing of only the best `m`'s from the search (I test the top 5-20%)
     * `gap_stats` more accurately calculates probability of record with higher `--sieve-range`
 
@@ -121,16 +121,16 @@ Method2 output
 ```bash
 $ mkdir -p benchmark_data
 $ cd benchmark_data
-# gap_search (takes ~6 minutes)
+# combined_sieve (takes ~6 minutes)
 
 $ time for P in 503 1009; do
 echo -e "\n\nSieving $P#/3090";
-../gap_search -p $P -d 3090 --mstart 1 --minc 1000 --sieve-range 1000 --save-unknowns -qqq;
+../combined_sieve -p $P -d 3090 --mstart 1 --minc 1000 --sieve-range 1000 --save-unknowns -qqq;
 done
 
 $ time for P in 1999 5003 10007; do
 echo -e "\n\nSieving $P#/3090";
-../gap_search -p $P -d 3090 --mstart 1 --minc 100 --sieve-range 5000 --save-unknowns -qqq;
+../combined_sieve -p $P -d 3090 --mstart 1 --minc 100 --sieve-range 5000 --save-unknowns -qqq;
 done
 
 $ ls -sh1tr

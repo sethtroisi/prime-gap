@@ -25,15 +25,15 @@ A fast prime gap searching suite
 
 ## Tools
 
-### Gap Search (Sieve many `m * p#/d`)
+### Combined Sieve (Sieve many `m * p#/d`)
 
 #### Method1 vs Method2 (Default)
 
-`gap_search` parameter `--method1` changes how the sieve is performed.
+`combined_sieve` parameter `--method1` changes how the sieve is performed.
 
 ```bash
-$ make gap_search
-$ time ./gap_search [--method1] -p <p> -d <d> --mstart <m_start> --minc <m_inc> --sieve-range <SR>M [--sieve-length <SR>] --save-unknowns
+$ make combined_sieve
+$ time ./combined_sieve [--method1] -p <p> -d <d> --mstart <m_start> --minc <m_inc> --sieve-range <SR>M [--sieve-length <SR>] --save-unknowns
 ```
 
 **Method1** performs a large initial setup phase to find the first `mi` that each `prime` divides before starting any sieving.
@@ -58,8 +58,8 @@ Status output is significantly nicer in Method2. Stats are computed at regular i
 In practice Method2 is better. Method1 is only used to validate results.
 
 ```bash
-$ make gap_search
-$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 1000 --sieve-range 1000 --save-unknowns --method1
+$ make combined_sieve
+$ time ./combined_sieve -p 907 -d 210 --mstart 21400000 --minc 1000 --sieve-range 1000 --save-unknowns --method1
 AUTO SET: sieve length (coprime: 353, prob_gap longer 0.79%): 7746
 
 	Calculating first m each prime divides
@@ -86,8 +86,8 @@ AUTO SET: sieve length (coprime: 353, prob_gap longer 0.79%): 7746
 ```
 
 ```bash
-$ make gap_search
-$ time ./gap_search -p 907 -d 210 --mstart 21400000 --minc 1000 --sieve-range 1000 --save-unknowns
+$ make combined_sieve
+$ time ./combined_sieve -p 907 -d 210 --mstart 21400000 --minc 1000 --sieve-range 1000 --save-unknowns
 AUTO SET: sieve length (coprime: 353, prob_gap longer 0.79%): 7746
 
 Testing m * 907#/210, m = 21400000 + [0, 1,000)
@@ -201,7 +201,7 @@ $ ./benchmark 100000 _all
 
 ## Flow
 
-1. `gap_search`
+1. `combined_sieve`
    * Takes a set of parameters ([m\_start, m\_start + m\_inc), P#, d, sieve-length, sieve-range)
    * Performs combined sieve algorithm
    * Produces <PARAMS>.txt, list of all numbers near m * P#/d with no small factors.
@@ -251,12 +251,12 @@ $ sqlite3 prime-gap-search.db < schema.sql
 
 ## Notes
 
-* Anecdotally `gap_search` is ~8% faster when using `CC=clang++-11`
+* Anecdotally `combined_sieve` is ~8% faster when using `CC=clang++-11`
 * There is some support for using OpenPFGW [PrimeWiki](https://www.rieselprime.de/ziki/PFGW) [SourceForge](https://sourceforge.net/projects/openpfgw/)
   * Unpack somewhere and link binary as `pfgw64`
   * may also need to `chmod a+x pfgw64`
   * modify `is_prime` in gap\_utils.py
-* Multiple layers of verification of `gap_search`
+* Multiple layers of verification of `combined_sieve`
   * Can compare `--method1` result with `--method2`
   * Can add `-DGMP_VALIDATE_FACTORS=1` to `CFLAGS` in Makefile
   * `misc/double_check.py` double checks using `ecm`, if small factor found number shouldn't appear in unknown-file.txt
@@ -270,9 +270,9 @@ $ sqlite3 prime-gap-search.db < schema.sql
 ### Quick test of all functions
 ```bash
 $ PARAMS="-p 907 -d 2190 --mstart 1 --minc 200 --sieve-range 100 --sieve-length 11000"
-$ make gap_search gap_stats gap_test
-$ time ./gap_search --method1 --save-unknowns $PARAMS
-$ time ./gap_search           --save-unknowns $PARAMS
+$ make combined_sieve gap_stats gap_test
+$ time ./combined_sieve --method1 --save-unknowns $PARAMS
+$ time ./combined_sieve           --save-unknowns $PARAMS
 $ md5sum 1_907_2190_200_s11000_l100M.{txt,m1.txt}
 080309453b4310e0310a4fb4d1779ffe  1_907_2190_200_s11000_l100M.txt
 080309453b4310e0310a4fb4d1779ffe  1_907_2190_200_s11000_l100M.m1.txt
@@ -289,7 +289,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 
 * [ ] Make =SL included in sieve (e.g. change \< SL to \<= SL)
   * [ ] Verify endpoints explicitly in double\_check.py
-* [ ] Rename `gap_search` to `combined_sieve`
 * [ ] Find better name for `--sieve-length` / `--sieve-range`
 * [ ] avg record prob (quick test): changed by two orders of magnitude, why!
 * Flow
@@ -333,6 +332,7 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [x] Fill out gap test section
   * [x] Split out some benchmarking
 * Project level
+  * [x] Rename `gap_search` to `combined_sieve`
   * [x] Rename prime-gap.db to prime-gap-search.db
   * [x] Make method2 the default
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test

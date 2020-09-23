@@ -15,11 +15,11 @@ limitations under the License.
 
 PRAGMA foreign_keys = ON;
 
-/* Used in various stages of gap_search / gap_test */
+/* Used in various stages of combined_sieve / gap_test */
 
 /*
     Flow is:
-        ./gap_search -> <params>.txt
+        ./combined_sieve -> <params>.txt
         ./gap_stats
                 INSERT row into 'range'
                 INSERT range stats into 'range_stats'

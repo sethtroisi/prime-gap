@@ -14,12 +14,12 @@
 
 
 OBJS	= gap_common.o modulo_search.o
-OUT	= gap_search gap_stats gap_test benchmark gap_stats_missing
+OUT	= combined_sieve gap_stats gap_test benchmark gap_stats_missing
 CC	= g++
 CFLAGS	= -Wall -Werror -O3 -lgmp
 LDFLAGS	= -L /usr/local/lib
 DEFINES =
-PROGS	= gap_search gap_test
+PROGS	= combined_sieve gap_test
 
 %.o: %.cpp
 	$(CC) -c -o $@ $< $(CFLAGS)

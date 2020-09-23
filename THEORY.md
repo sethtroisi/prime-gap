@@ -1,7 +1,7 @@
 # Table of Contents
 
 - [Theory](#Theory)
-  * [`gap_search`](#gap_search)
+  * [`combined_sieve`](#combined_sieve)
     * [`--sieve_length`](#sieve_length)
     * [Skipped PRP Tests](#skipped-prp-tests)
   * [`gap_stats`](#gap_stats)
@@ -13,11 +13,11 @@
 
 Information and experimental validation that doesn't fit in [README.md](README.md)
 
-## `gap_search`
+## `combined_sieve`
 
 ### `--sieve_length`
 
-`gap_search` autosets `--sieve_length` (SL) if not passed.
+`combined_sieve` autosets `--sieve_length` (SL) if not passed.
 
 This section abbreviates gcd(a, b) = c as (a, b) = c
 
@@ -79,8 +79,8 @@ def ExpectedTests(test, m * K, old_limit, new_limit):
 Sieve a range to multiple depths (100M, 200M, ... 3B, 4B)
 
 ```bash
-$ make gap_search DEFINES=-DSAVE_INCREMENTS
-$ time ./gap_search --unknown-filename 1_1009_210_2000_s7000_l4000M.txt --save-unknowns
+$ make combined_sieve DEFINES=-DSAVE_INCREMENTS
+$ time ./combined_sieve --unknown-filename 1_1009_210_2000_s7000_l4000M.txt --save-unknowns
 
 100,000,007 (primes 2,760,321/5,761,456)	(seconds: 0.99/3.1 | per m: 0.0067)
 	~ 2x 29.22 PRP/m		(~ 1046.7 skipped PRP => 1013.7 PRP/seconds)
@@ -143,7 +143,7 @@ TODO
 
 Assumptions:
 
-* Assume that `gap_search` is linear (in practice it's faster than linear)
+* Assume that `combined_sieve` is linear (in practice it's faster than linear)
 * Assume that `gap_stats` is linear (it is)
 * Assume that `gap_test` is linear (it is)
 * `prob_record(m)` distribution is independant of m
