@@ -517,9 +517,28 @@ Config argparse(int argc, char* argv[]) {
         }
     }
 
+    {
+        // Check that SL % 1000 = 0 or (SL, K) = 1
+        size_t SL = config.sieve_length;
+        if (SL % 1000 != 0) {
+            for (size_t p = 2; p < config.p; p += 1 + (p > 2)) {
+                if (isprime_brute(p)) {
+                    if (SL % p == 0 && config.d % p != 0) {
+                        config.valid = 0;
+                        cout << "SL=" << SL << " not coprime (p=" << p << ")" << endl;
+                    }
+                }
+            }
+        }
+    }
+
     if (config.d <= 0) {
         config.valid = 0;
         cout << "d must be greater than 0: " << config.d << endl;
+    }
+
+    if (config.valid == 0) {
+        cout << endl;
     }
 
     return config;
