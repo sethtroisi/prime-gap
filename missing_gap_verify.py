@@ -25,13 +25,16 @@ import gmpy2
 For missing gaps with prime end points (which would be a record)
 Verify that no internal primes were missed (generally there will be missed records)
 
-sqlite> select '"' || "BOTH SIDES PRIME: " || m || " * " || p || "# / " || d || " " || prev_p || " " || next_p || " " || (next_p + prev_p) || '",' from m_missing_stats where prev_p > 0 and next_p > 0 ORDER BY M;
+1.
+```
+sqlite> select '"' || "BOTH SIDES PRIME: " || m || " * " || p || "# / " || d || " " || -prev_p || " +" || next_p || '",' from m_missing_stats where prev_p > 0 and next_p > 0 ORDER BY M;
 
-"BOTH SIDES PRIME: 1001027 * 9511# / 310310 13520 116264 129784",
-"BOTH SIDES PRIME: 1002873 * 9511# / 310310 34720 96682 131402",
+"BOTH SIDES PRIME: 1001027 * 9511# / 310310 -13520 +116264",
+"BOTH SIDES PRIME: 1002873 * 9511# / 310310 -34720 +96682",
 ...
-
-Add these to missing_gap_data.json (under check)
+```
+2. Add these to missing_gap_data.json (under check)
+3. time python missing_gap_verify.py
 
 """
 
@@ -54,25 +57,27 @@ def save_data(valid, fails):
             'fails': normalize(fails),
         })
         # HACK: fix quotes so json can load the file.
-        f.write(res.replace("'", '"'))
+        f.write(res.replace("'", '"').strip())
+
+
+def normalize_line_new_format(line):
+    # All success / fails have gap
+    data = parse_line(line)
+    assert data[-1] not in (None, ""), (line, data)
+
+    new_format = "{:<7} * {:5}# / {:<6} {:<+6} {:+6}".format(*data[:-1])
+    # manually gap align the final gap column
+    return "{:50} gap {}".format(new_format, data[-1])
+
 
 def normalize(lines):
     def sort_key(line):
         m,p,d,*_ = parse_line(line)
         return p,d,m
 
-    def change_to_new(line):
-        # All success / fails have gap
-        data = parse_line(line)
-        assert data[-1] not in (None, ""), (line, data)
-
-        new_format = "{:<7} * {:5}# / {:<6} {:<+6} {:+6}".format(*data[:-1])
-        # manually gap align the final gap column
-        return "{:50} gap {}".format(new_format, data[-1])
-
     # Sort by (p,d) then m
     ordered = sorted(lines, key=sort_key)
-    return list(map(change_to_new, ordered))
+    return list(map(normalize_line_new_format, ordered))
 
 
 def parse_line(line):
@@ -83,21 +88,51 @@ def parse_line(line):
     assert match, line
     groups = match.groups()
 
-    gap = groups[-1] or "" # Replace None with ""
+    gap = groups[-1] or ""  # Replace None with ""
     groups = groups[:-1]
 
     m, p, d, l, h = map(int, groups)
     return (m, p, d, l, h, gap)
 
 
-def test_records():
-    check, valid, fails = load_data()
+def check_check(test):
+    m, p, d, l, h, gap = parse_line(test)
+    assert gap == "", test
 
-    print("checks: {}, valid: {}, fails: {}\n".format(
-        len(check), len(valid), len(fails)))
+    N = m * gmpy2.primorial(p) // d
+    assert l < 0 and h > 0, test
+    low = N + l
+    high = N + h
 
-    updates = []
-    for test in check:
+    print (f"Testing {m} * {p}# / {d} ({l}, {h})")
+
+    t0 = time.time()
+    assert gmpy2.is_prime(low)
+    assert gmpy2.is_prime(high)
+    t1 = time.time()
+
+    print ("\tverified endpoints {:.2f} seconds".format(t1-t0))
+
+    # XXX: because many low values checked prev_prime(high) is likely to be faster.
+    # if prev_prime was available, check next_prime(N) - N = h
+    # then check N - prev_prime(N) = l
+
+    z = gmpy2.next_prime(low)
+    t2 = time.time()
+
+    success = z == high
+    found_gap = z - low
+    print ("\t next_prime {}, {}   {:.1f} seconds".format(
+        success, found_gap, t2 - t1))
+
+    return success, found_gap, test
+
+
+def filter_checks(checks, valid, fails):
+    processed = {(m,p,d) for m, p, d, *_ in map(parse_line, valid + fails)}
+    already_processed = 0
+
+    for test in checks:
         test = test.strip()
         if test == "":
             continue
@@ -105,38 +140,37 @@ def test_records():
         m, p, d, l, h, gap = parse_line(test)
         assert gap == "", test
 
-        N = m * gmpy2.primorial(p) // d
-        low = N - l
-        high = N + h
+        if (m,p,d) in processed:
+            already_processed += 1
+            continue
+        processed.add((m,p,d))
 
-        print (f"Testing {m}*{p}#/{d} (-{l}, +{h})")
+        yield test
 
-        t0 = time.time()
-        assert gmpy2.is_prime(low)
-        assert gmpy2.is_prime(high)
-        t1 = time.time()
+    if already_processed:
+        print(f"\n\t{already_processed} checks were already processed")
 
-        print ("\tverified endpoints {:.2f} seconds".format(t1-t0))
 
-        # XXX: because many low values checked prev_prime(high) is likely to be faster.
-        # if prev_prime was available, check next_prime(N) - N = h
-        # then check N - prev_prime(N) = l
+def test_records():
+    checks, valid, fails = load_data()
+    print("checks: {}, valid: {}, fails: {}\n".format(
+        len(checks), len(valid), len(fails)))
 
-        z = gmpy2.next_prime(low)
-        t2 = time.time()
+    updates = []
+    for test_line in filter_checks(checks, valid, fails):
+        success, found_gap, test = check_check(test_line)
+        assert test == test_line
 
-        print ("\t next_prime {}, {}   {:.1f} seconds".format(
-            z == high, z - low, t2 - t1))
-
-        update = f"\t{test}\t => gap = {z - low}"
+        update = normalize_line_new_format(test + " gap " + str(found_gap))
         updates.append(update)
-        print(update)
-        if z == high:
-            valid.append(update.replace("\t", "    "))
+        if success:
+            valid.append(update)
             # Double print with lots of space for improved visibility
             print("\n"*3, update, "\n"*2)
         else:
-            fails.append(update.replace("\t", "    "))
+            fails.append(update)
+
+        print(update)
 
     if updates:
         print ("\n")
