@@ -7,7 +7,7 @@
   * [`gap_stats`](#gap_stats)
   * [Choosing `--top-x-percent`](#choosing-top-x-percent)
   * [Out of order testing](#out-of-order-testing)
-
+  * [`missing_gap_test.py`](#missing_gap_test.py)
 
 # Theory
 
@@ -181,3 +181,54 @@ Some thoughts:
         Maybe mark row with tested-all-prob-record-gaps
                 tested X pairs that could have been a record gap non were
                 but later which are record gaps could have changed
+
+
+# `missing_gap_test.py`
+
+In `missing_gap_test.py` two options
+1. S1: Find `prev_prime` (or equivilantly `next_prime`)
+  1. For each `missing_gap` let `tenative_next_prime = missing_gap - prev_prime`.
+    * >98% of the time `tenative_next_prime` is a known combosite; skip
+    * ~1% (`prob_prime` * X unknowns) is a prime! Check if `next_prime(center) = tenative_next_prime`
+1. S2: Only check `unknown_l` that have `unknown_h = missing_gap - unknown_l`
+  * Only checks ~1/3 of `unknown_l` BUT need to validate both sides now.
+
+It's clear S1 is ~twice as fast a normal search as it skips `next_prime(center)` 9X% of the time.
+
+It's less clear what the speed up of S2 is. And if S2 is faster than S1. Naively S2 produces more pairs of primes faster but more of the pairs will fail validation (because both `prev_prime` and `next_prime` can be wrong).
+
+Think about the case where `prob_prime` = 1% and all but the first `unknown_l` have a single valid pair. Note that 99%+ of the time there are enough candidates that there will be a prime in `unknown_l`.
+
+```
+S1 = 1/100 done immmediatly + 99/100 * (testing till prime + 1 test + prob tenative is prime * cost of validation)
+   = 1 test + 99/100 * (E(tests till prime) + 1 + 1/100 * cost_next_prime)
+   = 1 PRPs + 99/100 * (100 PRPs + 1 PRPs) + 99/100 * 1/100 * cost_next_prime)
+   = 1 + (101 * 99) / 100 PRPS + 99/10000 * cost_next_prime
+   = 100.99 PRPS + 99/10000 * cost_next_prime
+
+S2 = testing till prime + 1 test + prob tenative is prime * cost of validation
+   = E(tests till prime) + 1 test + 1/100 * (cost_validate_previous + 99/100 * cost_next_prime)
+   = 100 PRPs + 1 PRP + 1/100 * (1 PRP (the only missing low value to test) + 99/100 * cost_next_prime)
+   = 101.1 PRPs + 99/10000 * cost_next_prime
+```
+
+With first two `unknown_l` not having matching pairs, but all others with valid pairs
+
+```
+S1 = 1 test + 99/100 * 1 test + (99/100)^2 * (E(100) + 1 test + 1/100 * cost_next_prime)
+   = 1.99 + 98.01 * (101 + 1/100 * cost_next_prime)
+   = 1.99 + 98.01 * 101/100 + 9801/10000 * cost_next_prime
+   = 100.98 PRP tests + 9801/10000 * cost_next_prime
+
+S2 = E(tests till prime) + 1 test + 1/100 * (2 PRP tests + (99/100)^2 * cost_next_prime)
+   = 101 PRP tests + 1.99/100 PRP tests + 9801/10000 * cost_next_prime
+   = 102.99 PRP tests + 9801/10000 * cost\_next\_prime
+```
+
+It seems S2 is worse, because it always runs E(tests) PRPs for `prev_prime` then at least 1 PRP for `next_prime`. S1 runs the same E(tests) PRPs but doesn't always run PRPs for `next_prime`.
+
+Additionall S2 requires more work (20% overhead in `gap_stats` + extra data structure + harder to dynamically update...) so S1 it is.
+
+Sadly this means only a generic 2x speedup (plus some small gains from ordering) over testing the gaps normally, it does allow these to be fit back into the normal framework.
+
+
