@@ -1005,6 +1005,7 @@ void prime_gap_parallel(struct Config config) {
                     s_prime_factors,
                     s_small_prime_factors_interval + s_large_prime_factors_interval,
                     1.0 * s_large_prime_factors_interval / pi_interval);
+                // count_coprime_sieve * valid_ms also makes sense but leads to smaller numbers
                 printf("\tunknowns %'9ld/%-5ld\t"
                        "(avg/m: %.2f) (composite: %.2f%% +%.3f%% +%'ld)\n",
                     t_total_unknowns, valid_ms,

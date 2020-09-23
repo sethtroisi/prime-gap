@@ -65,7 +65,7 @@ static double average_v(vector<float> &a) {
 
 static void prob_stats(char const *name, vector<float> probs) {
     vector<float> sorted = probs;
-    std::sort(sorted.begin(), sorted.end());
+    std::sort(sorted.begin(), sorted.end(), std::greater<>());
 
     for (auto percent : {1, 5, 10, 20, 50, 100}) {
         size_t count = probs.size() * percent / 100;
@@ -218,6 +218,7 @@ bool is_range_already_processed(const struct Config& config) {
 void store_stats(
         const struct Config& config,
         float K_log,
+        double time_stats,
         vector<float>& prob_gap_norm,
         vector<uint64_t>& M_vals,
         vector<float>& expected_prev,
@@ -242,17 +243,21 @@ void store_stats(
 
     const uint64_t rid = config_hash(config);
     const size_t num_rows = M_vals.size();
-    char sSQL[200];
-    sprintf(sSQL, (
+    char sSQL[300];
+    sprintf(sSQL,
         "INSERT INTO range(rid, m_start, m_inc, P, D,"
                           "sieve_length, max_prime,"
-                          "min_merit, num_to_processed)"
-         "VALUES(%ld,  %ld,%ld,  %d,%d,  %d,%ld,  %.3f,  %ld)"),
-            rid,
-            config.mstart, config.minc,
-            config.p, config.d,
+                          "min_merit,"
+                          "num_m,num_processed, num_remaining,"
+                          "time_sieve,time_stats,time_tests)"
+         "VALUES(%ld,  %ld,%ld, %d,%d,"
+                "%d,%ld,  %.3f,"
+                "%ld,%d,%ld,  %.2f,%.2f,%.2f)",
+            rid,  config.mstart, config.minc,  config.p, config.d,
             config.sieve_length, config.max_prime,
-            config.min_merit, num_rows);
+            config.min_merit,
+            num_rows, 0, num_rows,
+            0.0, time_stats, 0.0);
 
     int rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
     if (rc != SQLITE_OK) {
@@ -279,9 +284,11 @@ void store_stats(
         exit(1);
     }
 
+    size_t skipped_gap_stats = 0;
     for (size_t g = 2; g < prob_gap_norm.size(); g += 2) {
         if (prob_gap_norm[g] < 1e-10) {
             // XXX: Consider summing the misc prob at g=0.
+            skipped_gap_stats += 1;
             continue;
         }
 
@@ -306,7 +313,7 @@ void store_stats(
         }
     }
     if (config.verbose >= 0) {
-        printf("Saved %ld rows to 'gap_stats' table\n", prob_gap_norm.size());
+        printf("Saved %ld rows to 'gap_stats' table\n", prob_gap_norm.size() - skipped_gap_stats);
     }
 
     /* Create SQL statement to INSERT into m_stats. */
@@ -755,6 +762,8 @@ void prime_gap_stats(const struct Config config) {
     const unsigned int SL = SIEVE_LENGTH;
     assert( SL > 1000 );
 
+    auto  s_start_t = high_resolution_clock::now();
+
     // ----- Read from unknown file
     std::ifstream unknown_file;
     {
@@ -928,8 +937,12 @@ void prime_gap_stats(const struct Config config) {
     }
 
     if (config.save_unknowns) {
+        auto s_stop_t = high_resolution_clock::now();
+        double   secs = duration<double>(s_stop_t - s_start_t).count();
+
         store_stats(
             config, K_log,
+            secs,
             prob_gap_norm,
             M_vals,
             expected_prev, expected_next,

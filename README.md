@@ -404,7 +404,7 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 * gap\_search.cpp
   * [ ] Option to output m with gcd(m, d) != 1
 * gap\_stats.cpp
-  * [ ] Write relevant data to sqlite (TODO: describe)
+  * [ ] Write all data that gap_test.py consumes to sqlite
 * gap\_test.cpp
   * [ ] `--top-x-percent` (see THEORY.md)
   * [ ] Read some data from sqlite (TODO: describe)
@@ -415,9 +415,9 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [ ] Plot average tests count
   * [ ] Sort by expected gap and PRP only top X%
 * missing\_gap\_test.py
-  * [ ] Negatives for `m_missing_stats`
-  * [ ] also to `m_stats`
 * missing\_gap\_verify.py
+  * [ ] Read / Write directly too Sqlite
+    * [ ] Will there be some record of near miss with this method?
   * [ ] Update `m_missing_stat`
     * [ ] Would be nice to have `gmpy2.prev_prime` so that next\_p / prev\_p are correct
 * schema.sql
@@ -477,6 +477,7 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [x] Describe distribution
   * [x] Generate expected length
 * missing\_gap\_verify.py & missing\_gap\_test.py
+  * [x] save to `m_stats`
   * [x] load/save from DB file.
   * [x] grouped output of BOTH PRIME (every X entries)
   * [x] record stats about prime found (potential candidate for high merit?)

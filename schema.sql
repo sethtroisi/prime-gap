@@ -145,4 +145,3 @@ CREATE TABLE IF NOT EXISTS result (
 
 CREATE INDEX IF NOT EXISTS    r_m_p_d ON             result(m,P,D);
 CREATE INDEX IF NOT EXISTS   ms_m_p_d ON            m_stats(m,P,D);
-CREATE INDEX IF NOT EXISTS  mms_m_p_d ON    m_missing_stats(m,P,D);
