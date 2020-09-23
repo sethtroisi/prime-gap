@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import json
+import multiprocessing
 import pprint
 import re
 import time
@@ -57,7 +58,9 @@ def save_data(valid, fails):
             'fails': normalize(fails),
         })
         # HACK: fix quotes so json can load the file.
-        f.write(res.replace("'", '"').strip())
+        output = res.replace("'", '"')
+        # Add trailing newline so hand editing doesn't leave diff
+        f.write(output.strip() + "\n")
 
 
 def normalize_line_new_format(line):
@@ -104,7 +107,8 @@ def check_check(test):
     low = N + l
     high = N + h
 
-    print (f"Testing {m} * {p}# / {d} ({l}, {h})")
+    short_num = f"{m} * {p}# / {d} - {-l}"
+    print (f"Testing {short_num} to {h:+}")
 
     t0 = time.time()
     assert gmpy2.is_prime(low)
@@ -117,13 +121,15 @@ def check_check(test):
     # if prev_prime was available, check next_prime(N) - N = h
     # then check N - prev_prime(N) = l
 
-    z = gmpy2.next_prime(low)
+    next_prime = gmpy2.next_prime(low)
     t2 = time.time()
 
-    success = z == high
-    found_gap = z - low
-    print ("\t next_prime {}, {}   {:.1f} seconds".format(
-        success, found_gap, t2 - t1))
+    success = next_prime == high
+    found_gap = next_prime - low
+    print ("\nnext_prime({}) = {} {} {}\t{:.1f} seconds\n".format(
+        short_num, found_gap,
+        "=" if success else "!=", high - low,
+        t2 - t1))
 
     return success, found_gap, test
 
@@ -157,20 +163,21 @@ def test_records():
         len(checks), len(valid), len(fails)))
 
     updates = []
-    for test_line in filter_checks(checks, valid, fails):
-        success, found_gap, test = check_check(test_line)
-        assert test == test_line
 
-        update = normalize_line_new_format(test + " gap " + str(found_gap))
-        updates.append(update)
-        if success:
-            valid.append(update)
-            # Double print with lots of space for improved visibility
-            print("\n"*3, update, "\n"*2)
-        else:
-            fails.append(update)
+    # XXX: make this configurable
+    with multiprocessing.Pool(multiprocessing.cpu_count() // 4) as pool:
+        filtered = filter_checks(checks, valid, fails)
+        for success, found_gap, test in pool.imap(check_check, filtered):
+            update = normalize_line_new_format(test + " gap " + str(found_gap))
+            updates.append(update)
+            if success:
+                valid.append(update)
+                # Double print with lots of space for improved visibility
+                print("\n"*3, update, "\n"*2)
+            else:
+                fails.append(update)
 
-        print(update)
+            print(update)
 
     if updates:
         print ("\n")
