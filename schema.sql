@@ -92,7 +92,8 @@ CREATE TABLE IF NOT EXISTS range_stats (
 );
 
 CREATE TABLE IF NOT EXISTS m_stats (
-        rid INTEGER REFERENCES range(rid) ON UPDATE CASCADE ON DELETE CASCADE,
+        rid INTEGER REFERENCES range(rid) ON UPDATE CASCADE
+                                          ON DELETE SET NULL,
 
         m INTEGER,
         P INTEGER,
@@ -125,11 +126,8 @@ CREATE TABLE IF NOT EXISTS m_stats (
 
         test_time REAL,
 
-        PRIMARY KEY(rid, m)
+        PRIMARY KEY(m, P, D)
 );
-
-CREATE TABLE IF NOT EXISTS m_missing_stats
-        AS SELECT * FROM m_stats WHERE 1 = 2;
 
 CREATE TABLE IF NOT EXISTS result (
         m INTEGER,

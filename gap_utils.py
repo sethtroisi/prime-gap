@@ -129,6 +129,26 @@ def K_and_stats(args):
     return K, K_digits, K_bits, K_log
 
 
+def parse_unknown_line(line):
+    unknowns = [[], []]
+
+    start, c_l, c_h = line.split(" | ")
+
+    match = re.match(r"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
+    assert match, start
+    mtest, unknown_l, unknown_u = map(int, match.groups())
+
+    unknowns[0] = list(map(int,c_l.split(" ")))
+    unknowns[1] = list(map(int,c_h.split(" ")))
+
+    unknown_l_test = len(unknowns[0])
+    unknown_u_test = len(unknowns[1])
+    assert unknown_l == unknown_l_test, (unknown_l, unknown_l_test, "\t", start)
+    assert unknown_u == unknown_u_test, (unknown_u, unknown_u_test, "\t", start)
+
+    return mtest, unknown_l, unknown_u, unknowns
+
+
 def openPFGW_is_prime(strn):
     # Overhead of subprocess calls seems to be ~0.03
     # Process seems to use more than 1 thread, accounting for this gmp is quite competitive.

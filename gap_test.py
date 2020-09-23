@@ -474,27 +474,15 @@ def prime_gap_test(args):
 
         log_m = (K_log + math.log(m))
 
-        unknowns = [[], []]
+        # Read a line from the file
+        line = unknown_file.readline()
+
+        mtest, unknown_l, unknown_u, unknowns = \
+            gap_utils.parse_unknown_line(line)
+        assert mtest == mi
 
         prev_p_i = 0
         next_p_i = 0
-
-        # Read a line from the file
-        line = unknown_file.readline()
-        start, c_l, c_h = line.split(" | ")
-
-        match = re.match(r"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
-        assert match, start
-        mtest, unknown_l, unknown_u = map(int, match.groups())
-        assert mtest == mi
-
-        unknowns[0] = list(map(int,c_l.split(" ")))
-        unknowns[1] = list(map(int,c_h.split(" ")))
-
-        unknown_l_test = len(unknowns[0])
-        unknown_u_test = len(unknowns[1])
-        assert unknown_l == unknown_l_test, (unknown_l, unknown_l_test, "\t", start)
-        assert unknown_u == unknown_u_test, (unknown_u, unknown_u_test, "\t", start)
 
         s_total_unknown += unknown_l + unknown_u
         s_t_unk_low += unknown_l

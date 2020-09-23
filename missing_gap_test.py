@@ -52,44 +52,34 @@ def get_arg_parser():
     return parser
 
 
-def parse_unknown_lines(args, finished):
+def parse_unknown_lines(args, probs, finished):
     skipped = 0
+
+    # TODO --top-x-percent
+    processed = []
+
     with open(args.unknown_filename) as unknown_file:
-        p_last = 1.0
-        processed = []
-        for line in tqdm.tqdm(unknown_file.readlines()):
-            line = line.strip()
-            if not line: continue
+        for mi in tqdm.tqdm(range(args.minc)):
+            m = args.mstart + mi
+            if math.gcd(m, args.d) != 1: continue
 
-            prob, start, tests = line.split(" : ")
-            prob = float(prob)
+            line = unknown_file.readline()
+            assert line.startswith(str(mi)), (mi, line[:10])
 
-            m, p, d = parse_start(start)
             if m in finished:
                 skipped += 1
                 continue
 
-            # parsing to int_tests uses 8x space,
-            # runs on main thread not worker threads,
-            # passing 20k character strings is fast.
-            processed.append((prob, start, line.count(","), line))
+            prob = probs[m]
 
-            assert prob <= p_last, (prob, p_last)
-            p_last = prob
+            # parsing lines uses 8x space and runs on main thread.
+            # passing 25k+ character strings is fast.
+            processed.append((prob, m, line))
+
+    # larger probs first
+    processed.sort(reverse=True)
 
     return skipped, processed
-
-
-def parse_start(start):
-    """
-    Parse N to (m,p,d)
-
-    '123 * 503# / 210' => (123, 503, 210)
-    '123*503#/210' => (123, 503, 210)
-    """
-    match = re.match(r"(\d+) *\*(\d+)# *\/ *(\d+)", start)
-    assert match
-    return map(int, match.groups())
 
 
 def print_count_timing(s_start_t, prefix, count):
@@ -109,41 +99,44 @@ def print_count_timing(s_start_t, prefix, count):
 
 
 def load_existing(conn, args):
-    # TODO: min_merit and num_to_process...
+    # TODO: min_merit and to_process...
     rv = list(conn.execute(
-        "SELECT rid, min_merit, num_to_processed FROM range"
+        "SELECT rid FROM range"
         " WHERE P = ? AND D = ? AND m_start = ? AND m_inc = ?",
         (args.p, args.d, args.mstart, args.minc)))
     assert len(rv) == 1, rv
     rid = rv[0][0]
 
     rv = conn.execute(
-        "SELECT m FROM m_missing_stats"
-        " WHERE P = ? and D = ? and m BETWEEN ? AND ?",
+        "SELECT m, prob_missing FROM m_stats"
+        " WHERE P = ? AND D = ? AND m BETWEEN ? AND ?",
         (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
-    return rid, set(row['m'] for row in rv)
+    probs = {row['m']: row['prob_missing'] for row in rv}
+
+    rv = conn.execute(
+        "SELECT m FROM m_stats"
+        " WHERE P = ? AND D = ? AND m BETWEEN ? AND ?"
+        "    AND (prev_p != 0 OR prp_prev > 0 OR test_time > 0)",
+        (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
+    finished = {row['m'] for row in rv}
+
+    return rid, probs, finished
 
 
 def save_record(
-        conn, rid, m, p, d,
-        prob, merit, prev_p, next_p,
+        conn, m, p, d,
+        prev_p, next_p,
         prev_tests, next_tests, test_time):
-    # TODO: verify next,prev and see if they can match schema.sql
-    # TODO: support next_p, prev_p conventions
     conn.execute(
-        "INSERT INTO m_missing_stats"
-        "   (rid,m,P,D,"
-        "    next_p,prev_p,"
-        "    merit,prob_record,prob_missing,prob_merit,"
-        "    e_gap_next,e_gap_prev,"
-        "    prp_next,prp_prev,"
-        "    test_time) VALUES"
-        "   (?,?,?,?,  ?,?,   ?,0,?,0,  0,0,  ?,?,?)",
-        (rid, m, p, d,
-         next_p, prev_p,
-         merit, prob,
-         next_tests, prev_tests,
-         test_time))
+        "UPDATE m_stats SET "
+        "   prev_p=?, next_p=?,"
+        "   prp_prev=?, prp_next=?,"
+        "   test_time=test_time + ?"
+        "WHERE m=? AND P=? AND D=?",
+        (prev_p, next_p,
+         prev_tests, next_tests,
+         test_time,
+         m, p, d))
     conn.commit()
 
 
@@ -158,76 +151,99 @@ def test_and_increment(p, start, str_diff):
     return gap_utils.is_prime(p, start, str_diff)
 
 # See Pool and initializer which set test_line.ignore_gaps
-def init_worker(function, ignore):
-    function.ignore_gaps = ignore
+def init_worker(function, args):
+    function.args = args
 
+    # TODO: load from args or from sql
+    # sqlite3 gaps.db "WITH RECURSIVE generate_series(value) AS (
+    # SELECT 110000 UNION ALL SELECT value+2 FROM generate_series WHERE value+2 <= 133000
+    # ) SELECT value || ',' FROM generate_series WHERE value NOT IN (select gapsize from gaps)"
+    function.missing = [
+        113326, 115694, 116254, 117238, 117242, 119222, 119584,
+        120154, 121138, 121174, 121366, 121832, 122290, 122666,
+        122686, 123230, 123238, 123242, 123598, 123662, 123782,
+        124106, 124258, 124346, 124534, 124792, 125024, 125318,
+        125974, 126134, 126206, 126236, 126298, 126376, 126394,
+        126538, 126554, 126814, 127346, 127544, 127622, 127732,
+        127906, 128114, 128362, 128372, 128516, 128686, 128714,
+        128762, 128872, 129298, 129406, 129538, 129698, 129754,
+        129784, 130042, 130162, 130252, 130280, 130282, 130310,
+        130438, 130798, 130846, 130882, 130898, 131074, 131288,
+        131378, 131402, 131446, 131530, 131536, 131564, 131578,
+        131648, 131762, 131788, 131876, 131938, 131954, 132130,
+        132194, 132206, 132218, 132232, 132242, 132302, 132314,
+        132446, 132506, 132548, 132598, 132644, 132838, 132842,
+        132848, 132928, 132958, 132992, 132994,
+    ]
+
+    for ignore in test_line.args.ignore_gaps:
+        if ignore in function.missing:
+            function.missing.remove(ignore)
 
 def test_line(data):
-    prob, start, test_count, tests = data
+    prob, m, line = data
 
-    m, p, d = parse_start(start)
-    #assert p == str(P) and d == str(D), (p, d, P, D)
-
-    K, r = divmod(gmpy2.primorial(p), d)
+    start = f"{m} * {args.p}# / {args.d}"
+    K, r = divmod(gmpy2.primorial(args.p), args.d)
     assert r == 0
     N = m * K
 
-    cache = {}
-
-    skipped = 0
-    max_high = None
-    max_low  = None
+    mtest, unknown_l, unknown_u, unknowns = \
+        gap_utils.parse_unknown_line(line)
 
     t0 = time.time()
 
-    for low, high in re.findall("(\d+),(\d+)", tests):
-        low, high = int(low), int(high)
-        assert low > 0 and high > 0
+    prime_low  = 0
+    prime_high = 0
 
-        if max_low and low > max_low:
-            continue
+    prp_low = 0
+    prp_high = 0
 
-        if max_high and high > max_high:
-            continue
+    for low in unknowns[0]:
+        assert low < 0
+        low = abs(low)
 
-        if (low + high) in test_line.ignore_gaps:
-            skipped += 1
-            continue
+        # In theory stop, but SO LARGE keep running.
+        #if low > test_line.missing[-1]:
+        #    break
 
         # use - for low so that (N - x) doesn't conflict with (N + x)
-        if -low not in cache:
-            cache[-low] = test_and_increment(N - low, start, "-" + str(low))
-            if cache[-low]:
-                # TECHNICALLY Should never have more than one success:
-                # if low,high happen in reasonable order after the first pair
-                # all intervals will be larger (and invalid).
-                assert max_low is None
-                max_low = low
-
-        if not cache[-low]:
+        prp_low += 1
+        if not test_and_increment(N - low, start, "-" + str(low)):
             continue
 
-        if high not in cache:
-            cache[high] = test_and_increment(N + high, start, "+" + str(high))
-            if cache[high]:
-                # See TECHNICALLY note above.
-                assert max_high is None
-                max_high = high
+        prime_low = low
+
+        for gap in test_line.missing:
+            assert gap not in test_line.args.ignore_gaps
+
+            if gap <= low:
+                continue
+
+            high = gap - low
+            # XXX: binary search or set
+            if high not in unknowns[1]:
+                continue
+
+            prp_high += 1
+            if test_and_increment(N + high, start, "+" + str(high)):
+                prime_high = high
+                break
+
+        break
+
 
     t1 = time.time()
 
-    tested_low  = sum(1 for i in cache if i < 0)
-    tested_high = sum(1 for i in cache if i > 0)
-    primes = sum(cache.values())
-
     return (
         # input data copied to output
-        prob, start, test_count,
+        prob, m,
         # top level output counters
-        skipped, primes, tested_low, tested_high, t1 - t0,
+        prp_low, prp_high, t1 - t0,
         # primes found
-        max_low, max_high
+        prime_low, prime_high
     )
+
 
 def prime_gap_test(args):
 
@@ -238,15 +254,18 @@ def prime_gap_test(args):
 
     conn = sqlite3.connect(args.search_db)
     conn.row_factory = sqlite3.Row
-    rid, finished = load_existing(conn, args)
-    if finished:
-        print("\tFound {} already processed(m {} to {})".format(
-            len(finished), min(finished), max(finished)))
+    rid, probs, finished = load_existing(conn, args)
+    if probs:
+        print("\tFound {} (m {} to {}) ({} already processed)".format(
+            len(probs), min(probs), max(probs), len(finished)))
+    else:
+        print("Already processed({}) everything".format(len(finished)))
+        exit(1)
 
     print()
 
     if args.ignore_gaps:
-        print ("\tSkipping gaps: {}\n".format(
+        print("\tSkipping gaps: {}\n".format(
             ", ".join(map(str, args.ignore_gaps))))
 
     K, K_digits, K_bits, K_log = gap_utils.K_and_stats(args)
@@ -260,12 +279,10 @@ def prime_gap_test(args):
 
     successes = []
     summed_prob = 0
-    skipped_prob = 0
-    skipped = 0
     tested = 0
     primes = 0
 
-    skipped_lines, lines = parse_unknown_lines(args, finished)
+    skipped_lines, lines = parse_unknown_lines(args, probs, finished)
     if len(lines) == 0:
         print("All {} lines already processed".format(skipped_lines))
         # Could have processed other m from other runs.
@@ -280,12 +297,12 @@ def prime_gap_test(args):
     assert min(probs) == lines[-1][0], "Out of order lines!"
 
     # Pass *init_args to initializer
-    init_args = (test_line, args.ignore_gaps)
+    init_args = (test_line, args)
 
     with multiprocessing.Pool(args.threads, init_worker, init_args) as pool:
-        for li, (prob, start, test_count, line_s, line_p,
-                 test_low, test_high, test_time, prev_p, next_p) in \
+        for li, (prob, m, test_low, test_high, test_time, prev_p, next_p) in \
                 enumerate(pool.imap_unordered(test_line, lines)):
+            start = f"{m} * {args.p}# / {args.d}"
 
             # XXX: load gaps.db and verify this is a missing gap?
             if prev_p and next_p:
@@ -295,33 +312,21 @@ def prime_gap_test(args):
                 print("\t", succ)
                 print("\n"*3)
 
-            m, p, d = parse_start(start)
-            merit = (prev_p + next_p) / (K_log + math.log(m)) if prev_p and next_p else 0
+            # NOTE: -next_p indicates prime, but not necessarily first.
             save_record(
-                conn, rid, m, p, d, prob,
-                merit, prev_p or 0, next_p or 0,
+                conn, m, args.p, args.d,
+                prev_p, -next_p,
                 test_low, test_high, test_time)
 
-            ratio = 1 - line_s / test_count
-            summed_prob += prob * ratio
-            skipped += line_s
+            summed_prob += prob
             tested  += test_low + test_high
-            primes  += line_p
+            primes  += (prev_p != 0) + (next_p != 0)
 
             s_stop_t = time.time()
             secs = s_stop_t - s_start_t
             print_secs = s_stop_t - s_last_print_t
 
-            if line_s == 0:
-                pair_print = "{:<4}".format(test_count)
-                prob_print   = "{:.2e}".format(prob)
-            else:
-                pair_print = "{:4}/{:<4}".format(test_count - line_s, test_count)
-                prob_print   = "{:.2e}/{:.2e}".format(ratio * prob, prob)
-
-            print("finished: {} ({} from {} pairs)\t|".format(
-                start, prob_print, pair_print, test_count),
-                end = " ")
+            print("finished: {} ({:.2e})\t|".format(start, prob), end = " ")
 
             li1 = li + 1
 
@@ -362,7 +367,7 @@ def prime_gap_test(args):
 if __name__ == "__main__":
     parser = get_arg_parser()
     args = parser.parse_args()
-    gap_utils.verify_args(args, ".missing")
+    gap_utils.verify_args(args, ".txt")
 
     # TeeLogger context if args.save_logs
     with gap_utils.logger_context(args):
