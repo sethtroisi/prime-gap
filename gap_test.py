@@ -244,7 +244,7 @@ def save(conn, m, p, d, n_p_i, p_p_i, merit):
     conn.commit()
 
 
-def prob_prime_sieve_length(M, D, prob_prime, K_digits, K_primes, SL, sieve_range):
+def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, K_primes, SL, sieve_range):
     assert sieve_range >= 10 ** 6, sieve_range
 
     # From Mertens' 3rd theorem
@@ -258,12 +258,10 @@ def prob_prime_sieve_length(M, D, prob_prime, K_digits, K_primes, SL, sieve_rang
         if D % prime != 0:
             prob_prime_coprime *= (1 - 1/prime)
 
-    count_coprime = SL
+    count_coprime = 0
     for i in range(1, SL+1):
-        for prime in K_primes:
-            if (i % prime) == 0 and (D % prime) != 0:
-                count_coprime -= 1
-                break
+        count_coprime += math.gcd(K, i) == 1
+    print (f"{count_coprime=}")
 
     chance_coprime_composite = 1 - prob_prime / prob_prime_coprime
     prob_gap_shorter_hypothetical = chance_coprime_composite ** count_coprime
@@ -428,13 +426,14 @@ def prime_gap_test(args):
 
     # ----- Allocate memory for a handful of utility functions.
 
+    # XXX: Cleanup after gmpy2.prev_prime.
     # Remainders of (p#/d) mod prime
     remainder   = [K % prime for prime in primes]
 
     # ----- Sieve stats
     prob_prime = 1 / M_log - 1 / (M_log * M_log)
     prob_prime_after_sieve = prob_prime_sieve_length(
-        M, D, prob_prime, K_digits, K_primes, SL, sieve_range)
+        M, K, D, prob_prime, K_digits, K_primes, SL, sieve_range)
 
     # ----- Main sieve loop.
     print("\nStarting m={}".format(M))
