@@ -48,7 +48,7 @@ using namespace std::chrono;
 
 // Tweaking this doesn't seem to method1 much.
 // method2 is more sensative and set it's own.
-#define SIEVE_SMALL_METHOD1       400'000
+#define SMALL_PRIME_LIMIT_METHOD1       400'000
 
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config config);
@@ -83,11 +83,11 @@ int main(int argc, char* argv[]) {
     }
     setlocale(LC_NUMERIC, "C");
 
-    if ((config.sieve_range > 2'000'000'000) &&
-            (config.sieve_range / config.minc > 100'000) &&
+    if ((config.max_prime > 2'000'000'000) &&
+            (config.max_prime / config.minc > 100'000) &&
             (config.p <= 10000)) {
-        printf("\tsieve_range(%ldB) is probably too large\n",
-            config.sieve_range / 1'000'000'000);
+        printf("\tmax_prime(%ldB) is probably too large\n",
+            config.max_prime / 1'000'000'000);
     }
 
     if (config.save_unknowns) {
@@ -230,20 +230,20 @@ void set_defaults(struct Config& config) {
         assert( config.sieve_length > 100 ); // Something went wrong above.
     }
 
-    if (config.sieve_range == 0) {
+    if (config.max_prime == 0) {
         // each additional numbers removes unknowns / prime
         // and takes log2(prime / sieve_length) time
 
         // Not worth improving given method2 CTRL+C handling.
         if (K_log >= 1500) {
-            config.sieve_range =  10'000'000'000;
+            config.max_prime =  10'000'000'000;
         } else {
-            config.sieve_range =   1'000'000'000;
+            config.max_prime =   1'000'000'000;
         }
 
         if (config.verbose >= 0) {
-            printf("AUTO SET: sieve range (log(K) = ~%.0f): %ld\n",
-                K_log, config.sieve_range);
+            printf("AUTO SET: max_prime (log(K) = ~%.0f): %ld\n",
+                K_log, config.max_prime);
         }
     }
 
@@ -259,7 +259,7 @@ double prob_prime_and_stats(
     K_stats(config, K, &K_digits, &K_log);
 
     // From Mertens' 3rd theorem
-    double unknowns_after_sieve = 1 / (log(config.sieve_range) * exp(GAMMA));
+    double unknowns_after_sieve = 1 / (log(config.max_prime) * exp(GAMMA));
     const double N_log = K_log + log(config.mstart);
     const double prob_prime = 1 / N_log - 1 / (N_log * N_log);
     double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
@@ -274,7 +274,7 @@ double prob_prime_and_stats(
         printf("\tavg %.0f left from %.3f%% of %u interval with %ldM sieve\n",
                 count_coprime * (unknowns_after_sieve / prob_prime_coprime),
                 100 * unknowns_after_sieve,
-                config.sieve_length, config.sieve_range/1'000'000);
+                config.sieve_length, config.max_prime/1'000'000);
         printf("\t%.3f%% of %d digit numbers are prime\n",
                 100 * prob_prime, K_digits);
         printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
@@ -299,7 +299,7 @@ void prime_gap_search(const struct Config config) {
     const unsigned int SIEVE_LENGTH = config.sieve_length;
     const unsigned int SL = SIEVE_LENGTH;
 
-    const uint64_t SIEVE_RANGE = config.sieve_range;
+    const uint64_t MAX_PRIME = config.max_prime;
 
     mpz_t test;
     mpz_init(test);
@@ -308,13 +308,13 @@ void prime_gap_search(const struct Config config) {
         setlocale(LC_NUMERIC, "");
         printf("\n");
         printf("sieve_length: 2x %'d\n", config.sieve_length);
-        printf("sieve_range:  %'ld\n", config.sieve_range);
+        printf("max_prime:       %'ld\n", MAX_PRIME);
         printf("\n");
         setlocale(LC_NUMERIC, "C");
     }
 
-    // ----- Generate primes under SIEVE_RANGE.
-    vector<uint32_t> small_primes = get_sieve_primes(SIEVE_SMALL_METHOD1);
+    // ----- Generate primes under SMALL_PRIME_LIMIT_METHOD1
+    vector<uint32_t> small_primes = get_sieve_primes(SMALL_PRIME_LIMIT_METHOD1);
 
     // ----- Merit Stuff
     mpz_t K;
@@ -322,16 +322,16 @@ void prime_gap_search(const struct Config config) {
 
 
     // ----- Sieve stats
-    const size_t SIEVE_SMALL_PRIME_PI = small_primes.size();
+    const size_t SMALL_PRIME_PI = small_primes.size();
     {
-        // SIEVE_SMALL deals with all primes that can mark off two items in SIEVE_LENGTH.
-        assert( SIEVE_SMALL_METHOD1 > 2 * SIEVE_LENGTH );
+        // deals with all primes that can mark off two items in SIEVE_LENGTH.
+        assert( SMALL_PRIME_LIMIT_METHOD1 > 2 * SIEVE_LENGTH );
         if (config.verbose >= 1) {
-            printf("\tUsing %'ld primes for SIEVE_SMALL(%'d)\n\n",
-                SIEVE_SMALL_PRIME_PI, SIEVE_SMALL_METHOD1);
+            printf("\tUsing %'ld primes for SMALL_PRIME_LIMIT(%'d)\n\n",
+                SMALL_PRIME_PI, SMALL_PRIME_LIMIT_METHOD1);
         }
-        assert( small_primes[SIEVE_SMALL_PRIME_PI-1] < SIEVE_SMALL_METHOD1);
-        assert( small_primes[SIEVE_SMALL_PRIME_PI-1] + 200 > SIEVE_SMALL_METHOD1);
+        assert( small_primes[SMALL_PRIME_PI-1] < SMALL_PRIME_LIMIT_METHOD1);
+        assert( small_primes[SMALL_PRIME_PI-1] + 200 > SMALL_PRIME_LIMIT_METHOD1);
     }
 
     const auto  s_setup_t = high_resolution_clock::now();
@@ -341,13 +341,14 @@ void prime_gap_search(const struct Config config) {
     // Remainders of (p#/d) mod prime
     typedef pair<uint64_t,uint64_t> p_and_r;
     vector<p_and_r> prime_and_remainder;
+    prime_and_remainder.reserve(SMALL_PRIME_PI);
 
     // Big improvement over surround_prime is avoiding checking each large prime.
     // vector<m, vector<pi>> for large primes that only rarely divide a sieve
     int s_large_primes_rem = 0;
 
     // To save space, only save remainder for primes that divide ANY m in range.
-    // This helps with memory usage when SIEVE_RANGE >> SL * MINC;
+    // This helps with memory usage when MAX_PRIME >> SL * MINC;
     std::vector<p_and_r> *large_prime_queue = new vector<p_and_r>[M_inc];
     {
         size_t pr_pi = 0;
@@ -361,10 +362,10 @@ void prime_gap_search(const struct Config config) {
         // Print "."s during, equal in length to 'Calculat...'
         size_t print_dots = 38;
 
-        // Lookup primepi for common sieve_range values.
-        const size_t expected_primes = common_primepi.count(SIEVE_RANGE) ?
-            common_primepi[SIEVE_RANGE] :
-            1.04 * SIEVE_RANGE / log(SIEVE_RANGE);
+        // Lookup primepi for common max_prime values.
+        const size_t expected_primes = common_primepi.count(MAX_PRIME) ?
+            common_primepi[MAX_PRIME] :
+            1.04 * MAX_PRIME / log(MAX_PRIME);
 
         long first_m_sum = 0;
         double expected_large_primes = 0;
@@ -373,7 +374,7 @@ void prime_gap_search(const struct Config config) {
             cout << "\t";
         }
         size_t pi = 0;
-        get_sieve_primes_segmented_lambda(SIEVE_RANGE, [&](const uint64_t prime) {
+        get_sieve_primes_segmented_lambda(MAX_PRIME, [&](const uint64_t prime) {
             pi += 1;
             if (config.verbose >= 0 && (pi * print_dots) % expected_primes < print_dots) {
                 cout << "." << std::flush;
@@ -382,7 +383,7 @@ void prime_gap_search(const struct Config config) {
             // Big improvement over surround_prime is reusing this for each m.
             const uint64_t base_r = mpz_fdiv_ui(K, prime);
 
-            if (prime <= SIEVE_SMALL_METHOD1) {
+            if (prime <= SMALL_PRIME_LIMIT_METHOD1) {
                 prime_and_remainder.emplace_back(prime, base_r);
                 pr_pi += 1;
                 return true;
@@ -429,17 +430,18 @@ void prime_gap_search(const struct Config config) {
             printf("\tSum of m1: %ld\n", first_m_sum);
             setlocale(LC_NUMERIC, "");
             if (pi == expected_primes) {
-                printf("\tPrimePi(%ld) = %ld\n", SIEVE_RANGE, pi);
+                printf("\tPrimePi(%ld) = %ld\n", MAX_PRIME, pi);
             } else {
-                printf("\tPrimePi(%ld) = %ld guessed %ld\n", SIEVE_RANGE, pi, expected_primes);
+                printf("\tPrimePi(%ld) = %ld guessed %ld\n", MAX_PRIME, pi, expected_primes);
             }
 
             printf("\t%ld primes not needed (%.1f%%)\n",
-                (pi - SIEVE_SMALL_PRIME_PI) - pr_pi,
-                100 - (100.0 * pr_pi / (pi - SIEVE_SMALL_PRIME_PI)));
+                (pi - SMALL_PRIME_PI) - pr_pi,
+                100 - (100.0 * pr_pi / (pi - SMALL_PRIME_PI)));
+
+            float mertens3 = log(log(MAX_PRIME)) - log(log(SMALL_PRIME_LIMIT_METHOD1));
             printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
-                expected_large_primes,
-                (2 * SL + 1) * (log(log(SIEVE_RANGE)) - log(log(SIEVE_SMALL_METHOD1))));
+                expected_large_primes, (2 * SL + 1) * mertens3);
             setlocale(LC_NUMERIC, "C");
         }
     }
@@ -705,7 +707,7 @@ void signal_callback_handler(int signum) {
 }
 
 
-// Would be nice to pass const but CTRL+C handler changes sieve_range
+// Would be nice to pass const but CTRL+C handler changes max_prime
 void prime_gap_parallel(struct Config config) {
     // Method2
     const uint32_t M_start = config.mstart;
@@ -716,16 +718,16 @@ void prime_gap_parallel(struct Config config) {
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     const uint32_t SL = SIEVE_LENGTH;
 
-    const uint64_t SIEVE_RANGE = config.sieve_range;
+    const uint64_t MAX_PRIME = config.max_prime;
 
     mpz_t test;
     mpz_init(test);
 
-    mpz_set_ui(test, SIEVE_RANGE);
+    mpz_set_ui(test, MAX_PRIME);
     mpz_prevprime(test, test);
 
     uint64_t LAST_PRIME = mpz_get_ui(test);
-    assert( LAST_PRIME <= SIEVE_RANGE && LAST_PRIME + 500 > SIEVE_RANGE);
+    assert( LAST_PRIME <= MAX_PRIME && LAST_PRIME + 500 > MAX_PRIME);
 
     // ----- Generate primes for P
     const vector<uint32_t> P_primes = get_sieve_primes(P);
@@ -810,8 +812,8 @@ void prime_gap_parallel(struct Config config) {
     if (config.verbose >= 1) {
         setlocale(LC_NUMERIC, "");
         printf("sieve_length: 2x %'d\n", config.sieve_length);
-        printf("sieve_range: %'ld   small_threshold:  %'ld (%.1f x SL)\n",
-            config.sieve_range, SMALL_THRESHOLD, 2 * SMALL_MULT);
+        printf("max_prime:       %'ld   small_threshold:  %'ld (%.1f x SL)\n",
+            config.max_prime, SMALL_THRESHOLD, 2 * SMALL_MULT);
         //printf("last prime :  %'ld\n", LAST_PRIME);
         setlocale(LC_NUMERIC, "C");
     }
@@ -861,7 +863,7 @@ void prime_gap_parallel(struct Config config) {
 
     size_t pi = 0;
     size_t pi_interval = 0;
-    get_sieve_primes_segmented_lambda(SIEVE_RANGE, [&](const uint64_t prime) {
+    get_sieve_primes_segmented_lambda(MAX_PRIME, [&](const uint64_t prime) {
         pi_interval += 1;
         // Big improvement over surround_prime is reusing this for each m.
         const uint64_t base_r = mpz_fdiv_ui(K, prime);
@@ -1035,10 +1037,10 @@ void prime_gap_parallel(struct Config config) {
             }
             setlocale(LC_NUMERIC, "C");
 
-            // if is_last would truncate .sieve_range by 1 million
+            // if is_last would truncate .max_prime by 1 million
             if (g_control_c && (prime != LAST_PRIME)) {
                 // NOTE: the resulting files were sieved by 1 extra prime
-                // they will differ from --sieve_range=X in a few entries
+                // they will differ from --max_prime=X in a few entries
 
                 if (prime < 1'000'000) {
                     cout << "Exit(2) from CTRL+C @ prime=" << prime << endl;
@@ -1048,7 +1050,7 @@ void prime_gap_parallel(struct Config config) {
                 cout << "Breaking loop from CTRL+C @ prime=" << prime << endl;
                 // reset unknown_filename if cached;
                 config.unknown_filename = "";
-                config.sieve_range = prime - (prime % 1'000'000);
+                config.max_prime = prime - (prime % 1'000'000);
 
                 return false;
             }
@@ -1057,13 +1059,13 @@ void prime_gap_parallel(struct Config config) {
             if (config.save_unknowns && prime > 1e8 && prime != LAST_PRIME) {
                 // reset unknown_filename if cached;
                 config.unknown_filename = "";
-                size_t old = config.sieve_range;
-                config.sieve_range = prime - (prime % 1'000'000);
+                size_t old = config.max_prime;
+                config.max_prime = prime - (prime % 1'000'000);
                 save_unknowns_method2(
                     config,
                     valid_mi, m_reindex, i_reindex,
                     composite);
-                config.sieve_range = old;
+                config.max_prime = old;
             }
             #endif // SAVE_INCREMENTS
         }

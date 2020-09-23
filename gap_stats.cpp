@@ -180,7 +180,7 @@ uint64_t config_hash(const struct Config& config) {
     hash = hash * 31 + config.p;
     hash = hash * 31 + config.d;
     hash = hash * 31 + config.sieve_length;
-    hash = hash * 31 + config.sieve_range;
+    hash = hash * 31 + config.max_prime;
     return hash;
 }
 
@@ -240,13 +240,13 @@ void store_stats(
     char sSQL[200];
     sprintf(sSQL, (
         "INSERT INTO range(rid, m_start, m_inc, P, D,"
-                          "sieve_length, sieve_range,"
+                          "sieve_length, max_prime,"
                           "min_merit, num_to_processed)"
          "VALUES(%ld,  %ld,%ld,  %d,%d,  %d,%ld,  %.3f,  %ld)"),
             rid,
             config.mstart, config.minc,
             config.p, config.d,
-            config.sieve_length, config.sieve_range,
+            config.sieve_length, config.max_prime,
             config.min_merit, num_rows);
 
     int rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
@@ -853,7 +853,7 @@ void prime_gap_stats(const struct Config config) {
 
     // ----- Sieve stats
     const double PROB_PRIME = 1 / N_log - 1 / (N_log * N_log);
-    const double UNKNOWNS_AFTER_SIEVE = 1 / (log(config.sieve_range) * exp(GAMMA));
+    const double UNKNOWNS_AFTER_SIEVE = 1 / (log(config.max_prime) * exp(GAMMA));
     const double PROB_PRIME_AFTER_SIEVE = PROB_PRIME / UNKNOWNS_AFTER_SIEVE;
     if (config.verbose >= 2) {
         printf("prob prime             : %.7f\n", PROB_PRIME);

@@ -288,20 +288,19 @@ void show_usage(char* name) {
     cout << "  --minc   <int>" << endl;
     cout << "OR" << endl;
     cout << "  --unknown-filename <filename>" << endl;
-    cout << "    parse p, d, mstart, minc, sieve-length, sieve-range from filename" << endl;
+    cout << "    parse p, d, mstart, minc, sieve-length, max-prime from filename" << endl;
     cout << "[OPTIONALLY]" << endl;
     cout << "  --min-merit <minmerit>" << endl;
     cout << "    only display prime gaps with merit >= minmerit" << endl;
     cout << "  --sieve-length" << endl;
     cout << "    how large the positive/negative sieve arrays should be" << endl;
-    cout << "  --sieve-range" << endl;
-    cout << "    use primes <= sieve-range (in millions) for checking composite" << endl;
+    cout << "  --max-prime" << endl;
+    cout << "    use primes <= max-prime (in millions) for checking composite" << endl;
     cout  << endl;
     cout << "  --run-prp" << endl;
     cout << "    run PRP tests" << endl;
     cout << "  --save-unknowns" << endl;
-    cout << "    save not-composites to a temp file (p_d_mstart_minc_sieve_range.txt)" << endl;
-    cout << "    where they can be processed in a 2nd pass." << endl;
+    cout << "    save unknowns to a temp file where they are processed in a 2nd pass." << endl;
     cout << endl;
     cout << "  -q, --quiet" << endl;
     cout << "    suppress some status output (twice for more suppression)" << endl;
@@ -326,7 +325,7 @@ std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
            std::to_string(config.d) + "_" +
            std::to_string(config.minc) + "_s" +
            std::to_string(config.sieve_length) + "_l" +
-           std::to_string(config.sieve_range / 1'000'000) + "M" +
+           std::to_string(config.max_prime / 1'000'000) + "M" +
            (config.method1 ? ".m1" : "") +
            suffix;
 }
@@ -342,7 +341,7 @@ Config argparse(int argc, char* argv[]) {
         {"unknown-filename", required_argument, 0,  'u' },
 
         {"sieve-length",     required_argument, 0,   4  },
-        {"sieve-range",      required_argument, 0,   5  },
+        {"max-prime",        required_argument, 0,   5  },
 
         {"min-merit",        required_argument, 0,   3  },
         {"run-prp",          no_argument,       0,   6  },
@@ -417,7 +416,7 @@ Config argparse(int argc, char* argv[]) {
                     assert( t[0] == '_' && t[1] == 'l' );
                     t += 2;
 
-                    config.sieve_range = atol(t) * 1'000'000;
+                    config.max_prime = atol(t) * 1'000'000;
                     t = std::strchr(t, 'M');
 
                     config.method1 = (t[3] == '1');
@@ -433,7 +432,7 @@ Config argparse(int argc, char* argv[]) {
                 config.sieve_length = atoi(optarg);
                 break;
             case 5:
-                config.sieve_range = atol(optarg) * 1'000'000;
+                config.max_prime = atol(optarg) * 1'000'000;
                 break;
 
             case 6:
@@ -491,16 +490,16 @@ Config argparse(int argc, char* argv[]) {
         cout << "minc > 50M will use to much memory" << endl;
     }
 
-    if (config.sieve_range > 500'000'000'000) {
+    if (config.max_prime > 500'000'000'000) {
         // This is kinda arbitrary.
         config.valid = 0;
-        cout << "sieve_range > 500B not supported" << endl;
+        cout << "max_prime > 500B not supported" << endl;
     }
 
-    uint64_t max_m = (1UL << 62) / config.sieve_range;
+    uint64_t max_m = (1UL << 62) / config.max_prime;
     if (max_m <= last_m) {
         config.valid = 0;
-        cout << "sieve_range * last_m(" << last_m << ") might overflow int64" << endl;
+        cout << "max_prime * last_m(" << last_m << ") might overflow int64" << endl;
     }
 
     {

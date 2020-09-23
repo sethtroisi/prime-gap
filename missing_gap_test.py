@@ -42,7 +42,7 @@ def get_arg_parser():
         help="Prime database from gap_test (default: %(default)s)")
 
     parser.add_argument("--unknown-filename", type=str, required=True,
-        help="mstart, minc, p, d, sieve-length, and sieve-range"
+        help="mstart, minc, p, d, sieve-length, and max-prime"
              " are determined from filename")
 
     parser.add_argument("-i", "--ignore-gaps", type=int,

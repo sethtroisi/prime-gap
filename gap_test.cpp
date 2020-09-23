@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (config.sieve_range == 0) {
+    if (config.max_prime == 0) {
         cout << "Must set sieve-length for " << argv[0] << endl;
         show_usage(argv[0]);
         return 1;
@@ -74,7 +74,7 @@ int main(int argc, char* argv[]) {
     if (config.verbose >= 2) {
         printf("\n");
         printf("sieve_length: 2x %'d\n", config.sieve_length);
-        printf("sieve_range:  %'ld\n", config.sieve_range);
+        printf("max_prime:       %'ld\n", config.max_prime);
         printf("\n");
 
         printf("run_prp:  %d\n", config.run_prp);
@@ -214,9 +214,9 @@ void prime_gap_test(const struct Config config) {
 
     // ----- Sieve stats
     {
-        assert( config.sieve_range >= 1e6 );
+        assert( config.max_prime >= 1e6 );
         //From Mertens' 3rd theorem
-        double unknowns_after_sieve = 1 / (log(config.sieve_range) * exp(GAMMA));
+        double unknowns_after_sieve = 1 / (log(config.max_prime) * exp(GAMMA));
         double N_log = K_log + log(M_start);
         double prob_prime = 1 / N_log - 1 / (N_log * N_log);
         double prob_prime_coprime = 1;
@@ -251,7 +251,7 @@ void prime_gap_test(const struct Config config) {
             printf("\n");
             printf("\t%.3f%% of SL should be unknown (%ldM) ~= %.0f\n",
                 100 * unknowns_after_sieve,
-                config.sieve_range/1'000'000,
+                config.max_prime/1'000'000,
                 count_coprime * (unknowns_after_sieve / prob_prime_coprime));
             printf("\t%.3f%% of %d digit numbers are prime\n",
                 100 * prob_prime, K_digits);

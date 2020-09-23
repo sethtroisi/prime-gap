@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS range(
         D INTEGER,
 
         sieve_length INTEGER,
-        sieve_range INTEGER,
+        max_prime    INTEGER,
 
         /* for prob_merit in m_stats */
         min_merit DOUBLE,

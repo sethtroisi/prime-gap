@@ -42,7 +42,7 @@ struct Config {
     float min_merit = 12;
 
     uint32_t sieve_length = 0;
-    uint64_t sieve_range  = 0;
+    uint64_t max_prime    = 0;
 
     bool run_prp = false;
     bool save_unknowns = false;

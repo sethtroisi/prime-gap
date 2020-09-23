@@ -33,7 +33,7 @@ A fast prime gap searching suite
 
 ```bash
 $ make combined_sieve
-$ time ./combined_sieve [--method1] -p <p> -d <d> --mstart <m_start> --minc <m_inc> --sieve-range <SR>M [--sieve-length <SR>] --save-unknowns
+$ time ./combined_sieve [--method1] -p <p> -d <d> --mstart <m_start> --minc <m_inc> --max-prime <LIMIT>M [--sieve-length <SR>] --save-unknowns
 ```
 
 **Method1** performs a large initial setup phase to find the first `mi` that each `prime` divides before starting any sieving.
@@ -53,7 +53,7 @@ Half the time will be spent watching dots cross this screen.
 **Method2** inverts this process and keeps all sieve intervals in memory at the same time.
 Primes are iterated in order and all sieve intervals are handled simultaneously.
 
-Status output is significantly nicer in Method2. Stats are computed at regular intervals giving better insight into `--sieve-range`.
+Status output is significantly nicer in Method2. Stats are computed at regular intervals giving better insight into `--max-prime`.
 
 In practice Method2 is better. Method1 is only used to validate results.
 
@@ -61,7 +61,7 @@ Method2 is slightly faster because it use `modulo_search_euclid_all(...)` then a
 
 ```bash
 $ make combined_sieve
-$ time ./combined_sieve -p 907 -d 210 --mstart 1 --minc 1000 --sieve-range 1000 --save-unknowns --method1 -q
+$ time ./combined_sieve -p 907 -d 210 --mstart 1 --minc 1000 --max-prime 1000 --save-unknowns --method1 -q
 AUTO SET: sieve length: 7554 (coprime: 340, prob_gap longer 0.79%)
 
 Testing m * 907#/210, m = 1 + [0, 1,000)
@@ -97,11 +97,11 @@ real	0m9.107s
 
 ```bash
 $ make combined_sieve
-$ time ./combined_sieve -p 907 -d 210 --mstart 1 --minc 1000 --sieve-range 1000 --save-unknowns -q
+$ time ./combined_sieve -p 907 -d 210 --mstart 1 --minc 1000 --max-prime 1000 --save-unknowns -q
 
 Testing m * 907#/210, m = 1 + [0, 1,000)
 sieve_length: 2x 7,554
-sieve_range: 1,000,000,000   small_threshold:  137,790 (18.2 x SL)
+max-prime:       1,000,000,000   small_threshold:  137,790 (18.2 x SL)
 coprime m    228/1000,  coprime i 1991/7554,  ~0MB
 
 
@@ -145,7 +145,7 @@ $ diff 1_907_210_1000_s7554_l1000M.m1.txt 1_907_210_1000_s7554_l1000M.txt
 ```bash
 $ make combined_sieve gap_stats
 # Use a larger `--sieve-length` for better record probability
-$ time ./combined_sieve -p 907 -d 210 --mstart 1 --minc 1000 --sieve-range 1000 --save-unknowns --sieve-length 15000 -qq
+$ time ./combined_sieve -p 907 -d 210 --mstart 1 --minc 1000 --max-prime 1000 --save-unknowns --sieve-length 15000 -qq
 
 Testing m * 907#/210, m = 1 + [0, 1,000)
 999,999,937 (primes 50,847,534/142,065,175)	(seconds: 9.05/9.1 | per m: 0.04)
@@ -306,7 +306,7 @@ $ ./benchmark 100000 _all
 ## Flow
 
 1. `combined_sieve`
-   * Takes a set of parameters ([m\_start, m\_start + m\_inc), P#, d, sieve-length, sieve-range)
+   * Takes a set of parameters ([m\_start, m\_start + m\_inc), P#, d, sieve-length, max-prime)
    * Performs combined sieve algorithm
    * Produces <PARAMS>.txt, list of all numbers near m * P#/d with no small factors.
      * each row is `m: -count_low, +count_high | -18 -50 -80 -120 ... | +6 +10 +12 +24 ...`
@@ -373,7 +373,7 @@ $ sqlite3 prime-gap-search.db < schema.sql
 
 ### Quick test of all functions
 ```bash
-$ PARAMS="-p 907 -d 2190 --mstart 1 --minc 200 --sieve-range 100 --sieve-length 11000"
+$ PARAMS="-p 907 -d 2190 --mstart 1 --minc 200 --max-prime 100 --sieve-length 11000"
 $ make combined_sieve gap_stats gap_test
 $ time ./combined_sieve --method1 --save-unknowns $PARAMS
 $ time ./combined_sieve           --save-unknowns $PARAMS
@@ -392,7 +392,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 ### TODO
 
 * [ ] Verify endpoints explicitly in double\_check.py
-* [ ] Find better name for `--sieve-length` / `--sieve-range`
 * [ ] avg record prob (quick test): changed by two orders of magnitude, why!
 * Flow
   * [ ] `gap_stats_missing` always write to range?
@@ -457,9 +456,9 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
     * [x] Calculate `sieve_length` for all (m % d)
   * [x] Don't save to large\_prime\_queue[next\_mi] with (next\_mi, d) > 1
   * [x] Only store prime/remainder for primes that divide ANY mi.
-  * [x] `sieve_range` > 4B
+  * [x] `max_prime` > 4B
   * [x] Dynamic `sieve_length`
-  * [x] Dynamic `sieve_range`
+  * [x] Dynamic `max_prime`
 * gap\_stats.cpp
   * [x] Tweak logging at different verbose levels
   * [x] Move missing gaps behind a compile flag

@@ -36,7 +36,7 @@ def get_arg_parser():
         help="Prime database from gap_test")
 
     parser.add_argument('--unknown-filename', type=str,
-        help="determine mstart, minc, p, d, sieve-length, and sieve-range"
+        help="determine mstart, minc, p, d, sieve-length, and max-prime"
              " from unknown-results filename")
 
     parser.add_argument('--min-merit',    type=int, default=10,
@@ -244,12 +244,12 @@ def save(conn, m, p, d, n_p_i, p_p_i, merit):
     conn.commit()
 
 
-def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, K_primes, SL, sieve_range):
-    assert sieve_range >= 10 ** 6, sieve_range
+def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, K_primes, SL, max_prime):
+    assert max_prime >= 10 ** 6, max_prime
 
     # From Mertens' 3rd theorem
     gamma = 0.577215665
-    unknowns_after_sieve = 1.0 / (math.log(sieve_range) * math.exp(gamma))
+    unknowns_after_sieve = 1.0 / (math.log(max_prime) * math.exp(gamma))
 
     prob_prime_coprime = 1
     prob_prime_after_sieve = prob_prime / unknowns_after_sieve
@@ -269,7 +269,7 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, K_primes, SL, sieve_r
     # count_coprime already includes some parts of unknown_after_sieve
     print("\t{:.3f}% of SL should be unknown ({}M) ~= {:.0f}".format(
         100 * unknowns_after_sieve,
-        sieve_range//1e6,
+        max_prime//1e6,
         count_coprime * (unknowns_after_sieve / prob_prime_coprime)))
     print("\t{:.3f}% of {} digit numbers are prime".format(
         100 * prob_prime, K_digits))
@@ -395,7 +395,7 @@ def prime_gap_test(args):
     M_inc = args.minc
 
     SL = sieve_length = args.sieve_length
-    sieve_range = args.sieve_range
+    max_prime = args.max_prime
 
     min_merit = args.min_merit
 
@@ -433,7 +433,7 @@ def prime_gap_test(args):
     # ----- Sieve stats
     prob_prime = 1 / M_log - 1 / (M_log * M_log)
     prob_prime_after_sieve = prob_prime_sieve_length(
-        M, K, D, prob_prime, K_digits, K_primes, SL, sieve_range)
+        M, K, D, prob_prime, K_digits, K_primes, SL, max_prime)
 
     # ----- Main sieve loop.
     print("\nStarting m={}".format(M))
