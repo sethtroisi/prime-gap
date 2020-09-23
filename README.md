@@ -287,10 +287,11 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 
 ### TODO
 
-* [ ] Make =SL included in sieve (e.g. change < SL to <= SL)
+* [ ] Make =SL included in sieve (e.g. change \< SL to \<= SL)
 * [ ] Rename `gap_search` to `combined_sieve`
 * [ ] Find better name for `--sieve-length` / `--sieve-range`
 * gap\_utils.py
+  * [ ] Python version of `hash_config`?
 * README.md
   * [ ] gap\_test.py vs gap\_test.cpp
 * gap\_search.cpp
@@ -307,6 +308,9 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
   * [ ] Plot Prob(record)
   * [ ] Plot average tests count
   * [ ] Sort by expected gap and PRP only top X%
+* schema.sql
+  * [ ] Fix `num_to_processed` name (maybe split into two fields)
+  * [ ] `prp_next`, `prp_prev` should be INTEGER
 * benchmarking
   * [ ] Add instructions to verify `modulo\_search` is >80% of the time.
 

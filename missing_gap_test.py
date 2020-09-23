@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import argparse
+import math
 import multiprocessing
 import re
 import time
@@ -108,23 +109,41 @@ def print_count_timing(s_start_t, prefix, count):
 
 
 def load_existing(conn, args):
+    # TODO: min_merit and num_to_process...
+    rv = list(conn.execute(
+        "SELECT rid, min_merit, num_to_processed FROM range"
+        " WHERE P = ? AND D = ? AND m_start = ? AND m_inc = ?",
+        (args.p, args.d, args.mstart, args.minc)))
+    assert len(rv) == 1, rv
+    rid = rv[0][0]
+
     rv = conn.execute(
-        "SELECT m FROM missing_gap_result"
+        "SELECT m FROM m_missing_stats"
         " WHERE P = ? and D = ? and m BETWEEN ? AND ?",
         (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
-    return set(row['m'] for row in rv)
+    return rid, set(row['m'] for row in rv)
 
 
-def save_record(conn, m, p, d, prob, prev_p, next_p, prev_tests, next_tests):
+def save_record(
+        conn, rid, m, p, d,
+        prob, merit, prev_p, next_p,
+        prev_tests, next_tests, test_time):
+    # TODO: verify next,prev and see if they can match schema.sql
+    # TODO: support next_p, prev_p conventions
     conn.execute(
-        "INSERT INTO missing_gap_result"
-        "   (mgrid,m,P,D,prob_missing_gap,"
-        "    test_prev_p,test_next_p,prev_p_tests,next_p_tests) "
-        "VALUES(null, ?,?,?, ?, ?,?,?,?)",
-        (m, p, d,
-        prob,
-        prev_p, next_p,
-        prev_tests, next_tests))
+        "INSERT INTO m_missing_stats"
+        "   (rid,m,P,D,"
+        "    next_p,prev_p,"
+        "    merit,prob_record,prob_missing,prob_merit,"
+        "    e_gap_next,e_gap_prev,"
+        "    prp_next,prp_prev,"
+        "    test_time) VALUES"
+        "   (?,?,?,?,  ?,?,   ?,0,?,0,  0,0,  ?,?,?)",
+        (rid, m, p, d,
+         next_p, prev_p,
+         merit, prob,
+         next_tests, prev_tests,
+         test_time))
     conn.commit()
 
 
@@ -158,6 +177,8 @@ def test_line(data):
     skipped = 0
     max_high = None
     max_low  = None
+
+    t0 = time.time()
 
     for low, high in re.findall("(\d+),(\d+)", tests):
         low, high = int(low), int(high)
@@ -193,6 +214,8 @@ def test_line(data):
                 assert max_high is None
                 max_high = high
 
+    t1 = time.time()
+
     tested_low  = sum(1 for i in cache if i < 0)
     tested_high = sum(1 for i in cache if i > 0)
     primes = sum(cache.values())
@@ -201,7 +224,7 @@ def test_line(data):
         # input data copied to output
         prob, start, test_count,
         # top level output counters
-        skipped, primes, tested_low, tested_high,
+        skipped, primes, tested_low, tested_high, t1 - t0,
         # primes found
         max_low, max_high
     )
@@ -215,7 +238,7 @@ def prime_gap_test(args):
 
     conn = sqlite3.connect(args.search_db)
     conn.row_factory = sqlite3.Row
-    finished = load_existing(conn, args)
+    rid, finished = load_existing(conn, args)
     if finished:
         print("\tFound {} already processed(m {} to {})".format(
             len(finished), min(finished), max(finished)))
@@ -243,6 +266,11 @@ def prime_gap_test(args):
     primes = 0
 
     skipped_lines, lines = parse_unknown_lines(args, finished)
+    if len(lines) == 0:
+        print("All {} lines already processed".format(skipped_lines))
+        # Could have processed other m from other runs.
+        assert skipped_lines <= len(finished)
+        exit(1)
 
     print("Read {} lines ({} already processed) with missing_gap_prob: {:.3g} to {:.3g}".format(
         len(lines), skipped_lines, lines[0][0], lines[-1][0]))
@@ -255,7 +283,8 @@ def prime_gap_test(args):
     init_args = (test_line, args.ignore_gaps)
 
     with multiprocessing.Pool(args.threads, init_worker, init_args) as pool:
-        for li, (prob, start, test_count, line_s, line_p, test_low, test_high, prev_p, next_p) in \
+        for li, (prob, start, test_count, line_s, line_p,
+                 test_low, test_high, test_time, prev_p, next_p) in \
                 enumerate(pool.imap_unordered(test_line, lines)):
 
             # XXX: load gaps.db and verify this is a missing gap?
@@ -267,10 +296,11 @@ def prime_gap_test(args):
                 print("\n"*3)
 
             m, p, d = parse_start(start)
+            merit = (prev_p + next_p) / (K_log + math.log(m)) if prev_p and next_p else 0
             save_record(
-                conn, m, p, d, prob,
-                prev_p or 0, next_p or 0,
-                test_low, test_high)
+                conn, rid, m, p, d, prob,
+                merit, prev_p or 0, next_p or 0,
+                test_low, test_high, test_time)
 
             ratio = 1 - line_s / test_count
             summed_prob += prob * ratio
@@ -284,7 +314,7 @@ def prime_gap_test(args):
 
             if line_s == 0:
                 pair_print = "{:<4}".format(test_count)
-                prob_print   = "{:.2e}".format(summed_prob)
+                prob_print   = "{:.2e}".format(prob)
             else:
                 pair_print = "{:4}/{:<4}".format(test_count - line_s, test_count)
                 prob_print   = "{:.2e}/{:.2e}".format(ratio * prob, prob)
@@ -292,16 +322,25 @@ def prime_gap_test(args):
             print("finished: {} ({} from {} pairs)\t|".format(
                 start, prob_print, pair_print, test_count),
                 end = " ")
-            print("m: {}/{}, p/t: {}/{}, sum(prob): {:.4f}  per day: {:.3f}".format(
+
+            li1 = li + 1
+
+            # Adjusted a little to make `per_day` more stable
+            avg_test = secs / li1
+            adj_secs = max(avg_test, secs - (avg_test * args.threads / 2))
+            per_day = "  per day: {:.3f}".format(summed_prob / (adj_secs / 86400))
+
+            print("m: {}/{}, p/t: {}/{}, sum(prob): {:.4f}{}".format(
                 li + 1, len(lines),
                 primes, tested,
-                summed_prob, summed_prob / (secs / 86400)))
+                summed_prob, per_day if 2 * li >= args.threads else ""))
 
-            if li in (1,2,5,10,20,50, len(lines-1)) or li % 100 == 0 or print_secs > 240:
+            if li1 in (1,2,5,10,20,50, len(lines)) or li1 % 100 == 0 or print_secs > 240:
                 s_last_print_t = s_stop_t
 
+                # TODO: eta for finishing
                 with g_tested.get_lock():
-                    print_count_timing(s_start_t, li + 1, g_tested.value)
+                    print_count_timing(s_start_t, li1, g_tested.value)
 
                 if len(successes) - s_last_success_count >= 5:
                     print("\n"*2)
