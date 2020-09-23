@@ -56,15 +56,29 @@ CREATE TABLE IF NOT EXISTS range(
         /* for prob_merit in m_stats */
         min_merit DOUBLE,
 
-        /* rough integer of things left to process */
-        num_to_processed INTEGER
+        /* count of m with (m, D) = 1 */
+        num_m INTEGER,
+
+        /* number of entries in m_stats processed by gap_tests */
+        num_processed INTEGER,
+
+        /* number left to process in m_stats
+         * because of --top-x-percent
+         * num_m != num_processed + num_remaining
+         */
+        num_remaining INTEGER,
+
+        /* Time for various tasks */
+        time_sieve REAL,
+        time_stats REAL,
+        time_tests REAL
 );
 
 CREATE TABLE IF NOT EXISTS range_stats (
         /**
-         * Produced by gap_stats.py
+         * produced by gap_stats.py
          *
-         * Should be Expected values over ALL m
+         * should be Expected values over ALL m
          */
 
         /* range id (foreign key) */
@@ -106,8 +120,8 @@ CREATE TABLE IF NOT EXISTS m_stats (
         e_gap_prev REAL,
 
         /* updated during gap_test / missing_gap_test */
-        prp_next REAL,
-        prp_prev REAL,
+        prp_next INTEGER,
+        prp_prev INTEGER,
 
         test_time REAL,
 
@@ -122,7 +136,7 @@ CREATE TABLE IF NOT EXISTS result (
         P INTEGER,
         D INTEGER,
 
-        /* next_p_interval, prev_p_iinterval */
+        /* next_p_interval, prev_p_interval */
         next_p_i INTEGER,
         prev_p_i INTEGER,
 

@@ -295,7 +295,6 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 * Flow
   * [ ] `gap_stats_missing` always write to range?
   * [ ] How to get sieve time into sql.range
-  * [ ] Fix `num_to_processed` name (maybe split into two fields)
   * [ ] When does `num_processed`/`num_to_process` get updated
 * README.md
   * [ ] gap\_test.py vs gap\_test.cpp
