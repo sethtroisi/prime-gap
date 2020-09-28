@@ -33,15 +33,21 @@ import gap_utils
 def get_arg_parser():
     parser = argparse.ArgumentParser('Double check the results of combined_sieve')
 
+    parser.add_argument('--seed', type=int, default=None,
+        help="random seed (default: %(default)s)")
+
     parser.add_argument('--ecm', type=str, default="ecm",
-        metavar="ecm_program", help="Path to gmp-ecm (default: ecm)")
+        metavar="ecm_program", help="Path to gmp-ecm (default: %(default)s)")
+
+    parser.add_argument('--B1', type=int, default=10000,
+        help="stage 1 bound for ecm (see ecm --help) (default: %(default)s)")
 
     parser.add_argument('--unknown-filename', type=str, required=True,
         help="determine mstart, minc, p, d, sieve-length, and sieve-range"
              " from unknown-results filename")
 
-    parser.add_argument('-c', '--count', type=int, default=20,
-        help="count of non-trivial numbers to verify per m")
+    parser.add_argument('-c', '--count', type=int, default=10,
+        help="count of non-trivial numbers to verify per m (default: %(default)s)")
 
     return parser
 
@@ -53,6 +59,9 @@ def product(l):
     return r
 
 def double_check(args):
+    # initial random with seed or default: None
+    random.seed(args.seed)
+
     P = args.p
     D = args.d
 
@@ -112,30 +121,29 @@ def double_check(args):
                 continue
 
             # If sieve found a small factor
-            found_small = t not in unknowns
+            sieve_had_factor = t not in unknowns
 
             N = (m * K + t)
             found = False
             for p in small_primes:
                 if N % p == 0:
                     print(f"\t\t\t{t:<+6} had trivial factor of {p} skipping")
-                    assert found_small, f"{p} divides {str_start} + {t}"
+                    assert sieve_had_factor, f"{p} divides {str_start} + {t}"
                     found = True
                     break
             if found:
                 continue
 
-            tested[1 + found_small] += 1
-            word = "" if found_small else "n't"
+            tested[1 + sieve_had_factor] += 1
+            word = "" if sieve_had_factor else "n't"
             print (f"\t{t:<+6}\tshould{word} have small factor")
 
             # Interesting factor
             count -= 1
 
             # Change to subprocess.run(X, capture_output=True) with Python 3.7
-            ret, output = subprocess.getstatusoutput("echo '{} + {}' | {} -one -primetest -q 1e4".format(
-                str_start, t,
-                args.ecm))
+            ret, output = subprocess.getstatusoutput("echo '{} + {}' | {} -one -primetest -q {}".format(
+                str_start, t, args.ecm, args.B1))
 
             found_factor = (ret & 2) > 0
 
@@ -153,17 +161,18 @@ def double_check(args):
                 assert product(factors) == ecm_factor, (ecm_factor, factors)
 
                 # verify if sieve didn't find a small ecm better not find a small
-                if not found_small:
+                if not sieve_had_factor:
                     assert all(f > args.max_prime for f in factors), (ecm_factor, factors)
 
-                # Tempting to check if found_small then any(f < args.max_prime)
+                # Tempting to check if sieve_had_factor then any(f < args.max_prime)
                 # but ecm not guarenteed to find that factor.
 
-            # generally expected ecm to find the
-            ecm_found[found_small] += 1
+                # generally expected ecm to find the
+                ecm_found[sieve_had_factor] += 1
 
     print ("{} trivially composite, {} unknowns, {} known composites".format(*tested))
-    print ("ecm found {} composites: not known {} composite, {} known".format(sum(ecm_found), *ecm_found))
+    print ("ecm found {} composites: known {} composite, {} were unknown".format(
+        sum(ecm_found), ecm_found[True], ecm_found[False]))
 
 if __name__ == "__main__":
     parser = get_arg_parser()
