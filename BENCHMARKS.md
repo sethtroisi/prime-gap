@@ -181,6 +181,14 @@ Processing 1_5003_3090_100_s48878_l5000M.txt
 	    tests     26         (0.04/sec)  682 seconds elapsed
 	    unknowns  31096      (avg: 1196.00), 98.78% composite  49.61% <- % -> 50.39%
 	    prp tests 7134       (avg: 274.38) (10.5 tests/sec)
+
+Processing 1_10007_3090_100_s100616_l5000M.txt
+Testing m * 10007#/3090, m = 1 + [0, 100)
+       m=97 1192 <- unknowns -> 1213   61988 <- gap -> 50068
+           tests     26         (269.49 secs/test)  7007 seconds elapsed
+           unknowns  62805      (avg: 2415.58), 98.80% composite  49.98% <- % -> 50.02%
+           prp tests 13466      (avg: 517.92) (1.9 tests/sec)
+
 ```
 
 | P#    | M/second  | PRP/second |
@@ -189,7 +197,7 @@ Processing 1_5003_3090_100_s48878_l5000M.txt
 | 1009  | 15        | 751        |
 | 1999  | 0.96      | 103        |
 | 5003  | 26s/test  | 10.5       |
-| 10007 | 270/test  | 1.9       |
+| 10007 | 270s/test | 1.9        |
 
 
 ## Other Tools

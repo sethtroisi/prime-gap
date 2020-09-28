@@ -342,6 +342,9 @@ $ sudo apt install sqlite3 libsqlite3-dev
 $ pip install --user gmpy2=2.1.0b5 tqdm
 
 $ sqlite3 prime-gap-search.db < schema.sql
+
+# For misc/double_check.py
+$ sudo apt install gmp-ecm
 ```
 
 * [prime-gap-list](https://github.com/primegap-list-project/prime-gap-list)
@@ -380,6 +383,7 @@ $ time ./combined_sieve           --save-unknowns $PARAMS
 $ md5sum 1_907_2190_200_s11000_l100M.{txt,m1.txt}
 080309453b4310e0310a4fb4d1779ffe  1_907_2190_200_s11000_l100M.txt
 080309453b4310e0310a4fb4d1779ffe  1_907_2190_200_s11000_l100M.m1.txt
+
 
 $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 # Verify RECORD @ 1,7,13,101,137
@@ -468,38 +472,43 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 
 ### TODO
 
-* [ ] Verify endpoints explicitly in double\_check.py
 * [ ] avg record prob (quick test): changed by two orders of magnitude, why!
 * Flow
-  * [ ] `gap_stats_missing` always write to range?
-  * [ ] How to get sieve time into sql.range
-  * [ ] When does `num_processed`/`num_to_process` get updated
+  * [ ] How to get sieve time into DB
+  * [ ] When do `num_processed`/`num_to_process` get updated
 * README.md
   * [ ] gap\_test.py vs gap\_test.cpp
-* gap\_utils.py
-  * [ ] Python version of `hash_config`?
-* gap\_search.cpp
-  * [ ] Option to output m with gcd(m, d) != 1
+  * [ ] statement about predicting `combined_sieve` timing.
+* THEORY.md
+  * [ ] Add some theory for only doing one side test.
+* combined\_sieve
+  * [ ] "expect %ld left" doesn't match
+    * [ ] Verify `prop_gap_larger`, related to `count_coprime` and `count_coprime_after_d`
 * gap\_stats.cpp
-  * [ ] Write all data that gap_test.py consumes to sqlite
+  * [ ] Write all data that `gap_test.py` consumes to DB
 * gap\_test.cpp
   * [ ] `--top-x-percent` (see THEORY.md)
-  * [ ] Read some data from sqlite (TODO: describe)
+  * [ ] Multithreaded
+  * [ ] Read `time_sieve` and `time_stats` print optimal to restart search point
+    * [ ] Leave XXX note for restart
   * [ ] Produce P(record) / day (and upfront estimate)
 * gap\_test.py
   * [ ] Option to starting at m > mstart
   * [ ] Plot Prob(record)
   * [ ] Plot average tests count
   * [ ] Sort by expected gap and PRP only top X%
-* missing\_gap\_test.py
-* missing\_gap\_verify.py
-  * [ ] Read / Write directly too Sqlite
-    * [ ] Will there be some record of near miss with this method?
-  * [ ] Update `m_missing_stat`
-    * [ ] Would be nice to have `gmpy2.prev_prime` so that next\_p / prev\_p are correct
+* missing\_gap\_test.py && missing\_gap\_verify.py
 * schema.sql
 * benchmarking
+  * [ ] Update `prime_time_estimate` polynomial
   * [ ] Add instructions to verify `modulo\_search` is >80% of the time.
+
+### Maybes
+
+* gap\_search.cpp
+  * [ ] Option to output m with gcd(m, d) != 1
+* gap\_stats.cpp
+  * [ ] Check if higher prob is related to unique (mi % d)
 
 ### TODONE
 
@@ -554,6 +563,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [x] Describe distribution
   * [x] Generate expected length
 * missing\_gap\_verify.py & missing\_gap\_test.py
+  * [x] read and update DB directly
   * [x] save to `m_stats`
   * [x] load/save from DB file.
   * [x] grouped output of BOTH PRIME (every X entries)

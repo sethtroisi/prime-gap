@@ -271,7 +271,9 @@ double prob_prime_and_stats(
 
     if (config.verbose >= 2) {
         printf("\n");
-        printf("\tavg %.0f left from %.3f%% of %u interval with %ldM sieve\n",
+        // XXX: sieve is more combosite than unknowns_after_sieve would suggest.
+        // Adjust for MANY coprimes (especially around center).
+        printf("\texpect %.0f left (%.3f%%) of %u after %ldM\n",
                 count_coprime * (unknowns_after_sieve / prob_prime_coprime),
                 100 * unknowns_after_sieve,
                 config.sieve_length, config.max_prime/1'000'000);
