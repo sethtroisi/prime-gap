@@ -21,25 +21,14 @@ import re
 import time
 
 import gmpy2
+import sqlite3
 
 """
 For missing gaps with prime end points (which would be a record)
-Verify that no internal primes were missed (generally there will be missed records)
-
-1.
-```
-sqlite> select '"' || "BOTH SIDES PRIME: " || m || " * " || p || "# / " || d || " " || -prev_p || " +" || next_p || '",' from m_missing_stats where prev_p > 0 and next_p > 0 ORDER BY M;
-
-"BOTH SIDES PRIME: 1001027 * 9511# / 310310 -13520 +116264",
-"BOTH SIDES PRIME: 1002873 * 9511# / 310310 -34720 +96682",
-...
-```
-2. Add these to missing_gap_data.json (under check)
-3. time python missing_gap_verify.py
-
+Verify that no internal (next) primes were missed (generally there will be missed records)
 """
 
-
+SEARCH_GAPS_DB_FN           = "prime-gap-search.db"
 MISSING_GAP_BOTH_PRIME_FILE = "missing_gap_data.json"
 
 
@@ -47,13 +36,41 @@ def load_data():
     with open(MISSING_GAP_BOTH_PRIME_FILE) as f:
         data = json.loads(f.read().replace("'", '"'))
 
-    return data['check'], data['valid'], data['fails']
+    return data['valid'], data['fails']
+
+
+def get_db():
+    return sqlite3.connect(SEARCH_GAPS_DB_FN)
+
+
+def load_sql():
+    with get_db() as conn:
+        conn.row_factory = sqlite3.Row
+
+        rv = conn.execute(
+            "SELECT m, P, D, prev_p, next_p, prp_prev, prp_next "
+            "FROM m_stats "
+            "WHERE prev_p > 0 AND next_p < 0")
+
+        return tuple(dict(row) for row in rv)
+
+
+def save_record(m, p, d, prev_p, next_p, test_time):
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE m_stats SET "
+            "   next_p = ?, test_time = test_time + ?"
+            "WHERE m=? AND P=? AND D=? AND prev_p=?",
+            (next_p, test_time, m, p, d, prev_p))
+
+        assert cur.rowcount == 1, (m, p, d, prev_p, next_p)
+        conn.commit()
 
 
 def save_data(valid, fails):
     with open(MISSING_GAP_BOTH_PRIME_FILE, "w") as f:
         res = pprint.pformat({
-            'check': [],
             'valid': normalize(valid),
             'fails': normalize(fails),
         })
@@ -99,66 +116,65 @@ def parse_line(line):
 
 
 def check_check(test):
-    m, p, d, l, h, gap = parse_line(test)
-    assert gap == "", test
-
+    m, p, d = test['m'], test['P'], test['D']
     N = m * gmpy2.primorial(p) // d
-    assert l < 0 and h > 0, test
-    low = N + l
-    high = N + h
 
-    short_num = f"{m} * {p}# / {d} - {-l}"
-    print (f"Testing {short_num} to {h:+}")
+    prev_p, next_p = test['prev_p'], test['next_p']
+
+    assert prev_p > 0, test
+    assert next_p < 0, test
+
+    # set both positive to help out
+    prev_p = abs(prev_p)
+    next_p = abs(next_p)
+
+    short_num = f"{m} * {p}# / {d} -{prev_p:<5}"
+    print (f"Testing {short_num} to +{next_p}")
+
+    low  = N - prev_p
+    high = N + next_p
 
     t0 = time.time()
     assert gmpy2.is_prime(low)
     assert gmpy2.is_prime(high)
     t1 = time.time()
 
-    print ("\tverified endpoints {:.2f} seconds".format(t1-t0))
+    print ("\tverified endpoints {:.2f} seconds".format(t1 - t0))
 
-    # XXX: because many low values checked prev_prime(high) is likely to be faster.
-    # if prev_prime was available, check next_prime(N) - N = h
-    # then check N - prev_prime(N) = l
+    found_prime = gmpy2.next_prime(N)
+    gap = found_prime - low
 
-    next_prime = gmpy2.next_prime(low)
+    success = (gap == next_p + prev_p)
+    if success:
+        # Also verify prev_prime
+        temp = gmpy2.next_prime(low)
+        assert temp == found_prime, (prev_p, next_p, "|", gap, temp - low)
+
     t2 = time.time()
 
-    success = next_prime == high
-    found_gap = next_prime - low
     print ("\nnext_prime({}) = {} {} {}\t{:.1f} seconds\n".format(
-        short_num, found_gap,
-        "=" if success else "!=", high - low,
-        t2 - t1))
+        short_num, gap, "=" if success else "!=", high - low, t2 - t1))
 
-    return success, found_gap, test
+    save_record(m, p, d, prev_p, next_p, t2 - t0)
+
+    update = normalize_line_new_format(f"{short_num} +{next_p} gap {gap}")
+    return success, update, gap, t2 - t0
 
 
-def filter_checks(checks, valid, fails):
+def verify_checks(checks, valid, fails):
     processed = {(m,p,d) for m, p, d, *_ in map(parse_line, valid + fails)}
-    already_processed = 0
-
-    for test in checks:
-        test = test.strip()
-        if test == "":
-            continue
-
-        m, p, d, l, h, gap = parse_line(test)
-        assert gap == "", test
-
-        if (m,p,d) in processed:
-            already_processed += 1
-            continue
-        processed.add((m,p,d))
-
-        yield test
-
-    if already_processed:
-        print(f"\n\t{already_processed} checks were already processed")
+    for row in checks:
+        assert (row['m'], row['P'], row['D']) not in processed
 
 
 def test_records():
-    checks, valid, fails = load_data()
+    valid, fails = load_data()
+
+    checks = load_sql()
+
+    # Verify none have been previously processed
+    verify_checks(checks, valid, fails)
+
     print("checks: {}, valid: {}, fails: {}\n".format(
         len(checks), len(valid), len(fails)))
 
@@ -166,9 +182,8 @@ def test_records():
 
     # XXX: make this configurable
     with multiprocessing.Pool(multiprocessing.cpu_count() // 4) as pool:
-        filtered = filter_checks(checks, valid, fails)
-        for success, found_gap, test in pool.imap(check_check, filtered):
-            update = normalize_line_new_format(test + " gap " + str(found_gap))
+        # XXX: should write back to DB even in filtered case.
+        for success, update, found_gap, time in pool.imap(check_check, checks):
             updates.append(update)
             if success:
                 valid.append(update)
@@ -177,7 +192,6 @@ def test_records():
             else:
                 fails.append(update)
 
-            print(update)
 
     if updates:
         print ("\n")
