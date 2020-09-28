@@ -34,7 +34,7 @@ def get_arg_parser():
     parser = argparse.ArgumentParser('Double check the results of combined_sieve')
 
     parser.add_argument('--ecm', type=str, default="ecm",
-        help="ecm tool")
+        metavar="ecm_program", help="Path to gmp-ecm (default: ecm)")
 
     parser.add_argument('--unknown-filename', type=str, required=True,
         help="determine mstart, minc, p, d, sieve-length, and sieve-range"
@@ -65,8 +65,7 @@ def double_check(args):
     M_start = args.mstart
     M_inc = args.minc
 
-    SL = sieve_length = args.sieve_length
-    sieve_range = args.sieve_range
+    SL = args.sieve_length
 
     # ----- Open Output file
     print("\tLoading unknowns from '{}'".format(args.unknown_filename))
@@ -107,7 +106,7 @@ def double_check(args):
         # Choose some random numbers
         count = args.count
         while count > 0:
-            t = random.choice(range(-SL+1, SL))
+            t = random.choice(range(-SL, SL+1))
             if t in boring_composites:
                 tested[0] += 1
                 continue
@@ -119,7 +118,7 @@ def double_check(args):
             found = False
             for p in small_primes:
                 if N % p == 0:
-                    print(f"\t\t{t:<+6} had trivial factor of {p} skipping")
+                    print(f"\t\t\t{t:<+6} had trivial factor of {p} skipping")
                     assert found_small, f"{p} divides {str_start} + {t}"
                     found = True
                     break
@@ -127,8 +126,8 @@ def double_check(args):
                 continue
 
             tested[1 + found_small] += 1
-            word = "a" if found_small else "no"
-            print (f"\t{t:<+6}\texpect {word} small composite factor")
+            word = "" if found_small else "n't"
+            print (f"\t{t:<+6}\tshould{word} have small factor")
 
             # Interesting factor
             count -= 1
@@ -140,7 +139,7 @@ def double_check(args):
 
             found_factor = (ret & 2) > 0
 
-            print ("\t\t\tecm:", output)
+            print ("\t\tecm:", output)
             if found_factor:
                 ecm_factor = int(output.split(" ")[0])
 
@@ -148,16 +147,16 @@ def double_check(args):
                 factor_output = subprocess.check_output(["factor", str(ecm_factor)])
                 factors = [int(f) for f in factor_output.decode().split(":")[1].strip().split(" ")]
                 if len(factors) > 1:
-                    print("\t\t\tfactor", factor_output)
+                    print("\t\tfactor", factor_output.decode().strip())
                 assert all(gmpy2.is_prime(factor) for factor in factors)
 
                 assert product(factors) == ecm_factor, (ecm_factor, factors)
 
                 # verify if sieve didn't find a small ecm better not find a small
                 if not found_small:
-                    assert all(f > args.sieve_length for f in factors), (ecm_factor, factors)
+                    assert all(f > args.max_prime for f in factors), (ecm_factor, factors)
 
-                # Tempting to check if found_small then any(f < args.sieve_length)
+                # Tempting to check if found_small then any(f < args.max_prime)
                 # but ecm not guarenteed to find that factor.
 
             # generally expected ecm to find the
