@@ -615,11 +615,12 @@ void run_gap_file(
         read_unknown_line(mi, unknown_file, unknown_low, unknown_high);
 
         if (config.verbose >= 2 && probs_seen.empty()) {
-            for (size_t i = 0; i < unknown_low[i]; i += 1) {
+            for (size_t i = 0; i < unknown_low.size(); i += 1) {
                 if (2 * unknown_low[i] > MISSING_GAPS_LOW) {
-                    printf("MISSING_GAP prob pair: ~~%.2e "
-                            "if both prime: ~~%.2e (~%.1f tests)\n",
+                    printf("MISSING_GAP prob pair: ~%.2e (%ld in middle) "
+                            "if both prime: ~%.2e (~%.0f tests per record)\n",
                             prob_combined[2*i],
+                            2 * i - 2,
                             prob_great_nth[2*i-2],
                             1 / prob_great_nth[2*i-2]);
                     break;

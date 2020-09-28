@@ -386,7 +386,84 @@ $ ./gap_stats --unknown-filename 1_907_2190_200_s11000_l100M.txt
 # Verify "avg seen prob:   0.9994038
 # Verify "avg record prob: 4.54e-06 (max: 8.123e-06)"
 
-# TODO gap_test.cpp, gap_test.py
+
+# Optionaly validate combined_sieve results with ecm
+$ python misc/double_check.py --seed=123 --unknown-filename 1_907_2190_200_s11000_l100M.txt -c 5 --B1 1000
+1 * 907# / 2190 	unknowns 218 + 212 = 430
+			+1423  had trivial factor of 2 skipping
+	+6570 	should have small factor
+		ecm: 2099 (1*907#/2190+6570)/2099
+			+1373  had trivial factor of 2 skipping
+			-1439  had trivial factor of 2 skipping
+			+7789  had trivial factor of 2 skipping
+			-2306  had trivial factor of 3 skipping
+			+4377  had trivial factor of 2 skipping
+	-4222 	should have small factor
+		ecm: 3325199 (1*907#/2190+-4222)/3325199
+		factor 3325199: 1319 2521
+...
+17 * 907# / 2190 	unknowns 216 + 208 = 424
+	+2722 	shouldn't have small factor
+		ecm: 17*907#/2190+2722
+...
+
+
+$ ./gap_test --unknown-filename 1_907_2190_200_s11000_l100M.txt -q --min-merit 8 --run-prp
+Testing m * 907#/2190, m = 1 + [0, 200)
+Min Gap ~= 7734 (for merit > 9.0)
+
+Reading unknowns from '1_907_2190_200_s11000_l100M.txt'
+
+53 tests M_start(1) + mi(0 to 198)
+
+7750  9.0185  1 * 907#/2190 -450 to +7300
+	m=1  218 <- unknowns -> 212 	 450 <- gap -> 7300
+	    tests     1          (15.29/sec)  0 seconds elapsed
+	    unknowns  430        (avg: 430.00), 98.05% composite  50.70% <- % -> 49.30%
+	    prp tests 144        (avg: 144.00) (2201.5 tests/sec)
+7462  8.6548  17 * 907#/2190 -6982 to +480
+6938  8.0460  19 * 907#/2190 -6722 to +216
+	m=37  214 <- unknowns -> 234 	1296 <- gap -> 250
+	    tests     10         (34.35/sec)  0 seconds elapsed
+	    unknowns  4262       (avg: 426.20), 98.06% composite  48.97% <- % -> 51.03%
+	    prp tests 643        (avg: 64.30) (2208.7 tests/sec)
+8520  9.8689  53 * 907#/2190 -4084 to +4436
+	m=113  207 <- unknowns -> 215 	  40 <- gap -> 972
+	    tests     30         (41.87/sec)  1 seconds elapsed
+	    unknowns  12676      (avg: 422.53), 98.08% composite  49.31% <- % -> 50.69%
+	    prp tests 1550       (avg: 51.67) (2163.0 tests/sec)
+8382  9.6979  143 * 907#/2190 -1800 to +6582
+7678  8.8820  163 * 907#/2190 -432 to +7246
+	m=199  216 <- unknowns -> 205 	 192 <- gap -> 30
+	    tests     53         (43.88/sec)  1 seconds elapsed
+	    unknowns  22377      (avg: 422.21), 98.08% composite  49.97% <- % -> 50.03%
+	    prp tests 2590       (avg: 48.87) (2144.5 tests/sec)
+
+
+$ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-merit 8 --run-prp
+...
+7750  9.0185  1 * 907#/2190 -7300 to +450
+	  1  218 <- unknowns ->  212	7300 <- gap ->  450
+7462  8.6548  17 * 907#/2190 -480 to +6982
+6938  8.0460  19 * 907#/2190 -216 to +6722
+	 37  214 <- unknowns ->  234	 250 <- gap -> 1296
+	    tests     10         (35.7/sec)  0 seconds elapsed
+	    unknowns  4262       (avg: 426.20), 98.06% composite  48.97% <- % -> 51.03%
+	    prp tests 643        (avg: 64.30) (2294.854 tests/sec)
+	    best merit this interval: 9.018 (at m=1)
+8520  9.8689  53 * 907#/2190 -4436 to +4084
+	113  207 <- unknowns ->  215	 972 <- gap ->   40
+	    tests     30         (43.1/sec)  1 seconds elapsed
+	    unknowns  12676      (avg: 422.53), 98.08% composite  49.31% <- % -> 50.69%
+	    prp tests 1550       (avg: 51.67) (2226.529 tests/sec)
+	    best merit this interval: 9.869 (at m=53)
+8382  9.6979  143 * 907#/2190 -6582 to +1800
+7678  8.8820  163 * 907#/2190 -7246 to +432
+	199  216 <- unknowns ->  205	  30 <- gap ->  192
+	    tests     53         (45/sec)  1 seconds elapsed
+	    unknowns  22377      (avg: 422.21), 98.08% composite  49.97% <- % -> 50.03%
+	    prp tests 2590       (avg: 48.87) (2199.432 tests/sec)
+	    best merit this interval: 9.698 (at m=143)
 ```
 
 ### TODO

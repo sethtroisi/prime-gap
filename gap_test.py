@@ -566,9 +566,10 @@ def prime_gap_test(args):
             if tested and args.run_prp:
                 print("\t    prp tests {:<10d} (avg: {:.2f}) ({:.3f} tests/sec)".format(
                     s_total_prp_tests, s_total_prp_tests / tested, s_total_prp_tests / secs))
-                print("\t    fallback prev_gap {} ({:.1f}%), next_gap {} ({:.1f}%)".format(
-                    s_gap_out_of_sieve_prev, 100 * s_gap_out_of_sieve_prev / tested,
-                    s_gap_out_of_sieve_next, 100 * s_gap_out_of_sieve_next / tested))
+                if s_gap_out_of_sieve_prev or s_gap_out_of_sieve_next:
+                    print("\t    fallback prev_gap {} ({:.1f}%), next_gap {} ({:.1f}%)".format(
+                        s_gap_out_of_sieve_prev, 100 * s_gap_out_of_sieve_prev / tested,
+                        s_gap_out_of_sieve_next, 100 * s_gap_out_of_sieve_next / tested))
                 print("\t    best merit this interval: {:.3f} (at m={})".format(
                     s_best_merit_interval, s_best_merit_interval_m))
 
