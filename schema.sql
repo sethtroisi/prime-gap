@@ -86,7 +86,11 @@ CREATE TABLE IF NOT EXISTS range_stats (
 
         /* map of <gap, prob> over all <low,high> pairs over all m's (in range) */
         gap INTEGER,
-        prob FLOAT,
+        prob_combined FLOAT,
+        /* map of <gap, prob> over all <low> values over all m's (in range) */
+        prob_low_side FLOAT,
+        /* map of <gap, prob> over all <high> values over all m's (in range) */
+        prob_high_side FLOAT,
 
         PRIMARY KEY (rid, gap)
 );

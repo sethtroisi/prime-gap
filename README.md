@@ -485,7 +485,6 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [ ] "expect %ld left" doesn't match
     * [ ] Verify `prop_gap_larger`, related to `count_coprime` and `count_coprime_after_d`
 * gap\_stats.cpp
-  * [ ] Write all data that `gap_test.py` consumes to DB
 * gap\_test.cpp
   * [ ] `--top-x-percent` (see THEORY.md)
   * [ ] Multithreaded
@@ -546,6 +545,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [x] Dynamic `sieve_length`
   * [x] Dynamic `max_prime`
 * gap\_stats.cpp
+  * [x] Write all data that `gap_test.py` consumes to DB
   * [x] Tweak logging at different verbose levels
   * [x] Move missing gaps behind a compile flag
   * [x] drop directory from `unknown-filename`

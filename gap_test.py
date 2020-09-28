@@ -62,7 +62,7 @@ def stats_plots(
         s_expected_gap,
         s_expected_prev, s_expected_next,
         s_experimental_gap, s_experimental_side,
-        p_gap_side, p_gap_comb, p_gap_merit
+        p_gap_side, p_gap_comb, p_merit_gap
     ):
 
 
@@ -84,7 +84,7 @@ def stats_plots(
             (s_expected_gap,  'expected', 'seagreen'),
             (s_experimental_side, 'next/prev gap', 'sandybrown'),
             (s_experimental_gap, 'gap', 'peru'),
-            (p_gap_merit, f'P(gap > min_merit({args.min_merit}))', 'dodgerblue'),
+            (p_merit_gap, f'P(gap > min_merit({args.min_merit}))', 'dodgerblue'),
     ]):
         if not d: continue
 
@@ -149,8 +149,8 @@ def stats_plots(
                  label='Theoretical P(gap)', color=color, alpha=0.4)
         plt.legend(loc='upper right')
 
-    assert len(p_gap_merit) == len(s_experimental_gap)
-    zipped = list(itertools.zip_longest(p_gap_merit, s_experimental_gap))
+    assert len(p_merit_gap) == len(s_experimental_gap)
+    zipped = list(itertools.zip_longest(p_merit_gap, s_experimental_gap))
 
     # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
     # sorted and unsorted order
@@ -459,7 +459,7 @@ def prime_gap_test(args):
     s_experimental_gap = []
     p_gap_side  = defaultdict(float)
     p_gap_comb  = defaultdict(float)
-    p_gap_merit = []
+    p_merit_gap = []
 
     last_mi = M_inc - 1
     while math.gcd(M + last_mi, D) != 1:
@@ -495,7 +495,7 @@ def prime_gap_test(args):
             s_expected_prev.append(e_prev)
             s_expected_next.append(e_next)
             s_expected_gap.append(e_prev + e_next)
-            p_gap_merit.append(p_merit)
+            p_merit_gap.append(p_merit)
 
         if args.run_prp:
 
@@ -585,7 +585,7 @@ def prime_gap_test(args):
             s_expected_gap,
             s_expected_prev, s_expected_next,
             s_experimental_gap, s_experimental_side,
-            p_gap_side, p_gap_comb, p_gap_merit
+            p_gap_side, p_gap_comb, p_merit_gap
         )
 
 

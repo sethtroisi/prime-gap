@@ -219,7 +219,11 @@ void store_stats(
         const struct Config& config,
         float K_log,
         double time_stats,
+        /* Over all M values */
         vector<float>& prob_gap_norm,
+        vector<float>& prob_gap_low,
+        vector<float>& prob_gap_high,
+        /* Per m value */
         vector<uint64_t>& M_vals,
         vector<float>& expected_prev,
         vector<float>& expected_next,
@@ -274,7 +278,8 @@ void store_stats(
 
     /* Create SQL statement to INSERT into range_stats. */
     char insert_range_stats[] = (
-        "INSERT INTO range_stats(rid, gap, prob) VALUES(?,?,?)"
+        "INSERT INTO range_stats(rid, gap, prob_combined, prob_low_side, prob_high_side)"
+        " VALUES(?,?, ?,?,?)"
     );
     sqlite3_stmt *insert_range_stmt;
     /* Prepare SQL statement */
@@ -284,9 +289,13 @@ void store_stats(
         exit(1);
     }
 
+    assert( prob_gap_norm.size() == prob_gap_low.size() );
+    assert( prob_gap_norm.size() == prob_gap_high.size() );
     size_t skipped_gap_stats = 0;
-    for (size_t g = 2; g < prob_gap_norm.size(); g += 2) {
-        if (prob_gap_norm[g] < 1e-10) {
+    for (size_t g = 1; g < prob_gap_norm.size(); g ++) {
+        if (prob_gap_norm[g] < 1e-10 &&
+            prob_gap_low[g]  < 1e-10 &&
+            prob_gap_high[g] < 1e-10) {
             // XXX: Consider summing the misc prob at g=0.
             skipped_gap_stats += 1;
             continue;
@@ -296,6 +305,8 @@ void store_stats(
 
         BIND_OR_ERROR(sqlite3_bind_int,    insert_range_stmt, 2, g);
         BIND_OR_ERROR(sqlite3_bind_double, insert_range_stmt, 3, prob_gap_norm[g]);
+        BIND_OR_ERROR(sqlite3_bind_double, insert_range_stmt, 4, prob_gap_low[g]);
+        BIND_OR_ERROR(sqlite3_bind_double, insert_range_stmt, 5, prob_gap_high[g]);
 
         int rc = sqlite3_step(insert_range_stmt);
         if (rc != SQLITE_DONE) {
@@ -316,8 +327,9 @@ void store_stats(
     }
 
     /* Create SQL statement to INSERT into m_stats. */
+    // NOTE: IGNORE so that can rerun with different max-prime/sieve-length
     char insert_m_stats[] = (
-            "INSERT INTO m_stats"
+            "INSERT OR IGNORE INTO m_stats"
             "(rid, m, P, D, next_p, prev_p, merit,"
             " prob_record, prob_missing, prob_merit,"
             " e_gap_next, e_gap_prev,"
@@ -579,6 +591,8 @@ void run_gap_file(
         std::ifstream& unknown_file,
         /* output */
         vector<float>& prob_gap_norm,
+        vector<float>& prob_gap_low,
+        vector<float>& prob_gap_high,
         vector<uint64_t>& M_vals,
         vector<float>& expected_prev,
         vector<float>& expected_next,
@@ -597,7 +611,13 @@ void run_gap_file(
     }
 
     prob_gap_norm.clear();
+    prob_gap_low.clear();
+    prob_gap_high.clear();
+
+    // NOTE: prob_gap_low only use values <=  SL but helps with store_stats
     prob_gap_norm.resize(2*config.sieve_length+1, 0);
+    prob_gap_low .resize(2*config.sieve_length+1, 0);
+    prob_gap_high.resize(2*config.sieve_length+1, 0);
 
     // sum prob_record_inside sieve
     // sum prob_record_outer (extended)
@@ -668,6 +688,9 @@ void run_gap_file(
             }
         }
 
+        // expected_gap_low | expected_gap_high
+        // prob_gap_low     | prob_gap_high
+
         double e_prev = 0, e_next = 0;
         double prob_record_outer = 0;
 
@@ -684,6 +707,8 @@ void run_gap_file(
 
                 prob_record_outer += prob_i * PROB_HIGH_GREATER * conditional_prob;
                 e_prev += unknown_low[i] * prob_i;
+
+                prob_gap_low[unknown_low[i]] += prob_i;
             }
             if (i < unknown_high.size()) {
                 float conditional_prob = prob_record_extended_gap[unknown_high[i]];
@@ -691,6 +716,8 @@ void run_gap_file(
 
                 prob_record_outer += prob_i * PROB_LOW_GREATER * conditional_prob;
                 e_next += unknown_high[i] * prob_i;
+
+                prob_gap_high[unknown_high[i]] += prob_i;
             }
         }
 
@@ -736,6 +763,8 @@ void run_gap_file(
     // Normalize the probability of gap (across all m) to per m
     for (size_t i = 0; i < prob_gap_norm.size(); i++) {
         prob_gap_norm[i] /= valid_m.size();
+        prob_gap_low[i]  /= valid_m.size();
+        prob_gap_high[i] /= valid_m.size();
     }
 
     if (config.verbose >= 0) {
@@ -896,6 +925,8 @@ void prime_gap_stats(const struct Config config) {
 
     /* Over all m values */
     vector<float> prob_gap_norm;
+    vector<float> prob_gap_low;
+    vector<float> prob_gap_high;
 
     /* Per m stats */
     vector<uint64_t> M_vals;
@@ -918,7 +949,7 @@ void prime_gap_stats(const struct Config config) {
         /* sieve input */
         unknown_file,
         /* output */
-        prob_gap_norm,
+        prob_gap_norm, prob_gap_low, prob_gap_high,
         M_vals,
         expected_prev, expected_next,
         probs_seen,
@@ -943,7 +974,7 @@ void prime_gap_stats(const struct Config config) {
         store_stats(
             config, K_log,
             secs,
-            prob_gap_norm,
+            prob_gap_norm, prob_gap_low, prob_gap_high,
             M_vals,
             expected_prev, expected_next,
             probs_seen, probs_record
