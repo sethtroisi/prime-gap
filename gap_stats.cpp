@@ -299,8 +299,7 @@ void store_stats(
 
         int rc = sqlite3_step(insert_range_stmt);
         if (rc != SQLITE_DONE) {
-            // Allow BUSY with retry.
-            printf("\nCould not execute stmt (%ld): %d: %s\n", g, rc, sqlite3_errmsg(db));
+            printf("\nrange_stats insert failed (%ld): %d: %s\n", g, rc, sqlite3_errmsg(db));
             break;
         }
 
@@ -375,8 +374,8 @@ void store_stats(
 
         int rc = sqlite3_step(stmt);
         if (rc != SQLITE_DONE) {
-            // Allow BUSY with retry.
-            printf("\nCould not execute stmt (%ld): %d: %s\n", i, rc, sqlite3_errmsg(db));
+            printf("\nm_stats insert failed %ld: (%ld, %d, %d): %d: %s\n",
+                i, m, config.p, config.d, rc, sqlite3_errmsg(db));
             break;
         }
 
