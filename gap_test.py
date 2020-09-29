@@ -81,6 +81,9 @@ def stats_plots(
     fig3 = plt.figure(constrained_layout=True, figsize=(8, 8))
     gs = fig3.add_gridspec(6, 2)
 
+    axis_one_gap = fig3.add_subplot(gs[0:2, 1])
+    axis_combined_gap = fig3.add_subplot(gs[2:4, 1])
+
     for plot_i, (d, label, color) in enumerate([
             (s_expected_prev, 'prev', 'lightskyblue'),
             (s_expected_next, 'next', 'darksalmon'),
@@ -92,18 +95,18 @@ def stats_plots(
         if not d: continue
 
         if plot_i == 0: # Not called again on plot_i == 1
-            fig3.add_subplot(gs[0:2, 0])
+            axis = fig3.add_subplot(gs[0:2, 0])
         elif plot_i == 2:
-            fig3.add_subplot(gs[2:4, 0])
+            axis = fig3.add_subplot(gs[2:4, 0])
         elif plot_i == 3:
-            fig3.add_subplot(gs[0:2, 1])
+            axis = axis_one_gap
         elif plot_i == 4:
-            fig3.add_subplot(gs[2:4, 1])
+            axis = axis_combined_gap
         elif plot_i == 5:
-            fig3.add_subplot(gs[4:6, 0])
+            axis = fig3.add_subplot(gs[4:6, 0])
 
         hist_data = np.histogram(d, bins=100, density=True)
-        plt.scatter(hist_data[1][:-1], hist_data[0], color=color,
+        axis.scatter(hist_data[1][:-1], hist_data[0], color=color,
                     marker='o' if plot_i in (3,4) else 'x', s=8)
         max_y = hist_data[0].max()
 
@@ -120,10 +123,10 @@ def stats_plots(
         E = np.mean(d)
 
         if plot_i != 5:
-            plt.axvline(x=E, ymax=1.0/1.2, color=color, label=f"E({label}) = {E:.0f}")
-            plt.legend(loc='upper right')
+            axis.axvline(x=E, ymax=1.0/1.2, color=color, label=f"E({label}) = {E:.0f}")
+            axis.legend(loc='upper right')
         else:
-            plt.legend([label])
+            axis.legend([label])
 
         gap_span = np.linspace(0.95 * np.percentile(d, 1), 1.05 * np.percentile(d, 99), 400)
         if plot_i == 5:
@@ -132,26 +135,26 @@ def stats_plots(
         if 'gap' not in label:
             mu, std = stats.norm.fit(d)
             p = stats.norm.pdf(gap_span, mu, std)
-            plt.plot(gap_span, p, color=color)
+            axis.plot(gap_span, p, color=color)
 
-        plt.xlim(np.percentile(d, 0.01), np.percentile(d, 99.9))
-        plt.ylim(2e-5, 1.2 * max_y)
+        axis.set_xlim(np.percentile(d, 0.01), np.percentile(d, 99.9))
+        axis.set_ylim(2e-5, 1.2 * max_y)
 
     for d, color in [
             (p_gap_side, 'blueviolet'),
             (p_gap_comb, 'seagreen'),
     ]:
         if color == 'blueviolet':
-            fig3.add_subplot(gs[0:2, 1])
+            axis = axis_one_gap
         else:
-            fig3.add_subplot(gs[2:4, 1])
+            axis = axis_combined_gap
 
         d_x, d_w = zip(*sorted(((g, v) for g,v in d.items() if v > 1e-8)))
         print (f"|P(gap)| = {len(d_x)}, Sum(P(gap)) = {sum(d_w)}")
 
-        plt.hist(d_x, weights=d_w, bins=100, density=True,
+        axis.hist(d_x, weights=d_w, bins=100, density=True,
                  label='Theoretical P(gap)', color=color, alpha=0.4)
-        plt.legend(loc='upper right')
+        axis.legend(loc='upper right')
 
     assert len(p_merit_gap) == len(s_experimental_gap)
     zipped = list(itertools.zip_longest(p_merit_gap, s_experimental_gap))
@@ -159,16 +162,26 @@ def stats_plots(
     # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
     # sorted and unsorted order
     fig3.add_subplot(gs[4:6, 1])
+    plt.xlabel(" # of m's tests")
+    plt.ylabel(f'Sum(P(gap > min_merit)')
 
     p_gap_merit_sorted, _ = zip(*sorted(zipped, reverse=True))
     p_gap_merit_ord, gap_real_ord = zip(*zipped)
 
     tests = list(range(1, len(p_gap_merit_ord)+1))
 
+    #Experimental
+    cumcount_large = np.cumsum(np.array(gap_real_ord) > min_merit_gap)
+    plt.plot(tests, cumcount_large, label='Count gap > min_merit')
+
     # Theoretical
     cumsum_p = np.cumsum(p_gap_merit_ord)
     cumsum_p_sorted = np.cumsum(p_gap_merit_sorted)
 
+    plt.plot(tests, cumsum_p, label='Sum(P(gap > min_merit))')
+    z  = plt.plot(tests, cumsum_p_sorted, label='Sum(P(gap > min_merit)) (best first)')
+
+    '''
     # Theoretical with restart
     def cumsum_restarts(restarts):
         part_size = len(tests) // (restarts + 1)
@@ -181,17 +194,9 @@ def stats_plots(
     cumsum_p_restart = cumsum_restarts(1)
     cumsum_p_restart_freq = cumsum_restarts(9)
 
-    # Experimental
-    cumcount_large = np.cumsum(np.array(gap_real_ord) > min_merit_gap)
-
     # Want this one below next graph
-    z3 = plt.plot(tests, cumsum_p_restart_freq, label='10 runs of top 10%')
+    z3 = plt.plot(tests, cumsum_p_restart_freq, label='(top 10% of 10x larger run)')
     z2 = plt.plot(tests, cumsum_p_restart, label='P(gap > min_merit) (top 50% of two sieves)')
-    z  = plt.plot(tests, cumsum_p_sorted, label='P(gap > min_merit) (sorting by best first)')
-    plt.plot(tests, cumsum_p, label='P(gap > min_merit)')
-    plt.plot(tests, cumcount_large, label='Count gap > min_merit')
-    plt.xlabel(" # of m's tests")
-    plt.ylabel(f'Sum(P(gap > min_merit)')
 
     # Plot speedup at 50th percentile
     mid_t = len(tests) // 2
@@ -203,9 +208,9 @@ def stats_plots(
     y = [cumsum_p[-1], cumsum_p_restart[-1]]
     plt.plot([tests[-1], tests[-1]], y, c=z2[0].get_color(),
                 label="+{:.1%} using top 50% & sorting".format(y[1] / y[0] - 1))
+    '''
 
     plt.legend(loc='upper left')
-
 
     # TODO plot number of PRP tests per M
     # TODO(P(record))
@@ -217,8 +222,6 @@ def stats_plots(
     # Another plot needed is
     #   P(record gap) sorted vs unsorted
     #   P(rg) sorted 50% then new gap
-
-
 
     if args.save_logs:
         plt.savefig(args.unknown_filename + ".png", dpi=1080//8)
@@ -665,22 +668,22 @@ def prime_gap_test(args):
              s_expected_gap_db, p_merit_gap_db,
              p_gap_comb_db, p_gap_side_db) = load_stats(conn, args)
             assert s_expected_prev_db and p_gap_comb_db
-
-            stats_plots(
-                args,
-                min_merit_gap,
-
-                valid_m,
-                s_expected_gap_db,
-                s_expected_prev_db, s_expected_next_db,
-                s_experimental_gap, s_experimental_side,
-                p_gap_side_db, p_gap_comb_db, p_merit_gap_db
-            )
         except:
             # Failed to load
             if not args.stats and args.plots:
                 print("Failed to load from DB so no plots.")
                 exit(1)
+
+        stats_plots(
+            args,
+            min_merit_gap,
+
+            valid_m,
+            s_expected_gap_db,
+            s_expected_prev_db, s_expected_next_db,
+            s_experimental_gap, s_experimental_side,
+            p_gap_side_db, p_gap_comb_db, p_merit_gap_db
+        )
 
 
 
