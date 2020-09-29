@@ -228,12 +228,16 @@ void store_stats(
         vector<float>& expected_prev,
         vector<float>& expected_next,
         vector<float>& probs_seen,
-        vector<float>& probs_record) {
+        vector<float>& probs_record,
+        vector<float>& probs_missing,
+        vector<float>& probs_highmerit) {
 
     assert( M_vals.size() == expected_prev.size() );
     assert( M_vals.size() == expected_next.size() );
     assert( M_vals.size() == probs_seen.size() );
     assert( M_vals.size() == probs_record.size() );
+    assert( M_vals.size() == probs_missing.size() );
+    assert( M_vals.size() == probs_highmerit.size() );
 
     sqlite3 *db = get_db(gaps_db);
 
@@ -335,7 +339,7 @@ void store_stats(
             " e_gap_next, e_gap_prev,"
             " prp_next, prp_prev, test_time)"
             "VALUES"
-            "(?, ?, ?, ?, 0, 0, 0,"
+            "(?, ?, ?, ?, 0, 0, 0.0,"
             " ?, ?, ?,"
             " ?, ?,"
             " 0, 0, 0)"
@@ -363,9 +367,11 @@ void store_stats(
         if (config.verbose >= 2 && (
                     (r <= 5) || (r < 500 && r % 100 == 0) ||
                     (r % 2000 == 0) || r == num_rows)) {
-            printf("Saving Row: %6ld/%ld %ld: %.1f, %.1f | %.1e\n",
+            printf("Saving Row: %6ld/%ld %6ld: %.1f, %.1f | R: %.1e M: %.1e HM(%.1f): %.1e\n",
                     r, num_rows, m,
-                    e_next, e_prev, probs_record[i]);
+                    e_next, e_prev,
+                    probs_record[i], probs_missing[i],
+                    config.min_merit, probs_highmerit[i]);
         }
 
         BIND_OR_ERROR(sqlite3_bind_int64, stmt, 1, rid);
@@ -377,8 +383,8 @@ void store_stats(
 
         // prob_record, prob_missing, prob_merit
         BIND_OR_ERROR(sqlite3_bind_double, stmt, 5, probs_record[i]);
-        BIND_OR_ERROR(sqlite3_bind_double, stmt, 6, probs_record[i]);
-        BIND_OR_ERROR(sqlite3_bind_double, stmt, 7, probs_record[i]);
+        BIND_OR_ERROR(sqlite3_bind_double, stmt, 6, probs_missing[i]);
+        BIND_OR_ERROR(sqlite3_bind_double, stmt, 7, probs_highmerit[i]);
 
         // e_next, e_prev
         BIND_OR_ERROR(sqlite3_bind_double, stmt, 8, e_next);
@@ -584,6 +590,7 @@ void run_gap_file(
         const float K_log,
         const vector<float>& records,
         const uint32_t min_record_gap,
+        const uint32_t min_gap_min_merit,
         const vector<float>& prob_prime_nth,
         const vector<float>& prob_great_nth,
         const vector<float>& prob_combined,
@@ -657,11 +664,13 @@ void run_gap_file(
 
         double prob_record = 0;
         double prob_is_missing_gap = 0;
+        double prob_highmerit = 0;
 
         size_t min_j = unknown_high.size() - 1;
+        uint32_t min_interesting_gap = std::min(min_gap_min_merit, min_record_gap);
         for (size_t i = 0; i < unknown_low.size(); i++) {
             uint32_t gap_low = unknown_low[i];
-            while ((min_j > 0) && (gap_low + unknown_high[min_j] > min_record_gap)) {
+            while ((min_j > 0) && (gap_low + unknown_high[min_j] > min_interesting_gap)) {
                 min_j -= 1;
             }
 
@@ -674,10 +683,14 @@ void run_gap_file(
                 // Same as prob_prime_nth[i] * prob_prime_nth[j];
                 float prob_this_gap = prob_combined[i + j];
 
+                // XXX: Costs some performance to calculate all of these
                 prob_gap_norm[gap] += prob_this_gap;
 
-                if (j >= min_j && records[gap] > log_start_prime) {
-                    // assert(i + j < prob_combined.size());
+                if (gap >= min_gap_min_merit) {
+                    prob_highmerit += prob_this_gap;
+                }
+
+                if (gap >= min_record_gap && records[gap] > log_start_prime) {
                     prob_record += prob_this_gap;
 
                     if (MISSING_GAPS_LOW <= gap && gap <= MISSING_GAPS_HIGH &&
@@ -733,6 +746,7 @@ void run_gap_file(
         probs_seen.push_back(prob_seen);
         probs_record.push_back(prob_record_combined);
         probs_missing.push_back(prob_is_missing_gap);
+        probs_highmerit.push_back(prob_highmerit);
 
         if (prob_record_combined > max_p_record) {
             max_p_record = prob_record_combined;
@@ -813,9 +827,9 @@ void prime_gap_stats(const struct Config config) {
     K_stats(config, K, &K_digits, &K_log);
     float N_log = K_log + log(config.mstart);
 
+    uint32_t min_gap_min_merit = std::ceil(config.min_merit * N_log);
     if (config.verbose >= 2) {
-        size_t min_gap = config.min_merit * N_log;
-        printf("Min Gap ~= %ld (for merit > %.1f)\n\n", min_gap, config.min_merit);
+        printf("Min Gap ~= %d (for merit > %.1f)\n\n", min_gap_min_merit, config.min_merit);
     }
 
     // ----- Get Record Prime Gaps
@@ -877,12 +891,14 @@ void prime_gap_stats(const struct Config config) {
         prob_prime_nth_sieve, prob_great_nth_sieve);
 
 
-    /* prob_combined_sieve[i+j] = prime * (1 - prime)^i * (1 - prime)^j * prime */
+    /**
+     * prob_combined_sieve[i+j] = prime * (1 - prime)^i * (1 - prime)^j * prime
+     *                          = prime ^ 2 * (1 - prime)^(i+j)
+     */
     vector<float> prob_combined_sieve;
     prob_combined_gap(
         PROB_PRIME_AFTER_SIEVE,
         prob_combined_sieve);
-
 
     // Prob record with gap[i] and other gap > SL
     vector<float> prob_record_extended_gap(SL+1, 0.0);
@@ -942,7 +958,7 @@ void prime_gap_stats(const struct Config config) {
     run_gap_file(
         /* Input */
         config, K_log,
-        records, poss_record_gaps.front(),
+        records, poss_record_gaps.front(), min_gap_min_merit,
         prob_prime_nth_sieve, prob_great_nth_sieve,
         prob_combined_sieve,
         prob_record_extended_gap,
@@ -977,7 +993,8 @@ void prime_gap_stats(const struct Config config) {
             prob_gap_norm, prob_gap_low, prob_gap_high,
             M_vals,
             expected_prev, expected_next,
-            probs_seen, probs_record
+            probs_seen,
+            probs_record, probs_missing, probs_highmerit
         );
     }
 }
