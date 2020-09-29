@@ -39,7 +39,7 @@ def get_arg_parser():
         help="determine mstart, minc, p, d, sieve-length, and max-prime"
              " from unknown-results filename")
 
-    parser.add_argument('--min-merit',    type=int, default=10,
+    parser.add_argument('--min-merit',    type=int, default=12,
         help="only display prime gaps with merit >= minmerit")
     parser.add_argument('--run-prp',  action='store_true',
         help="Run PRP, leave off to benchmarking and print some stats")
@@ -143,7 +143,8 @@ def stats_plots(
         else:
             fig3.add_subplot(gs[2:4, 1])
 
-        d_x, d_w = zip(*sorted(d.items()))
+        d_x, d_w = zip(*sorted(((g, v) for g,v in d.items() if v > 1e-8)))
+        print (f"|P(gap)| = {len(d_x)}, Sum(P(gap)) = {sum(d_w)}")
 
         plt.hist(d_x, weights=d_w, bins=100, density=True,
                  label='Theoretical P(gap)', color=color, alpha=0.4)
@@ -194,7 +195,7 @@ def stats_plots(
 
     y = [cumsum_p[mid_t], cumsum_p_sorted[mid_t]]
     plt.plot([tests[mid_t], tests[mid_t]], y, c=z[0].get_color(),
-                label="+{:.1%} by sorting".format(y[1] / y[0] - 1))
+                label="+{:.1%} by sorting at midpoint".format(y[1] / y[0] - 1))
 
     y = [cumsum_p[-1], cumsum_p_restart[-1]]
     plt.plot([tests[-1], tests[-1]], y, c=z2[0].get_color(),
@@ -229,18 +230,59 @@ def stats_plots(
 
 
 def load_existing(conn, args):
-    # TODO to_process_range
     rv = conn.execute(
         "SELECT m, next_p_i, prev_p_i FROM result"
-        " WHERE P = ? and D = ? and m BETWEEN ? AND ?",
+        " WHERE P = ? AND D = ? AND m BETWEEN ? AND ?",
         (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
     return {row['m']: [row['prev_p_i'], row['next_p_i']] for row in rv}
 
 
+def config_hash(config):
+    h =          config.mstart
+    h = h * 31 + config.minc;
+    h = h * 31 + config.p;
+    h = h * 31 + config.d;
+    h = h * 31 + config.sieve_length;
+    h = h * 31 + config.max_prime;
+    return h % (2 ** 64)
+
+
+def load_stats(conn, args):
+    rv = conn.execute(
+        "SELECT e_gap_prev, e_gap_next, e_gap_prev + e_gap_next, prob_merit"
+        " FROM m_stats WHERE P = ? AND D = ? AND m BETWEEN ? AND ?",
+        (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
+
+    s_expected_prev, s_expected_next, s_expected_gap, p_merit_gap = zip(
+        *[tuple(row) for row in rv])
+
+    # Need dictionary
+    p_gap_comb  = defaultdict(float)
+    p_gap_side  = defaultdict(float)
+
+    m_values = len(p_merit_gap)
+
+    rv = conn.execute(
+        "SELECT gap, prob_combined, prob_low_side, prob_high_side "
+        "FROM range_stats where rid = ?",
+        (config_hash(args),))
+    for row in rv:
+        gap = row['gap']
+        # Values were normalized by / m_values in gap_stats
+        p_gap_comb[gap] += row['prob_combined'] * m_values
+        p_gap_side[gap] += row['prob_low_side'] / 2 * m_values
+        p_gap_side[gap] += row['prob_high_side'] / 2 * m_values
+
+    return (
+        s_expected_prev, s_expected_next, s_expected_gap, p_merit_gap,
+        p_gap_comb, p_gap_side
+    )
+
 def save(conn, m, p, d, n_p_i, p_p_i, merit):
     conn.execute(
-        "INSERT INTO result VALUES(null, ?, ?, ?, ?, ?, ?)",
-        (m, p, d, n_p_i, p_p_i, round(merit,3)))
+        "INSERT INTO result(m,P,D,next_p_i,prev_p_i,merit)"
+        "VALUES(?,?,?,  ?,?,  ?)",
+        (m, p, d,  n_p_i, p_p_i,  round(merit,4)))
     conn.commit()
 
 
@@ -304,6 +346,7 @@ def calculate_expected_gaps(composites, SL, prob_prime_after_sieve, log_m,
         expected_length = 0
         for v, prob in zip(side, probs):
             expected_length += abs(v) * prob
+            # Normalized to 1 by matplotlib.hist later.
             p_gap_side[abs(v)] += prob
 
         # expected to encounter a prime at distance ~= ln(start)
@@ -415,7 +458,7 @@ def prime_gap_test(args):
     # ----- Open Prime-Gap-Search DB
     conn = sqlite3.connect(args.search_db)
     conn.row_factory = sqlite3.Row
-    existing = {} #load_existing(conn, args)
+    existing = load_existing(conn, args)
     print (f"Found {len(existing)} existing results")
 
     # used in next_prime
@@ -524,10 +567,11 @@ def prime_gap_test(args):
 
             merit = gap / log_m
             if m not in existing:
-                #save(conn, m, P, D, next_p_i, prev_p_i, merit)
-                if merit > min_merit:
-                    print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(
-                        gap, merit, m, P, D, prev_p_i, next_p_i))
+                save(conn, m, P, D, next_p_i, prev_p_i, merit)
+
+            if merit > min_merit:
+                print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(
+                    gap, merit, m, P, D, prev_p_i, next_p_i))
 
             if merit > s_best_merit_interval:
                 s_best_merit_interval = merit
@@ -586,6 +630,22 @@ def prime_gap_test(args):
             s_expected_prev, s_expected_next,
             s_experimental_gap, s_experimental_side,
             p_gap_side, p_gap_comb, p_merit_gap
+        )
+
+        # Load stats from gap_stats
+        (s_expected_prev_db, s_expected_next_db,
+         s_expected_gap_db, p_merit_gap_db,
+         p_gap_comb_db, p_gap_side_db) = load_stats(conn, args)
+
+        stats_plots(
+            args,
+            min_merit_gap,
+
+            valid_m,
+            s_expected_gap_db,
+            s_expected_prev_db, s_expected_next_db,
+            s_experimental_gap, s_experimental_side,
+            p_gap_side_db, p_gap_comb_db, p_merit_gap_db
         )
 
 
