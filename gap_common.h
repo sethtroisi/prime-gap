@@ -20,6 +20,7 @@
 #include <vector>
 
 #include <gmp.h>
+#include <sqlite3.h>
 
 
 using std::map;
@@ -61,10 +62,33 @@ struct Config {
     string unknown_filename;
 };
 
-void show_usage(char* name);
-Config argparse(int argc, char* argv[]);
 
-std::string gen_unknown_fn(const struct Config& config, std::string suffix);
+class Args
+{
+    public:
+        static void show_usage(char* name);
+        static Config argparse(int argc, char* argv[]);
+        static std::string gen_unknown_fn(const struct Config& config, std::string suffix);
+
+    private:
+        // Disallow creating instance
+        Args() {}
+};
+
+
+class DB
+{
+    public:
+        DB(const char* path);
+        ~DB() { if (db != NULL) sqlite3_close(db); };
+
+        uint64_t    config_hash(const struct Config& config);
+
+        sqlite3*    get_db() { assert(db != NULL); return db; };
+
+    private:
+        sqlite3 *db = NULL;
+};
 
 
 /* Random Utils */

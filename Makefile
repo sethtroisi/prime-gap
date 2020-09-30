@@ -16,7 +16,7 @@
 OBJS	= gap_common.o modulo_search.o
 OUT	= combined_sieve gap_stats gap_test benchmark
 CC	= g++
-CFLAGS	= -Wall -Werror -O3 -lgmp
+CFLAGS	= -Wall -Werror -O3 -lgmp -lsqlite3
 LDFLAGS	= -L /usr/local/lib
 DEFINES =
 PROGS	= combined_sieve gap_test
@@ -31,7 +31,7 @@ $(PROGS) : %: %.cpp $(OBJS)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(DEFINES)
 
 gap_stats: gap_stats.cpp gap_common.o
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -lsqlite3
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 benchmark: misc/benchmark.cpp modulo_search.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -I.

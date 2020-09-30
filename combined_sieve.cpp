@@ -56,7 +56,7 @@ void prime_gap_parallel(const struct Config config);
 
 
 int main(int argc, char* argv[]) {
-    Config config = argparse(argc, argv);
+    Config config = Args::argparse(argc, argv);
 
     if (config.verbose >= 2) {
         printf("\tCompiled with GMP %d.%d.%d\n\n",
@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (config.valid == 0) {
-        show_usage(argv[0]);
+        Args::show_usage(argv[0]);
         exit(1);
     }
 
@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (config.save_unknowns) {
-        std::string fn = gen_unknown_fn(config, ".txt");
+        std::string fn = Args::gen_unknown_fn(config, ".txt");
         std::ifstream f(fn);
         if (f.good()) {
             printf("\nOutput file '%s' already exists\n", fn.c_str());
@@ -457,7 +457,7 @@ void prime_gap_search(const struct Config config) {
     // ----- Open and Save to Output file
     std::ofstream unknown_file;
     if (config.save_unknowns) {
-        std::string fn = gen_unknown_fn(config, ".txt");
+        std::string fn = Args::gen_unknown_fn(config, ".txt");
         printf("\nSaving unknowns to '%s'\n", fn.c_str());
         unknown_file.open(fn, std::ios::out);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
@@ -649,7 +649,7 @@ void save_unknowns_method2(
     // ----- Open and Save to Output file
     std::ofstream unknown_file;
     {
-        std::string fn = gen_unknown_fn(config, ".txt");
+        std::string fn = Args::gen_unknown_fn(config, ".txt");
         printf("\nSaving unknowns to '%s'\n", fn.c_str());
         unknown_file.open(fn, std::ios::out);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file

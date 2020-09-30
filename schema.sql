@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS range(
         num_m INTEGER,
 
         /* number of entries in m_stats processed by gap_tests */
-        num_processed INTEGER,
+        num_processed INTEGER DEFAULT 0,
 
         /* number left to process in m_stats
          * because of --top-x-percent
@@ -69,9 +69,9 @@ CREATE TABLE IF NOT EXISTS range(
         num_remaining INTEGER,
 
         /* Time for various tasks */
-        time_sieve REAL,
-        time_stats REAL,
-        time_tests REAL
+        time_sieve REAL DEFAULT 0,
+        time_stats REAL DEFAULT 0,
+        time_tests REAL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS range_stats (

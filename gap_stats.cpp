@@ -84,7 +84,7 @@ static void prob_stats(char const *name, vector<float> probs) {
 
 int main(int argc, char* argv[]) {
 
-    Config config = argparse(argc, argv);
+    Config config = Args::argparse(argc, argv);
 
     if (config.verbose >= 3) {
         printf("\tCompiled with GMP %d.%d.%d\n\n",
@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (config.valid == 0) {
-        show_usage(argv[0]);
+        Args::show_usage(argv[0]);
         return 1;
     }
 
@@ -110,36 +110,18 @@ int main(int argc, char* argv[]) {
 //---------------------------------------------------------------------------//
 
 
-sqlite3* get_db(const char* path) {
-    {
-        std::ifstream f(path);
-        if (!f.good()) {
-            printf("database(%s) doesn't exist\n", path);
-            exit(1);
-        }
-    }
-
-    sqlite3 *db;
-    if (sqlite3_open(path, &db) != SQLITE_OK) {
-        printf("Can't open database(%s): %s\n", path, sqlite3_errmsg(db));
-        exit(1);
-    }
-    return db;
-}
-
-
 vector<float> get_record_gaps() {
     vector<float> records(MAX_GAP, GAP_INF);
 
     // TODO accept db file as param.
-    sqlite3 *db = get_db(records_db);
+    DB db(records_db);
 
     /* Create SQL statement */
     char sql[] = "SELECT gapsize, merit FROM gaps";
     char *zErrMsg = 0;
 
     /* Execute SQL statement */
-    int rc = sqlite3_exec(db, sql, [](void* recs, int argc, char **argv, char **azColName)->int {
+    int rc = sqlite3_exec(db.get_db(), sql, [](void* recs, int argc, char **argv, char **azColName)->int {
         uint64_t gap = atol(argv[0]);
         if (gap < MAX_GAP) {
             // Recover log(startprime)
@@ -152,7 +134,6 @@ vector<float> get_record_gaps() {
         printf("SQL error: %s\n", zErrMsg);
         sqlite3_free(zErrMsg);
     }
-    sqlite3_close(db);
 
     return records;
 }
@@ -178,25 +159,15 @@ void load_possible_records(
 }
 
 
-uint64_t config_hash(const struct Config& config) {
-    // Hash the config to a uint64
-    uint64_t hash =    config.mstart;
-    hash = hash * 31 + config.minc;
-    hash = hash * 31 + config.p;
-    hash = hash * 31 + config.d;
-    hash = hash * 31 + config.sieve_length;
-    hash = hash * 31 + config.max_prime;
-    return hash;
-}
-
-
 bool is_range_already_processed(const struct Config& config) {
-    uint64_t hash = config_hash(config);
+    DB db_helper(gaps_db);
+    sqlite3 *db = db_helper.get_db();
+
+    uint64_t hash = db_helper.config_hash(config);
     char sql[200];
-    sprintf(sql, "SELECT count(*) FROM range WHERE rid = %ld", hash);
+    sprintf(sql, "SELECT count(*) FROM range WHERE rid = %ld and stats_time > 0", hash);
     char *zErrMsg = 0;
 
-    sqlite3 *db = get_db(gaps_db);
 
     int count = 0;
     int rc = sqlite3_exec(db, sql, [](void* data, int argc, char **argv, char **azColName)->int {
@@ -204,7 +175,6 @@ bool is_range_already_processed(const struct Config& config) {
         *static_cast<int*>(data) = atoi(argv[0]);
         return 0;
     }, &count, &zErrMsg);
-    sqlite3_close(db);
 
     if (rc != SQLITE_OK) {
         printf("\nrange SELECT failed '%s' | %d: '%s'\n",
@@ -239,7 +209,8 @@ void store_stats(
     assert( M_vals.size() == probs_missing.size() );
     assert( M_vals.size() == probs_highmerit.size() );
 
-    sqlite3 *db = get_db(gaps_db);
+    DB db_helper(gaps_db);
+    sqlite3 *db = db_helper.get_db();
 
     assert( !is_range_already_processed(config) );
 
@@ -249,23 +220,24 @@ void store_stats(
         exit(1);
     }
 
-    const uint64_t rid = config_hash(config);
+    const uint64_t rid = db_helper.config_hash(config);
     const size_t num_rows = M_vals.size();
     char sSQL[300];
     sprintf(sSQL,
         "INSERT INTO range(rid, m_start, m_inc, P, D,"
                           "sieve_length, max_prime,"
                           "min_merit,"
-                          "num_m,num_processed, num_remaining,"
-                          "time_sieve,time_stats,time_tests)"
+                          "num_m, num_remaining,"
+                          "time_stats)"
          "VALUES(%ld,  %ld,%ld, %d,%d,"
                 "%d,%ld,  %.3f,"
-                "%ld,%d,%ld,  %.2f,%.2f,%.2f)",
+                "%ld,%ld,  %.2f)"
+        "ON CONFLICT DO UPDATE SET time_sieve=%.2f",
             rid,  config.mstart, config.minc,  config.p, config.d,
             config.sieve_length, config.max_prime,
             config.min_merit,
-            num_rows, 0, num_rows,
-            0.0, time_stats, 0.0);
+            num_rows, num_rows,
+            time_stats, time_stats);
 
     int rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
     if (rc != SQLITE_OK) {
@@ -415,8 +387,6 @@ void store_stats(
         printf("Saved %ld rows to 'm_stats' table\n",
                 num_rows);
     }
-
-    sqlite3_close(db);
 }
 
 
@@ -810,7 +780,7 @@ void prime_gap_stats(const struct Config config) {
     // ----- Read from unknown file
     std::ifstream unknown_file;
     {
-        std::string fn = gen_unknown_fn(config, ".txt");
+        std::string fn = Args::gen_unknown_fn(config, ".txt");
         if (config.verbose >= 0) {
             printf("\nReading from %s'\n\n", fn.c_str());
         }

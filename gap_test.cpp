@@ -36,9 +36,9 @@ void prime_gap_test(const struct Config config);
 
 
 int main(int argc, char* argv[]) {
-    Config config = argparse(argc, argv);
+    Config config = Args::argparse(argc, argv);
     if (config.valid == 0) {
-        show_usage(argv[0]);
+        Args::show_usage(argv[0]);
         return 1;
     }
 
@@ -54,13 +54,13 @@ int main(int argc, char* argv[]) {
 
     if (config.sieve_length == 0) {
         cout << "Must set sieve-length for " << argv[0] << endl;
-        show_usage(argv[0]);
+        Args::show_usage(argv[0]);
         return 1;
     }
 
     if (config.max_prime == 0) {
         cout << "Must set sieve-length for " << argv[0] << endl;
-        show_usage(argv[0]);
+        Args::show_usage(argv[0]);
         return 1;
     }
 
@@ -267,7 +267,7 @@ void prime_gap_test(const struct Config config) {
     // ----- Open unknown input file
     std::ifstream unknown_file;
     {
-        std::string fn = gen_unknown_fn(config, ".txt");
+        std::string fn = Args::gen_unknown_fn(config, ".txt");
         if (config.verbose >= 1) {
             printf("\nReading unknowns from '%s'\n", fn.c_str());
         }

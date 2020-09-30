@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <fstream>
 #include <getopt.h>
 #include <iostream>
 #include <map>
@@ -279,7 +280,8 @@ void get_sieve_primes_segmented_lambda(uint64_t n, std::function<bool (uint64_t)
 }
 
 
-void show_usage(char* name) {
+
+void Args::show_usage(char* name) {
     cout << "Usage: " << name << endl;
     cout << "[REQUIRED]" << endl;
     cout << "  -p <p>" << endl;
@@ -311,7 +313,7 @@ void show_usage(char* name) {
 }
 
 
-std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
+std::string Args::gen_unknown_fn(const struct Config& config, std::string suffix) {
     if (!config.unknown_filename.empty()) {
         // If trying to read the unknown_fn can cause issue (with having dropped basename)
         // handled specially in gap_stats / gap_test
@@ -331,7 +333,7 @@ std::string gen_unknown_fn(const struct Config& config, std::string suffix) {
 }
 
 
-Config argparse(int argc, char* argv[]) {
+Config Args::argparse(int argc, char* argv[]) {
     static struct option long_options[] = {
         {"mstart",           required_argument, 0,   1  },
         {"minc",             required_argument, 0,   2  },
@@ -542,3 +544,32 @@ Config argparse(int argc, char* argv[]) {
 
     return config;
 }
+
+
+DB::DB(const char* path) {
+    {
+        std::ifstream f(path);
+        if (!f.good()) {
+            printf("database(%s) doesn't exist\n", path);
+            exit(1);
+        }
+    }
+
+    if (sqlite3_open(path, &db) != SQLITE_OK) {
+        printf("Can't open database(%s): %s\n", path, sqlite3_errmsg(db));
+        exit(1);
+    }
+};
+
+
+uint64_t DB::config_hash(const struct Config& config) {
+    // Hash the config to a uint64
+    uint64_t hash =    config.mstart;
+    hash = hash * 31 + config.minc;
+    hash = hash * 31 + config.p;
+    hash = hash * 31 + config.d;
+    hash = hash * 31 + config.sieve_length;
+    hash = hash * 31 + config.max_prime;
+    return hash;
+}
+
