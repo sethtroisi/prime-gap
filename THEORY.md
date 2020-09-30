@@ -22,7 +22,7 @@ Information and experimental validation that doesn't fit in [README.md](README.m
 This section abbreviates gcd(a, b) = c as (a, b) = c
 
 1. Finds SL such that `prob_prime ** |{i | (K, i) = 1, -SL < i < SL}|` is < 0.008
-  * `prob_prime ** goal_coprime < 0.008` ⇔ `goal_coprime > log(0.008, prob_prime)`
+    * `prob_prime ** goal_coprime < 0.008` ⇔ `goal_coprime > log(0.008, prob_prime)`
 1. `prob_prime` is improved be adjusted for sharing no factor with K
   1. `prob_prime ≈ (1 / log(m * K)) / Prod(1 - 1/p, p <= P)`
 1. Over all `0 <= mi < M_inc` find
@@ -35,10 +35,10 @@ This section abbreviates gcd(a, b) = c as (a, b) = c
     1. Check `math.gcd((m % D) * K + i, K*D) == 1`
 1. Check if `min(...) >= goal_coprime`
   1. Expensive to calculate so use these optimizations
-    * Cache `len(i for i in range(-SL+1, SL) if (m * K + i, K*D) == 1)`
-    * `((m % D) * K + i, K*D) > 1` => `(i, K) > 1 or ((m % D) * (K % D) + i, D) > 1`
-    * if `(i, K) > 1` advance to next (all `m * K + i` will be coprime)
-    * All (m % D) have same count, so only consider m with (m, d) == 1
+      * Cache `len(i for i in range(-SL+1, SL) if (m * K + i, K*D) == 1)`
+      * `((m % D) * K + i, K*D) > 1` => `(i, K) > 1 or ((m % D) * (K % D) + i, D) > 1`
+      * if `(i, K) > 1` advance to next (all `m * K + i` will be coprime)
+      * All (m % D) have same count, so only consider m with (m, d) == 1
 
 
 ### Skipped PRP Tests
@@ -152,12 +152,12 @@ Assumptions:
 Math:
 
 1. `gap_stats` gives us `prob_record(m)` for each m in M.
-  * `gap_test` Test records in decreasing order (most likely to be a record first)
+    * `gap_test` Test records in decreasing order (most likely to be a record first)
 1. During `gap_test` keep `sum(prob_record(m))` for m's tested.
-  * `Derivative(sum(prob_record(m)), t) = prob_record(m) / time to test m`
-  * In english: Probability of finding a record given additional time spent
+    * `Derivative(sum(prob_record(m)), t) = prob_record(m) / time to test m`
+    * In english: Probability of finding a record given additional time spent
 1. When the derivative follows below the average value, it is more efficient to restart on a new interval.
-  * `prob_record(m) / test_time < (setup + sum_prob_record) / total_time`
+    * `prob_record(m) / test_time < (setup + sum_prob_record) / total_time`
 
 In Practice:
 
@@ -165,8 +165,8 @@ In Practice:
 1. Have `gap_test` tell us reasonable `--top-x-percent`
 1. Determine how many tests we want to run
 1. Sieve `tests / --top-x-percent` m's.
-  * Maybe sieve 20% extra
-  * Always be experimenting with different values to find maximal prob/hr.
+    * Maybe sieve 20% extra
+    * Always be experimenting with different values to find maximal prob/hr.
 
 
 ## Out of order testing
@@ -188,10 +188,10 @@ Some thoughts:
 In `missing_gap_test.py` two options
 1. S1: Find `prev_prime` (or equivilantly `next_prime`)
   1. For each `missing_gap` let `tenative_next_prime = missing_gap - prev_prime`.
-    * >98% of the time `tenative_next_prime` is a known combosite; skip
-    * ~1% (`prob_prime` * X unknowns) is a prime! Check if `next_prime(center) = tenative_next_prime`
+      * >98% of the time `tenative_next_prime` is a known combosite; skip
+      * ~1% (`prob_prime` * X unknowns) is a prime! Check if `next_prime(center) = tenative_next_prime`
 1. S2: Only check `unknown_l` that have `unknown_h = missing_gap - unknown_l`
-  * Only checks ~1/3 of `unknown_l` BUT need to validate both sides now.
+    * Only checks ~1/3 of `unknown_l` BUT need to validate both sides now.
 
 It's clear S1 is ~twice as fast a normal search as it skips `next_prime(center)` 9X% of the time.
 
@@ -230,5 +230,4 @@ It seems S2 is worse, because it always runs E(tests) PRPs for `prev_prime` then
 Additionall S2 requires more work (20% overhead in `gap_stats` + extra data structure + harder to dynamically update...) so S1 it is.
 
 Sadly this means only a generic 2x speedup (plus some small gains from ordering) over testing the gaps normally, it does allow these to be fit back into the normal framework.
-
 
