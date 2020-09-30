@@ -350,21 +350,22 @@ $ ./benchmark 100000 _all
 ## Flow
 
 1. `combined_sieve`
-   * Takes a set of parameters ([m\_start, m\_start + m\_inc), P#, d, sieve-length, max-prime)
+   * Takes a set of parameters (`[m\_start, m\_start + m\_inc), P#, d, sieve-length, max-prime`)
    * Performs combined sieve algorithm
-   * Produces <PARAMS>.txt, list of all numbers near m * P#/d with no small factors.
-     * each row is `m: -count_low, +count_high | -18 -50 -80 -120 ... | +6 +10 +12 +24 ...`
+   * Produces `<PARAMS>.txt`, list of all numbers near `m * P#/d` with no small factors.
+     * each row is `m: -count_low, +count_high | -18 -50 -80 ... | +6 +10 +12 ...`
+   * Writes initial `range` entry (with `time_sieve`) into `range` table.
 1. `gap_stats`
    * Calculates some statistics over each range in the interval
      * Expected gap in both directions
      * Probability of being a record gap, of being a missing gap, of being gap > `--min-merit`
    * Store statistics in `m_stats` table
    * Compute prob(gap) over all m and save in `range_stats` table
-1. `gap_test` / `gap_test.py` / `missing_gap_test` --unknown-filename <PARAM>.txt
-   * Runs PRP tests on most likely m's from <PARAM>.txt
-     * Early quitting behavior stores `m_stats` table
-   * Stores results in `result` & `m_stats`
-   * `gap_test.py` can produce graphs of distribution
+1. `gap_test` / `gap_test.py` / `missing_gap_test` `--unknown-filename <PARAM>.txt`
+   * Runs PRP tests on most likely m's from `<PARAM>.txt`
+   * Stores results (as they are calculated in `result` & `m_stats`
+     * Allows for saving of progress and graceful restart
+   * `gap_test.py` can produce graphs of distribution (via `--plots`)
 
 
 ## Benchmarks
@@ -392,13 +393,13 @@ $ sudo apt install gmp-ecm
 ```
 
 * [prime-gap-list](https://github.com/primegap-list-project/prime-gap-list)
-        ```bash
-        $ git clone https://github.com/primegap-list-project/prime-gap-list.git
-        $ cd prime-gap-list
-        $ sqlite3 gaps.db < allgaps.sql
-        $ cd <prime-gaps>
-        $ ln -s ../prime-gap-list/gaps.db .
-        ```
+    ```bash
+    $ git clone https://github.com/primegap-list-project/prime-gap-list.git
+    $ cd prime-gap-list
+    $ sqlite3 gaps.db < allgaps.sql
+    $ cd <prime-gaps>
+    $ ln -s ../prime-gap-list/gaps.db .
+    ```
 
 ## Notes
 
@@ -408,17 +409,18 @@ $ sudo apt install gmp-ecm
   * may also need to `chmod a+x pfgw64`
   * modify `is_prime` in gap\_utils.py
 * Multiple layers of verification of `combined_sieve`
-  * Can compare `--method1` result with `--method2`
-  * Can add `DEFINES=-DGMP_VALIDATE_FACTORS=1` to `make`
-  * `misc/double_check.py` double checks using `ecm`, if small factor found number shouldn't appear in unknown-file.txt
-    * `python misc/double_check.py --unknown-filename <unknown_filen> -c 10`
-  * skipped PRP is checked in [THEORY.md](THEORY.md#skipped-prp-tests)
+  * Can compare `--method1` output with `--method2`
+  * Can add use `make DEFINES="-DGMP_VALIDATE_FACTORS=1" combined_sieve`
+  * `misc/double_check.py` double checks using `ecm`, to check that small factor aren't found for numbers in unknown-file.txt
+    * `python misc/double_check.py --unknown-filename <unknown_file.txt> -c 10`
+  * `skipped PRP/s` is checked in [THEORY.md](THEORY.md#skipped-prp-tests)
 * Dev GMPlib | GMP 6.2.99
   * GMP 6.2.0 hasn't yet accepted my `mpz_prevprime` patch
     * `hg apply <patch>` from https://gmplib.org/list-archives/gmp-devel/2020-August/005851.html
     * If you are a developer consider asking telling them that `mpz_prevprime` would be useful
 
 ### Quick test of all functions
+
 <details>
 <summary>quick test commands and output</summary>
 <p>
@@ -516,7 +518,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 	    unknowns  22377      (avg: 422.21), 98.08% composite  49.97% <- % -> 50.03%
 	    prp tests 2590       (avg: 48.87) (2199.432 tests/sec)
 	    best merit this interval: 9.698 (at m=143)
-/```
+```
 
 </p></details>
 
@@ -560,6 +562,9 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 
 ### TODONE
 
+<details>
+<summary>Tracker for finished TODO items</summary>
+<p>
 * README.md
   * [x] Clarify gap\_test.py vs gap\_test.cpp
   * [x] Add Flow section based on comments in schema.sql
@@ -636,3 +641,4 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [x] Read from sql db
 * double\_check.py
   * [x] run ecm on random unknowns and verify factors found > sieve limit
+</p></details>
