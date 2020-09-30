@@ -481,7 +481,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [ ] statement about predicting `combined_sieve` timing.
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
-* combined\_sieve
+* combined\_sieve.cpp
   * [ ] "expect %ld left" doesn't match
     * [ ] Verify `prop_gap_larger`, related to `count_coprime` and `count_coprime_after_d`
 * gap\_stats.cpp
@@ -492,22 +492,23 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
     * [ ] Leave XXX note for restart
   * [ ] Produce P(record) / day (and upfront estimate)
 * gap\_test.py
-  * [ ] Option to starting at m > mstart
-  * [ ] Plot Prob(record)
-  * [ ] Plot average tests count
   * [ ] Sort by expected gap and PRP only top X%
+  * [ ] Multithreaded
 * missing\_gap\_test.py && missing\_gap\_verify.py
 * schema.sql
 * benchmarking
   * [ ] Update `prime_time_estimate` polynomial
   * [ ] Add instructions to verify `modulo\_search` is >80% of the time.
 
-### Maybes
+### Low Priority TODOs
 
-* gap\_search.cpp
+* combined\_sieve.cpp
   * [ ] Option to output m with gcd(m, d) != 1
 * gap\_stats.cpp
   * [ ] Check if higher prob is related to unique (mi % d)
+  * [ ] Option to starting at m > mstart
+* gap\_test.py
+  * [ ] Plot average tests count
 
 ### TODONE
 
