@@ -476,7 +476,6 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 
 * [ ] avg record prob (quick test): changed by two orders of magnitude, why!
 * Flow
-  * [ ] How to get sieve time into DB
   * [ ] When do `num_processed`/`num_to_process` get updated
 * README.md
 * THEORY.md
@@ -525,7 +524,8 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [x] Rename prime-gap.db to prime-gap-search.db
   * [x] Make method2 the default
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
-* gap\_search.cpp
+* combined\_sieve.cpp
+  * [x] Write time_sieve into DB
   * Method2 (all composites in memory)
     * [x] `vector<char>` doesn't show improvement over `vector<bool>`
     * [x] Verify skipped PRP by testing at X and 2\*X

@@ -292,6 +292,41 @@ double prob_prime_and_stats(
 }
 
 
+void insert_range_db(
+        const struct Config config,
+        long num_rows,
+        float time_sieve) {
+
+    DB db_helper(DB::search_db);
+    sqlite3 *db = db_helper.get_db();
+
+    const uint64_t rid = db_helper.config_hash(config);
+    char sSQL[300];
+    sprintf(sSQL,
+        "INSERT INTO range(rid, m_start, m_inc, P, D,"
+                          "sieve_length, max_prime,"
+                          "min_merit,"
+                          "num_m, num_remaining,"
+                          "time_sieve)"
+         "VALUES(%ld,  %ld,%ld, %d,%d,"
+                " %d,%ld, %.3f,"
+                "%ld,%ld,  %.2f)"
+         "ON CONFLICT(rid) DO UPDATE SET time_sieve=%.2f",
+            rid,  config.mstart, config.minc,  config.p, config.d,
+            config.sieve_length, config.max_prime,
+            config.min_merit,
+            num_rows, num_rows,
+            time_sieve, time_sieve);
+
+    char *zErrMsg = 0;
+    int rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
+    if (rc != SQLITE_OK) {
+        printf("\nrange INSERT failed %d: %s\n",
+            rc, sqlite3_errmsg(db));
+        exit(1);
+    }
+}
+
 // Method1
 
 
@@ -637,6 +672,12 @@ void prime_gap_search(const struct Config config) {
                         s_large_primes_rem, s_large_primes_tested / s_tests);
             }
         }
+    }
+
+    {
+        auto s_stop_t = high_resolution_clock::now();
+        double   secs = duration<double>(s_stop_t - s_setup_t).count();
+        insert_range_db(config, s_tests, secs);
     }
 
     // Should be cleaning up after self.
@@ -1100,6 +1141,10 @@ void prime_gap_parallel(struct Config config) {
             config,
             valid_mi, m_reindex, i_reindex,
             composite);
+
+        auto s_stop_t = high_resolution_clock::now();
+        double   secs = duration<double>(s_stop_t - s_start_t).count();
+        insert_range_db(config, valid_mi.size(), secs);
     }
 
     delete[] composite;

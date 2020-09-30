@@ -40,8 +40,6 @@ using std::vector;
 using namespace std::chrono;
 
 
-const char records_db[] = "gaps.db";
-const char gaps_db[]    = "prime-gap-search.db";
 
 // Limits the size of record list
 const uint32_t MAX_GAP = 1'000'000;
@@ -113,8 +111,7 @@ int main(int argc, char* argv[]) {
 vector<float> get_record_gaps() {
     vector<float> records(MAX_GAP, GAP_INF);
 
-    // TODO accept db file as param.
-    DB db(records_db);
+    DB db(DB::records_db);
 
     /* Create SQL statement */
     char sql[] = "SELECT gapsize, merit FROM gaps";
@@ -160,12 +157,12 @@ void load_possible_records(
 
 
 bool is_range_already_processed(const struct Config& config) {
-    DB db_helper(gaps_db);
+    DB db_helper(DB::search_db);
     sqlite3 *db = db_helper.get_db();
 
     uint64_t hash = db_helper.config_hash(config);
     char sql[200];
-    sprintf(sql, "SELECT count(*) FROM range WHERE rid = %ld and stats_time > 0", hash);
+    sprintf(sql, "SELECT count(*) FROM range WHERE rid = %ld and time_stats > 0", hash);
     char *zErrMsg = 0;
 
 
@@ -209,7 +206,7 @@ void store_stats(
     assert( M_vals.size() == probs_missing.size() );
     assert( M_vals.size() == probs_highmerit.size() );
 
-    DB db_helper(gaps_db);
+    DB db_helper(DB::search_db);
     sqlite3 *db = db_helper.get_db();
 
     assert( !is_range_already_processed(config) );
@@ -222,7 +219,7 @@ void store_stats(
 
     const uint64_t rid = db_helper.config_hash(config);
     const size_t num_rows = M_vals.size();
-    char sSQL[300];
+    char sSQL[500];
     sprintf(sSQL,
         "INSERT INTO range(rid, m_start, m_inc, P, D,"
                           "sieve_length, max_prime,"
@@ -232,7 +229,7 @@ void store_stats(
          "VALUES(%ld,  %ld,%ld, %d,%d,"
                 "%d,%ld,  %.3f,"
                 "%ld,%ld,  %.2f)"
-        "ON CONFLICT DO UPDATE SET time_sieve=%.2f",
+        "ON CONFLICT(rid) DO UPDATE SET time_stats=%.2f",
             rid,  config.mstart, config.minc,  config.p, config.d,
             config.sieve_length, config.max_prime,
             config.min_merit,
@@ -241,7 +238,7 @@ void store_stats(
 
     int rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
     if (rc != SQLITE_OK) {
-        printf("\nrange INSERT failed %d: %s\n",
+        printf("\nrange INSERT/UPDATE failed %d: %s\n",
             rc, sqlite3_errmsg(db));
         exit(1);
     }

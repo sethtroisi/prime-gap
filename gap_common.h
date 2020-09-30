@@ -82,8 +82,10 @@ class DB
         DB(const char* path);
         ~DB() { if (db != NULL) sqlite3_close(db); };
 
-        uint64_t    config_hash(const struct Config& config);
+        static const char *search_db;
+        static const char *records_db;
 
+        uint64_t    config_hash(const struct Config& config);
         sqlite3*    get_db() { assert(db != NULL); return db; };
 
     private:

@@ -32,6 +32,9 @@ using std::string;
 using std::vector;
 
 
+const char *DB::search_db  = "prime-gap-search.db";
+const char *DB::records_db = "gaps.db";
+
 std::map<uint64_t,uint64_t> common_primepi = {
     {     10'000'000,      664'579},
     {    100'000'000,    5'761'455},
