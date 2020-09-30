@@ -62,166 +62,283 @@ def stats_plots(
         min_merit_gap,
 
         valid_m,
+        s_test_unknowns, prob_nth,
         s_expected_gap,
         s_expected_prev, s_expected_next,
         s_experimental_gap, s_experimental_side,
-        p_gap_side, p_gap_comb, p_merit_gap
+        p_gap_side, p_gap_comb,
+        p_merit_gap, p_record_gaps
     ):
-
-
     import numpy as np
     import matplotlib.pyplot as plt
     from scipy import stats
 
-    if args.run_prp:
-        slope, _, R, _, _ = stats.linregress(s_expected_gap, s_experimental_gap)
-        print ("R^2 for expected gap: {:.3f}, corr: {:.3f}".format(R**2, slope))
+    print()
 
-    # Set up subplots.
-    fig3 = plt.figure(constrained_layout=True, figsize=(8, 8))
-    gs = fig3.add_gridspec(6, 2)
+    def verify_no_trend(valid_m, data):
+        """There should be no trend based on m value"""
+        # Have to adjust for Expected gap which has two data points for each m
+        m_values = valid_m
+        if len(d) == 2 * len(valid_m):
+            m_values = [mi for mi in valid_m for side in ['l', 'r']]
 
-    axis_one_gap = fig3.add_subplot(gs[0:2, 1])
-    axis_combined_gap = fig3.add_subplot(gs[2:4, 1])
-
-    for plot_i, (d, label, color) in enumerate([
-            (s_expected_prev, 'prev', 'lightskyblue'),
-            (s_expected_next, 'next', 'darksalmon'),
-            (s_expected_gap,  'expected', 'seagreen'),
-            (s_experimental_side, 'next/prev gap', 'sandybrown'),
-            (s_experimental_gap, 'gap', 'peru'),
-            (p_merit_gap, f'P(gap > min_merit({args.min_merit}))', 'dodgerblue'),
-    ]):
-        if not d: continue
-
-        if plot_i == 0: # Not called again on plot_i == 1
-            axis = fig3.add_subplot(gs[0:2, 0])
-        elif plot_i == 2:
-            axis = fig3.add_subplot(gs[2:4, 0])
-        elif plot_i == 3:
-            axis = axis_one_gap
-        elif plot_i == 4:
-            axis = axis_combined_gap
-        elif plot_i == 5:
-            axis = fig3.add_subplot(gs[4:6, 0])
-
-        hist_data = np.histogram(d, bins=100, density=True)
-        axis.scatter(hist_data[1][:-1], hist_data[0], color=color,
-                    marker='o' if plot_i in (3,4) else 'x', s=8)
-        max_y = hist_data[0].max()
-
-        if plot_i == 3:
-            trend, _ = np.polyfit([mi for mi in valid_m for d in ['l','up']], d, 1)
-        else:
-            trend, _ = np.polyfit(valid_m, d, 1)
-
+        trend, _ = np.polyfit(m_values, d, 1)
         if trend > 2e-3:
             print("\n")
             print("NON-ZERO TREND: ", trend) # Verify that expected value doesn't vary with M.
             print("\n")
 
-        E = np.mean(d)
+    def plot_hist(axis, data, color, marker):
+        hist_data = np.histogram(data, bins=100, density=True)
+        axis.scatter(hist_data[1][:-1], hist_data[0], color=color, marker=marker, s=8)
+        max_y = hist_data[0].max()
 
-        if plot_i != 5:
-            axis.axvline(x=E, ymax=1.0/1.2, color=color, label=f"E({label}) = {E:.0f}")
-            axis.legend(loc='upper right')
-        else:
-            axis.legend([label])
-
-        gap_span = np.linspace(0.95 * np.percentile(d, 1), 1.05 * np.percentile(d, 99), 400)
-        if plot_i == 5:
-            gap_span = np.linspace(0, max(d) * 1.1, 400)
-
-        if 'gap' not in label:
-            mu, std = stats.norm.fit(d)
-            p = stats.norm.pdf(gap_span, mu, std)
-            axis.plot(gap_span, p, color=color)
-
-        axis.set_xlim(np.percentile(d, 0.01), np.percentile(d, 99.9))
+        axis.set_xlim(np.percentile(data, 0.01), np.percentile(data, 99.9))
         axis.set_ylim(2e-5, 1.2 * max_y)
 
-    for d, color in [
-            (p_gap_side, 'blueviolet'),
-            (p_gap_comb, 'seagreen'),
-    ]:
-        if color == 'blueviolet':
-            axis = axis_one_gap
-        else:
-            axis = axis_combined_gap
+    def plot_cdf(axis, data, color, label):
+        n = len(data)
+        d_sorted = np.sort(data)
+        dist_label = f"Empirical CDF({label} gap <= X)" if 'P(' not in label else "CDF"
+        axis.plot(
+                d_sorted, np.arange(1, n+1) / n,
+                color=color, label=dist_label)
+        axis.set_xlim(np.percentile(data, 0.01), np.percentile(data, 99.9))
 
-        d_x, d_w = zip(*sorted(((g, v) for g,v in d.items() if v > 1e-8)))
-        print (f"|P(gap)| = {len(d_x)}, Sum(P(gap)) = {sum(d_w)}")
+        # Draw some lines for 50th, 90th, 95th percentile
+        for percent in (50, 90, 95):
+            percentile = np.percentile(d_sorted, percent)
+            if percentile > 10:
+                dist_label=f"{percent}th percentile = {percentile:.0f}"
+            else:
+                dist_label=f"{percent}th percentile = {percentile:.3f}"
+            axis.plot(
+                    [0, percentile, percentile],
+                    [percent/100, percent/100, 0],
+                    color="sandybrown",
+                    label=dist_label)
+        axis.legend(loc='upper left')
 
-        axis.hist(d_x, weights=d_w, bins=100, density=True,
-                 label='Theoretical P(gap)', color=color, alpha=0.4)
-        axis.legend(loc='upper right')
+    def plot_prob_hist(axis, probs, color):
+        x, w = zip(*sorted(((g, v) for g,v in probs.items() if v > 0)))
+        axis.hist(x, weights=w, bins=100, density=True,
+                  label='Theoretical P(gap)', color=color, alpha=0.4)
+        print (f"|P(gap)| = {len(x)}, Sum(P(gap)) = {sum(w):.1f}")
 
-    assert len(p_merit_gap) == len(s_experimental_gap)
-    zipped = list(itertools.zip_longest(p_merit_gap, s_experimental_gap))
+    def fit_normal_dist(axis, data):
+        x_start = max(0, 0.95 * np.percentile(data, 1))
+        x_end   = 1.05 * np.percentile(data, 99)
+        gap_span = np.linspace(x_start, x_end, 400)
 
-    # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
-    # sorted and unsorted order
-    fig3.add_subplot(gs[4:6, 1])
-    plt.xlabel(" # of m's tests")
-    plt.ylabel(f'Sum(P(gap > min_merit)')
+        mu, std = stats.norm.fit(data)
+        p = stats.norm.pdf(gap_span, mu, std)
+        axis.plot(gap_span, p, color=color)
 
-    p_gap_merit_sorted, _ = zip(*sorted(zipped, reverse=True))
-    p_gap_merit_ord, gap_real_ord = zip(*zipped)
+    def add_expected_value(axis, data, color, label):
+        E = np.mean(data)
+        label_e = f"E({label}) = {E:.0f}"
+        axis.axvline(x=E, ymax=1.0/1.2, color=color, label=label_e)
 
-    tests = list(range(1, len(p_gap_merit_ord)+1))
 
-    #Experimental
-    cumcount_large = np.cumsum(np.array(gap_real_ord) > min_merit_gap)
-    plt.plot(tests, cumcount_large, label='Count gap > min_merit')
+    if args.run_prp:
+        slope, _, R, _, _ = stats.linregress(s_expected_gap, s_experimental_gap)
+        print ("R^2 for expected gap: {:.3f}, corr: {:.3f}".format(R**2, slope))
 
-    # Theoretical
-    cumsum_p = np.cumsum(p_gap_merit_ord)
-    cumsum_p_sorted = np.cumsum(p_gap_merit_sorted)
+    if True:
+        # Set up subplots.
+        fig = plt.figure(
+            "Per Side Statistics",
+            constrained_layout=True,
+            figsize=(8, 12))
+        gs = fig.add_gridspec(3, 2)
 
-    plt.plot(tests, cumsum_p, label='Sum(P(gap > min_merit))')
-    z  = plt.plot(tests, cumsum_p_sorted, label='Sum(P(gap > min_merit)) (best first)')
+        # Plot 1: Gap(side):
+        #   [ prev mi,    next mi]
+        #   [ BLANK,   prob all m]
+        #   [ expected,   cdf    ]
 
-    '''
-    # Theoretical with restart
-    def cumsum_restarts(restarts):
-        part_size = len(tests) // (restarts + 1)
-        t = []
-        for i in range(restarts):
-            t.extend(p_gap_merit_sorted[:part_size])
-        t.extend(p_gap_merit_sorted[:len(tests) - len(t)])
-        return np.cumsum(t)
+        axis_prev = fig.add_subplot(gs[0, 0])
+        axis_next = fig.add_subplot(gs[0, 1])
+        axis_prob_gap     = fig.add_subplot(gs[1, 1])
+        axis_expected_gap = fig.add_subplot(gs[2, 0])
+        axis_cdf_gap      = fig.add_subplot(gs[2, 1])
 
-    cumsum_p_restart = cumsum_restarts(1)
-    cumsum_p_restart_freq = cumsum_restarts(9)
+        # Handle prob_prev, prev_next
+        def plot_prob_nth(axis, unknowns, color, label):
+            n = min(len(prob_nth), len(unknowns))
+            axis.scatter(unknowns[:n], prob_nth[:n], marker='.', s=12, label=label)
 
-    # Want this one below next graph
-    z3 = plt.plot(tests, cumsum_p_restart_freq, label='(top 10% of 10x larger run)')
-    z2 = plt.plot(tests, cumsum_p_restart, label='P(gap > min_merit) (top 50% of two sieves)')
+        # See Prob_nth in gap_stats
+        colors = ['lightskyblue', 'tomato', 'seagreen']
+        for m, c, (u_p, u_n) in zip(valid_m, colors, s_test_unknowns):
+            plot_prob_nth(axis_prev, u_p, c, f"m={m}")
+            plot_prob_nth(axis_next, u_n, c, f"m={m}")
 
-    # Plot speedup at 50th percentile
-    mid_t = len(tests) // 2
+        axis_prev.legend(loc='upper left')
+        axis_next.legend(loc='upper right')
+        axis_prev.set_yscale('log')
+        axis_next.set_yscale('log')
 
-    y = [cumsum_p[mid_t], cumsum_p_sorted[mid_t]]
-    plt.plot([tests[mid_t], tests[mid_t]], y, c=z[0].get_color(),
-                label="+{:.1%} by sorting at midpoint".format(y[1] / y[0] - 1))
+        # Combining all probs for a pseudo distribution of P(next_gap) / P(prev_gap)
+        plot_prob_hist(axis_prob_gap, p_gap_side,  'blueviolet')
+        # Expected value
+        add_expected_value(axis_prob_gap, s_experimental_side, 'peru', 'next')
+        # Experimental values
+        plot_hist(axis_prob_gap, s_experimental_side, 'peru', 'x')
+        min_y = 0.8 * min(v for v in p_gap_side.values() if v > 0) / sum(p_gap_side.values())
+        print(f"Min Prob(gap side): {min_y:.2e}")
+        axis_prob_gap.set_yscale('log')
+        axis_prob_gap.set_ylim(bottom=min_y)
+        axis_prob_gap.legend(loc='upper right')
 
-    y = [cumsum_p[-1], cumsum_p_restart[-1]]
-    plt.plot([tests[-1], tests[-1]], y, c=z2[0].get_color(),
-                label="+{:.1%} using top 50% & sorting".format(y[1] / y[0] - 1))
-    '''
+        for data, color, label in (
+                (s_expected_prev, 'lightskyblue', 'prev'),
+                (s_expected_next, 'tomato', 'next'),
+        ):
+            plot_hist(axis_expected_gap,          data, color, 'x')
+            add_expected_value(axis_expected_gap, data, color, label)
+            fit_normal_dist(axis_expected_gap, data)
+            axis_expected_gap.legend(loc='upper left')
 
-    plt.legend(loc='upper left')
+            # CDF of gap <= x
+            plot_cdf(axis_cdf_gap, data, color, label)
 
-    # TODO plot number of PRP tests per M
-    # TODO(P(record))
-    # TODO(P(gap > X))
 
-    # Another plot needed is sieve_depth
-    # warm audiance up to time on Y axis with pause will sieving
+    if False:
+        # Older 1-page 3x3 layout
 
-    # Another plot needed is
-    #   P(record gap) sorted vs unsorted
-    #   P(rg) sorted 50% then new gap
+        fig = plt.figure(
+            "Prime Gap Statistics",
+            constrained_layout=True,
+            figsize=(12, 12))
+        gs = fig.add_gridspec(3, 3)
+        axis_one_gap      = fig.add_subplot(gs[0, 2])
+        axis_combined_gap = fig.add_subplot(gs[1, 2])
+
+        for plot_i, (d, label, color) in enumerate((
+                (s_expected_prev, 'prev', 'lightskyblue'),
+                (s_expected_next, 'next', 'tomato'),
+                (s_expected_gap,  'expected', 'seagreen'),
+                (s_experimental_side, 'next/prev gap', 'sandybrown'),
+                (s_experimental_gap, 'gap', 'peru'),
+                (p_merit_gap, f'P(gap > min_merit({args.min_merit}))', 'dodgerblue'),
+        )):
+            if not d: continue
+
+            if plot_i == 0: # Not called again on plot_i == 1
+                axis = fig.add_subplot(gs[0, 0])
+                dist_axis = fig.add_subplot(gs[0, 1])
+            elif plot_i == 2:
+                axis = fig.add_subplot(gs[1, 0])
+                dist_axis = fig.add_subplot(gs[1, 1])
+            elif plot_i == 3:
+                axis = axis_one_gap
+                dist_axis = None
+            elif plot_i == 4:
+                axis = axis_combined_gap
+                dist_axis = None
+            elif plot_i == 5:
+                axis = fig.add_subplot(gs[2, 0])
+                dist_axis = fig.add_subplot(gs[2, 1])
+
+            verify_no_trend(valid_m, d)
+
+            marker='o' if plot_i in (3,4) else 'x'
+            plot_hist(axis, d, color, marker)
+
+            if 'gap' not in label:
+                # Fit normal distribution to data
+                fit_normal_dist(axis, d)
+
+            if plot_i != 5:
+                # Plot a line for expected value
+                add_expected_value(axis, d, color, label)
+                axis.legend()
+            else:
+                axis.legend([label])
+
+            if dist_axis:
+                # Cumulative sum of probability by gap
+                plot_cdf(dist_axis, d, color, label)
+
+        for d, color in [
+                (p_gap_side, 'blueviolet'),
+                (p_gap_comb, 'seagreen'),
+        ]:
+            if color == 'blueviolet':
+                axis = axis_one_gap
+            else:
+                axis = axis_combined_gap
+
+            plot_prob_hist(axis, d,  color)
+            axis.legend(loc='upper right')
+
+        assert len(p_merit_gap) == len(s_experimental_gap)
+        zipped = list(itertools.zip_longest(p_merit_gap, s_experimental_gap))
+
+        # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
+        # sorted and unsorted order
+        fig.add_subplot(gs[2, 2])
+        plt.xlabel(" # of m's tests")
+        plt.ylabel(f'Sum(P(gap > min_merit)')
+
+        p_gap_merit_sorted, _ = zip(*sorted(zipped, reverse=True))
+        p_gap_merit_ord, gap_real_ord = zip(*zipped)
+
+        tests = list(range(1, len(p_gap_merit_ord)+1))
+
+        #Experimental
+        cumcount_large = np.cumsum(np.array(gap_real_ord) > min_merit_gap)
+        plt.plot(tests, cumcount_large, label='Count gap > min_merit')
+
+        # Theoretical
+        cumsum_p = np.cumsum(p_gap_merit_ord)
+        cumsum_p_sorted = np.cumsum(p_gap_merit_sorted)
+
+        plt.plot(tests, cumsum_p, label='Sum(P(gap > min_merit))')
+        z  = plt.plot(tests, cumsum_p_sorted, label='Sum(P(gap > min_merit)) (best first)')
+
+        '''
+        # Theoretical with restart
+        def cumsum_restarts(restarts):
+            part_size = len(tests) // (restarts + 1)
+            t = []
+            for i in range(restarts):
+                t.extend(p_gap_merit_sorted[:part_size])
+            t.extend(p_gap_merit_sorted[:len(tests) - len(t)])
+            return np.cumsum(t)
+
+        cumsum_p_restart = cumsum_restarts(1)
+        cumsum_p_restart_freq = cumsum_restarts(9)
+
+        # Want this one below next graph
+        z3 = plt.plot(tests, cumsum_p_restart_freq, label='(top 10% of 10x larger run)')
+        z2 = plt.plot(tests, cumsum_p_restart, label='P(gap > min_merit) (top 50% of two sieves)')
+
+        # Plot speedup at 50th percentile
+        mid_t = len(tests) // 2
+
+        y = [cumsum_p[mid_t], cumsum_p_sorted[mid_t]]
+        plt.plot([tests[mid_t], tests[mid_t]], y, c=z[0].get_color(),
+                    label="+{:.1%} by sorting at midpoint".format(y[1] / y[0] - 1))
+
+        y = [cumsum_p[-1], cumsum_p_restart[-1]]
+        plt.plot([tests[-1], tests[-1]], y, c=z2[0].get_color(),
+                    label="+{:.1%} using top 50% & sorting".format(y[1] / y[0] - 1))
+        '''
+
+        #plt.legend(loc='upper left')
+
+        # TODO plot number of PRP tests per M
+        # TODO(P(record))
+        # TODO(P(gap > X))
+
+        # Another plot needed is sieve_depth
+        # warm audiance up to time on Y axis with pause will sieving
+
+        # Another plot needed is
+        #   P(record gap) sorted vs unsorted
+        #   P(rg) sorted 50% then new gap
 
     if args.save_logs:
         plt.savefig(args.unknown_filename + ".png", dpi=1080//8)
@@ -255,13 +372,14 @@ def config_hash(config):
 
 def load_stats(conn, args):
     rv = conn.execute(
-        "SELECT e_gap_prev, e_gap_next, e_gap_prev + e_gap_next, prob_merit"
+        "SELECT e_gap_prev, e_gap_next, e_gap_prev + e_gap_next,"
+        "       prob_merit, prob_record"
         " FROM m_stats WHERE P = ? AND D = ? AND m BETWEEN ? AND ?",
         (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
 
     # Will fail if non-present
-    s_expected_prev, s_expected_next, s_expected_gap, p_merit_gap = zip(
-        *[tuple(row) for row in rv])
+    (s_expected_prev, s_expected_next, s_expected_gap,
+     p_merit_gap, p_record_gap)= zip(*[tuple(row) for row in rv])
 
     # Need dictionary
     p_gap_comb  = defaultdict(float)
@@ -281,7 +399,8 @@ def load_stats(conn, args):
         p_gap_side[gap] += row['prob_high_side'] / 2 * m_values
 
     return (
-        s_expected_prev, s_expected_next, s_expected_gap, p_merit_gap,
+        s_expected_prev, s_expected_next, s_expected_gap,
+        p_merit_gap, p_record_gap,
         p_gap_comb, p_gap_side
     )
 
@@ -333,38 +452,27 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, K_primes, SL, max_pri
     return prob_prime_after_sieve
 
 
-def calculate_expected_gaps(composites, SL, prob_prime_after_sieve, log_m,
-                            p_gap_side, p_gap_comb, min_merit_gap):
+def calculate_expected_gaps(
+        SL, min_merit_gap, prob_nth, prob_longer,
+        log_n, unknowns, p_gap_side, p_gap_comb):
     expected_side = []
-
-    # Geometric distribution (could be cached)
-    probs = []
-    prob_longer = []
-    prob_gap_longer = 1
-    for i in range(max(len(composites[0]), len(composites[1]))+1):
-        probs.append(prob_gap_longer * prob_prime_after_sieve)
-        prob_longer.append(prob_gap_longer)
-
-        prob_gap_longer *= (1 - prob_prime_after_sieve)
-
-    assert min(probs) > 0
 
     for side in composites:
         expected_length = 0
-        for v, prob in zip(side, probs):
+        for v, prob in zip(side, prob_nth):
             expected_length += abs(v) * prob
             # Normalized to 1 by matplotlib.hist later.
             p_gap_side[abs(v)] += prob
 
-        # expected to encounter a prime at distance ~= ln(start)
-        prob_gap_longer = probs[len(side)]
+        # expected to encounter a prime at distance ~= ln(n)
+        prob_gap_longer = prob_nth[len(side)]
         assert prob_gap_longer < 0.01, (prob_gap_longer, len(side))
-        expected_length += (SL + log_m) * prob_gap_longer
+        expected_length += (SL + log_n) * prob_gap_longer
         expected_side.append(expected_length)
 
     p_merit = 0
-    for prob_i, lower in zip(probs, composites[0]):
-        for prob_j, upper in zip(probs, composites[1]):
+    for prob_i, lower in zip(prob_nth, composites[0]):
+        for prob_j, upper in zip(prob_nth, composites[1]):
             prob_joint = prob_i * prob_j
             gap = -lower + upper
             if gap >= min_merit_gap:
@@ -536,6 +644,19 @@ def prime_gap_test(args):
     prob_prime_after_sieve = prob_prime_sieve_length(
         M, K, D, prob_prime, K_digits, K_primes, SL, max_prime)
 
+    # Geometric distribution
+    prob_nth = []
+    prob_longer = []
+    prob_gap_longer = 1
+    while prob_gap_longer > 1e-13:
+        prob_nth.append(prob_gap_longer * prob_prime_after_sieve)
+        prob_longer.append(prob_gap_longer)
+        prob_gap_longer *= (1 - prob_prime_after_sieve)
+    assert min(prob_nth) > 0
+    assert min(prob_longer) > 0
+    #print (f"|prob_nth| = {len(prob_nth)}")
+
+
     # ----- Main sieve loop.
     print("\nStarting m={}".format(M))
     print()
@@ -553,6 +674,7 @@ def prime_gap_test(args):
     s_best_merit_interval_m = 0
 
     valid_m = []
+    s_test_unknowns = []
     s_expected_prev = []
     s_expected_next = []
     s_expected_gap  = []
@@ -573,13 +695,15 @@ def prime_gap_test(args):
 
         valid_m.append(m)
 
-        log_m = (K_log + math.log(m))
+        log_n = (K_log + math.log(m))
 
         # Read a line from the file
         line = unknown_file.readline()
 
         mtest, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
         assert mtest == mi
+        if len(valid_m) <= 3:
+            s_test_unknowns.append(unknowns)
 
         prev_p_i = 0
         next_p_i = 0
@@ -592,8 +716,8 @@ def prime_gap_test(args):
             # NOTES: calculate_expected_gaps is really slow, only used to
             # doublecheck gap_stats (with --stats).
             e_prev, e_next, p_merit = calculate_expected_gaps(
-                unknowns, SL, prob_prime_after_sieve, log_m,
-                p_gap_side, p_gap_comb, min_merit_gap)
+                SL, min_merit_gap, prob_nth, prob_longer,
+                log_n, unknowns, p_gap_side, p_gap_comb)
             s_expected_prev.append(e_prev)
             s_expected_next.append(e_next)
             s_expected_gap.append(e_prev + e_next)
@@ -623,7 +747,7 @@ def prime_gap_test(args):
             s_experimental_side.append(prev_p_i)
             assert next_p_i > 0 and prev_p_i > 0, (m, next_pi, prev_p_i)
 
-            merit = gap / log_m
+            merit = gap / log_n
             if m not in existing:
                 save(conn, m, P, D, next_p_i, prev_p_i, merit)
 
@@ -651,21 +775,26 @@ def prime_gap_test(args):
 
     if args.plots or args.save_logs:
         if args.stats:
+            # Not calculated
+            p_record_gap = p_merit_gap
+
             stats_plots(
                 args,
                 min_merit_gap,
 
                 valid_m,
+                s_test_unknowns, prob_nth,
                 s_expected_gap,
                 s_expected_prev, s_expected_next,
                 s_experimental_gap, s_experimental_side,
-                p_gap_side, p_gap_comb, p_merit_gap
+                p_gap_side, p_gap_comb,
+                p_merit_gap, p_record_gap
             )
 
         # Load stats from gap_stats (fails if empty)
         try:
-            (s_expected_prev_db, s_expected_next_db,
-             s_expected_gap_db, p_merit_gap_db,
+            (s_expected_prev_db, s_expected_next_db, s_expected_gap_db,
+             p_merit_gap_db, p_record_gap_db,
              p_gap_comb_db, p_gap_side_db) = load_stats(conn, args)
             assert s_expected_prev_db and p_gap_comb_db
         except:
@@ -679,10 +808,12 @@ def prime_gap_test(args):
             min_merit_gap,
 
             valid_m,
+            s_test_unknowns, prob_nth,
             s_expected_gap_db,
             s_expected_prev_db, s_expected_next_db,
             s_experimental_gap, s_experimental_side,
-            p_gap_side_db, p_gap_comb_db, p_merit_gap_db
+            p_gap_side_db, p_gap_comb_db,
+            p_merit_gap_db, p_record_gap_db
         )
 
 
