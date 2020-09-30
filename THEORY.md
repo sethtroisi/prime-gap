@@ -2,12 +2,12 @@
 
 - [Theory](#Theory)
   * [`combined_sieve`](#combined_sieve)
-    * [`--sieve_length`](#sieve_length)
+    * [`--sieve_length`](#--sieve_length)
     * [Skipped PRP Tests](#skipped-prp-tests)
   * [`gap_stats`](#gap_stats)
-  * [Choosing `--top-x-percent`](#choosing-top-x-percent)
+  * [Choosing `--top-x-percent`](#choosing---top-x-percent)
   * [Out of order testing](#out-of-order-testing)
-  * [`missing_gap_test.py`](#missing_gap_test.py)
+  * [`missing_gap_test.py`](#missing_gap_testpy)
 
 # Theory
 

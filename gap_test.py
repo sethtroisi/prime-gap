@@ -664,8 +664,7 @@ def should_print_stats(
             unknown_l, unknown_u,
             prev_p_i, next_p_i))
         if mi <= 10 and secs < 6:
-            return
-        s_last_print_t = s_stop_t
+            return False
 
         def roundSig(n, sig):
             return '{:g}'.format(float('{:.{p}g}'.format(n, p=sig)))
@@ -694,6 +693,8 @@ def should_print_stats(
             print("\t    best merit this interval: {:.3f} (at m={})".format(
                 s_best_merit_interval, s_best_merit_interval_m))
 
+        return True
+    return False
 
 def prime_gap_test(args):
     P = args.p
@@ -878,6 +879,7 @@ def prime_gap_test(args):
                     s_best_merit_interval, s_best_merit_interval_m):
                 s_best_merit_interval = 0
                 s_best_merit_interval_m = -1
+                s_last_print_t = time.time()
 
     if args.num_plots or args.save_logs:
         if args.stats:

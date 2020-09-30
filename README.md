@@ -1,12 +1,12 @@
 # Combined Sieve - a new program to find prime gaps.
 
-A fast prime gap searching suite
+A fast prime gap searching suite.
 
 # Table of Contents
 
 - [Combined Sieve - a new program to find prime gaps.](#combined-sieve---a-new-program-to-find-prime-gaps)
   * [Tools](#tools)
-    + [Gap Search (Sieve many `m * p#/d`)](#gap-search-sieve-many-m--pd)
+    + [Combined Sieve (Sieve many `m * p#/d`)](#combined-sieve-sieve-many-m--pd)
       - [Method1 vs Method2 (Default)](#method1-vs-method2-default)
     + [Gap Stats](#gap-stats)
     + [Gap Test](#gap-test)
@@ -39,7 +39,7 @@ $ time ./combined_sieve [--method1] -p <p> -d <d> --mstart <m_start> --minc <m_i
 **Method1** performs a large initial setup phase to find the first `mi` that each `prime` divides before starting any sieving.
 Each `mi` is then processed in order, looking at small primes and only those large primes that divide a number in the sieve interval.
 
-Half the time will be spent watching dots cross this screen.
+A large percent of time will be spent watching dots cross this screen.
 ```
         Calculating first m each prime divides
         .
@@ -49,15 +49,15 @@ Half the time will be spent watching dots cross this screen.
 	......................................
 ```
 
-
 **Method2** inverts this process and keeps all sieve intervals in memory at the same time.
 Primes are iterated in order and all sieve intervals are handled simultaneously.
 
-Status output is significantly nicer in Method2. Stats are computed at regular intervals giving better insight into `--max-prime`.
-
 In practice Method2 is better. Method1 is only used to validate results.
-
-Method2 is slightly faster because it use `modulo_search_euclid_all(...)` then a lookup for gcd. Method1 uses `modulo_search_euclid_gcd(...)` which calls gcd(m, D).
+* Status output is significantly nicer in Method2
+* Stats are computed at regular intervals giving better insight into `--max-prime`. A
+* Method2 allows for early stopping (set a very large `--max-prime` and press Ctrl+C once when you want to stop)
+* Method2 is slightly faster because it use `modulo_search_euclid_all(...)` then a lookup for precomputed gcd.
+  *  Method1 uses `modulo_search_euclid_gcd(...)` which calls `gcd(m, D)` which is significantly slower than lookup.
 
 ```bash
 $ make combined_sieve
@@ -92,7 +92,6 @@ Saving unknowns to '1_907_210_1000_s7554_l1000M.m1.txt'
 	    large prime remaining: 0 (avg/test: 7155)
 
 real	0m9.107s
-
 ```
 
 ```bash
@@ -132,7 +131,6 @@ coprime m    228/1000,  coprime i 1991/7554,  ~0MB
 
 
 Saving unknowns to '1_907_210_1000_s7554_l1000M.txt'
-
 ```
 
 ```bash
@@ -188,6 +186,10 @@ Saved 228 rows to 'm_stats' table
 ```
 
 ### Gap Test
+
+Quick note, `python gap_test.py ...` and `./gap_test` should be roughly equivilant.
+`python gap_test.py` supports `--stats` to SLOWLY double check `./gap_stats` and `--plots` to print fun plots.
+
 
 ```bash
 $ make gap_test
@@ -477,8 +479,6 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [ ] How to get sieve time into DB
   * [ ] When do `num_processed`/`num_to_process` get updated
 * README.md
-  * [ ] gap\_test.py vs gap\_test.cpp
-  * [ ] statement about predicting `combined_sieve` timing.
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
 * combined\_sieve.cpp
@@ -503,6 +503,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 ### Low Priority TODOs
 
 * combined\_sieve.cpp
+  * [ ] ETA for `combined_sieve` timing.
   * [ ] Option to output m with gcd(m, d) != 1
 * gap\_stats.cpp
   * [ ] Check if higher prob is related to unique (mi % d)
@@ -513,6 +514,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 ### TODONE
 
 * README.md
+  * [x] Clarify gap\_test.py vs gap\_test.cpp
   * [x] Add Flow section based on comments in schema.sql
   * [x] Add commands for benchmarking
   * [x] Fill out gap test section
