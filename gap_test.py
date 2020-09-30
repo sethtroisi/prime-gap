@@ -110,10 +110,12 @@ def stats_plots(
         # Draw some lines for 50th, 90th, 95th percentile
         for percent in (50, 90, 95):
             percentile = np.percentile(d_sorted, percent)
-            if percentile > 10:
+            if percentile > 100:
                 dist_label=f"{percent}th percentile = {percentile:.0f}"
+            elif percentile > .01:
+                dist_label=f"{percent}th percentile = {percentile:.4f}"
             else:
-                dist_label=f"{percent}th percentile = {percentile:.3f}"
+                dist_label=f"{percent}th percentile = {percentile:.2e}"
             axis.plot(
                     [0, percentile, percentile],
                     [percent/100, percent/100, 0],
@@ -146,7 +148,7 @@ def stats_plots(
     print ("R^2 for expected gap: {:.3f}, corr: {:.3f}".format(R**2, slope))
     print ()
 
-    if args.num_plots > 0:
+    if args.num_plots > 1:
         # Set up subplots.
         fig = plt.figure(
             "Per Side Statistics",
@@ -188,7 +190,7 @@ def stats_plots(
         axis_next.legend(loc='upper right')
         axis_prev.set_yscale('log')
         axis_next.set_yscale('log')
-        axis_prev.set_xlim(0, args.sieve_length)
+        axis_prev.set_xlim(-args.sieve_length, 0)
         axis_next.set_xlim(0, args.sieve_length)
 
         # Combining all probs for a pseudo distribution of P(next_gap) / P(prev_gap)
@@ -216,7 +218,7 @@ def stats_plots(
             # CDF of gap <= x
             plot_cdf(axis_cdf_gap, data, color, label)
 
-    if args.num_plots > 1:
+    if args.num_plots > 0:
         # Set up subplots.
         fig = plt.figure(
             "Combined Gap Statistics",
@@ -280,26 +282,28 @@ def stats_plots(
 
             print(f"{label:20} | sum(P) = {sum(data):.3f}")
 
-            tests = list(range(1, len(p_gap_merit_ord)+1))
-
             #Experimental
             if row == 1:
                 cumcount = np.cumsum(np.array(gap_real_ord) > min_merit_gap)
             else:
                 cumcount = np.cumsum(np.array([g in record_gaps for g in gap_real_ord]))
 
-            plt.plot(tests, cumcount, label='Count gap > min_merit')
+            tests = list(range(1, len(p_gap_merit_ord)+1))
+            axis.plot(tests, cumcount, label='Count ' + label)
 
             # Theoretical
             cumsum_p = np.cumsum(p_gap_merit_ord)
             cumsum_p_sorted = np.cumsum(p_gap_merit_sorted)
 
-            axis.plot(tests, cumsum_p, label='Sum(P(gap > min_merit))')
-            z  = axis.plot(tests, cumsum_p_sorted, label='Sum(P(gap > min_merit)) (best first)')
+            axis.plot(tests, cumsum_p, label=f'Sum(P({label}))')
+            z  = axis.plot(tests, cumsum_p_sorted, label=f'Sum(P({label})) (best first)')
+            axis.legend(loc='upper left')
 
+            # Hist
             axis = fig.add_subplot(gs[row, 1])
             plot_hist(axis, data, color, 'x')
 
+            # CDF
             axis = fig.add_subplot(gs[row, 2])
             plot_cdf(axis,  data, color, label)
 

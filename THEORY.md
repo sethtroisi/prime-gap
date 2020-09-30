@@ -31,7 +31,7 @@ This section abbreviates gcd(a, b) = c as (a, b) = c
           for m in range(M_start, M_start+M_inc) if math.gcd(m, D) == 1)
   ```
   1. Because D often includes many small factors can improve accuracy by also handling factor of D
-    1. **Approxiamated** by replacing `m` with `m % D`
+    1. **Approximated** by replacing `m` with `m % D`
     1. Check `math.gcd((m % D) * K + i, K*D) == 1`
 1. Check if `min(...) >= goal_coprime`
   1. Expensive to calculate so use these optimizations
@@ -136,7 +136,13 @@ Can compute how many real PRP tests were skipped by each increase in `--sieve-ra
 
 ## `gap_stats`
 
-TODO
+
+`gap_stats` produces a number of useful predictions. They are somewhat validated in `gap_test.py --stats`
+
+One sided gap statistics
+![One Sided Gap Statistics](data/1_3001_2190_100000_s40000_l10000M.txt.side.png)
+Combined (prev + next) gap statistics
+![Combined Gap Statistics](data/1_3001_2190_100000_s40000_l10000M.txt.comb.png)
 
 
 ## Choosing `--top-x-percent`
@@ -146,8 +152,7 @@ Assumptions:
 * Assume that `combined_sieve` is linear (in practice it's faster than linear)
 * Assume that `gap_stats` is linear (it is)
 * Assume that `gap_test` is linear (it is)
-* `prob_record(m)` distribution is independant of m
-  * Technically not true because log(m) + log(K), but log(K) >> log(m) so true in practice
+* `prob_record(m)` distribution is independent of m (e.g. `log(k) >> log(m)`)
 
 Math:
 
@@ -186,7 +191,7 @@ Some thoughts:
 # `missing_gap_test.py`
 
 In `missing_gap_test.py` two options
-1. S1: Find `prev_prime` (or equivilantly `next_prime`)
+1. S1: Find `prev_prime` (or equivalently `next_prime`)
   1. For each `missing_gap` let `tenative_next_prime = missing_gap - prev_prime`.
       * >98% of the time `tenative_next_prime` is a known combosite; skip
       * ~1% (`prob_prime` * X unknowns) is a prime! Check if `next_prime(center) = tenative_next_prime`
@@ -227,7 +232,7 @@ S2 = E(tests till prime) + 1 test + 1/100 * (2 PRP tests + (99/100)^2 * cost_nex
 
 It seems S2 is worse, because it always runs E(tests) PRPs for `prev_prime` then at least 1 PRP for `next_prime`. S1 runs the same E(tests) PRPs but doesn't always run PRPs for `next_prime`.
 
-Additionall S2 requires more work (20% overhead in `gap_stats` + extra data structure + harder to dynamically update...) so S1 it is.
+Additionally S2 requires more work (20% overhead in `gap_stats` + extra data structure + harder to dynamically update...) so S1 it is.
 
 Sadly this means only a generic 2x speedup (plus some small gains from ordering) over testing the gaps normally, it does allow these to be fit back into the normal framework.
 
