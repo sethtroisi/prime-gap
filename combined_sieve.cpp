@@ -292,6 +292,33 @@ double prob_prime_and_stats(
 }
 
 
+// Method1
+
+
+void save_unknowns_method1(
+        std::ofstream &unknown_file,
+        const uint64_t mi, int unknown_l, int unknown_u,
+        const unsigned int SL, const vector<char> composite[]) {
+
+    unknown_file << mi;
+    unknown_file << " : -" << unknown_l << " +" << unknown_u << " |";
+
+    for (int d = 0; d <= 1; d++) {
+        char prefix = "-+"[d];
+
+        for (size_t i = 1; i <= SL; i++) {
+            if (!composite[d][i]) {
+                unknown_file << " " << prefix << i;
+            }
+        }
+        if (d == 0) {
+            unknown_file << " |";
+        }
+    }
+    unknown_file << "\n";
+}
+
+
 void prime_gap_search(const struct Config config) {
     const uint64_t M_start = config.mstart;
     const uint64_t M_inc = config.minc;
@@ -578,22 +605,11 @@ void prime_gap_search(const struct Config config) {
 
         // Save unknowns
         if (config.save_unknowns) {
-            unknown_file << mi;
-            unknown_file << " : -" << unknown_l << " +" << unknown_u << " |";
-
-            for (int d = 0; d <= 1; d++) {
-                char prefix = "-+"[d];
-
-                for (size_t i = 1; i <= SL; i++) {
-                    if (!composite[d][i]) {
-                        unknown_file << " " << prefix << i;
-                    }
-                }
-                if (d == 0) {
-                    unknown_file << " |";
-                }
-            }
-            unknown_file << "\n";
+            save_unknowns_method1(
+                unknown_file,
+                mi, unknown_l, unknown_u,
+                SL, composite
+            );
         }
 
         bool is_last = (mi == last_mi);
@@ -696,6 +712,7 @@ void save_unknowns_method2(
         unknown_file << "\n";
     }
 }
+
 
 bool g_control_c = false;
 void signal_callback_handler(int signum) {
