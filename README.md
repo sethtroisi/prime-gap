@@ -62,6 +62,13 @@ In practice Method2 is better. Method1 is only used to validate results.
 ```bash
 $ make combined_sieve
 $ time ./combined_sieve -p 907 -d 210 --mstart 1 --minc 1000 --max-prime 1000 --save-unknowns --method1 -q
+```
+
+<details>
+<summary>combined_sieve --method1 output</summary>
+<p>
+
+```bash
 AUTO SET: sieve length: 7554 (coprime: 340, prob_gap longer 0.79%)
 
 Testing m * 907#/210, m = 1 + [0, 1,000)
@@ -94,10 +101,19 @@ Saving unknowns to '1_907_210_1000_s7554_l1000M.m1.txt'
 real	0m9.107s
 ```
 
+</p></details>
+
+
 ```bash
 $ make combined_sieve
 $ time ./combined_sieve -p 907 -d 210 --mstart 1 --minc 1000 --max-prime 1000 --save-unknowns -q
+```
 
+<details>
+<summary>combined_sieve --method2 output</summary>
+<p>
+
+```
 Testing m * 907#/210, m = 1 + [0, 1,000)
 sieve_length: 2x 7,554
 max-prime:       1,000,000,000   small_threshold:  137,790 (18.2 x SL)
@@ -133,6 +149,10 @@ coprime m    228/1000,  coprime i 1991/7554,  ~0MB
 Saving unknowns to '1_907_210_1000_s7554_l1000M.txt'
 ```
 
+</p></details>
+
+Verify outputs are the same with
+
 ```bash
 $ diff 1_907_210_1000_s7554_l1000M.m1.txt 1_907_210_1000_s7554_l1000M.txt
 <empty>
@@ -144,7 +164,13 @@ $ diff 1_907_210_1000_s7554_l1000M.m1.txt 1_907_210_1000_s7554_l1000M.txt
 $ make combined_sieve gap_stats
 # Use a larger `--sieve-length` for better record probability
 $ time ./combined_sieve -p 907 -d 210 --mstart 1 --minc 1000 --max-prime 1000 --save-unknowns --sieve-length 15000 -qq
+```
 
+<details>
+<summary>gap_stats output</summary>
+<p>
+
+```bash
 Testing m * 907#/210, m = 1 + [0, 1,000)
 999,999,937 (primes 50,847,534/142,065,175)	(seconds: 9.05/9.1 | per m: 0.04)
 	factors  177,931,017 		(interval: 8,887,445 avg m/large_prime interval: 0.0)
@@ -185,6 +211,8 @@ Saving Row:    228/228 997: 1258.8, 1342.1 | 4.7e-07
 Saved 228 rows to 'm_stats' table
 ```
 
+</p></details>
+
 ### Gap Test
 
 Quick note, `python gap_test.py ...` and `./gap_test` should be roughly equivilant.
@@ -194,7 +222,13 @@ Quick note, `python gap_test.py ...` and `./gap_test` should be roughly equivila
 ```bash
 $ make gap_test
 $ time ./gap_test --unknown-filename 1_907_210_1000_s15000_l1000M.txt --run-prp -q
+```
 
+<details>
+<summary>gap_test output</summary>
+<p>
+
+```bash
 Testing m * 907#/210, m = 1 + [0, 1,000)
 Min Gap ~= 10340 (for merit > 12.0)
 
@@ -227,6 +261,8 @@ Reading unknowns from '1_907_210_1000_s15000_l1000M.txt'
 	    best merit this interval: 12.265 (at m=479)
 ```
 
+</p></details>
+
 or slightly more quiet
 
 ```bash
@@ -245,7 +281,11 @@ Testing m * 907#/210, m = 1 + [0, 1,000)
 
 80%+ of the time is spent in `modulo_search_euclid` so it's important to optimize this function.
 
-More benchmarks are present in [BENCHMARKS.md](BENCHMARKS.md)
+See [BENCHMARKS.md](BENCHMARKS.md) for more details
+
+<details>
+<summary>benchmark output</summary>
+<p>
 
 ```bash
 $ make benchmark
@@ -304,6 +344,8 @@ $ ./benchmark 100000 _all
 	|    40 x  100000 | modulo_search_euclid_all_small | 18       | 100021   | 0.0240  |     240 | 813.5       |
 	|    40 x  100000 | modulo_search_euclid_all_large | 18       | 100021   | 0.0242  |     242 | 821.5       |
 ```
+
+</p></details>
 
 ## Flow
 
@@ -377,6 +419,10 @@ $ sudo apt install gmp-ecm
     * If you are a developer consider asking telling them that `mpz_prevprime` would be useful
 
 ### Quick test of all functions
+<details>
+<summary>quick test commands and output</summary>
+<p>
+
 ```bash
 $ PARAMS="-p 907 -d 2190 --mstart 1 --minc 200 --max-prime 100 --sieve-length 11000"
 $ make combined_sieve gap_stats gap_test
@@ -470,7 +516,9 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 	    unknowns  22377      (avg: 422.21), 98.08% composite  49.97% <- % -> 50.03%
 	    prp tests 2590       (avg: 48.87) (2199.432 tests/sec)
 	    best merit this interval: 9.698 (at m=143)
-```
+/```
+
+</p></details>
 
 ### TODO
 
