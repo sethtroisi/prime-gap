@@ -108,7 +108,7 @@ double prp_time_estimate(double K_log) {
 }
 
 
-double prop_gap_larger(
+double prob_gap_larger(
         const struct Config& config, double prob_prime,
         double *prob_prime_coprime, size_t *count_coprime) {
     vector<uint32_t> P_primes = get_sieve_primes(config.p);
@@ -123,6 +123,7 @@ double prop_gap_larger(
 
     *count_coprime = config.sieve_length;
     for (size_t i = 1; i <= config.sieve_length; i++) {
+        // if (gcd(i, K) > 1) --count_coprime -= 1;
         for (uint32_t prime : P_primes) {
             if (prime > config.p) break;
             if ((i % prime) == 0 && (config.d % prime) != 0) {
@@ -131,8 +132,11 @@ double prop_gap_larger(
             }
         }
     }
+
     double chance_coprime_composite = 1 - prob_prime / *prob_prime_coprime;
     return pow(chance_coprime_composite, *count_coprime);
+
+    // See "Optimizing Choice Of D" in THEORY.md.
 }
 
 

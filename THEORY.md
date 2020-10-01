@@ -3,6 +3,7 @@
 - [Theory](#Theory)
   * [`combined_sieve`](#combined_sieve)
     * [`--sieve_length`](#--sieve_length)
+    * [Optimizing choice of D](#optimizing-choice-of-d)
     * [Skipped PRP Tests](#skipped-prp-tests)
   * [`gap_stats`](#gap_stats)
   * [Choosing `--top-x-percent`](#choosing---top-x-percent)
@@ -36,9 +37,60 @@ This section abbreviates gcd(a, b) = c as (a, b) = c
 1. Check if `min(...) >= goal_coprime`
   1. Expensive to calculate so use these optimizations
       * Cache `len(i for i in range(-SL+1, SL) if (m * K + i, K*D) == 1)`
-      * `((m % D) * K + i, K*D) > 1` => `(i, K) > 1 or ((m % D) * (K % D) + i, D) > 1`
+      * `((m % D) * K + i, K*D) > 1` implies `(i, K) > 1 or ((m % D) * (K % D) + i, D) > 1`
       * if `(i, K) > 1` advance to next (all `m * K + i` will be coprime)
       * All (m % D) have same count, so only consider m with (m, d) == 1
+
+### Optimizing Choice of D
+
+Not all `d` are created equal. Many `d` increase the average gap non-trivially.
+Anecdotally choosing a small primorial (`11#` or `7#`) is quite common.
+
+To understand why look at the estimation of unknowns.
+The naive estimation of unknowns (numbers not removed by small primes) has 3 parts.
+
+1. Primes `pk` which divide `K`
+2. Primes `pd` which divide `d` (note `pd` must be less than `P` from `P#`)
+3. Primes up to `--max-prime`
+
+---
+
+1. Primes of the first category are the most easy to handle.
+
+`pk | m * K + X` ⇔ `pk | (pk, m * K + X)` and `(pk, m * K + X) = (pk, X)`
+So only `X` with `gcd(X, K) == 1` need to be considered. (This is the `coprime_count` in `--method2`)
+
+2. Primes of the second category (generally only a handful of primes) are handled per m.
+
+For each `m`, find a multiple of `pd` and mark off other multiple of `pd`
+
+By making `d` a multiple of 2 `count_coprime` decreases by a factor of 2.
+Non-intuitively the number of odd/even coprime X is not always close to 50%.
+
+For `1 <= X <= P` all X will be composed of factors of `d` (meaning mostly divisible by `pk`)
+
+For `P <= X <= P * pd`, `pd | X` implies `X/pd <= P` which can only be true if `X/pd` is composed of only factors of `d`
+So most numbers on this interval WILL NOT be divisible by `pd` (see [SL_factors_of_d.py](misc/SL_factors_of_d.py))
+
+For `X >= P * pd` initially there will be more X divisible by `pd` then expected (`1/pd`) then a trend towards the expected count.
+
+This is illustrated by ![Excess Factors by D](data/SL_factors_of_d.png)
+
+X divisible by `pd` is BAD because `pd | X, (K, pd) = 1, (m, pd) = 1` implies `(m * K + X, pd) = (m * K, pd) = 1`
+
+So the larger percent of X NOT divisible by `pd` the larger chance of `m * K + X` being divisible by `pd`
+
+3. Finally the larger small primes, `p`, seem to behavior normally and divide ~1 in p of the remaining X.
+
+We can estimate what percent of numbers will be removed by using
+[Mertens 3rd theorem](https://en.wikipedia.org/wiki/Mertens%27_theorems)
+
+---
+
+Notice from the graph that each of the individual factors `dp` might have a deficientcy of divisibilty
+but the product `d` will still have excess of divisibility (see `d=30` near `8*10^4`)
+
+In the end the best advice is to try to minimize avg factors / m OR maximize expected gap (from `gap_stats`).
 
 
 ### Skipped PRP Tests

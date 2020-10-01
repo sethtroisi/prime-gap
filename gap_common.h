@@ -105,7 +105,7 @@ void K_stats(
 
 double prp_time_estimate(double K_log);
 
-double prop_gap_larger(
+double prob_gap_larger(
     const struct Config& config,
     double prob_prime,
     double *prob_prime_coprime,

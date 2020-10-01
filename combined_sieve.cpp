@@ -266,16 +266,16 @@ double prob_prime_and_stats(
 
     size_t count_coprime = 0;
     double prob_prime_coprime = 0;
-    double prob_gap_hypothetical = prop_gap_larger(
+    double prob_gap_hypothetical = prob_gap_larger(
         config, prob_prime, &prob_prime_coprime, &count_coprime);
 
     if (config.verbose >= 2) {
         printf("\n");
-        // XXX: sieve is more combosite than unknowns_after_sieve would suggest.
-        // Adjust for MANY coprimes (especially around center).
-        printf("\texpect %.0f left (%.3f%%) of %u after %ldM\n",
-                count_coprime * (unknowns_after_sieve / prob_prime_coprime),
-                100 * unknowns_after_sieve,
+        printf("count_coprime: %ld * (%.3f = %.3f/%.3f)\n",
+                count_coprime, unknowns_after_sieve / prob_prime_coprime, unknowns_after_sieve, prob_prime_coprime);
+        size_t expected = count_coprime * (unknowns_after_sieve / prob_prime_coprime);
+        printf("\texpect %ld left (%.3f%%) of %u after %ldM\n",
+                expected,  100.0 * expected / (config.sieve_length + 1),
                 config.sieve_length, config.max_prime/1'000'000);
         printf("\t%.3f%% of %d digit numbers are prime\n",
                 100 * prob_prime, K_digits);
@@ -911,7 +911,7 @@ void prime_gap_parallel(struct Config config) {
     long  s_prime_factors = 0;
     long  s_small_prime_factors_interval = 0;
     long  s_large_prime_factors_interval = 0;
-    uint64_t  s_next_print = 0;
+    uint64_t  s_next_print = config.p;
     uint64_t  next_mult = SMALL_THRESHOLD <= 10000 ? 10000 : 100000;
     double s_prp_needed = 1 / prob_prime;
 
@@ -923,7 +923,7 @@ void prime_gap_parallel(struct Config config) {
 
     size_t pi = 0;
     size_t pi_interval = 0;
-    get_sieve_primes_segmented_lambda(MAX_PRIME, [&](const uint64_t prime) {
+    get_sieve_primes_segmented_lambda(1009, [&](const uint64_t prime) {
         pi_interval += 1;
         // Big improvement over surround_prime is reusing this for each m.
         const uint64_t base_r = mpz_fdiv_ui(K, prime);
