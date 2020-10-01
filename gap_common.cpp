@@ -108,35 +108,58 @@ double prp_time_estimate(double K_log) {
 }
 
 
+/**
+ * Handles approx count of divisors by d
+ * See "Optimizing Choice Of D" in THEORY.md for why this is required
+ */
 double prob_gap_larger(
         const struct Config& config, double prob_prime,
-        double *prob_prime_coprime, size_t *count_coprime) {
+        double *prob_prime_coprime_p, size_t *count_coprime_p) {
     vector<uint32_t> P_primes = get_sieve_primes(config.p);
     assert( P_primes.back() == config.p );
 
-    *prob_prime_coprime = 1;
+    *prob_prime_coprime_p = 1;
     for (uint32_t prime : P_primes) {
-        if (config.d % prime != 0) {
-            *prob_prime_coprime *= (1 - 1.0/prime);
-        }
+        *prob_prime_coprime_p *= (1 - 1.0/prime);
     }
 
-    *count_coprime = config.sieve_length;
-    for (size_t i = 1; i <= config.sieve_length; i++) {
-        // if (gcd(i, K) > 1) --count_coprime -= 1;
-        for (uint32_t prime : P_primes) {
-            if (prime > config.p) break;
-            if ((i % prime) == 0 && (config.d % prime) != 0) {
-                *count_coprime -= 1;
-                break;
+    // Count remaining coprime X for 0 <= X <= SL over SAMPLE_M m values
+    const size_t SAMPLES_M = config.d == 1 ? 1 : 6;
+
+    // Unoptimized but cleaner code is preferred here
+    mpz_t P, N, temp;
+    mpz_init(P);
+    mpz_init(N);
+    mpz_init(temp);
+
+    mpz_primorial_ui(P, config.p);
+
+    size_t m_counted = 0;
+    for (uint64_t mi = 0; m_counted < SAMPLES_M; mi++) {
+        uint64_t m = config.mstart + mi;
+        if (gcd(m, config.d) > 1) continue;
+        m_counted++;
+
+        mpz_mul_ui(N, P, m);
+        assert(0 == mpz_tdiv_q_ui(N, N, config.d));
+
+        for (size_t X = 0; X <= config.sieve_length; X++) {
+            mpz_gcd(temp, N, P);
+            if (mpz_cmp_ui(temp, 1) == 0) {
+                *count_coprime_p += 1;
             }
+            mpz_add_ui(N, N, 1);
         }
     }
+    mpz_clear(N);
+    mpz_clear(P);
+    mpz_clear(temp);
 
-    double chance_coprime_composite = 1 - prob_prime / *prob_prime_coprime;
-    return pow(chance_coprime_composite, *count_coprime);
+    printf("Hi: %ld, %ld\n", *count_coprime_p, *count_coprime_p / SAMPLES_M);
+    *count_coprime_p /= SAMPLES_M;
 
-    // See "Optimizing Choice Of D" in THEORY.md.
+    double chance_coprime_composite = 1 - prob_prime / *prob_prime_coprime_p;
+    return pow(chance_coprime_composite, *count_coprime_p);
 }
 
 

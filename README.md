@@ -531,7 +531,6 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
 * combined\_sieve.cpp
-  * [ ] "expect %ld left" doesn't match
 * gap\_stats.cpp
 * gap\_test.cpp
   * [ ] `--top-x-percent` (see THEORY.md)
@@ -578,6 +577,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [x] Make method2 the default
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
 * combined\_sieve.cpp
+  * [x] "expect %ld left" doesn't match
   * [x] Write time_sieve into DB
   * Method2 (all composites in memory)
     * [x] `vector<char>` doesn't show improvement over `vector<bool>`

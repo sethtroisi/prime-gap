@@ -130,14 +130,14 @@ void set_defaults(struct Config& config) {
         // Change that a number near K is prime
         // GIVEN no factor of K or D => no factor of P#
         double N_log = K_log + log(config.mstart);
-        double prob_prime_coprime = 1 / N_log - 1 / (N_log * N_log);
+        double prob_prime_coprime_P = 1 / N_log - 1 / (N_log * N_log);
 
         // factors of K = P#/D
         vector<uint32_t> K_primes = get_sieve_primes(config.p);
         {
             // Adjust for prob_prime for no primes <= P
             for (auto prime : K_primes) {
-                prob_prime_coprime /= (1 - 1.0 / prime);
+                prob_prime_coprime_P /= (1 - 1.0 / prime);
             }
 
             // Remove any factors of D
@@ -216,7 +216,7 @@ void set_defaults(struct Config& config) {
                 }
 
                 // Assume each coprime is independent
-                double prob_gap_shorter = pow(1 - prob_prime_coprime, min_coprime);
+                double prob_gap_shorter = pow(1 - prob_prime_coprime_P, min_coprime);
 
                 // This seems to balance PRP fallback and sieve_size
                 if (prob_gap_shorter <= 0.008) {
@@ -258,24 +258,23 @@ double prob_prime_and_stats(
     double K_log;
     K_stats(config, K, &K_digits, &K_log);
 
-    // From Mertens' 3rd theorem
-    double unknowns_after_sieve = 1 / (log(config.max_prime) * exp(GAMMA));
-    const double N_log = K_log + log(config.mstart);
-    const double prob_prime = 1 / N_log - 1 / (N_log * N_log);
-    double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
-
-    size_t count_coprime = 0;
-    double prob_prime_coprime = 0;
-    double prob_gap_hypothetical = prob_gap_larger(
-        config, prob_prime, &prob_prime_coprime, &count_coprime);
-
     if (config.verbose >= 2) {
+        // From Mertens' 3rd theorem
+        double unknowns_after_sieve = 1 / (log(config.max_prime) * exp(GAMMA));
+        const double N_log = K_log + log(config.mstart);
+        const double prob_prime = 1 / N_log - 1 / (N_log * N_log);
+        double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
+
+        size_t count_coprime_p = 0;
+        double prob_prime_coprime_p = 0;
+        double prob_gap_hypothetical = prob_gap_larger(
+            config, prob_prime, &prob_prime_coprime_p, &count_coprime_p);
+
+        size_t expected = count_coprime_p * (unknowns_after_sieve / prob_prime_coprime_p);
+
         printf("\n");
-        printf("count_coprime: %ld * (%.3f = %.3f/%.3f)\n",
-                count_coprime, unknowns_after_sieve / prob_prime_coprime, unknowns_after_sieve, prob_prime_coprime);
-        size_t expected = count_coprime * (unknowns_after_sieve / prob_prime_coprime);
-        printf("\texpect %ld left (%.3f%%) of %u after %ldM\n",
-                expected,  100.0 * expected / (config.sieve_length + 1),
+        printf("\texpect %ld left = 2 * %ld (%.3f%%) of %u after %ldM\n",
+                2 * expected, expected,  100.0 * expected / (config.sieve_length + 1),
                 config.sieve_length, config.max_prime/1'000'000);
         printf("\t%.3f%% of %d digit numbers are prime\n",
                 100 * prob_prime, K_digits);
@@ -923,7 +922,7 @@ void prime_gap_parallel(struct Config config) {
 
     size_t pi = 0;
     size_t pi_interval = 0;
-    get_sieve_primes_segmented_lambda(1009, [&](const uint64_t prime) {
+    get_sieve_primes_segmented_lambda(MAX_PRIME, [&](const uint64_t prime) {
         pi_interval += 1;
         // Big improvement over surround_prime is reusing this for each m.
         const uint64_t base_r = mpz_fdiv_ui(K, prime);
