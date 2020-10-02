@@ -526,7 +526,6 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 
 * [ ] avg record prob (quick test): changed by two orders of magnitude, why!
 * Flow
-  * [ ] When do `num_processed`/`num_to_process` get updated
 * README.md
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
@@ -541,7 +540,8 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 * gap\_test.py
   * [ ] Sort by expected gap and PRP only top X%
   * [ ] Multithreaded
-  * [ ] Update m_stats (with test_time)
+  * [ ] Update m_stats (with test_time),
+  * [ ] Save to results
 * missing\_gap\_test.py && missing\_gap\_verify.py
 * schema.sql
 * benchmarking
@@ -549,6 +549,9 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 
 ### Low Priority TODOs
 
+* New script to update DB (and maybe delete uninteresting results
+  * [ ] Verify every table.`m_stat` result in table.`result`
+  * [x] Update range.`num_processed / num_to_process`
 * combined\_sieve.cpp
   * [ ] ETA for `combined_sieve` timing.
   * [ ] Option to output m with gcd(m, d) != 1
@@ -560,6 +563,8 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [ ] Plot average tests count
 * gap\_common.py
   * [ ] Compute smaller PRP and use that to computer larger (slower) PRP estimate
+* benchmarking
+  * [ ] Validate `modulo\_search` is >80% execution time for `combined_sieve`.
 
 ### TODONE
 
