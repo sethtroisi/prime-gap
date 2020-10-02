@@ -103,7 +103,7 @@ void K_stats(
         const struct Config& config,
         mpz_t &K, int *K_digits, double *K_log);
 
-double prp_time_estimate(double K_log);
+double prp_time_estimate_composite(double K_log, int verbose);
 
 double prob_gap_larger(
     const struct Config& config,

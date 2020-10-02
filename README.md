@@ -541,10 +541,10 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 * gap\_test.py
   * [ ] Sort by expected gap and PRP only top X%
   * [ ] Multithreaded
+  * [ ] Update m_stats (with test_time)
 * missing\_gap\_test.py && missing\_gap\_verify.py
 * schema.sql
 * benchmarking
-  * [ ] Update `prime_time_estimate` polynomial
   * [ ] Add instructions to verify `modulo\_search` is >80% of the time.
 
 ### Low Priority TODOs
@@ -558,6 +558,8 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [ ] Option to starting at m > mstart
 * gap\_test.py
   * [ ] Plot average tests count
+* gap\_common.py
+  * [ ] Compute smaller PRP and use that to computer larger (slower) PRP estimate
 
 ### TODONE
 
@@ -630,6 +632,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [x] store records in some .gitignore'd file
   * [x] Multiprocessing
 * benchmarking
+  * [x] Experimentally compute `prime_time_estimate`
   * [x] Redo prime-time with user time (gmp better)
     * There's serious overhead using subproccess, and I see 150% CPU usage. I Tried passing via stdin (pfgw supports -- but quits after one) but couldn't make it work. MF suggest you can use gwnum library and hack some api but seems like a like of work for ~1.4-2x gain on the largest primes.
   * [x] Add int64 `modulo_search_euclid_all`

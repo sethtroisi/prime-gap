@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -30,6 +31,8 @@ using std::cout;
 using std::endl;
 using std::string;
 using std::vector;
+using namespace std::chrono;
+
 
 
 const char *DB::search_db  = "prime-gap-search.db";
@@ -96,15 +99,69 @@ void K_stats(
 }
 
 
-double prp_time_estimate(double K_log) {
-    // Estimates from:
+/**
+ * Return estimated time (in seconds) to PRP test a composite with no small factor
+ */
+double prp_time_estimate_composite(double K_log, int verbose) {
+    // TODO: For large K_log, time smaller PRP then upscale with polynomial
+
+    // Some rough estimates at
     // https://github.com/sethtroisi/misc-scripts/tree/master/prime-time
-    assert(K_log > 400);
 
-    // prp for primes takes ~7x this estimate is for 'hard' composite
-    return std::max(0.0001501, -1.0301e-1 + 1.576e-4 * K_log + -8.345e-9 * K_log*K_log);
+    float K_log_2 = K_log * K_log;
+    float t_estimate_poly = -1.1971e-03
+                        +  5.1072e-07 * K_log
+                        +  9.4362e-10 * K_log_2
+                        +  1.8757e-13 * K_log_2 * K_log
+                        + -1.9582e-18 * K_log_2 * K_log_2;
+    float t_estimate = std::max(1e-3f, t_estimate_poly);
 
-    // XXX: with verbose >= 2 just measure it?
+    if (verbose >= 2) {
+        if (t_estimate > 0.3) {
+            printf("Estimated secs/PRP: %.1f\n", t_estimate);
+        } else {
+            // Benchmark in thread
+
+            // Create some non-trivial semi-primes.
+            mpz_t n, p, q;
+            mpz_init(n);
+            mpz_init(p);
+            mpz_init(q);
+
+            size_t bits = K_log * 1.442;
+            assert( bits > 50 );
+
+            // Larger static prime
+            mpz_ui_pow_ui(p, 2, bits - 25);
+            mpz_nextprime(p, p);
+
+            // Smaller prime for fast nextprime.
+            // Large enough to avoid being found with trial division.
+            mpz_ui_pow_ui(q, 2, 25);
+            mpz_nextprime(q, q);
+
+            double t = 0;
+            size_t count = 0;
+            // A lot of overhead in nextprime so only time ~1 second of tests.
+            for (; count < 10 || t < 1; count++) {
+                mpz_mul(n, p, q);
+                assert( mpz_sizeinbase(n, 2) >= bits );
+
+                auto  s_start_t = high_resolution_clock::now();
+
+                assert( mpz_probab_prime_p(n, 25) == 0 );
+
+                t += duration<double>(high_resolution_clock::now() - s_start_t).count();
+                mpz_nextprime(q, q);
+            }
+
+            printf("Estimating PRP/s: %ld / %.2f = %.1f/s vs polyfit estimate of %.1f/s\n",
+                count, t, count / t, 1 / t_estimate);
+            t_estimate = t / count;
+        }
+    }
+
+    return t_estimate;
 }
 
 
@@ -155,7 +212,6 @@ double prob_gap_larger(
     mpz_clear(P);
     mpz_clear(temp);
 
-    printf("Hi: %ld, %ld\n", *count_coprime_p, *count_coprime_p / SAMPLES_M);
     *count_coprime_p /= SAMPLES_M;
 
     double chance_coprime_composite = 1 - prob_prime / *prob_prime_coprime_p;

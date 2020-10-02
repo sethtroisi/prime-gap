@@ -797,15 +797,9 @@ void prime_gap_parallel(struct Config config) {
     const double K_log = prob_prime_and_stats(config, K, P_primes);
     const double N_log = K_log + log(config.mstart);
     const double prob_prime = 1 / N_log - 1 / (N_log * N_log);
-    const double prp_time_est = prp_time_estimate(N_log);
 
-    if (config.verbose >= 2) {
-        if (prp_time_est < 1) {
-            printf("Estimated PRP/s %.1f\n", 1 / prp_time_est);
-        } else {
-            printf("Estimated secs/PRP %.1f\n", prp_time_est);
-        }
-    }
+    // Also prints estimate if verbose >= 2
+    const double prp_time_est = prp_time_estimate_composite(N_log, config.verbose);
 
     // ----- Allocate memory
     // SIEVE_INTERVAL includes endpoints [-SL ... K ... SL]
