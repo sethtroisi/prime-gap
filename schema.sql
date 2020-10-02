@@ -20,8 +20,9 @@ PRAGMA foreign_keys = ON;
 /*
     Flow is:
         ./combined_sieve -> <params>.txt
-        ./gap_stats
                 INSERT row into 'range'
+        ./gap_stats
+                UPDATE 'range' time_stats
                 INSERT range stats into 'range_stats'
                 INSERT stats per m into 'm_stats'
                 (if using -DSEARCH_MISSING_GAPS=1)
@@ -109,8 +110,8 @@ CREATE TABLE IF NOT EXISTS m_stats (
          * 0        => ???
          * negative => X is prime but haven't checked all values less
          */
-        next_p INTEGER,
-        prev_p INTEGER,
+        next_p INTEGER DEFAULT 0,
+        prev_p INTEGER DEFAULT 0,
 
         /* (next_p_i + prev_p_i) / log(N) */
         merit REAL,
@@ -125,10 +126,10 @@ CREATE TABLE IF NOT EXISTS m_stats (
         e_gap_prev REAL,
 
         /* updated during gap_test / missing_gap_test */
-        prp_next INTEGER,
-        prp_prev INTEGER,
+        prp_next INTEGER DEFAULT 0,
+        prp_prev INTEGER DEFAULT 0,
 
-        test_time REAL,
+        test_time REAL DEFAULT 0,
 
         PRIMARY KEY(m, P, D)
 );

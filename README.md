@@ -540,8 +540,6 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 * gap\_test.py
   * [ ] Sort by expected gap and PRP only top X%
   * [ ] Multithreaded
-  * [ ] Update m_stats (with test_time),
-  * [ ] Save to results
 * missing\_gap\_test.py && missing\_gap\_verify.py
 * schema.sql
 * benchmarking
@@ -560,6 +558,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [ ] Check if higher prob is related to unique (mi % d)
   * [ ] Option to starting at m > mstart
 * gap\_test.py
+  * [ ] Plan for minimize memory when using large `--top-x-percent`
   * [ ] Plot average tests count
 * gap\_common.py
   * [ ] Compute smaller PRP and use that to computer larger (slower) PRP estimate
@@ -619,6 +618,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_test.py
+  * [x] Update `m_stats` (with `test_time`),
   * [x] Plot P(gap > min\_merit) and P(record) sorted and unsorted.
   * [x] Option to toggle between OpenPFGW and gmp (see note in benchmarking below)
   * [x] Store all results to sql

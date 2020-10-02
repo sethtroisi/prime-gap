@@ -303,15 +303,13 @@ void store_stats(
     // NOTE: IGNORE so that can rerun with different max-prime/sieve-length
     char insert_m_stats[] = (
             "INSERT OR IGNORE INTO m_stats"
-            "(rid, m, P, D, next_p, prev_p, merit,"
+            "(rid, m, P, D, "
             " prob_record, prob_missing, prob_merit,"
-            " e_gap_next, e_gap_prev,"
-            " prp_next, prp_prev, test_time)"
+            " e_gap_next, e_gap_prev)"
             "VALUES"
-            "(?, ?, ?, ?, 0, 0, 0.0,"
+            "(?, ?, ?, ?,"
             " ?, ?, ?,"
-            " ?, ?,"
-            " 0, 0, 0)"
+            " ?, ?)"
             );
 
     sqlite3_stmt *stmt;

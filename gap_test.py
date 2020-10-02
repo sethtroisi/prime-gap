@@ -507,11 +507,20 @@ def load_stats(conn, args):
         p_gap_comb, p_gap_side
     )
 
-def save(conn, m, p, d, n_p_i, p_p_i, merit):
+def save(conn, m, p, d, next_p_i, prev_p_i, merit,
+         n_tests, p_tests, test_time):
     conn.execute(
         "INSERT INTO result(m,P,D,next_p_i,prev_p_i,merit)"
         "VALUES(?,?,?,  ?,?,  ?)",
-        (m, p, d,  n_p_i, p_p_i,  round(merit,4)))
+        (m, p, d,  next_p_i, pprev_p_i,  round(merit,4)))
+
+    conn.execute(
+        "UPDATE m_stats "
+        "SET next_p=?, prev_p=?,"
+        "    prp_next=?,prp_prev=?,test_time=?"
+        "WHERE m=? AND p=? AND d=?",
+        (next_p_i, prev_p_i, p_tests, n_tests, test_time, m, p, d))
+
     conn.commit()
 
 
@@ -837,30 +846,41 @@ def prime_gap_test(args):
         if args.run_prp:
             if m in existing:
                 prev_p_i, next_p_i = existing[m]
+                gap = next_p_i + prev_p_i
+                merit = gap / log_n
             else:
                 tested += 1
                 # Used for openPFGW
                 strn = "{}*{}#/{}+".format(m, P, D)
 
+                t0 = time.time()
+
+                n_tests, next_p_i = determine_next_prime_i(m, strn, K, unknowns[1], SL)
                 p_tests, prev_p_i = determine_prev_prime_i(m, strn, K, unknowns[0],
                                                          SL, primes, remainder)
+
+                test_time = time.time() - t0
+
+                gap = next_p_i + prev_p_i
+                merit = gap / log_n
+
+                save(conn,
+                    m, P, D, next_p_i, prev_p_i, merit,
+                    n_tests, p_tests, test_time)
+
                 s_total_prp_tests += p_tests
                 s_gap_out_of_sieve_prev += prev_p_i > SL
 
-                n_tests, next_p_i = determine_next_prime_i(m, strn, K, unknowns[1], SL)
                 s_total_prp_tests += n_tests
                 s_gap_out_of_sieve_next += next_p_i > SL
 
+
             assert prev_p_i > 0 and next_p_i > 0
-            gap = int(next_p_i + prev_p_i)
             s_experimental_gap.append(gap)
             s_experimental_side.append(next_p_i)
             s_experimental_side.append(prev_p_i)
             assert next_p_i > 0 and prev_p_i > 0, (m, next_pi, prev_p_i)
 
-            merit = gap / log_n
-            if m not in existing:
-                save(conn, m, P, D, next_p_i, prev_p_i, merit)
 
             if gap in record_gaps or merit > min_merit:
                 print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(

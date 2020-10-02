@@ -904,7 +904,7 @@ void prime_gap_parallel(struct Config config) {
     long  s_prime_factors = 0;
     long  s_small_prime_factors_interval = 0;
     long  s_large_prime_factors_interval = 0;
-    uint64_t  s_next_print = config.p;
+    uint64_t  s_next_print = 0;
     uint64_t  next_mult = SMALL_THRESHOLD <= 10000 ? 10000 : 100000;
     double s_prp_needed = 1 / prob_prime;
 
