@@ -862,7 +862,7 @@ def prime_gap_test(args):
             if m not in existing:
                 save(conn, m, P, D, next_p_i, prev_p_i, merit)
 
-            if merit > min_merit:
+            if gap in record_gaps or merit > min_merit:
                 print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(
                     gap, merit, m, P, D, prev_p_i, next_p_i))
 
