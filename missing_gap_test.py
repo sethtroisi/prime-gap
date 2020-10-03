@@ -180,11 +180,12 @@ def init_worker(function, args):
         if ignore in function.missing:
             function.missing.remove(ignore)
 
+
 def test_line(data):
     prob, m, line = data
 
-    start = f"{m} * {args.p}# / {args.d}"
-    K, r = divmod(gmpy2.primorial(args.p), args.d)
+    start = f"{m} * {test_line.args.p}# / {test_line.args.d}"
+    K, r = divmod(gmpy2.primorial(test_line.args.p), test_line.args.d)
     assert r == 0
     N = m * K
 

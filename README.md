@@ -506,7 +506,7 @@ Reading unknowns from '1_907_2190_200_s11000_l100M.txt'
 	    prp tests 2590       (avg: 48.87) (2144.5 tests/sec)
 
 
-$ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-merit 8 --run-prp
+$ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-merit 8
 ...
 7750  9.0185  1 * 907#/2190 -7300 to +450
 	  1  218 <- unknowns ->  212	7300 <- gap ->  450
@@ -544,6 +544,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 * combined\_sieve.cpp
 * gap\_stats.cpp
 * gap\_test.cpp
+  * [ ] remove `--run-prp`
   * [ ] `--top-x-percent` (see THEORY.md)
   * [ ] Multithreaded
   * [ ] Read `time_sieve` and `time_stats` print optimal to restart search point
@@ -551,7 +552,6 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [ ] Produce P(record) / day (and upfront estimate)
 * gap\_test.py
   * [ ] Sort by expected gap and PRP only top X%
-  * [ ] Multithreaded
 * missing\_gap\_test.py && missing\_gap\_verify.py
 * schema.sql
 * benchmarking
@@ -631,6 +631,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_test.py
+  * [x] Multithreaded
   * [x] Update `m_stats` (with `test_time`),
   * [x] Plot P(gap > min\_merit) and P(record) sorted and unsorted.
   * [x] Option to toggle between OpenPFGW and gmp (see note in benchmarking below)
