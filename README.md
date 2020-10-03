@@ -12,6 +12,7 @@ A fast prime gap searching suite.
     + [Gap Test](#gap-test)
     + [Benchmark](#benchmark)
   * [Flow](#flow)
+    + [Database](#database)
   * [Benchmarks](#benchmarks) | [BENCHMARKS.md](BENCHMARKS.md)
   * [Theory](#theory) | [THEORY.md](THEORY.md)
   * [Setup](#setup)
@@ -367,6 +368,15 @@ $ ./benchmark 100000 _all
      * Allows for saving of progress and graceful restart
    * `gap_test.py` can produce graphs of distribution (via `--plots`)
 
+### Database
+
+Often I run `combined_sieve` and `gap_stats` for a BUNCH of ranges not I never end up testing.
+
+`misc/show_ranges.sh` updates and shows ranges from prime-gap-search.db.
+
+`misc/drop_range.sh` deletes ranges when none of them have ever been tested
+
+
 
 ## Benchmarks
 
@@ -527,6 +537,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 * [ ] avg record prob (quick test): changed by two orders of magnitude, why!
 * Flow
 * README.md
+  * [ ] record\_check.py guide to use
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
 * combined\_sieve.cpp
@@ -549,7 +560,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 
 * New script to update DB (and maybe delete uninteresting results
   * [ ] Verify every table.`m_stat` result in table.`result`
-  * [x] Update range.`num_processed / num_to_process`
+  * [ ] Set rid if null (but reasonable range exists)
 * combined\_sieve.cpp
   * [ ] ETA for `combined_sieve` timing.
   * [ ] Option to output m with gcd(m, d) != 1
@@ -645,6 +656,8 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
   * [x] Add benchmarks for `K % p`
 * prime-gap-search.db
   * [x] A plan for how to clean up [partially] finished ranges
+* misc scripts
+  * [x] Update range.`num_processed / num_to_process`
 * record\_check.py
   * [x] Read from sql db
 * double\_check.py

@@ -512,14 +512,15 @@ def save(conn, m, p, d, next_p_i, prev_p_i, merit,
     conn.execute(
         "INSERT INTO result(m,P,D,next_p_i,prev_p_i,merit)"
         "VALUES(?,?,?,  ?,?,  ?)",
-        (m, p, d,  next_p_i, pprev_p_i,  round(merit,4)))
+        (m, p, d,  next_p_i, prev_p_i,  round(merit,4)))
 
     conn.execute(
         "UPDATE m_stats "
-        "SET next_p=?, prev_p=?,"
-        "    prp_next=?,prp_prev=?,test_time=?"
+        "SET next_p=?, prev_p=?, merit=?,"
+        "    prp_next=?, prp_prev=?, test_time=?"
         "WHERE m=? AND p=? AND d=?",
-        (next_p_i, prev_p_i, p_tests, n_tests, test_time, m, p, d))
+        (next_p_i, prev_p_i, round(merit,4),
+         p_tests, n_tests, test_time, m, p, d))
 
     conn.commit()
 
