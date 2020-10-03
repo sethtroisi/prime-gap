@@ -17,6 +17,7 @@
 import argparse
 import itertools
 import math
+import multiprocessing
 import re
 import sqlite3
 import time
@@ -46,8 +47,6 @@ def get_arg_parser():
 
     parser.add_argument('--min-merit', type=int, default=12,
         help="only display prime gaps with merit >= minmerit")
-    parser.add_argument('--run-prp',  action='store_true',
-        help="Run PRP, leave off to benchmarking and print some stats")
 
     parser.add_argument('--threads', type=int, default=1,
         help="Number of threads to use for searching (default: %(default)s)")
@@ -594,6 +593,8 @@ def calculate_expected_gaps(
         else:
             data.expected_next.append(expected_length)
 
+    data.expected_gap.append(data.expected_prev[-1] + data.expected_next[-1])
+
     p_merit = 0
     for prob_i, lower in zip(prob_nth, unknowns[0]):
         for prob_j, upper in zip(prob_nth, unknowns[1]):
@@ -667,6 +668,24 @@ def determine_prev_prime_i(m, strn, K, unknowns, SL, primes, remainder):
     return tests, prev_p_i
 
 
+# TODO TERRIBLE TO PASS PRIMES/REMAINDER AROUND EACH TIME
+def process_line(P, D, primes, remainder, line):
+    mtest, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
+
+    # Used for openPFGW
+    strn = "{}*{}#/{}+".format(mtest, P, D)
+
+    t0 = time.time()
+
+    p_tests, prev_p_i = determine_prev_prime_i(m, strn, K, unknowns[0],
+                                             SL, primes, remainder)
+    n_tests, next_p_i = determine_next_prime_i(m, strn, K, unknowns[1], SL)
+
+    test_time = time.time() - t0
+
+    return mtest, unknown_l, unknown_u, n_tests, next_p_i, p_tests, prev_p_i, test_time
+
+
 def should_print_stats(
         args, sc, data, mi, m, last_mi,
         unknown_l, unknown_u,
@@ -697,17 +716,19 @@ def should_print_stats(
         else:
             timing = "{}/sec".format(roundSig(sc.tested / secs, 3))
 
-        total_unknown = sc.t_unk_low + sc.t_unk_hgh
         # Stats!
         print("\t    tests     {:<10d} ({})  {:.0f} seconds elapsed".format(
             sc.tested, timing, secs))
-        print("\t    unknowns  {:<10d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
-            total_unknown, total_unknown / N,
-            100 * (1 - total_unknown / ((2 * args.sieve_length + 1) * N)),
-            100 * sc.t_unk_low / total_unknown,
-            100 * sc.t_unk_hgh / total_unknown))
-        if sc.tested and args.run_prp:
-            prp_tests = sc.total_prp_tests
+
+        total_unknown = sc.t_unk_low + sc.t_unk_hgh
+        if total_unknown:
+            print("\t    unknowns  {:<10d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
+                total_unknown, total_unknown / N,
+                100 * (1 - total_unknown / ((2 * args.sieve_length + 1) * N)),
+                100 * sc.t_unk_low / total_unknown,
+                100 * sc.t_unk_hgh / total_unknown))
+        prp_tests = sc.total_prp_tests
+        if sc.tested and prp_tests:
             print("\t    prp tests {:<10d} (avg: {:.2f}) ({:.3f} tests/sec)".format(
                 prp_tests, prp_tests / sc.tested, prp_tests / secs))
             if sc.gap_out_of_sieve_prev or sc.gap_out_of_sieve_next:
@@ -761,14 +782,14 @@ def prime_gap_test(args):
     # used in next_prime
     assert P <= 80000
     # Very slow but works.
-    primes = [2] + [p for p in range(3, 80000+1, 2) if gmpy2.is_prime(p)]
+    primes = tuple([2] + [p for p in range(3, 80000+1, 2) if gmpy2.is_prime(p)])
     P_primes = [p for p in primes if p <= P]
 
     # ----- Allocate memory for a handful of utility functions.
 
     # XXX: Cleanup after gmpy2.prev_prime.
     # Remainders of (p#/d) mod prime
-    remainder   = [K % prime for prime in primes]
+    remainder   = tuple([K % prime for prime in primes])
 
     # ----- Sieve stats
     prob_prime = 1 / M_log - 1 / (M_log * M_log)
@@ -789,8 +810,6 @@ def prime_gap_test(args):
 
 
     # ----- Main sieve loop.
-    print("\nStarting m={}".format(M))
-    print()
 
     @dataclass
     class StatCounters:
@@ -829,7 +848,11 @@ def prime_gap_test(args):
     misc = Misc()
 
     valid_m = [(M + mi, mi) for mi in range(M_inc) if math.gcd(M + mi, D) == 1]
-    last_mi = valid_m[-1]
+    last_mi = valid_m[-1][1]
+    print(f"\nStarting m({len(valid_m)}) {valid_m[0][1]} to {last_mi}")
+    print()
+
+    #pool = multiprocessing.Pool(12)
 
     for m, mi in valid_m:
         data.valid_m.append(m)
@@ -839,79 +862,75 @@ def prime_gap_test(args):
         # Read a line from the file
         line = unknown_file.readline()
 
-        mtest, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
-        assert mtest == mi
         if len(data.valid_m) <= 3:
+            _, _, _, unknowns = gap_utils.parse_unknown_line(line)
             misc.test_unknowns.append(unknowns)
 
-        sc.t_unk_low += unknown_l
-        sc.t_unk_hgh += unknown_u
-
         if args.stats and (args.save_logs or args.num_plots):
-            # NOTES: calculate_expected_gaps is really slow, only used to
-            # doublecheck gap_stats (with --stats).
+            # NOTES: calculate_expected_gaps is really slow,
+            # only real use is to doublecheck gap_stats.cpp
+            _, _, _, unknowns = gap_utils.parse_unknown_line(line)
             calculate_expected_gaps(
                 SL, min_merit_gap, prob_nth, prob_longer,
                 log_n, unknowns,
                 # Results saved to data / misc
                 data, misc)
 
-        if args.run_prp:
-            if m in existing:
-                prev_p_i, next_p_i = existing[m]
-                gap = next_p_i + prev_p_i
-                merit = gap / log_n
-            else:
-                sc.tested += 1
-                # Used for openPFGW
-                strn = "{}*{}#/{}+".format(m, P, D)
+        if m in existing:
+            prev_p_i, next_p_i = existing[m]
+            unknown_l, unknown_u = 0, 0
 
-                t0 = time.time()
+            gap = next_p_i + prev_p_i
+            merit = gap / log_n
+        else:
 
-                n_tests, next_p_i = determine_next_prime_i(m, strn, K, unknowns[1], SL)
-                p_tests, prev_p_i = determine_prev_prime_i(m, strn, K, unknowns[0],
-                                                         SL, primes, remainder)
+            mtest, unknown_l, unknown_u, n_tests, next_p_i, p_tests, prev_p_i, test_time = \
+                process_line(P, D, primes, remainder, line)
+            assert mtest == mi, (mi, mtest, line[:100])
 
-                test_time = time.time() - t0
+            sc.tested += 1
 
-                gap = next_p_i + prev_p_i
-                merit = gap / log_n
+            sc.t_unk_low += unknown_l
+            sc.t_unk_hgh += unknown_u
 
-                save(conn,
-                    m, P, D, next_p_i, prev_p_i, merit,
-                    n_tests, p_tests, test_time)
+            gap = next_p_i + prev_p_i
+            merit = gap / log_n
 
-                sc.total_prp_tests += p_tests
-                sc.gap_out_of_sieve_prev += prev_p_i > SL
+            save(conn,
+                m, P, D, next_p_i, prev_p_i, merit,
+                n_tests, p_tests, test_time)
 
-                sc.total_prp_tests += n_tests
-                sc.gap_out_of_sieve_next += next_p_i > SL
+            sc.total_prp_tests += p_tests
+            sc.gap_out_of_sieve_prev += prev_p_i > SL
 
-
-            assert prev_p_i > 0 and next_p_i > 0
-            data.experimental_gap.append(gap)
-            data.experimental_side.append(next_p_i)
-            data.experimental_side.append(prev_p_i)
-            assert next_p_i > 0 and prev_p_i > 0, (m, next_pi, prev_p_i)
+            sc.total_prp_tests += n_tests
+            sc.gap_out_of_sieve_next += next_p_i > SL
 
 
-            if gap in record_gaps or merit > min_merit:
-                print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(
-                    gap, merit, m, P, D, prev_p_i, next_p_i))
+        assert prev_p_i > 0 and next_p_i > 0
+        data.experimental_gap.append(gap)
+        data.experimental_side.append(next_p_i)
+        data.experimental_side.append(prev_p_i)
+        assert next_p_i > 0 and prev_p_i > 0, (m, next_pi, prev_p_i)
 
-            if merit > sc.best_merit_interval:
-                sc.best_merit_interval = merit
-                sc.best_merit_interval_m = m
 
-            if should_print_stats(
-                    args, sc, data,
-                    mi, m, last_mi,
-                    unknown_l, unknown_u,
-                    prev_p_i, next_p_i,
-                    ):
-                sc.best_merit_interval = 0
-                sc.best_merit_interval_m = -1
-                sc.last_print_t = time.time()
+        if gap in record_gaps or merit > min_merit:
+            print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(
+                gap, merit, m, P, D, prev_p_i, next_p_i))
+
+        if merit > sc.best_merit_interval:
+            sc.best_merit_interval = merit
+            sc.best_merit_interval_m = m
+
+        if should_print_stats(
+                args, sc, data,
+                mi, m, last_mi,
+                unknown_l, unknown_u,
+                prev_p_i, next_p_i,
+                ):
+            sc.best_merit_interval = 0
+            sc.best_merit_interval_m = -1
+            sc.last_print_t = time.time()
 
     if args.num_plots or args.save_logs:
         if args.stats:
