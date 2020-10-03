@@ -111,6 +111,8 @@ double prob_gap_larger(
     double *prob_prime_coprime,
     size_t *count_coprime);
 
+double prob_prime_and_stats(const struct Config& config, mpz_t &K);
+
 
 /* Prime Stuff */
 

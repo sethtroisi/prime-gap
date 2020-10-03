@@ -197,70 +197,15 @@ void prime_gap_test(const struct Config config) {
     const float min_merit = config.min_merit;
 
     const unsigned int SIEVE_LENGTH = config.sieve_length;
-    const unsigned int SL = SIEVE_LENGTH;
 
-    // ----- Merit Stuff
+    // ----- Merit / Sieve stats
     mpz_t K;
-    int K_digits;
-    double K_log;
-    K_stats(config, K, &K_digits, &K_log);
+    double K_log = prob_prime_and_stats(config, K);
     {
         float m_log = log(M_start);
         if (config.verbose >= 1) {
             printf("Min Gap ~= %d (for merit > %.1f)\n",
                 (int) (min_merit * (K_log + m_log)), min_merit);
-        }
-    }
-
-    // ----- Sieve stats
-    {
-        assert( config.max_prime >= 1e6 );
-        //From Mertens' 3rd theorem
-        double unknowns_after_sieve = 1 / (log(config.max_prime) * exp(GAMMA));
-        double N_log = K_log + log(M_start);
-        double prob_prime = 1 / N_log - 1 / (N_log * N_log);
-        double prob_prime_coprime = 1;
-        double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
-
-        vector<uint32_t> primes = get_sieve_primes(P);
-        for (auto prime : primes) {
-            assert( prime <= P );
-            if (gcd(D, prime) == 1) {
-                prob_prime_coprime *= (1 - 1.0/prime);
-            }
-        }
-
-        // TODO gcd_ui(K, i)
-        size_t count_coprime = SL;
-        for (size_t i = 1; i <= SL; i++) {
-            for (auto prime : primes) {
-                assert( prime <= P );
-
-                if ((i % prime) == 0 && (D % prime) != 0) {
-                    count_coprime -= 1;
-                    break;
-                }
-            }
-        }
-
-        double chance_coprime_composite = 1 - prob_prime / prob_prime_coprime;
-        double prob_gap_shorter_hypothetical = pow(chance_coprime_composite, count_coprime);
-
-        if (config.verbose >= 2) {
-            // count_coprime already includes some parts of unknown_after_sieve
-            printf("\n");
-            printf("\t%.3f%% of SL should be unknown (%ldM) ~= %.0f\n",
-                100 * unknowns_after_sieve,
-                config.max_prime/1'000'000,
-                count_coprime * (unknowns_after_sieve / prob_prime_coprime));
-            printf("\t%.3f%% of %d digit numbers are prime\n",
-                100 * prob_prime, K_digits);
-            printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
-                100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
-            printf("\t~2x%.1f ~ %.1f PRP tests per m\n",
-                1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
-            printf("\tsieve_length=%d is insufficient ~%.2f%% of time\n",
-                SIEVE_LENGTH, 100 * prob_gap_shorter_hypothetical);
         }
     }
 

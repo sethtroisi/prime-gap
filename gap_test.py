@@ -48,6 +48,9 @@ def get_arg_parser():
     parser.add_argument('--run-prp',  action='store_true',
         help="Run PRP, leave off to benchmarking and print some stats")
 
+    parser.add_argument('--threads', type=int, default=1,
+        help="Number of threads to use for searching (default: %(default)s)")
+
     parser.add_argument('--num-plots', type=int, default=0,
         help="Show plots about distributions")
 
@@ -525,33 +528,37 @@ def save(conn, m, p, d, next_p_i, prev_p_i, merit,
     conn.commit()
 
 
-def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, K_primes, SL, max_prime):
+def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_prime):
     assert max_prime >= 10 ** 6, max_prime
 
     # From Mertens' 3rd theorem
     gamma = 0.577215665
     unknowns_after_sieve = 1.0 / (math.log(max_prime) * math.exp(gamma))
 
-    prob_prime_coprime = 1
     prob_prime_after_sieve = prob_prime / unknowns_after_sieve
 
-    for prime in K_primes:
-        if D % prime != 0:
-            prob_prime_coprime *= (1 - 1/prime)
+    prob_prime_coprime_p = 1
+    for prime in P_primes:
+        prob_prime_coprime_p *= (1 - 1/prime)
 
-    count_coprime = 0
-    for i in range(1, SL+1):
-        count_coprime += math.gcd(K, i) == 1
-    print (f"{count_coprime=}")
+    # See "Optimizing Choice Of D" in THEORY.md for why this is required
+    count_coprime_p = 0
+    m_tests = [M+i for i in range(100) if math.gcd(M+i, D) == 1][:6]
+    for m in m_tests:
+        N0 = m * K
+        for i in range(1, SL+1):
+            N = N0 + i
+            if math.gcd(N, D) == 1 and gmpy2.gcd(N, K) == 1:
+                count_coprime_p += 1
 
-    chance_coprime_composite = 1 - prob_prime / prob_prime_coprime
-    prob_gap_shorter_hypothetical = chance_coprime_composite ** count_coprime
+    count_coprime_p //= len(m_tests)
 
-    # count_coprime already includes some parts of unknown_after_sieve
-    print("\t{:.3f}% of SL should be unknown ({}M) ~= {:.0f}".format(
-        100 * unknowns_after_sieve,
-        max_prime//1e6,
-        count_coprime * (unknowns_after_sieve / prob_prime_coprime)))
+    chance_coprime_composite = 1 - prob_prime / prob_prime_coprime_p
+    prob_gap_shorter_hypothetical = chance_coprime_composite ** count_coprime_p
+
+    expected = count_coprime_p * (unknowns_after_sieve / prob_prime_coprime_p)
+    print("\texpect {:.0f} left, {:.3f}% of SL={} after {}M".format(
+        expected, 100.0 * expected / (SL + 1), SL, max_prime//1e6))
     print("\t{:.3f}% of {} digit numbers are prime".format(
         100 * prob_prime, K_digits))
     print("\t{:.3f}% of tests should be prime ({:.1f}x speedup)".format(
@@ -752,7 +759,7 @@ def prime_gap_test(args):
     assert P <= 80000
     # Very slow but works.
     primes = [2] + [p for p in range(3, 80000+1, 2) if gmpy2.is_prime(p)]
-    K_primes = [p for p in primes if p <= P]
+    P_primes = [p for p in primes if p <= P]
 
     # ----- Allocate memory for a handful of utility functions.
 
@@ -763,7 +770,7 @@ def prime_gap_test(args):
     # ----- Sieve stats
     prob_prime = 1 / M_log - 1 / (M_log * M_log)
     prob_prime_after_sieve = prob_prime_sieve_length(
-        M, K, D, prob_prime, K_digits, K_primes, SL, max_prime)
+        M, K, D, prob_prime, K_digits, P_primes, SL, max_prime)
 
     # Geometric distribution
     prob_nth = []
