@@ -33,13 +33,14 @@ def get_arg_parser():
     parser = argparse.ArgumentParser('Search prime gaps logs')
 
     parser.add_argument('--logs-directory', type=str,
+        default="logs",
         help="directory of logs")
 
     parser.add_argument('--search-db', type=str,
-        default="prime-gap-search.db"
+        default="prime-gap-search.db",
         help="Prime database from gap_test")
 
-    parser.add_argument('--prime-gaps-db', type=str, required=True,
+    parser.add_argument('--prime-gaps-db', type=str,
         default="gaps.db",
         help="Prime gap database see github.com/primegap-list-project/prime-gap-list")
 
@@ -58,11 +59,12 @@ def describe_found_gaps(gaps):
         " "*len(str(len(gaps_by_size))),
         min(g[1] for g in gaps), max(g[1] for g in gaps)))
     for int_merit, items in sorted(gaps_by_merit.items()):
-        print ("    Merit {:<2} x{:<4} | {}{}".format(
+        print ("    Merit {:<2} x{:<4} | {}".format(
             int_merit,
             len(items),
-            sorted(items)[0][0],
-            "..." if len(items) > 1 else ""))
+            ", ".join([str(rec[0]) for rec in sorted(items)[:2]] +
+                      ["..."] * (len(items) > 2))
+        ))
     print ()
 
 
@@ -89,8 +91,10 @@ def print_record_gaps(args, gaps):
                         len(record_lines), gap[3], size, new_merit, existing))
         if record_lines:
             print ()
+            print (f"Records({len(record_lines)}):")
             for line in record_lines:
                 print (line)
+            print ()
 
 
 def search_logs(args):
@@ -144,12 +148,12 @@ def search_db(args):
 
         num_gaps = conn.execute('SELECT COUNT(*) FROM result').fetchone()[0]
         assert num_gaps > 1000, num_gaps
-        print (f"Found {num_gaps} results")
+        print (f"Found {num_gaps} results in {args.search_db!r}")
 
         # This is a good heuristic and probably will always work, until it doesn't.
         existing = conn.execute(
             'SELECT m, p, d, next_p_i, prev_p_i, merit FROM result WHERE '
-            '   merit > 18 or (next_p_i + prev_p_i) > 65000').fetchall()
+            '   merit > 10 or (next_p_i + prev_p_i) > 100000').fetchall()
         for gap in existing:
             gapsize = gap['next_p_i'] + gap['prev_p_i']
             merit = gap['merit']
@@ -174,14 +178,18 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     assert os.path.exists(args.prime_gaps_db), (
-        "Prime gaps database ({}) doesn't exist".format(
-            args.prime_gaps_db))
+        f"Prime gaps database ({args.prime_gaps_db!r}) doesn't exist")
 
-    if args.logs_directory:
+    neither = True
+    if os.path.exists(args.logs_directory):
+        neither = False
         search_logs(args)
-    elif args.search_db:
+
+    if os.path.exists(args.search_db):
+        neither = False
         search_db(args)
-    else:
-        print ("Must pass --logs-directory or --prime-db")
+
+    if neither:
+        print ("Must pass --logs-directory or --search-db 'gaps.db'")
         sys.exit(1)
 

@@ -368,14 +368,16 @@ $ ./benchmark 100000 _all
      * Allows for saving of progress and graceful restart
    * `gap_test.py` can produce graphs of distribution (via `--plots`)
 
+
 ### Database
 
 Often I run `combined_sieve` and `gap_stats` for a BUNCH of ranges not I never end up testing.
 
-`misc/show_ranges.sh` updates and shows ranges from prime-gap-search.db.
+`misc/show_ranges.sh` updates and shows ranges from `prime-gap-search.db`.
 
 `misc/drop_range.sh` deletes ranges when none of them have ever been tested
 
+`misc/record_check.py` searches through `prime-gap-search.db` for records (over `gaps.db`)
 
 
 ## Benchmarks
@@ -537,7 +539,6 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 * [ ] avg record prob (quick test): changed by two orders of magnitude, why!
 * Flow
 * README.md
-  * [ ] record\_check.py guide to use
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
 * combined\_sieve.cpp
@@ -582,6 +583,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 <summary>Tracker for finished TODO items</summary>
 <p>
 * README.md
+  * [x] record\_check.py guide to use
   * [x] Clarify gap\_test.py vs gap\_test.cpp
   * [x] Add Flow section based on comments in schema.sql
   * [x] Add commands for benchmarking

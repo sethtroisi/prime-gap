@@ -10,6 +10,7 @@ benchmark
 # data
 *.db
 data/
+backup/
 *M.txt
 *M.m1.txt
 *M.*missing.txt
@@ -27,3 +28,4 @@ pfgw-prime.log
 # Random
 __pycache__/
 .gdb_history
+prime-gap-list
