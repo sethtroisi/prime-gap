@@ -19,8 +19,9 @@ import itertools
 import math
 import multiprocessing
 import re
+import signal
 import sqlite3
-import threading
+import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -446,6 +447,52 @@ def stats_plots(
     plt.close()
 
 
+def plot_stuff(
+        args, conn, data, sc,
+        min_merit_gap, record_gaps, prob_nth):
+    if args.stats:
+        # Not calculated
+        prob_record_gap = data.prob_merit_gap
+
+        stats_plots(
+            args,
+            min_merit_gap, record_gaps,
+
+            data.valid_m,
+            misc.test_unknowns, prob_nth,
+            data.expected_gap,
+            data.expected_prev, data.expected_next,
+            data.experimental_gap, data.experimental_side,
+            data.prob_merit_gap, prob_record_gap,
+            misc.prob_gap_side, misc.prob_gap_comb,
+        )
+
+    # Load stats from gap_stats (fails if empty)
+    try:
+        (s_expected_prev_db, s_expected_next_db, s_expected_gap_db,
+         p_merit_gap_db, p_record_gap_db,
+         p_gap_comb_db, p_gap_side_db) = load_stats(conn, args)
+        assert s_expected_prev_db and p_gap_comb_db
+    except:
+        # Failed to load
+        if not args.stats and args.num_plots:
+            print("Failed to load from DB so no plots.")
+            exit(1)
+
+    stats_plots(
+        args,
+        min_merit_gap, record_gaps,
+
+        data.valid_m,
+        misc.test_unknowns, prob_nth,
+        s_expected_gap_db,
+        s_expected_prev_db, s_expected_next_db,
+        data.experimental_gap, data.experimental_side,
+        p_merit_gap_db, p_record_gap_db,
+        p_gap_side_db, p_gap_comb_db,
+    )
+
+
 #---- gap_testing ----#
 
 
@@ -637,7 +684,6 @@ def should_print_stats(
             or m == data.last_m or print_secs > 1200:
         secs = stop_t - sc.start_t
 
-        print (N, sc.tested)
         print("\t{:3d} {:4d} <- unknowns -> {:-4d}\t{:4d} <- gap -> {:-4d}".format(
             m,
             unknown_l, unknown_u,
@@ -763,12 +809,24 @@ def handle_result(
 
 # NOTE: Manager is prime_gap_test, Worker is maintains process_line workers
 def process_line(done_flag, work_q, results_q, thread_i, SL, K, P, D, primes, remainder):
+    def cleanup(*_):
+        print (f"Thread {thread_i} stopping")
+        work_q.close()
+        work_q.join_thread()
+        results_q.close()
+        results_q.join_thread()
+        exit(0)
+
+    # Ignore KeyboardInterrupt and let Manager terminate us.
+    signal.signal(signal.SIGINT, cleanup)
+
     print (f"Thread {thread_i} started")
     while True:
         work = work_q.get()
-        #print (f"Work({thread_i}): {work[:3]}")
+        #print (f"Work({thread_i}) done({done_flag.is_set()}): {work if work[0] == 'S' else work[:3]}")
         if done_flag.is_set():
             assert work == "STOP"
+            cleanup()
             return
 
         m, mi, log_n, line = work
@@ -823,6 +881,101 @@ def process_result(conn, args, record_gaps, data, sc, result):
         args, record_gaps, data, sc,
         mi, m, r_log_n, prev_p_i, next_p_i, unknown_l, unknown_u)
 
+def run_in_parallel(
+        args, conn, unknown_file, record_gaps,
+        prob_nth,
+        existing, valid_mi,
+        K, K_log,
+        data, sc, misc
+):
+
+    # XXX: Cleanup after gmpy2.prev_prime.
+    # Remainders of (p#/d) mod prime
+    primes = tuple([p for p in range(3, 80000+1) if gmpy2.is_prime(p)])
+    remainder = tuple([K % prime for prime in primes])
+
+    done_flag = multiprocessing.Event()
+    work_q    = multiprocessing.Queue(20)
+    results_q = multiprocessing.Queue()
+    #import queue
+    #work_q    = queue.Queue(20)
+    #results_q = queue.Queue()
+
+    assert args.threads in range(1, 65), args.threads
+    processes = []
+    for i in range(args.threads):
+        process = multiprocessing.Process(
+            target=process_line,
+            args=(
+                done_flag, work_q, results_q,
+                i, args.sieve_length, K, args.p, args.d,
+                primes, remainder))
+        process.start()
+        processes.append(process)
+    print()
+    time.sleep(0.2)
+
+    for mi in valid_mi:
+        m = args.mstart + mi
+        log_n = (K_log + math.log(m))
+
+        # Read a line from the file
+        line = unknown_file.readline()
+
+        if args.stats and (args.save_logs or args.num_plots):
+            # NOTES: calculate_expected_gaps is really slow,
+            # only real use is to doublecheck gap_stats.cpp
+            _, _, _, unknowns = gap_utils.parse_unknown_line(line)
+            calculate_expected_gaps(
+                SL, min_merit_gap, prob_nth, prob_longer,
+                log_n, unknowns,
+                # Results saved to data / misc
+                data, misc)
+
+        if m in existing:
+            prev_p_i, next_p_i = existing[m]
+            handle_result(
+                args, record_gaps, data, sc,
+                mi, m, log_n, prev_p_i, next_p_i, 0, 0)
+
+        else:
+            #print (f"Adding {m} to Queue")
+            sc.will_test += 1
+            try:
+               work_q.put((m, mi, log_n, line), True)
+            except KeyboardInterrupt:
+                print(" Breaking from Ctrl+C ^C")
+                for p in processes:
+                    p.terminate()
+                exit(1)
+
+        # Process any finished results
+        while not results_q.empty():
+            result = results_q.get(block=False)
+            process_result(conn, args, record_gaps, data, sc, result)
+
+    print("Everything Queued, done.set() & pushing STOP")
+    done_flag.set()
+
+    # Push "STOP" for every worker
+    for i in range(args.threads):
+        work_q.put("STOP")
+    work_q.close()
+
+    while sc.tested < sc.will_test:
+        print(f"Waiting on {sc.will_test - sc.tested} of {sc.will_test} results")
+        result = results_q.get(block=True)
+        process_result(conn, args, record_gaps, data, sc, result)
+
+    print("Joining work_q")
+    work_q.join_thread()
+    time.sleep(0.2)
+
+    for i, process in enumerate(processes):
+        print(f"Joining process({i})")
+        process.join(timeout=0.1)
+    print ("Done!")
+
 
 def prime_gap_test(args):
     P = args.p
@@ -831,7 +984,7 @@ def prime_gap_test(args):
     M = args.mstart
     M_inc = args.minc
 
-    SL = sieve_length = args.sieve_length
+    SL = args.sieve_length
     max_prime = args.max_prime
 
     K, K_digits, K_bits, K_log = gap_utils.K_and_stats(args)
@@ -863,14 +1016,9 @@ def prime_gap_test(args):
     # used in next_prime
     assert P <= 80000
     # Very slow but works.
-    primes = tuple([2] + [p for p in range(3, 80000+1, 2) if gmpy2.is_prime(p)])
-    P_primes = [p for p in primes if p <= P]
+    P_primes = [p for p in range(2, P+1) if gmpy2.is_prime(p)]
 
     # ----- Allocate memory for a handful of utility functions.
-
-    # XXX: Cleanup after gmpy2.prev_prime.
-    # Remainders of (p#/d) mod prime
-    remainder   = tuple([K % prime for prime in primes])
 
     # ----- Sieve stats
     prob_prime = 1 / M_log - 1 / (M_log * M_log)
@@ -896,7 +1044,10 @@ def prime_gap_test(args):
     class StatCounters:
         start_t: float
         last_print_t: float
+        will_test = 0
         tested = 0
+
+
         test_time = 0
         t_unk_low = 0
         t_unk_hgh = 0
@@ -939,111 +1090,19 @@ def prime_gap_test(args):
     print(f"\nStarting m({len(valid_mi)}) {data.first_m} to {data.last_m}")
     print()
 
-    done_flag = threading.Event()
-    work_q    = multiprocessing.Queue(20)
-    results_q = multiprocessing.Queue()
-
-    assert args.threads in range(1, 65), args.threads
-    processes = []
-    for i in range(args.threads):
-        process = multiprocessing.Process(
-            target=process_line,
-            args=(
-                done_flag, work_q, results_q,
-                i, SL, K, P, D, primes, remainder))
-        process.start()
-        processes.append(process)
-
-    for mi in valid_mi:
-        m = M + mi
-        log_n = (K_log + math.log(m))
-
-        # Read a line from the file
-        line = unknown_file.readline()
-
-        if args.stats and (args.save_logs or args.num_plots):
-            # NOTES: calculate_expected_gaps is really slow,
-            # only real use is to doublecheck gap_stats.cpp
-            _, _, _, unknowns = gap_utils.parse_unknown_line(line)
-            calculate_expected_gaps(
-                SL, min_merit_gap, prob_nth, prob_longer,
-                log_n, unknowns,
-                # Results saved to data / misc
-                data, misc)
-
-        if m in existing:
-            prev_p_i, next_p_i = existing[m]
-            handle_result(
-                args, record_gaps, data, sc,
-                mi, m, log_n, prev_p_i, next_p_i, 0, 0)
-
-        else:
-            #print (f"Adding {m} to Queue")
-            work_q.put((m, mi, log_n, line), True)
-
-        # Process any finished results
-        while not results_q.empty():
-            result = results_q.get(block=False)
-            process_result(conn, args, record_gaps, data, sc, result)
-
-    done_flag.set()
-
-    # Push "STOP" for every worker
-    for i in range(args.threads):
-        work_q.put("STOP")
-
-    while sc.tested < len(valid_m):
-        result = results_q.get(block=True)
-        process_result(conn, args, record_gaps, data, sc, result)
-
-    assert work_q.join(timeout=0.1)
-    for process in processes:
-        process.join(timeout=0.1)
-
+    run_in_parallel(
+        args, conn, unknown_file, record_gaps,
+        prob_nth,
+        existing, valid_mi,
+        K, K_log,
+        data, sc, misc
+    )
 
     # ----- Stats and Plots
     if args.num_plots or args.save_logs:
-        if args.stats:
-            # Not calculated
-            prob_record_gap = data.prob_merit_gap
-
-            stats_plots(
-                args,
-                min_merit_gap, record_gaps,
-
-                data.valid_m,
-                misc.test_unknowns, prob_nth,
-                data.expected_gap,
-                data.expected_prev, data.expected_next,
-                data.experimental_gap, data.experimental_side,
-                data.prob_merit_gap, prob_record_gap,
-                misc.prob_gap_side, misc.prob_gap_comb,
-            )
-
-        # Load stats from gap_stats (fails if empty)
-        try:
-            (s_expected_prev_db, s_expected_next_db, s_expected_gap_db,
-             p_merit_gap_db, p_record_gap_db,
-             p_gap_comb_db, p_gap_side_db) = load_stats(conn, args)
-            assert s_expected_prev_db and p_gap_comb_db
-        except:
-            # Failed to load
-            if not args.stats and args.num_plots:
-                print("Failed to load from DB so no plots.")
-                exit(1)
-
-        stats_plots(
-            args,
-            min_merit_gap, record_gaps,
-
-            data.valid_m,
-            misc.test_unknowns, prob_nth,
-            s_expected_gap_db,
-            s_expected_prev_db, s_expected_next_db,
-            data.experimental_gap, data.experimental_side,
-            p_merit_gap_db, p_record_gap_db,
-            p_gap_side_db, p_gap_comb_db,
-        )
+        plot_stuff(
+            args, conn, data, sc,
+            min_merit_gap, record_gaps, prob_nth)
 
 
 

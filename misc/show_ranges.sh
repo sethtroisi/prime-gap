@@ -48,16 +48,16 @@ SELECT changes() || " m_stats.rid Updates";
 SELECT "";
 
 SELECT "Table 'range'";
-SELECT PRINTF("  P=%-5d D=%-5d M(%-5d) = %6d +[0,%6d) processed=%-5d ",
+SELECT PRINTF("  P=%-5d D=%-7d M(%-6d) = %7d +[0,%7d) processed=%-7d ",
               p, d, num_m, m_start, m_inc, num_processed),
-       PRINTF(" time(sieve,stats,tests,p)=%5.1f %5.1f %8.1f | per m: %5.2f   %d",
+       PRINTF(" time(sieve,stats,tests,p)= %6.1f %5.1f %9.1f | per m: %5.2f   %d",
               time_sieve, time_stats, time_tests,
               (time_sieve + time_stats + time_tests) / num_processed, rid)
 FROM range ORDER BY p, d, m_start, m_inc;
 SELECT "";
 
 SELECT "Table 'results'/'m_stats'";
-SELECT PRINTF("  P=%-5d D=%-5d M(%-5d) = %-6d to %-6d (primes: %5d, PRPs: %7d, merit: %5.2f, time: %.0fs)",
+SELECT PRINTF("  P=%-5d D=%-7d M(%-6d) = %-7d to %-7d (primes: %7d, PRPs: %9d, merit: %5.2f, time: %.0fs)",
               p, d, count(*), min(m), max(m), sum(primes), sum(prp_tests), max(merit), sum(test_time))
 FROM (
   SELECT m,p,d, (next_p!=0)+(prev_p!=0) as primes, prp_prev+prp_next as prp_tests, merit, test_time FROM m_stats

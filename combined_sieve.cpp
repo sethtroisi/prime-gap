@@ -1013,7 +1013,7 @@ void prime_gap_parallel(struct Config config) {
             }
 
             if ((config.verbose + 2*is_last + (prime > 1e9)) >= 2) {
-                printf("\tfactors  %'9ld \t\t"
+                printf("\tfactors  %'14ld \t"
                        "(interval: %'ld avg m/large_prime interval: %.1f)\n",
                     s_prime_factors,
                     s_small_prime_factors_interval + s_large_prime_factors_interval,

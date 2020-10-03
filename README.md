@@ -551,7 +551,10 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
     * [ ] Leave XXX note for restart
   * [ ] Produce P(record) / day (and upfront estimate)
 * gap\_test.py
+  * [ ] Produce P(record) / day (and upfront estimate)
+  * [ ] `--top-x-percent` (see THEORY.md)
   * [ ] Sort by expected gap and PRP only top X%
+  * [ ] Correlation between Expected Gap & Gap
 * missing\_gap\_test.py && missing\_gap\_verify.py
 * schema.sql
 * benchmarking
