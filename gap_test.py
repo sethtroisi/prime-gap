@@ -82,6 +82,8 @@ def stats_plots(
     import matplotlib.pyplot as plt
     from scipy import stats
 
+    # XXX: How to handle when only partial results
+
     def verify_no_trend(valid_m, data):
         """There should be no trend based on m value"""
         # Have to adjust for Expected gap which has two data points for each m
@@ -148,12 +150,20 @@ def stats_plots(
         label_e = f"E({label}) = {E:.0f}"
         axis.axvline(x=E, ymax=1.0/1.2, color=color, label=label_e)
 
-    slope, _, R, _, _ = stats.linregress(s_expected_gap, s_experimental_gap)
+    egap_n = len(s_experimental_gap)
+    if len(s_expected_gap) != egap_n:
+        print("experimental_gap size mismatch")
+    slope, _, R, _, _ = stats.linregress(s_expected_gap[:egap_n], s_experimental_gap)
     print ()
     print ("R^2 for expected gap: {:.3f}, corr: {:.3f}".format(R**2, slope))
     print ()
 
-    if args.num_plots > 1:
+    if args.num_plots > 0:
+        # Plot 1: Gap(side):
+        #   [ prev mi,    next mi]
+        #   [ BLANK,   prob all m]
+        #   [ expected,   cdf    ]
+
         # Set up subplots.
         fig = plt.figure(
             "Per Side Statistics",
@@ -161,13 +171,9 @@ def stats_plots(
             figsize=(8, 12))
         gs = fig.add_gridspec(3, 2)
 
-        # Plot 1: Gap(side):
-        #   [ prev mi,    next mi]
-        #   [ BLANK,   prob all m]
-        #   [ expected,   cdf    ]
-
-        axis_prev = fig.add_subplot(gs[0, 0])
-        axis_next = fig.add_subplot(gs[0, 1])
+        if s_test_unknowns:
+            axis_prev = fig.add_subplot(gs[0, 0])
+            axis_next = fig.add_subplot(gs[0, 1])
         axis_prob_gap     = fig.add_subplot(gs[1, 1])
         axis_expected_gap = fig.add_subplot(gs[2, 0])
         axis_cdf_gap      = fig.add_subplot(gs[2, 1])
@@ -183,20 +189,21 @@ def stats_plots(
                 x=E, ymax=1.0/1.2,
                 color=color, label=f"E({label}) = {E:.0f}")
 
-        # prob_prev, prev_next for individual m
-        # See Prob_nth in gap_stats
-        colors = ['lightskyblue', 'tomato', 'seagreen']
-        for m, c, (u_p, u_n) in zip(valid_m, colors, s_test_unknowns):
-            label = f"m={m}"
-            plot_prob_nth(axis_prev, u_p, c, label)
-            plot_prob_nth(axis_next, u_n, c, label)
+        if s_test_unknowns:
+            # prob_prev, prev_next for individual m
+            # See Prob_nth in gap_stats
+            colors = ['lightskyblue', 'tomato', 'seagreen']
+            for m, c, (u_p, u_n) in zip(valid_m, colors, s_test_unknowns):
+                label = f"m={m}"
+                plot_prob_nth(axis_prev, u_p, c, label)
+                plot_prob_nth(axis_next, u_n, c, label)
 
-        axis_prev.legend(loc='upper left')
-        axis_next.legend(loc='upper right')
-        axis_prev.set_yscale('log')
-        axis_next.set_yscale('log')
-        axis_prev.set_xlim(-args.sieve_length, 0)
-        axis_next.set_xlim(0, args.sieve_length)
+            axis_prev.legend(loc='upper left')
+            axis_next.legend(loc='upper right')
+            axis_prev.set_yscale('log')
+            axis_next.set_yscale('log')
+            axis_prev.set_xlim(-args.sieve_length, 0)
+            axis_next.set_xlim(0, args.sieve_length)
 
         # Combining all probs for a pseudo distribution of P(next_gap) / P(prev_gap)
         plot_prob_hist(axis_prob_gap, p_gap_side,  'blueviolet')
@@ -223,18 +230,18 @@ def stats_plots(
             # CDF of gap <= x
             plot_cdf(axis_cdf_gap, data, color, label)
 
-    if args.num_plots > 0:
+    if args.num_plots > 1:
+        # Plot 2: Gap(combined):
+        #   [ prob all m,               expected,   cdf ]
+        #   [ sum(prob) & count,  dist,       cdf ] (for highmerit)
+        #   [ sum(prob) & count,  dist,       cdf ] (for record)
+
         # Set up subplots.
         fig = plt.figure(
             "Combined Gap Statistics",
             constrained_layout=True,
             figsize=(12, 12))
         gs = fig.add_gridspec(3, 3)
-
-        # Plot 2: Gap(combined):
-        #   [ prob all m,               expected,   cdf ]
-        #   [ sum(prob) & count,  dist,       cdf ] (for highmerit)
-        #   [ sum(prob) & count,  dist,       cdf ] (for record)
 
         axis_prob_comb     = fig.add_subplot(gs[0, 0])
         axis_expected_comb = fig.add_subplot(gs[0, 1])
@@ -279,8 +286,8 @@ def stats_plots(
             axis.set_xlabel(" # of m's tests")
             axis.set_ylabel(f'Sum(P(gap {label})')
 
-            assert len(data) == len(s_experimental_gap)
-            zipped = list(itertools.zip_longest(data, s_experimental_gap))
+            #assert len(data) == len(s_experimental_gap)
+            zipped = list(zip(data, s_experimental_gap))
 
             p_gap_merit_sorted, _ = zip(*sorted(zipped, reverse=True))
             p_gap_merit_ord, gap_real_ord = zip(*zipped)
@@ -448,7 +455,7 @@ def stats_plots(
 
 
 def plot_stuff(
-        args, conn, data, sc,
+        args, conn, data, sc, misc,
         min_merit_gap, record_gaps, prob_nth):
     if args.stats:
         # Not calculated
@@ -469,9 +476,11 @@ def plot_stuff(
 
     # Load stats from gap_stats (fails if empty)
     try:
+        db_data = Stats()
+        db_misc = Misc()
         (s_expected_prev_db, s_expected_next_db, s_expected_gap_db,
          p_merit_gap_db, p_record_gap_db,
-         p_gap_comb_db, p_gap_side_db) = load_stats(conn, args)
+         p_gap_comb_db, p_gap_side_db) = load_stats(conn, args, db_data, db_misc)
         assert s_expected_prev_db and p_gap_comb_db
     except:
         # Failed to load
@@ -523,8 +532,29 @@ def load_existing(conn, args):
         (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
     return {row['m']: [row['prev_p_i'], row['next_p_i']] for row in rv}
 
+    @dataclass
+    class Datas:
+        first_m = -1
+        last_m = -1
 
-def load_stats(conn, args):
+        valid_m = []
+
+        # Values for each m in valid_m
+        expected_prev = []
+        expected_next = []
+        expected_gap  = []
+        experimental_side = []
+        experimental_gap = []
+        prob_merit_gap = []
+
+    @dataclass
+    class Misc:
+        prob_gap_side  = defaultdict(float)
+        prob_gap_comb  = defaultdict(float)
+
+        test_unknowns = []
+
+def load_stats(conn, args, data, misc):
     rv = conn.execute(
         "SELECT e_gap_prev, e_gap_next, e_gap_prev + e_gap_next,"
         "       prob_merit, prob_record"
@@ -532,14 +562,18 @@ def load_stats(conn, args):
         (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
 
     # Will fail if non-present
-    (s_expected_prev, s_expected_next, s_expected_gap,
-     prob_merit_gap, prob_record_gap)= zip(*[tuple(row) for row in rv])
+    (data.expected_prev, data.expected_next, data.expected_gap,
+     data.prob_merit_gap, data.prob_record_gap)= zip(*[tuple(row) for row in rv])
+
+    data.expected_prev = s_expected_prev
+    data.expected_next = s_expected_next
+    expected_gap = s_expected_gap
 
     # Need dictionary
     p_gap_comb  = defaultdict(float)
     p_gap_side  = defaultdict(float)
 
-    m_values = len(prob_merit_gap)
+    m_values = len(data.prob_merit_gap)
 
     rv = conn.execute(
         "SELECT gap, prob_combined, prob_low_side, prob_high_side "
@@ -547,6 +581,7 @@ def load_stats(conn, args):
         (config_hash(args),))
     for row in rv:
         gap = row['gap']
+        # TODO: test if this works with out the normalization
         # Values were normalized by / m_values in gap_stats
         p_gap_comb[gap] += row['prob_combined'] * m_values
         p_gap_side[gap] += row['prob_low_side'] / 2 * m_values
@@ -783,10 +818,6 @@ def handle_result(
     data.experimental_side.append(next_p_i)
     data.experimental_side.append(prev_p_i)
 
-    #if len(data.valid_m) <= 3:
-    #   _, _, _, unknowns = gap_utils.parse_unknown_line(line)
-    #   misc.test_unknowns.append(unknowns)
-
     merit = gap / log_n
     if gap in record_gaps or merit > args.min_merit:
         print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(
@@ -823,11 +854,12 @@ def process_line(done_flag, work_q, results_q, thread_i, SL, K, P, D, primes, re
     print (f"Thread {thread_i} started")
     while True:
         work = work_q.get()
-        #print (f"Work({thread_i}) done({done_flag.is_set()}): {work if work[0] == 'S' else work[:3]}")
-        if done_flag.is_set():
-            assert work == "STOP"
+        if work == "STOP":
+            assert done_flag.is_set()
             cleanup()
             return
+
+        #print (f"Work({thread_i}) done({done_flag.is_set()}): {work if work[0] == 'S' else work[:3]}")
 
         m, mi, log_n, line = work
 
@@ -922,6 +954,11 @@ def run_in_parallel(
         # Read a line from the file
         line = unknown_file.readline()
 
+        if len(data.valid_m) <= 3:
+            _, _, _, unknowns = gap_utils.parse_unknown_line(line)
+            misc.test_unknowns.append(unknowns)
+
+
         if args.stats and (args.save_logs or args.num_plots):
             # NOTES: calculate_expected_gaps is really slow,
             # only real use is to doublecheck gap_stats.cpp
@@ -947,7 +984,7 @@ def run_in_parallel(
                 print(" Breaking from Ctrl+C ^C")
                 for p in processes:
                     p.terminate()
-                exit(1)
+                return
 
         # Process any finished results
         while not results_q.empty():
@@ -1058,7 +1095,7 @@ def prime_gap_test(args):
         best_merit_interval_m = -1
 
     @dataclass
-    class Stats:
+    class Data:
         first_m = -1
         last_m = -1
 
@@ -1071,6 +1108,7 @@ def prime_gap_test(args):
         experimental_side = []
         experimental_gap = []
         prob_merit_gap = []
+        prob_record_gap = []
 
     @dataclass
     class Misc:
@@ -1079,9 +1117,24 @@ def prime_gap_test(args):
 
         test_unknowns = []
 
+    # Load stats from gap_stats (fails if empty)
+    try:
+        db_data = Data()
+        db_misc = Misc()
+        (s_expected_prev_db, s_expected_next_db, s_expected_gap_db,
+         p_merit_gap_db, p_record_gap_db,
+         p_gap_comb_db, p_gap_side_db) = load_stats(conn, args, db_data, db_misc)
+        assert s_expected_prev_db and p_gap_comb_db
+    except:
+        # Failed to load
+        if not args.stats and args.num_plots:
+            print("Failed to load from DB so no plots.")
+            exit(1)
+
+
 
     sc = StatCounters(time.time(), time.time())
-    data = Stats()
+    data = Data()
     misc = Misc()
 
     valid_mi = [mi for mi in range(M_inc) if math.gcd(M + mi, D) == 1]
@@ -1101,7 +1154,7 @@ def prime_gap_test(args):
     # ----- Stats and Plots
     if args.num_plots or args.save_logs:
         plot_stuff(
-            args, conn, data, sc,
+            args, conn, data, sc, misc,
             min_merit_gap, record_gaps, prob_nth)
 
 

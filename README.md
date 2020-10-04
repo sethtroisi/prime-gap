@@ -537,6 +537,7 @@ $ python gap_test.py --unknown-filename 1_907_2190_200_s11000_l100M.txt --min-me
 ### TODO
 
 * [ ] avg record prob (quick test): changed by two orders of magnitude, why!
+* [ ] change "ms_P_D_minc_" to "P_D_ms_minc_"
 * Flow
 * README.md
 * THEORY.md
