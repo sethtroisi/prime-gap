@@ -42,7 +42,7 @@ def get_arg_parser():
         help="Prime database from gap_test (default: %(default)s)")
 
     parser.add_argument("--unknown-filename", type=str, required=True,
-        help="mstart, minc, p, d, sieve-length, and max-prime"
+        help="p, d, mstart, minc, sieve-length, and max-prime"
              " are determined from filename")
 
     parser.add_argument("-i", "--ignore-gaps", type=int,
@@ -124,19 +124,19 @@ def load_existing(conn, args):
 
 
 def save_record(
-        conn, m, p, d,
-        prev_p, next_p,
+        conn, p, d,
+        m, prev_p, next_p,
         prev_tests, next_tests, test_time):
     conn.execute(
         "UPDATE m_stats SET "
         "   prev_p=?, next_p=?,"
         "   prp_prev=?, prp_next=?,"
         "   test_time=test_time + ?"
-        "WHERE m=? AND P=? AND D=?",
+        "WHERE P=? AND D=? AND M=?",
         (prev_p, next_p,
          prev_tests, next_tests,
          test_time,
-         m, p, d))
+         p, d, m))
     conn.commit()
 
 
@@ -315,8 +315,8 @@ def prime_gap_test(args):
 
             # NOTE: -next_p indicates prime, but not necessarily first.
             save_record(
-                conn, m, args.p, args.d,
-                prev_p, -next_p,
+                conn, args.p, args.d,
+                m, prev_p, -next_p,
                 test_low, test_high, test_time)
 
             summed_prob += prob

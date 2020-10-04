@@ -57,12 +57,13 @@ FROM range ORDER BY p, d, m_start, m_inc;
 SELECT "";
 
 SELECT "Table 'results'/'m_stats'";
-SELECT PRINTF("  P=%-5d D=%-7d M(%-6d) = %-7d to %-7d (primes: %7d, PRPs: %9d, merit: %5.2f, time: %.0fs)",
-              p, d, count(*), min(m), max(m), sum(primes), sum(prp_tests), max(merit), sum(test_time))
+SELECT PRINTF("  P=%-5d D=%-7d M(%-6d) = %-7d to %-7d (last m: %7d, primes: %7d, PRPs: %9d, merit: %5.2f, time: %.0fs)",
+              p, d, count(*), min(m), max(m), max(m * (primes != 0)),
+              sum(primes), sum(prp_tests), max(merit), sum(test_time))
 FROM (
-  SELECT m,p,d, (next_p!=0)+(prev_p!=0) as primes, prp_prev+prp_next as prp_tests, merit, test_time FROM m_stats
+  SELECT p,d,m, (next_p!=0)+(prev_p!=0) as primes, prp_prev+prp_next as prp_tests, merit, test_time FROM m_stats
     UNION
-  SELECT m,p,d, 2 as primes, 2 as prp_tests, merit, 0 as test_time FROM result
+  SELECT p,d,m, 2 as primes, 2 as prp_tests, merit, 0 as test_time FROM result
 )
 GROUP BY p, d ORDER BY p, d;
 SELECT"";

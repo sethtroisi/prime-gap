@@ -43,7 +43,7 @@ def get_arg_parser():
         help="stage 1 bound for ecm (see ecm --help) (default: %(default)s)")
 
     parser.add_argument('--unknown-filename', type=str, required=True,
-        help="determine mstart, minc, p, d, sieve-length, and sieve-range"
+        help="determine p, d, mstart, minc, sieve-length, and max-prime"
              " from unknown-results filename")
 
     parser.add_argument('-c', '--count', type=int, default=10,

@@ -150,10 +150,10 @@ def search_db(args):
         assert num_gaps > 1000, num_gaps
         print (f"Found {num_gaps} results in {args.search_db!r}")
 
-        # This is a good heuristic and probably will always work, until it doesn't.
+        # Min gap for current record (filters 80% of results)
         existing = conn.execute(
-            'SELECT m, p, d, next_p_i, prev_p_i, merit FROM result WHERE '
-            '   merit > 10 or (next_p_i + prev_p_i) > 100000').fetchall()
+            'SELECT p, d, m, next_p_i, prev_p_i, merit FROM result WHERE '
+            '   merit > 18 or (next_p_i + prev_p_i) > 100000').fetchall()
         for gap in existing:
             gapsize = gap['next_p_i'] + gap['prev_p_i']
             merit = gap['merit']

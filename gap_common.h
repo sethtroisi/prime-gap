@@ -36,10 +36,12 @@ extern std::map<uint64_t,uint64_t> common_primepi;
 
 struct Config {
     int valid   = 0;
-    uint64_t mstart  = 0;
-    uint64_t minc    = 0;
     uint32_t p       = 0;
     uint32_t d       = 0;
+
+    uint64_t mstart  = 0;
+    uint64_t minc    = 0;
+
     float min_merit = 12;
 
     uint32_t sieve_length = 0;

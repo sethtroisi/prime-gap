@@ -221,16 +221,16 @@ void store_stats(
     const size_t num_rows = M_vals.size();
     char sSQL[500];
     sprintf(sSQL,
-        "INSERT INTO range(rid, m_start, m_inc, P, D,"
+        "INSERT INTO range(rid, P, D, m_start, m_inc,"
                           "sieve_length, max_prime,"
                           "min_merit,"
                           "num_m, num_remaining,"
                           "time_stats)"
-         "VALUES(%ld,  %ld,%ld, %d,%d,"
+         "VALUES(%ld,  %d,%d, %ld,%ld,"
                 "%d,%ld,  %.3f,"
                 "%ld,%ld,  %.2f)"
         "ON CONFLICT(rid) DO UPDATE SET time_stats=%.2f",
-            rid,  config.mstart, config.minc,  config.p, config.d,
+            rid,  config.p, config.d, config.mstart, config.minc,
             config.sieve_length, config.max_prime,
             config.min_merit,
             num_rows, num_rows,
@@ -303,7 +303,7 @@ void store_stats(
     // NOTE: IGNORE so that can rerun with different max-prime/sieve-length
     char insert_m_stats[] = (
             "INSERT OR IGNORE INTO m_stats"
-            "(rid, m, P, D, "
+            "(rid, P, D, m, "
             " prob_record, prob_missing, prob_merit,"
             " e_gap_next, e_gap_prev)"
             "VALUES"
@@ -343,10 +343,10 @@ void store_stats(
 
         BIND_OR_ERROR(sqlite3_bind_int64, stmt, 1, rid);
 
-        // m, P, D
-        BIND_OR_ERROR(sqlite3_bind_int, stmt, 2, m);
-        BIND_OR_ERROR(sqlite3_bind_int, stmt, 3, config.p);
-        BIND_OR_ERROR(sqlite3_bind_int, stmt, 4, config.d);
+        // P, D, m
+        BIND_OR_ERROR(sqlite3_bind_int, stmt, 2, config.p);
+        BIND_OR_ERROR(sqlite3_bind_int, stmt, 3, config.d);
+        BIND_OR_ERROR(sqlite3_bind_int, stmt, 4, m);
 
         // prob_record, prob_missing, prob_merit
         BIND_OR_ERROR(sqlite3_bind_double, stmt, 5, probs_record[i]);
@@ -359,8 +359,8 @@ void store_stats(
 
         int rc = sqlite3_step(stmt);
         if (rc != SQLITE_DONE) {
-            printf("\nm_stats insert failed %ld: (%ld, %d, %d): %d: %s\n",
-                i, m, config.p, config.d, rc, sqlite3_errmsg(db));
+            printf("\nm_stats insert failed %ld: (%d, %d, %ld): %d: %s\n",
+                i, config.p, config.d, m, rc, sqlite3_errmsg(db));
             break;
         }
 
@@ -777,7 +777,7 @@ void prime_gap_stats(const struct Config config) {
     {
         std::string fn = Args::gen_unknown_fn(config, ".txt");
         if (config.verbose >= 0) {
-            printf("\nReading from %s'\n\n", fn.c_str());
+            printf("\nReading from '%s'\n\n", fn.c_str());
         }
         unknown_file.open(fn, std::ios::in);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file

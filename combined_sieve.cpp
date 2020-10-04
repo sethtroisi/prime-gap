@@ -262,16 +262,16 @@ void insert_range_db(
     const uint64_t rid = db_helper.config_hash(config);
     char sSQL[300];
     sprintf(sSQL,
-        "INSERT INTO range(rid, m_start, m_inc, P, D,"
+        "INSERT INTO range(rid, P, D, m_start, m_inc,"
                           "sieve_length, max_prime,"
                           "min_merit,"
                           "num_m, num_remaining,"
                           "time_sieve)"
-         "VALUES(%ld,  %ld,%ld, %d,%d,"
+         "VALUES(%ld,  %d,%d, %ld,%ld,"
                 " %d,%ld, %.3f,"
                 "%ld,%ld,  %.2f)"
          "ON CONFLICT(rid) DO UPDATE SET time_sieve=%.2f",
-            rid,  config.mstart, config.minc,  config.p, config.d,
+            rid,  config.p, config.d, config.mstart, config.minc,
             config.sieve_length, config.max_prime,
             config.min_merit,
             num_rows, num_rows,
@@ -314,10 +314,10 @@ void save_unknowns_method1(
 
 
 void prime_gap_search(const struct Config config) {
-    const uint64_t M_start = config.mstart;
-    const uint64_t M_inc = config.minc;
     //const uint64_t P = config.p;
     const uint64_t D = config.d;
+    const uint64_t M_start = config.mstart;
+    const uint64_t M_inc = config.minc;
 
     const unsigned int SIEVE_LENGTH = config.sieve_length;
     const unsigned int SL = SIEVE_LENGTH;

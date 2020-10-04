@@ -446,9 +446,9 @@ std::string Args::gen_unknown_fn(const struct Config& config, std::string suffix
         return t.replace(t.size() - 4, 4, suffix);
     }
 
-    return std::to_string(config.mstart) + "_" +
-           std::to_string(config.p) + "_" +
+    return std::to_string(config.p) + "_" +
            std::to_string(config.d) + "_" +
+           std::to_string(config.mstart) + "_" +
            std::to_string(config.minc) + "_s" +
            std::to_string(config.sieve_length) + "_l" +
            std::to_string(config.max_prime / 1'000'000) + "M" +
@@ -459,10 +459,11 @@ std::string Args::gen_unknown_fn(const struct Config& config, std::string suffix
 
 Config Args::argparse(int argc, char* argv[]) {
     static struct option long_options[] = {
-        {"mstart",           required_argument, 0,   1  },
-        {"minc",             required_argument, 0,   2  },
         {"p",                required_argument, 0,  'p' },
         {"d",                required_argument, 0,  'd' },
+
+        {"mstart",           required_argument, 0,   1  },
+        {"minc",             required_argument, 0,   2  },
 
         {"unknown-filename", required_argument, 0,  'u' },
 
@@ -520,15 +521,15 @@ Config Args::argparse(int argc, char* argv[]) {
 
                     assert( std::count(t, t + strlen(t), '_')  == 5);
 
-                    config.mstart = atol(t);
-                    t = std::strchr(t, '_');
-                    t++;
-
                     config.p = atoi(t);
                     t = std::strchr(t, '_');
                     t++;
 
                     config.d = atoi(t);
+                    t = std::strchr(t, '_');
+                    t++;
+
+                    config.mstart = atol(t);
                     t = std::strchr(t, '_');
                     t++;
 

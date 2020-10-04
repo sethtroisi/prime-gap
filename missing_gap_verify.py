@@ -48,23 +48,23 @@ def load_sql():
         conn.row_factory = sqlite3.Row
 
         rv = conn.execute(
-            "SELECT m, P, D, prev_p, next_p, prp_prev, prp_next "
+            "SELECT P, D, m, prev_p, next_p, prp_prev, prp_next "
             "FROM m_stats "
             "WHERE prev_p > 0 AND next_p < 0")
 
         return tuple(dict(row) for row in rv)
 
 
-def save_record(m, p, d, prev_p, next_p, test_time):
+def save_record(p, d, m, prev_p, next_p, test_time):
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(
             "UPDATE m_stats SET "
-            "   next_p = ?, test_time = test_time + ?"
-            "WHERE m=? AND P=? AND D=? AND prev_p=?",
-            (next_p, test_time, m, p, d, prev_p))
+            "   next_p=?, test_time=test_time+?"
+            "WHERE P=? AND D=? AND m=? AND prev_p=?",
+            (next_p, test_time, p, d, m, prev_p))
 
-        assert cur.rowcount == 1, (m, p, d, prev_p, next_p)
+        assert cur.rowcount == 1, (p, d, m, prev_p, next_p)
         conn.commit()
 
 
@@ -91,13 +91,8 @@ def normalize_line_new_format(line):
 
 
 def normalize(lines):
-    def sort_key(line):
-        m,p,d,*_ = parse_line(line)
-        return p,d,m
-
     # Sort by (p,d) then m
-    ordered = sorted(lines, key=sort_key)
-    return list(map(normalize_line_new_format, ordered))
+    return list(map(normalize_line_new_format, sorted(ordered)))
 
 
 def parse_line(line):
@@ -111,12 +106,12 @@ def parse_line(line):
     gap = groups[-1] or ""  # Replace None with ""
     groups = groups[:-1]
 
-    m, p, d, l, h = map(int, groups)
-    return (m, p, d, l, h, gap)
+    p, d, m, l, h = map(int, groups)
+    return (p, d, m, l, h, gap)
 
 
 def check_check(test):
-    m, p, d = test['m'], test['P'], test['D']
+    p, d, m = test['P'], test['D'], test['m']
     N = m * gmpy2.primorial(p) // d
 
     prev_p, next_p = test['prev_p'], test['next_p']
@@ -155,16 +150,16 @@ def check_check(test):
     print ("\nnext_prime({}) = {} {} {}\t{:.1f} seconds\n".format(
         short_num, gap, "=" if success else "!=", high - low, t2 - t1))
 
-    save_record(m, p, d, prev_p, next_p, t2 - t0)
+    save_record(p, d, m, prev_p, next_p, t2 - t0)
 
     update = normalize_line_new_format(f"{short_num} +{next_p} gap {gap}")
     return success, update, gap, t2 - t0
 
 
 def verify_checks(checks, valid, fails):
-    processed = {(m,p,d) for m, p, d, *_ in map(parse_line, valid + fails)}
+    processed = {(p,d,m) for p, d, m, *_ in map(parse_line, valid + fails)}
     for row in checks:
-        assert (row['m'], row['P'], row['D']) not in processed
+        assert (row['P'], row['D'], row['m']) not in processed
 
 
 def test_records():

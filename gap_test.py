@@ -44,7 +44,7 @@ def get_arg_parser():
         help="Prime gap database see github.com/primegap-list-project/prime-gap-list")
 
     parser.add_argument('--unknown-filename', type=str,
-        help="determine mstart, minc, p, d, sieve-length, and max-prime"
+        help="determine p, d, mstart, minc, sieve-length, and max-prime"
              " from unknown-results filename")
 
     parser.add_argument('--min-merit', type=int, default=12,
@@ -593,20 +593,21 @@ def load_stats(conn, args, data, misc):
         p_gap_comb, p_gap_side
     )
 
-def save(conn, m, p, d, next_p_i, prev_p_i, merit,
+def save(conn, p, d, m, next_p_i, prev_p_i, merit,
          n_tests, p_tests, test_time):
+    assert p in range(201, 80000, 2), (p, d, m)
     conn.execute(
-        "INSERT INTO result(m,P,D,next_p_i,prev_p_i,merit)"
+        "INSERT INTO result(P,D,m,next_p_i,prev_p_i,merit)"
         "VALUES(?,?,?,  ?,?,  ?)",
-        (m, p, d,  next_p_i, prev_p_i,  round(merit,4)))
+        (p, d, m, next_p_i, prev_p_i,  round(merit,4)))
 
     conn.execute(
         "UPDATE m_stats "
         "SET next_p=?, prev_p=?, merit=?,"
         "    prp_next=?, prp_prev=?, test_time=?"
-        "WHERE m=? AND p=? AND d=?",
+        "WHERE p=? AND d=? AND m=?",
         (next_p_i, prev_p_i, round(merit,4),
-         p_tests, n_tests, test_time, m, p, d))
+         p_tests, n_tests, test_time, p, d, m))
 
     conn.commit()
 
@@ -877,7 +878,7 @@ def process_line(done_flag, work_q, results_q, thread_i, SL, K, P, D, primes, re
         test_time = time.time() - t0
 
         results_q.put((
-            m, mi, log_n, P, D,
+            m, mi, log_n,
             unknown_l, unknown_u,
             n_tests, next_p_i,
             p_tests, prev_p_i,
@@ -886,7 +887,7 @@ def process_line(done_flag, work_q, results_q, thread_i, SL, K, P, D, primes, re
 
 
 def process_result(conn, args, record_gaps, data, sc, result):
-    (m, mi, r_log_n, P, D, unknown_l, unknown_u,
+    (m, mi, r_log_n, unknown_l, unknown_u,
      n_tests, next_p_i,
      p_tests, prev_p_i, test_time) = result
 
@@ -900,7 +901,7 @@ def process_result(conn, args, record_gaps, data, sc, result):
     merit = gap / r_log_n
 
     save(conn,
-        m, P, D, next_p_i, prev_p_i, merit,
+        args.p, args.d, m, next_p_i, prev_p_i, merit,
         n_tests, p_tests, test_time)
 
     sc.total_prp_tests += p_tests

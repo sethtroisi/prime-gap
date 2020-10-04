@@ -80,11 +80,11 @@ def verify_args(args, fn_extension):
             print ("\"{}\" doesn't match unknown file format".format(fn))
             exit(1)
 
-        ms, p, d, mi, sl, mp, m1 = match.groups()
-        args.mstart = int(ms)
-        args.minc   = int(mi)
+        p, d, ms, mi, sl, mp, m1 = match.groups()
         args.p      = int(p)
         args.d      = int(d)
+        args.mstart = int(ms)
+        args.minc   = int(mi)
         args.sieve_length = int(sl)
         args.max_prime    = int(mp)
         args.method1 = (m1 == ".m1")
@@ -95,13 +95,14 @@ def verify_args(args, fn_extension):
         assert os.path.exists(args.search_db), (
             "Prime Search Database ('{}') doesn't exist".format(args.search_db))
 
-    for arg in ('mstart', 'minc', 'p', 'd', 'sieve_length', 'max_prime'):
+    for arg in ('p', 'd', 'mstart', 'minc', 'sieve_length', 'max_prime'):
         if arg not in args or args.__dict__[arg] in (None, 0):
             print ("Missing required argument", arg)
             exit(1)
 
     fn = "{}_{}_{}_{}_s{}_l{}M{}".format(
-        args.mstart, args.p, args.d, args.minc,
+        args.p, args.d,
+        args.mstart, args.minc,
         args.sieve_length, args.max_prime // 10 ** 6,
         ".m1" if args.method1 else "")
     fn += fn_extension

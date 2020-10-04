@@ -46,10 +46,10 @@ CREATE TABLE IF NOT EXISTS range(
         /* range id */
         rid      INTEGER PRIMARY KEY,
 
-        m_start INTEGER,
-        m_inc   INTEGER,
         P INTEGER,
         D INTEGER,
+        m_start INTEGER,
+        m_inc   INTEGER,
 
         sieve_length INTEGER,
         max_prime    INTEGER,
@@ -100,9 +100,9 @@ CREATE TABLE IF NOT EXISTS m_stats (
         rid INTEGER REFERENCES range(rid) ON UPDATE CASCADE
                                           ON DELETE SET NULL,
 
-        m INTEGER,
         P INTEGER,
         D INTEGER,
+        m INTEGER,
 
         /* next_p_interval, prev_p_interval (both positive) */
         /**
@@ -131,13 +131,13 @@ CREATE TABLE IF NOT EXISTS m_stats (
 
         test_time REAL DEFAULT 0,
 
-        PRIMARY KEY(m, P, D)
+        PRIMARY KEY(P, D, m)
 );
 
 CREATE TABLE IF NOT EXISTS result (
-        m INTEGER,
         P INTEGER,
         D INTEGER,
+        m INTEGER,
 
         /* next_p_interval, prev_p_interval */
         next_p_i INTEGER,
@@ -145,8 +145,8 @@ CREATE TABLE IF NOT EXISTS result (
 
         merit REAL,
 
-        PRIMARY KEY(m, P, D)
+        PRIMARY KEY(P, D, m)
 );
 
-CREATE INDEX IF NOT EXISTS    r_m_p_d ON             result(m,P,D);
-CREATE INDEX IF NOT EXISTS   ms_m_p_d ON            m_stats(m,P,D);
+CREATE INDEX IF NOT EXISTS    r_p_d_m ON             result(P,D,m);
+CREATE INDEX IF NOT EXISTS   ms_p_d_m ON            m_stats(P,D,m);
