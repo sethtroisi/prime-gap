@@ -577,7 +577,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 ### Low Priority TODOs
 
 * New script to update DB (and maybe delete uninteresting results
-  * [ ] Verify every table.`m_stat` result in table.`result`
   * [ ] Set rid if null (but reasonable range exists)
 * combined\_sieve.cpp
   * [ ] ETA for `combined_sieve` timing.
@@ -671,16 +670,20 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * benchmarking
   * [x] Experimentally compute `prime_time_estimate`
   * [x] Redo prime-time with user time (gmp better)
-    * There's serious overhead using subproccess, and I see 150% CPU usage. I Tried passing via stdin (pfgw supports -- but quits after one) but couldn't make it work. MF suggest you can use gwnum library and hack some api but seems like a like of work for ~1.4-2x gain on the largest primes.
+    * There's serious overhead using subproccess, and I see 150% CPU usage.
+    * I Tried passing via stdin (pfgw supports -- but quits after one) but couldn't make it work.
+    * MF suggest you can use gwnum library and hack some api but seems like a like of work for ~20-200% gain on reasonable primes.
   * [x] Add int64 `modulo_search_euclid_all`
   * [x] Add benchmarks for int32/int64 `modulo_search`
   * [x] Add benchmarks for `K % p`
 * prime-gap-search.db
   * [x] A plan for how to clean up [partially] finished ranges
-* misc scripts
-  * [x] Update range.`num_processed / num_to_process`
-* record\_check.py
-  * [x] Read from sql db
-* double\_check.py
-  * [x] run ecm on random unknowns and verify factors found > sieve limit
+* misc/
+  * show\_ranges.sh
+    * [x] Update range.`num_processed / num_to_process`
+    * [x] Verify every table.`m_stat` result in table.`result`
+  * record\_check.py
+    * [x] Read from sql db
+  * double\_check.py
+    * [x] run ecm on random unknowns and verify factors found > sieve limit
 </p></details>

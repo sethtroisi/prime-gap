@@ -82,6 +82,15 @@ def print_record_gaps(args, gaps):
         for gap in gaps:
                 size = gap[0]
                 new_merit = gap[1]
+                # These filters generated with
+                # sqlite3 gaps.db  "select min(merit) from gaps where gapsize BETWEEN 1500 AND 50000;"
+                if size <= 30000 and new_merit < 21.9:
+                    continue
+                if size <= 50000 and new_merit < 18:
+                    continue
+                if size <= 10000 and new_merit < 10.4:
+                    continue
+
                 existing = conn.execute(
                     'SELECT merit,primedigits,startprime FROM gaps WHERE'
                     ' gapsize=?', (size,)).fetchone()
@@ -153,7 +162,7 @@ def search_db(args):
         # Min gap for current record (filters 80% of results)
         existing = conn.execute(
             'SELECT p, d, m, next_p_i, prev_p_i, merit FROM result WHERE '
-            '   merit > 18 or (next_p_i + prev_p_i) > 100000').fetchall()
+            '   merit > 18 or (next_p_i + prev_p_i) > 50000').fetchall()
         for gap in existing:
             gapsize = gap['next_p_i'] + gap['prev_p_i']
             merit = gap['merit']

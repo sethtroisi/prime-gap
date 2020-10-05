@@ -51,7 +51,7 @@ def sql_and_file_ranges(sql_ranges, unknown_fns):
     # ---- Add sql ranges
     for r in sql_ranges:
         key = tuple(r[key] for key in ('P', 'D', 'm_start', 'm_inc'))
-        ranges[key] = [10, r['num_m'], 0]
+        ranges[key] = [20, r['num_m'], 0]
         assert r['num_m'] == count_num_m(r['m_start'], r['m_inc'], r['D'])
 
     # ---- Add file only ranges
@@ -64,9 +64,9 @@ def sql_and_file_ranges(sql_ranges, unknown_fns):
         key = (p, d, ms, mi)
         names[key] = unknown_fn
         if key in ranges:
-            ranges[key][0] = 11
+            ranges[key][0] = 21
         else:
-            ranges[key] = [20, count_num_m(ms, mi, d), 0]
+            ranges[key] = [10, count_num_m(ms, mi, d), 0]
 
     return ranges, names
 
@@ -127,7 +127,7 @@ def build_and_count_pd_results(results, ranges):
             if count_m == count:
                 ranges[key][0] = 41
             elif count > 0:
-                ranges[key][0] = 20 + status
+                ranges[key][0] = 30 + (status % 10)
 
 
 def check_processed(args):
@@ -140,10 +140,10 @@ def check_processed(args):
         results (create a pseudo range)
 
     Classify as
-        10: range,
-        11: range + file,
+        10: file
 
-        20: file
+        20: range
+        21: range + file
 
         30: partial_results
         31: partial_results + file,
@@ -171,6 +171,13 @@ def check_processed(args):
 
         print_results(conn, ranges, names)
 
+def check_mstatus(conn, p, d, ms, me):
+    count = conn.execute(
+        'SELECT COUNT(*) FROM m_stats WHERE p=? AND d=? AND m BETWEEN ? AND ?',
+        (p, d, ms, me)).fetchone()
+    return count[0]
+
+
 def print_results(conn, ranges, names):
     # ---- Show Results
     def sort_by_status(range_kv):
@@ -190,35 +197,41 @@ def print_results(conn, ranges, names):
         print("Finished: {:7} {:6.1%} (filename: {})".format(
             finished, finished / count_m, names.get(key, "???")))
 
-    print("\n", "-" * 80, "\n")
+    print("\n", "-" * 80, "\n", sep="")
 
     for key, value in display_order:
         p, d, ms, mi = key
         status, count_m, finished = value
         if status in (40, 41): continue
 
-        print("P: {:5} D: {:7} M({:7}) {:7} to {:7} |".format(
-            p, d, count_m, ms, ms + mi - 1), end=" ")
-        print("Finished: {:7} {:6.1%}".format(
-            finished, finished / count_m))
-
         base_params = "--save-unknowns --unknown-filename"
         fn_fake = gap_utils.generate_unknown_filename(p, d, ms, mi, "???", "???")
         fn = names.get(key, fn_fake)
 
-        if status in (10, 30):
-            print ("\tfile missing:")
-            print (f"\t\t./combined_sieve {base_params} {fn_fake}\n")
-        elif status == 11:
-            # XXX: Check m_stats
-            print ("\tgap_stats not yet run?")
-            print (f"\t\t./gap_test.py {base_params} {fn}\n")
-        elif status == 20:
-            print ("\trange missing:")
-            print (f"\t\t./gap_stats {base_params} {fn}\n")
-        elif status == 31:
-            print ("\tpartially finished resume:")
-            print (f"\t\t./gap_test.py {base_params} {fn}\n")
+        if status == 31:
+            print("P: {:5} D: {:7} M({:7}) {:7} to {:7} |".format(
+                p, d, count_m, ms, ms + mi - 1), end=" ")
+            print("Finished: {:7}/{:<7} {:6.1%}".format(
+                finished, count_m, finished/count_m))
+
+            print ("Partially finished resume:")
+            print (f"\t./gap_test.py {base_params} {fn}\n")
+        elif status in (20, 30):
+            print ("File missing (could be recreated with):")
+            print (f"\t./combined_sieve {base_params} {fn_fake}\n")
+        elif status == 21:
+            mstatus = check_mstatus(conn, p, d, ms, ms + mi - 1)
+            if mstatus:
+                print (f"Ready to start testing ({mstatus} m_stats):")
+                print (f"\t./gap_test.py {base_params} {fn}\n")
+            else:
+                print ("Ready for gap_statss")
+                print (f"\t./gap_stats {base_params} {fn}\n")
+        elif status == 10:
+            print ("range missing:")
+            print (f"\t./gap_stats {base_params} {fn}\n")
+        else:
+            print (f"unknown status: {status}")
 
 
 if __name__ == "__main__":
