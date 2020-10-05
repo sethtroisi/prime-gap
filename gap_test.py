@@ -68,16 +68,10 @@ def get_arg_parser():
 #---- Stats to plot ----#
 def stats_plots(
         args,
-        min_merit_gap, record_gaps,
-
+        min_merit_gap, record_gaps, prob_nth,
         valid_m,
-        s_test_unknowns, prob_nth,
-        s_expected_gap,
-        s_expected_prev, s_expected_next,
-        s_experimental_gap, s_experimental_side,
-        prob_merit_gap, prob_record_gap,
-        p_gap_side, p_gap_comb,
-    ):
+        data, misc):
+
     import numpy as np
     import matplotlib.pyplot as plt
     from scipy import stats
@@ -150,10 +144,10 @@ def stats_plots(
         label_e = f"E({label}) = {E:.0f}"
         axis.axvline(x=E, ymax=1.0/1.2, color=color, label=label_e)
 
-    egap_n = len(s_experimental_gap)
-    if len(s_expected_gap) != egap_n:
-        print("experimental_gap size mismatch", len(s_expected_gap), egap_n)
-    slope, _, R, _, _ = stats.linregress(s_expected_gap[:egap_n], s_experimental_gap)
+    egap_n = len(data.experimental_gap)
+    if len(data.expected_gap) != egap_n:
+        print("experimental_gap size mismatch", len(data.expected_gap), egap_n)
+    slope, _, R, _, _ = stats.linregress(data.expected_gap[:egap_n], data.experimental_gap)
     print ()
     print ("R^2 for expected gap: {:.3f}, corr: {:.3f}".format(R**2, slope))
     print ()
@@ -171,7 +165,7 @@ def stats_plots(
             figsize=(8, 12))
         gs = fig.add_gridspec(3, 2)
 
-        if s_test_unknowns:
+        if misc.test_unknowns:
             axis_prev = fig.add_subplot(gs[0, 0])
             axis_next = fig.add_subplot(gs[0, 1])
         axis_prob_gap     = fig.add_subplot(gs[1, 1])
@@ -189,11 +183,11 @@ def stats_plots(
                 x=E, ymax=1.0/1.2,
                 color=color, label=f"E({label}) = {E:.0f}")
 
-        if s_test_unknowns:
+        if misc.test_unknowns:
             # prob_prev, prev_next for individual m
             # See Prob_nth in gap_stats
             colors = ['lightskyblue', 'tomato', 'seagreen']
-            for m, c, (u_p, u_n) in zip(valid_m, colors, s_test_unknowns):
+            for m, c, (u_p, u_n) in zip(valid_m, colors, misc.test_unknowns):
                 label = f"m={m}"
                 plot_prob_nth(axis_prev, u_p, c, label)
                 plot_prob_nth(axis_next, u_n, c, label)
@@ -205,12 +199,14 @@ def stats_plots(
             axis_prev.set_xlim(-args.sieve_length, 0)
             axis_next.set_xlim(0, args.sieve_length)
 
+        # TODO generic method
         # Combining all probs for a pseudo distribution of P(next_gap) / P(prev_gap)
+        p_gap_side = misc.prob_gap_side
         plot_prob_hist(axis_prob_gap, p_gap_side,  'blueviolet')
         # Expected value
-        add_expected_value(axis_prob_gap, s_experimental_side, 'peru', 'next')
+        add_expected_value(axis_prob_gap, data.experimental_side, 'peru', 'next')
         # Experimental values
-        plot_hist(axis_prob_gap, s_experimental_side, 'peru', 'x')
+        plot_hist(axis_prob_gap, data.experimental_side, 'peru', 'x')
         min_y = 0.8 * min(v for v in p_gap_side.values() if v > 0) / sum(p_gap_side.values())
         print(f"Min Prob(gap side): {min_y:.2e}")
         axis_prob_gap.set_xlim(0, args.sieve_length)
@@ -218,17 +214,17 @@ def stats_plots(
         axis_prob_gap.set_ylim(bottom=min_y / 10)
         axis_prob_gap.legend(loc='upper right')
 
-        for data, color, label in (
-                (s_expected_prev, 'lightskyblue', 'prev'),
-                (s_expected_next, 'tomato', 'next'),
+        for e_data, color, label in (
+                (data.expected_prev, 'lightskyblue', 'prev'),
+                (data.expected_next, 'tomato', 'next'),
         ):
-            plot_hist(axis_expected_gap,          data, color, 'x')
-            add_expected_value(axis_expected_gap, data, color, label)
-            fit_normal_dist(axis_expected_gap, data)
+            plot_hist(axis_expected_gap,          e_data, color, 'x')
+            add_expected_value(axis_expected_gap, e_data, color, label)
+            fit_normal_dist(axis_expected_gap, e_data)
             axis_expected_gap.legend(loc='upper left')
 
             # CDF of gap <= x
-            plot_cdf(axis_cdf_gap, data, color, label)
+            plot_cdf(axis_cdf_gap, e_data, color, label)
 
     if args.num_plots > 1:
         # Plot 2: Gap(combined):
@@ -248,11 +244,12 @@ def stats_plots(
         axis_cdf_comb      = fig.add_subplot(gs[0, 2])
 
         # Combining all probs for a pseudo distribution of P(gap combined)
+        p_gap_comb = misc.prob_gap_comb
         plot_prob_hist(axis_prob_comb, p_gap_comb,  'blueviolet')
         # Expected value
-        add_expected_value(axis_prob_comb, s_experimental_gap, 'peru', 'next')
+        add_expected_value(axis_prob_comb, data.experimental_gap, 'peru', 'next')
         # Experimental values
-        plot_hist(axis_prob_comb, s_experimental_gap, 'peru', 'x')
+        plot_hist(axis_prob_comb, data.experimental_gap, 'peru', 'x')
         min_y = 0.8 * min(v for v in p_gap_comb.values() if v > 0) / sum(p_gap_comb.values())
         min_y = max(1e-7, min_y)
         max_y = 1.2 * max(p_gap_comb.values()) / sum(p_gap_comb.values())
@@ -263,21 +260,21 @@ def stats_plots(
 
         color = 'seagreen'
         axis = axis_expected_comb
-        data = s_expected_gap
-        plot_hist(axis,          data, color, 'x')
-        add_expected_value(axis, data, color, 'combined gap')
-        fit_normal_dist(axis,    data)
+        e_gap = data.expected_gap
+        plot_hist(axis,          e_gap, color, 'x')
+        add_expected_value(axis, e_gap, color, 'combined gap')
+        fit_normal_dist(axis,    e_gap)
         axis.legend(loc='upper left')
 
 #        # CDF of gap <= x
-        plot_cdf(axis_cdf_comb,  data, color, 'combined gap')
+        plot_cdf(axis_cdf_comb,  e_gap, color, 'combined gap')
 
         # Sum(prob) vs m's tested
         # Hist of Prob(record/merit)
         # CDF of Prob(record/merit)
-        for row, data, label, color in (
-            (1, prob_merit_gap, f'gap > min_merit({args.min_merit})', 'dodgerblue'),
-            (2, prob_record_gap, 'gap = record', 'lightskyblue'),
+        for row, prob_data, label, color in (
+            (1, data.prob_merit_gap, f'gap > min_merit({args.min_merit})', 'dodgerblue'),
+            (2, data.prob_record_gap, 'gap = record', 'lightskyblue'),
         ):
             axis = fig.add_subplot(gs[row, 0])
 
@@ -286,13 +283,13 @@ def stats_plots(
             axis.set_xlabel(" # of m's tests")
             axis.set_ylabel(f'Sum(P(gap {label})')
 
-            #assert len(data) == len(s_experimental_gap)
-            zipped = list(zip(data, s_experimental_gap))
+            #assert len(prob_data) == len(data.experimental_gap)
+            zipped = list(zip(prob_data, data.experimental_gap))
 
             p_gap_merit_sorted, _ = zip(*sorted(zipped, reverse=True))
             p_gap_merit_ord, gap_real_ord = zip(*zipped)
 
-            print(f"{label:20} | sum(P) = {sum(data):.3f}")
+            print(f"{label:20} | sum(P) = {sum(prob_data):.3f}")
 
             #Experimental
             if row == 1:
@@ -313,11 +310,11 @@ def stats_plots(
 
             # Hist
             axis = fig.add_subplot(gs[row, 1])
-            plot_hist(axis, data, color, 'x')
+            plot_hist(axis, prob_data, color, 'x')
 
             # CDF
             axis = fig.add_subplot(gs[row, 2])
-            plot_cdf(axis,  data, color, label)
+            plot_cdf(axis,  prob_data, color, label)
 
 
     if args.num_plots > 2:
@@ -332,12 +329,12 @@ def stats_plots(
         axis_combined_gap = fig.add_subplot(gs[1, 2])
 
         for plot_i, (d, label, color) in enumerate((
-                (s_expected_prev, 'prev', 'lightskyblue'),
-                (s_expected_next, 'next', 'tomato'),
-                (s_expected_gap,  'expected', 'seagreen'),
-                (s_experimental_side, 'next/prev gap', 'sandybrown'),
-                (s_experimental_gap, 'gap', 'peru'),
-                (prob_merit_gap, f'P(gap > min_merit({args.min_merit}))', 'dodgerblue'),
+                (data.expected_prev, 'prev', 'lightskyblue'),
+                (data.expected_next, 'next', 'tomato'),
+                (data.expected_gap,  'expected', 'seagreen'),
+                (data.experimental_side, 'next/prev gap', 'sandybrown'),
+                (data.experimental_gap, 'gap', 'peru'),
+                (data.prob_merit_gap, f'P(gap > min_merit({args.min_merit}))', 'dodgerblue'),
         )):
             if not d: continue
 
@@ -378,8 +375,8 @@ def stats_plots(
                 plot_cdf(dist_axis, d, color, label)
 
         for d, color in [
-                (p_gap_side, 'blueviolet'),
-                (p_gap_comb, 'seagreen'),
+                (misc.prob_gap_side, 'blueviolet'),
+                (misc.prob_gap_comb, 'seagreen'),
         ]:
             if color == 'blueviolet':
                 axis = axis_one_gap
@@ -389,8 +386,8 @@ def stats_plots(
             plot_prob_hist(axis, d,  color)
             axis.legend(loc='upper right')
 
-        assert len(prob_merit_gap) == len(s_experimental_gap)
-        zipped = list(itertools.zip_longest(prob_merit_gap, s_experimental_gap))
+        assert len(data.prob_merit_gap) == len(data.experimental_gap)
+        zipped = list(itertools.zip_longest(data.prob_merit_gap, data.experimental_gap))
 
         # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
         # sorted and unsorted order
@@ -462,17 +459,8 @@ def plot_stuff(
         data.prob_record_gap = data.prob_merit_gap
 
         stats_plots(
-            args,
-            min_merit_gap, record_gaps,
-
-            data.valid_m,
-            misc.test_unknowns, prob_nth,
-            data.expected_gap,
-            data.expected_prev, data.expected_next,
-            data.experimental_gap, data.experimental_side,
-            data.prob_merit_gap, data.prob_record_gap,
-            misc.prob_gap_side, misc.prob_gap_comb,
-        )
+            args, min_merit_gap, record_gaps, prob_nth,
+            data.valid_m, data, misc)
 
     # Load stats from gap_stats (fails if empty)
     try:
@@ -486,20 +474,12 @@ def plot_stuff(
             print("Failed to load from DB so no plots.")
             raise
 
-    # TODO: validate data_db.experimental_gap includes new records
+    # test_unknowns come from unknown-file not DB.
+    misc_db.test_unknowns = misc.test_unknowns
 
     stats_plots(
-        args,
-        min_merit_gap, record_gaps,
-
-        data.valid_m,
-        misc.test_unknowns, prob_nth,
-        data_db.expected_gap,
-        data_db.expected_prev, data_db.expected_next,
-        data_db.experimental_gap, data_db.experimental_side,
-        data_db.prob_merit_gap, data_db.prob_record_gap,
-        misc_db.prob_gap_side, misc_db.prob_gap_comb,
-    )
+        args, min_merit_gap, record_gaps, prob_nth,
+        data.valid_m, data_db, misc_db)
 
 
 #---- gap_testing ----#
