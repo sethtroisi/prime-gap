@@ -102,7 +102,7 @@ def stats_plots(
     def plot_cdf(axis, data, color, label):
         n = len(data)
         d_sorted = np.sort(data)
-        dist_label = f"Empirical CDF({label} gap <= X)" if 'P(' not in label else "CDF"
+        dist_label = f"Empirical CDF({label})" if 'P(' not in label else "CDF"
         axis.plot(
                 d_sorted, np.arange(1, n+1) / n,
                 color=color, label=dist_label)
@@ -129,6 +129,21 @@ def stats_plots(
         axis.hist(x, weights=w, bins=100, density=True,
                   label='Theoretical P(gap)', color=color, alpha=0.4)
         print (f"|P(gap)| = {len(x)}, Sum(P(gap)) = {sum(w):.1f}")
+
+    def prob_histogram_all(axis, probs, experimental, label):
+        plot_prob_hist(axis, probs,  'blueviolet')
+        # Expected value
+        add_expected_value(axis, experimental, 'peru', label)
+        # Experimental values
+        plot_hist(axis, experimental, 'peru', 'x')
+
+        # XXX: can I query this from experimental? axis.hist?
+        min_y = 0.8 * min(v for v in probs.values() if v > 0) / sum(probs.values())
+        max_y = 1.2 * max(probs.values()) / sum(probs.values())
+        axis.set_yscale('log')
+        axis.legend(loc='upper right')
+
+        return min_y, max_y
 
     def fit_normal_dist(axis, data):
         x_start = max(0, 0.95 * np.percentile(data, 1))
@@ -199,20 +214,11 @@ def stats_plots(
             axis_prev.set_xlim(-args.sieve_length, 0)
             axis_next.set_xlim(0, args.sieve_length)
 
-        # TODO generic method
-        # Combining all probs for a pseudo distribution of P(next_gap) / P(prev_gap)
-        p_gap_side = misc.prob_gap_side
-        plot_prob_hist(axis_prob_gap, p_gap_side,  'blueviolet')
-        # Expected value
-        add_expected_value(axis_prob_gap, data.experimental_side, 'peru', 'next')
-        # Experimental values
-        plot_hist(axis_prob_gap, data.experimental_side, 'peru', 'x')
-        min_y = 0.8 * min(v for v in p_gap_side.values() if v > 0) / sum(p_gap_side.values())
-        print(f"Min Prob(gap side): {min_y:.2e}")
+        min_y, max_y = prob_histogram_all(
+                axis_prob_gap, misc.prob_gap_side, data.experimental_side, 'next')
         axis_prob_gap.set_xlim(0, args.sieve_length)
-        axis_prob_gap.set_yscale('log')
         axis_prob_gap.set_ylim(bottom=min_y / 10)
-        axis_prob_gap.legend(loc='upper right')
+        print(f"Min Prob(gap side): {min_y:.2e}")
 
         for e_data, color, label in (
                 (data.expected_prev, 'lightskyblue', 'prev'),
@@ -244,19 +250,11 @@ def stats_plots(
         axis_cdf_comb      = fig.add_subplot(gs[0, 2])
 
         # Combining all probs for a pseudo distribution of P(gap combined)
-        p_gap_comb = misc.prob_gap_comb
-        plot_prob_hist(axis_prob_comb, p_gap_comb,  'blueviolet')
-        # Expected value
-        add_expected_value(axis_prob_comb, data.experimental_gap, 'peru', 'next')
-        # Experimental values
-        plot_hist(axis_prob_comb, data.experimental_gap, 'peru', 'x')
-        min_y = 0.8 * min(v for v in p_gap_comb.values() if v > 0) / sum(p_gap_comb.values())
-        min_y = max(1e-7, min_y)
-        max_y = 1.2 * max(p_gap_comb.values()) / sum(p_gap_comb.values())
+        min_y, max_y = prob_histogram_all(
+                axis_prob_comb, misc.prob_gap_comb, data.experimental_gap, 'gap')
         print(f"Min Prob(gap comb): {min_y:.2e}")
-        axis_prob_comb.set_yscale('log')
+        min_y = max(1e-7, min_y)
         axis_prob_comb.set_ylim(bottom=min_y, top=max_y)
-        axis_prob_comb.legend(loc='upper right')
 
         color = 'seagreen'
         axis = axis_expected_comb
@@ -462,17 +460,10 @@ def plot_stuff(
             args, min_merit_gap, record_gaps, prob_nth,
             data.valid_m, data, misc)
 
-    # Load stats from gap_stats (fails if empty)
-    try:
-        data_db, misc_db = load_stats(conn, args)
-        assert data_db.expected_prev
-        assert misc_db.prob_gap_comb, len(misc.prob_gap_comb)
-    except:
-        # Failed to load
-        if not args.stats and args.num_plots:
-            # TODO: print execption
-            print("Failed to load from DB so no plots.")
-            raise
+    # Load stats from gap_stats
+    data_db, misc_db = load_stats(conn, args)
+    assert data_db.expected_prev
+    assert misc_db.prob_gap_comb, len(misc.prob_gap_comb)
 
     # test_unknowns come from unknown-file not DB.
     misc_db.test_unknowns = misc.test_unknowns
