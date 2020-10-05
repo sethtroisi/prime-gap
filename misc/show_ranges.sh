@@ -47,6 +47,15 @@ WHERE m.rid not in (SELECT rid from range);
 SELECT changes() || " m_stats.rid Updates";
 SELECT "";
 
+# Happens from missing_gap, not sure quite what to do.
+#INSERT INTO result (P,D,m, next_p_i,prev_p_i, merit)
+#  SELECT P,D,m, next_p,prev_p, merit
+#  FROM m_stats WHERE
+#        m NOT IN (SELECT r.m FROM result r WHERE r.p = m_stats.p AND r.d = m_stats.d)
+#        AND (next_p != 0 OR prev_p != 0);
+#SELECT changes() || " m_stats results added to result";
+#SELECT "";
+
 SELECT "Table 'range'";
 SELECT PRINTF("  P=%-5d D=%-7d M(%-6d) = %7d +[0,%7d) processed=%-7d ",
               p, d, num_m, m_start, m_inc, num_processed),
@@ -57,7 +66,7 @@ FROM range ORDER BY p, d, m_start, m_inc;
 SELECT "";
 
 SELECT "Table 'results'/'m_stats'";
-SELECT PRINTF("  P=%-5d D=%-7d M(%-6d) = %-7d to %-7d (last m: %7d, primes: %7d, PRPs: %9d, merit: %5.2f, time: %.0fs)",
+SELECT PRINTF("  P=%-5d D=%-7d M(%-7d) = %-8d to %-8d (last m: %8d, primes: %7d, PRPs: %9d, merit: %5.2f, time: %.0fs)",
               p, d, count(*), min(m), max(m), max(m * (primes != 0)),
               sum(primes), sum(prp_tests), max(merit), sum(test_time))
 FROM (

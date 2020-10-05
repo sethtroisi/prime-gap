@@ -69,25 +69,37 @@ def logger_context(args):
     return context
 
 
-def verify_args(args, fn_extension):
+def parse_unknown_filename(fn):
+    '''None or (p,d,ms,mi,sl,mp,m1)'''
+    match = UNKNOWN_FILENAME_RE.match(os.path.basename(fn))
+    return tuple(map(lambda s: int(s) if s and s.isdigit() else s, match.groups())) if match else match
+
+
+def generate_unknown_filename(p, d, ms, mi, sl, mp, method1 = False, ext = ".txt"):
+    base = f"{p}_{d}_{ms}_{mi}_s{sl}_l{mp}M"
+    return base + (".m1" * (method1 == True)) + ext
+
+
+def verify_args(args):
     if args.unknown_filename:
         fn = args.unknown_filename
         if not os.path.exists(fn):
             print ("\"{}\" doesn't exist".format(fn))
             exit(1)
-        match = UNKNOWN_FILENAME_RE.match(os.path.basename(fn))
+
+        match = parse_unknown_filename(fn)
         if not match:
-            print ("\"{}\" doesn't match unknown file format".format(fn))
+            print (f"{fn!r} doesn't match unknown file format")
             exit(1)
 
-        p, d, ms, mi, sl, mp, m1 = match.groups()
-        args.p      = int(p)
-        args.d      = int(d)
-        args.mstart = int(ms)
-        args.minc   = int(mi)
-        args.sieve_length = int(sl)
-        args.max_prime    = int(mp)
-        args.method1 = (m1 == ".m1")
+        p, d, ms, mi, sl, mp, m1 = match
+        args.p              = p
+        args.d              = d
+        args.mstart         = ms
+        args.minc           = mi
+        args.sieve_length   = sl
+        args.max_prime      = mp
+        args.method1        = (m1 == ".m1")
 
     args.max_prime   *= 10 ** 6
 
@@ -100,12 +112,11 @@ def verify_args(args, fn_extension):
             print ("Missing required argument", arg)
             exit(1)
 
-    fn = "{}_{}_{}_{}_s{}_l{}M{}".format(
+    fn = generate_unknown_filename(
         args.p, args.d,
         args.mstart, args.minc,
         args.sieve_length, args.max_prime // 10 ** 6,
-        ".m1" if args.method1 else "")
-    fn += fn_extension
+        args.method1)
 
     if args.unknown_filename:
         basename = os.path.basename(args.unknown_filename)

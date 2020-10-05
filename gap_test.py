@@ -1155,7 +1155,7 @@ def prime_gap_test(args):
 if __name__ == "__main__":
     parser = get_arg_parser()
     args = parser.parse_args()
-    gap_utils.verify_args(args, ".txt")
+    gap_utils.verify_args(args)
 
     # TeeLogger context if args.save_logs
     with gap_utils.logger_context(args):

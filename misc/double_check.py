@@ -177,7 +177,7 @@ def double_check(args):
 if __name__ == "__main__":
     parser = get_arg_parser()
     args = parser.parse_args()
-    gap_utils.verify_args(args, ".txt")
+    gap_utils.verify_args(args)
 
     double_check(args)
 

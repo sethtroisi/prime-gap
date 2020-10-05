@@ -386,6 +386,12 @@ Often I run `combined_sieve` and `gap_stats` for a BUNCH of ranges not I never e
 
 `misc/record_check.py` searches through `prime-gap-search.db` for records (over `gaps.db`)
 
+---
+
+`misc/run.sh <UNKNOWN_FILENAME>` runs `combined_sieve`, `gap_stats`, and prints the `gap_test.py` command
+
+`misc/status.py` to check if a filename has been processed 100% (and can be deleted)
+
 
 ## Benchmarks
 
