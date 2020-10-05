@@ -235,7 +235,7 @@ def stats_plots(
     if args.num_plots > 1:
         # Plot 2: Gap(combined):
         #   [ prob all m,               expected,   cdf ]
-        #   [ sum(prob) & count,  dist,       cdf ] (for highmerit)
+        #   [ sum(prob) & count,  dist,       cdf ] (for >minmerit)
         #   [ sum(prob) & count,  dist,       cdf ] (for record)
 
         # Set up subplots.
@@ -718,25 +718,30 @@ def should_print_stats(
         timing_threads = rate(sc.tested, sc.test_time)
 
         # Stats!
-        print("\t    tests     {:<10d} ({}, {})  {:.0f}, {:.0f} seconds elapsed".format(
+        print("\t    tests      {:<9d} ({}, {})  {:.0f}, {:.0f} secs".format(
             sc.tested, timing, timing_threads, secs, sc.test_time))
+
+        print("\t    sum(prob_minmerit):  {:.2g}, {:.3g}/day\tfound: {}".format(
+            sc.prob_minmerit, 86400 / secs * sc.prob_minmerit, sc.count_minmerit))
+        print("\t    sum(prob_record):    {:.2g}, {:.3g}/day".format(
+            sc.prob_record, 86400  / secs * sc.prob_record))
 
         total_unknown = sc.t_unk_low + sc.t_unk_hgh
         if total_unknown:
-            print("\t    unknowns  {:<10d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
+            print("\t    unknowns   {:<9d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
                 total_unknown, total_unknown / N,
                 100 * (1 - total_unknown / ((2 * args.sieve_length + 1) * N)),
                 100 * sc.t_unk_low / total_unknown,
                 100 * sc.t_unk_hgh / total_unknown))
         prp_tests = sc.total_prp_tests
         if sc.tested and prp_tests:
-            print("\t    prp tests {:<10d} (avg: {:.2f}) ({:.3f} tests/sec)".format(
+            print("\t    prp tests  {:<9d} (avg: {:.2f}) ({:.3f} tests/sec)".format(
                 prp_tests, prp_tests / sc.tested, prp_tests / secs))
             if sc.gap_out_of_sieve_prev or sc.gap_out_of_sieve_next:
                 print("\t    fallback prev_gap {} ({:.1f}%), next_gap {} ({:.1f}%)".format(
                     sc.gap_out_of_sieve_prev, 100 * sc.gap_out_of_sieve_prev / sc.tested,
                     sc.gap_out_of_sieve_next, 100 * sc.gap_out_of_sieve_next / sc.tested))
-            print("\t    best merit this interval: {:.3f} (at m={})".format(
+            print("\t    merit {:.3f} (at m={})".format(
                 sc.best_merit_interval, sc.best_merit_interval_m))
 
         return True
@@ -788,6 +793,7 @@ def determine_prev_prime_i(m, strn, K, unknowns, SL, primes, remainder):
 def handle_result(
         args, record_gaps, data, sc,
         mi, m, log_n, prev_p_i, next_p_i, unknown_l, unknown_u):
+    '''Called for existing and new records'''
     assert next_p_i > 0 and prev_p_i > 0, (mi, m, next_pi, prev_p_i)
 
     gap = next_p_i + prev_p_i
@@ -863,7 +869,9 @@ def process_line(done_flag, work_q, results_q, thread_i, SL, K, P, D, primes, re
         ))
 
 
-def process_result(conn, args, record_gaps, data, sc, result):
+def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
+    ''' Handles new results '''
+
     (m, mi, r_log_n, unknown_l, unknown_u,
      n_tests, next_p_i,
      p_tests, prev_p_i, test_time) = result
@@ -876,6 +884,11 @@ def process_result(conn, args, record_gaps, data, sc, result):
 
     gap = next_p_i + prev_p_i
     merit = gap / r_log_n
+
+    sc.prob_minmerit           += mi_probs[mi][0]
+    if merit > args.min_merit:
+        sc.count_minmerit += 1
+    sc.prob_record             += mi_probs[mi][1]
 
     save(conn,
         args.p, args.d, m, next_p_i, prev_p_i, merit,
@@ -925,6 +938,11 @@ def run_in_parallel(
     print()
     time.sleep(0.2)
 
+    mi_probs = {
+        mi: (p_merit, p_record) for mi, p_merit, p_record in zip(
+            valid_mi, data.prob_merit_gap, data.prob_record_gap)
+    }
+
     for mi in valid_mi:
         m = args.mstart + mi
         log_n = (K_log + math.log(m))
@@ -946,6 +964,8 @@ def run_in_parallel(
                 log_n, unknowns,
                 # Results saved to data / misc
                 data, misc)
+            mi_probs[mi] = (data.prob_merit_gap[-1], data.prob_record_gap[-1])
+
 
         if m in existing:
             prev_p_i, next_p_i = existing[m]
@@ -967,7 +987,7 @@ def run_in_parallel(
         # Process any finished results
         while not results_q.empty():
             result = results_q.get(block=False)
-            process_result(conn, args, record_gaps, data, sc, result)
+            process_result(conn, args, record_gaps, mi_probs, data, sc, result)
 
     print("Everything Queued, done.set() & pushing STOP")
     done_flag.set()
@@ -980,7 +1000,7 @@ def run_in_parallel(
     while sc.tested < sc.will_test:
         print(f"Waiting on {sc.will_test - sc.tested} of {sc.will_test} results")
         result = results_q.get(block=True)
-        process_result(conn, args, record_gaps, data, sc, result)
+        process_result(conn, args, record_gaps, mi_probs, data, sc, result)
 
     print("Joining work_q")
     work_q.join_thread()
@@ -1069,36 +1089,17 @@ def prime_gap_test(args):
         total_prp_tests = 0
         gap_out_of_sieve_prev = 0
         gap_out_of_sieve_next = 0
+
         best_merit_interval = 0
         best_merit_interval_m = -1
 
-    @dataclass
-    class Data:
-        first_m = -1
-        last_m = -1
+        prob_record = 0.0
+        prob_minmerit = 0.0
+        count_minmerit = 0
 
-        valid_m = []
-
-        # Values for each m in valid_m
-        expected_prev = []
-        expected_next = []
-        expected_gap  = []
-        experimental_side = []
-        experimental_gap = []
-        prob_merit_gap = []
-        prob_record_gap = []
-
-    @dataclass
-    class Misc:
-        prob_gap_side  = defaultdict(float)
-        prob_gap_comb  = defaultdict(float)
-
-        test_unknowns = []
-
-    # TODO: consider moving DB load here for partially complete runs (so that Data, Misc can be 'reloaded')
 
     sc = StatCounters(time.time(), time.time())
-    data = Data()
+    data = Datas()
     misc = Misc()
 
     valid_mi = [mi for mi in range(M_inc) if math.gcd(M + mi, D) == 1]
@@ -1106,6 +1107,16 @@ def prime_gap_test(args):
     data.last_m = M + valid_mi[-1]
     print(f"\nStarting m({len(valid_mi)}) {data.first_m} to {data.last_m}")
     print()
+
+    # XXX: consider using all of data_db for resuming partially complete runs
+
+    # Load stats for prob_record
+    if not args.stats:
+        data_db, misc_db = load_stats(conn, args)
+        assert len(data_db.prob_merit_gap)  == len(valid_mi), "run ./gap_stats first"
+        assert len(data_db.prob_record_gap) == len(valid_mi), "run ./gap_stats first"
+        data.prob_merit_gap = data_db.prob_merit_gap
+        data.prob_record_gap = data_db.prob_record_gap
 
     run_in_parallel(
         args, conn, unknown_file, record_gaps,

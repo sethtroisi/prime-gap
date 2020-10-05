@@ -557,18 +557,14 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Add some theory for only doing one side test.
 * combined\_sieve.cpp
 * gap\_stats.cpp
-* gap\_test.cpp
-  * [ ] remove `--run-prp`
+* gap\_test.py
   * [ ] `--top-x-percent` (see THEORY.md)
-  * [ ] Multithreaded
   * [ ] Read `time_sieve` and `time_stats` print optimal to restart search point
     * [ ] Leave XXX note for restart
-  * [ ] Produce P(record) / day (and upfront estimate)
-* gap\_test.py
-  * [ ] Produce P(record) / day (and upfront estimate)
-  * [ ] `--top-x-percent` (see THEORY.md)
   * [ ] Sort by expected gap and PRP only top X%
   * [ ] Correlation between Expected Gap & Gap
+* gap\_test.cpp
+  * [ ] remove `--run-prp`
 * missing\_gap\_test.py && missing\_gap\_verify.py
 * schema.sql
 * benchmarking
@@ -583,6 +579,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Option to output m with gcd(m, d) != 1
   * [ ] optimize D helper
 * gap\_stats.cpp
+  * [ ] Produce P(record) / day estimate
   * [ ] Check if higher prob is related to unique (mi % d)
   * [ ] Option to starting at m > mstart
 * gap\_test.py
@@ -648,6 +645,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_test.py
+  * [x] Show P(record) / day
   * [x] Multithreaded
   * [x] Update `m_stats` (with `test_time`),
   * [x] Plot P(gap > min\_merit) and P(record) sorted and unsorted.

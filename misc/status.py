@@ -204,9 +204,9 @@ def print_results(conn, ranges, names):
         status, count_m, finished = value
         if status in (40, 41): continue
 
-        base_params = "--save-unknowns --unknown-filename"
         fn_fake = gap_utils.generate_unknown_filename(p, d, ms, mi, "???", "???")
         fn = names.get(key, fn_fake)
+        unk_fn_param = "--unknown-filename " + fn
 
         if status == 31:
             print("P: {:5} D: {:7} M({:7}) {:7} to {:7} |".format(
@@ -215,21 +215,21 @@ def print_results(conn, ranges, names):
                 finished, count_m, finished/count_m))
 
             print ("Partially finished resume:")
-            print (f"\t./gap_test.py {base_params} {fn}\n")
+            print (f"\t./gap_test.py {unk_fn_param}\n")
         elif status in (20, 30):
             print ("File missing (could be recreated with):")
-            print (f"\t./combined_sieve {base_params} {fn_fake}\n")
+            print (f"\t./combined_sieve --save-unknowns {unk_fn_param}\n")
         elif status == 21:
             mstatus = check_mstatus(conn, p, d, ms, ms + mi - 1)
             if mstatus:
                 print (f"Ready to start testing ({mstatus} m_stats):")
-                print (f"\t./gap_test.py {base_params} {fn}\n")
+                print (f"\t./gap_test.py {unk_fn_param}\n")
             else:
-                print ("Ready for gap_statss")
-                print (f"\t./gap_stats {base_params} {fn}\n")
+                print ("Ready for gap_stats")
+                print (f"\t./gap_stats --save-unknowns {unk_fn_param}\n")
         elif status == 10:
             print ("range missing:")
-            print (f"\t./gap_stats {base_params} {fn}\n")
+            print (f"\t./gap_stats --save-unknowns {unk_fn_param}\n")
         else:
             print (f"unknown status: {status}")
 
