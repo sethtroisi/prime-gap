@@ -221,17 +221,17 @@ real	0m0.122s
 
 ### Gap Test
 
-Quick note, `python gap_test.py ...` and `./gap_test` should be roughly equivilant.
+Quick note, `python gap_test.py ...` and `./gap_test_simple` should be roughly equivilant.
 `python gap_test.py` supports `--stats` to SLOWLY double check `./gap_stats` and `--plots` to print fun plots.
 
 
 ```bash
-$ make gap_test
-$ time ./gap_test --unknown-filename 907_210_1_1000_s15000_l1000M.txt --run-prp -q
+$ make gap_test_simple
+$ time ./gap_test_simple --unknown-filename 907_210_1_1000_s15000_l1000M.txt --run-prp -q
 ```
 
 <details>
-<summary>gap_test output</summary>
+<summary>gap_test_simple output</summary>
 <p>
 
 ```bash
@@ -274,7 +274,7 @@ real	0m5.275s
 or slightly more quiet
 
 ```bash
-$ time ./gap_test --unknown-filename 907_210_1_1000_s15000_l1000M.txt --run-prp -qq
+$ time ./gap_test_simple --unknown-filename 907_210_1_1000_s15000_l1000M.txt --run-prp -qq
 Testing m * 907#/210, m = 1 + [0, 1,000)
 10920 12.6002  143 * 907#/210 -6796 to +4124
 12164 14.0190  397 * 907#/210 -9644 to +2520
@@ -369,7 +369,7 @@ $ ./benchmark 100000 _all
      * Probability of being a record gap, of being a missing gap, of being gap > `--min-merit`
    * Store statistics in `m_stats` table
    * Compute prob(gap) over all m and save in `range_stats` table
-1. `gap_test` / `gap_test.py` / `missing_gap_test` `--unknown-filename <PARAM>.txt`
+1. `gap_test_simple` / `gap_test.py` / `missing_gap_test` `--unknown-filename <PARAM>.txt`
    * Runs PRP tests on most likely m's from `<PARAM>.txt`
    * Stores results (as they are calculated in `result` & `m_stats`
      * Allows for saving of progress and graceful restart
@@ -452,7 +452,7 @@ $ sudo apt install gmp-ecm
 
 ```bash
 $ PARAMS="-p 907 -d 2190 --mstart 1 --minc 200 --max-prime 100 --sieve-length 11000"
-$ make combined_sieve gap_stats gap_test
+$ make combined_sieve gap_stats gap_test_simple
 $ time ./combined_sieve --method1 -qqq --save-unknowns $PARAMS
 $ time ./combined_sieve           -qqq --save-unknowns $PARAMS
 $ md5sum 907_2190_1_200_s11000_l100M.{txt,m1.txt}
@@ -488,7 +488,7 @@ $ python misc/double_check.py --seed=123 --unknown-filename 907_2190_1_200_s1100
 ecm found 172 composites: known 168 composite, 4 were unknown
 
 
-$ ./gap_test --unknown-filename 907_2190_1_200_s11000_l100M.txt -q --min-merit 8 --run-prp
+$ ./gap_test_simple --unknown-filename 907_2190_1_200_s11000_l100M.txt -q --min-merit 8 --run-prp
 Testing m * 907#/2190, m = 1 + [0, 200)
 Min Gap ~= 7734 (for merit > 9.0)
 

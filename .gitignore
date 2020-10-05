@@ -3,7 +3,7 @@
 combined_sieve
 gap_stats
 gap_stats_missing
-gap_test
+gap_test_simple
 benchmark
 *.o
 
