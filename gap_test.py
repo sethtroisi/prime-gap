@@ -152,7 +152,7 @@ def stats_plots(
 
     egap_n = len(s_experimental_gap)
     if len(s_expected_gap) != egap_n:
-        print("experimental_gap size mismatch")
+        print("experimental_gap size mismatch", len(s_expected_gap), egap_n)
     slope, _, R, _, _ = stats.linregress(s_expected_gap[:egap_n], s_experimental_gap)
     print ()
     print ("R^2 for expected gap: {:.3f}, corr: {:.3f}".format(R**2, slope))
@@ -459,7 +459,7 @@ def plot_stuff(
         min_merit_gap, record_gaps, prob_nth):
     if args.stats:
         # Not calculated
-        prob_record_gap = data.prob_merit_gap
+        data.prob_record_gap = data.prob_merit_gap
 
         stats_plots(
             args,
@@ -470,23 +470,23 @@ def plot_stuff(
             data.expected_gap,
             data.expected_prev, data.expected_next,
             data.experimental_gap, data.experimental_side,
-            data.prob_merit_gap, prob_record_gap,
+            data.prob_merit_gap, data.prob_record_gap,
             misc.prob_gap_side, misc.prob_gap_comb,
         )
 
     # Load stats from gap_stats (fails if empty)
     try:
-        db_data = Stats()
-        db_misc = Misc()
-        (s_expected_prev_db, s_expected_next_db, s_expected_gap_db,
-         p_merit_gap_db, p_record_gap_db,
-         p_gap_comb_db, p_gap_side_db) = load_stats(conn, args, db_data, db_misc)
-        assert s_expected_prev_db and p_gap_comb_db
+        data_db, misc_db = load_stats(conn, args)
+        assert data_db.expected_prev
+        assert misc_db.prob_gap_comb, len(misc.prob_gap_comb)
     except:
         # Failed to load
         if not args.stats and args.num_plots:
+            # TODO: print execption
             print("Failed to load from DB so no plots.")
-            exit(1)
+            raise
+
+    # TODO: validate data_db.experimental_gap includes new records
 
     stats_plots(
         args,
@@ -494,11 +494,11 @@ def plot_stuff(
 
         data.valid_m,
         misc.test_unknowns, prob_nth,
-        s_expected_gap_db,
-        s_expected_prev_db, s_expected_next_db,
-        data.experimental_gap, data.experimental_side,
-        p_merit_gap_db, p_record_gap_db,
-        p_gap_side_db, p_gap_comb_db,
+        data_db.expected_gap,
+        data_db.expected_prev, data_db.expected_next,
+        data_db.experimental_gap, data_db.experimental_side,
+        data_db.prob_merit_gap, data_db.prob_record_gap,
+        misc_db.prob_gap_side, misc_db.prob_gap_comb,
     )
 
 
@@ -518,12 +518,16 @@ def config_hash(config):
 def load_records(conn, log_N):
     # Find records merit <= gap * log_N
     # Stop at merit = 35
+
+    # NOTE: to make sure 'count(records) still count after a gap
+    # record is submitted subtract a small amound from merit
     rv = conn.execute(
         "SELECT gapsize FROM gaps "
-        "WHERE gapsize > merit * ?"
+        "WHERE gapsize > merit * ? - 0.001"
         "  AND gapsize < 35 * ?",
         (log_N, log_N))
     return tuple(g[0] for g in sorted(rv))
+
 
 def load_existing(conn, args):
     rv = conn.execute(
@@ -532,47 +536,52 @@ def load_existing(conn, args):
         (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
     return {row['m']: [row['prev_p_i'], row['next_p_i']] for row in rv}
 
-    @dataclass
-    class Datas:
-        first_m = -1
-        last_m = -1
 
-        valid_m = []
+@dataclass
+class Datas:
+    first_m = -1
+    last_m = -1
 
-        # Values for each m in valid_m
-        expected_prev = []
-        expected_next = []
-        expected_gap  = []
-        experimental_side = []
-        experimental_gap = []
-        prob_merit_gap = []
+    valid_m = []
 
-    @dataclass
-    class Misc:
-        prob_gap_side  = defaultdict(float)
-        prob_gap_comb  = defaultdict(float)
+    # Values for each m in valid_m
+    expected_prev = []
+    expected_next = []
+    expected_gap  = []
+    experimental_side = []
+    experimental_gap = []
+    prob_merit_gap = []
+    prob_record_gap = []
 
-        test_unknowns = []
+@dataclass
+class Misc:
+    prob_gap_side  = defaultdict(float)
+    prob_gap_comb  = defaultdict(float)
 
-def load_stats(conn, args, data, misc):
+    test_unknowns = []
+
+
+def load_stats(conn, args):
+    data = Datas()
+    misc = Misc()
+
     rv = conn.execute(
         "SELECT e_gap_prev, e_gap_next, e_gap_prev + e_gap_next,"
+        "       prev_p, next_p,"
         "       prob_merit, prob_record"
         " FROM m_stats WHERE P = ? AND D = ? AND m BETWEEN ? AND ?",
         (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
 
     # Will fail if non-present
     (data.expected_prev, data.expected_next, data.expected_gap,
+     exp_prev, exp_next,
      data.prob_merit_gap, data.prob_record_gap)= zip(*[tuple(row) for row in rv])
 
-    data.expected_prev = s_expected_prev
-    data.expected_next = s_expected_next
-    expected_gap = s_expected_gap
+    # Interweave these
+    data.experimental_side = [s for s in exp_prev + exp_next if s > 0]
+    data.experimental_gap = [(p + n) for p, n in zip(exp_prev, exp_next) if p > 0 and n > 0]
 
     # Need dictionary
-    p_gap_comb  = defaultdict(float)
-    p_gap_side  = defaultdict(float)
-
     m_values = len(data.prob_merit_gap)
 
     rv = conn.execute(
@@ -583,15 +592,12 @@ def load_stats(conn, args, data, misc):
         gap = row['gap']
         # TODO: test if this works with out the normalization
         # Values were normalized by / m_values in gap_stats
-        p_gap_comb[gap] += row['prob_combined'] * m_values
-        p_gap_side[gap] += row['prob_low_side'] / 2 * m_values
-        p_gap_side[gap] += row['prob_high_side'] / 2 * m_values
+        misc.prob_gap_comb[gap] += row['prob_combined'] * m_values
+        misc.prob_gap_side[gap] += row['prob_low_side'] / 2 * m_values
+        misc.prob_gap_side[gap] += row['prob_high_side'] / 2 * m_values
 
-    return (
-        s_expected_prev, s_expected_next, s_expected_gap,
-        prob_merit_gap, prob_record_gap,
-        p_gap_comb, p_gap_side
-    )
+    return data, misc
+
 
 def save(conn, p, d, m, next_p_i, prev_p_i, merit,
          n_tests, p_tests, test_time):
@@ -1118,21 +1124,7 @@ def prime_gap_test(args):
 
         test_unknowns = []
 
-    # Load stats from gap_stats (fails if empty)
-    try:
-        db_data = Data()
-        db_misc = Misc()
-        (s_expected_prev_db, s_expected_next_db, s_expected_gap_db,
-         p_merit_gap_db, p_record_gap_db,
-         p_gap_comb_db, p_gap_side_db) = load_stats(conn, args, db_data, db_misc)
-        assert s_expected_prev_db and p_gap_comb_db
-    except:
-        # Failed to load
-        if not args.stats and args.num_plots:
-            print("Failed to load from DB so no plots.")
-            exit(1)
-
-
+    # TODO: consider moving DB load here for partially complete runs (so that Data, Misc can be 'reloaded')
 
     sc = StatCounters(time.time(), time.time())
     data = Data()
