@@ -96,8 +96,11 @@ def print_record_gaps(args, gaps):
                     ' gapsize=?', (size,)).fetchone()
                 if (not existing) or (new_merit > existing[0] - 1e-4):
                     record_lines.append(gap[2])
-                    print ("\tRecord {:2d} | {}\n\t\tGap={}, merit={} (old: {})".format(
-                        len(record_lines), gap[3], size, new_merit, existing))
+#                    print ("\tRecord {:2d} | {}\n\t\tGap={}, merit={} (old: {})".format(
+#                        len(record_lines), gap[3], size, new_merit, existing))
+                    print ("\tRecord {:2d} | {}\tGap={} (old: {})".format(
+                        len(record_lines), gap[3], size, None if not existing else existing[0]))
+
         if record_lines:
             print ()
             print (f"Records({len(record_lines)}):")
@@ -157,12 +160,14 @@ def search_db(args):
 
         num_gaps = conn.execute('SELECT COUNT(*) FROM result').fetchone()[0]
         assert num_gaps > 1000, num_gaps
-        print (f"Found {num_gaps} results in {args.search_db!r}")
+        print (f"{num_gaps} results in {args.search_db!r}")
 
         # Min gap for current record (filters 80% of results)
         existing = conn.execute(
-            'SELECT p, d, m, next_p_i, prev_p_i, merit FROM result WHERE '
-            '   merit > 18 or (next_p_i + prev_p_i) > 50000').fetchall()
+            'SELECT p, d, m, next_p_i, prev_p_i, merit FROM result '
+            'WHERE  merit > 18 or (next_p_i + prev_p_i) > 50000 '
+#            'ORDER BY p, d, m'
+        ).fetchall()
         for gap in existing:
             gapsize = gap['next_p_i'] + gap['prev_p_i']
             merit = gap['merit']

@@ -691,8 +691,9 @@ def should_print_stats(
     stop_t = time.time()
     print_secs = stop_t - sc.last_print_t
 
+    # Print a little bit if we resume but mostly as we test.
     N = len(data.valid_m)
-    if N in (1,10,30,100,300,1000) or N % 5000 == 0 \
+    if N in (1,10,30,100,300,1000) \
             or sc.tested in (1,10,30,100,300,1000) or (sc.tested and sc.tested % 5000 == 0) \
             or m == data.last_m or print_secs > 1200:
         secs = stop_t - sc.start_t
@@ -968,6 +969,7 @@ def run_in_parallel(
 
 
         if m in existing:
+            # XXX: missing_gap_test only sets one side.
             prev_p_i, next_p_i = existing[m]
             handle_result(
                 args, record_gaps, data, sc,

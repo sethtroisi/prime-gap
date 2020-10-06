@@ -192,9 +192,9 @@ def print_results(conn, ranges, names):
         status, count_m, finished = value
 
         assert (status in (40, 41)) == (count_m == finished)
-        print("P: {:5} D: {:7} M({:7}) {:7} to {:7} |".format(
+        print("P: {:5} D: {:7} M({:8}) {:9} to {:9} |".format(
             p, d, count_m, ms, ms + mi - 1), end=" ")
-        print("Finished: {:7} {:6.1%} (filename: {})".format(
+        print("Finished: {:8} {:6.1%} (filename: {})".format(
             finished, finished / count_m, names.get(key, "???")))
 
     print("\n", "-" * 80, "\n", sep="")
@@ -209,9 +209,9 @@ def print_results(conn, ranges, names):
         unk_fn_param = "--unknown-filename " + fn
 
         if status == 31:
-            print("P: {:5} D: {:7} M({:7}) {:7} to {:7} |".format(
+            print("P: {:5} D: {:7} M({:8}) {:9} to {:9} |".format(
                 p, d, count_m, ms, ms + mi - 1), end=" ")
-            print("Finished: {:7}/{:<7} {:6.1%}".format(
+            print("Finished: {:8}/{:<8} {:6.1%}".format(
                 finished, count_m, finished/count_m))
 
             print ("Partially finished resume:")
