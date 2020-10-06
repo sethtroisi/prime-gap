@@ -1043,7 +1043,8 @@ def prime_gap_test(args):
     unknown_file = open(args.unknown_filename, "r")
 
     # ----- Open Prime-Gap-Search DB
-    conn = sqlite3.connect(args.search_db)
+    # Longer timeout so that record_checking doesn't break saving
+    conn = sqlite3.connect(args.search_db, timeout=15)
     conn.row_factory = sqlite3.Row
     existing = load_existing(conn, args)
     print (f"Found {len(existing)} existing results")

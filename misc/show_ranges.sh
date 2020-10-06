@@ -16,16 +16,7 @@
 
 set -eux
 
-# sqlite3 prime-gap-search.db <<EOL
-# SELECT rid, r.p, r.d, num_m, num_processed, num_remaining, count(*)
-# FROM range r
-# INNER JOIN result ON
-#         r.p = result.p AND r.d = result.d AND
-#         result.m BETWEEN m_start AND m_start + m_inc
-# GROUP BY rid;
-# EOL
-
-sqlite3 prime-gap-search.db <<EOL
+sqlite3 "prime-gap-search.db" <<EOL
 UPDATE range AS ra SET
     num_processed =
         (SELECT count(*) FROM result r
@@ -55,7 +46,10 @@ SELECT "";
 #        AND (next_p != 0 OR prev_p != 0);
 #SELECT changes() || " m_stats results added to result";
 #SELECT "";
+EOL
 
+sqlite3 -readonly "prime-gap-search.db" <<EOL
+.timeout 20
 SELECT "Table 'range'";
 SELECT PRINTF("  P=%-5d D=%-7d M(%-6d) = %7d +[0,%7d) processed=%-7d ",
               p, d, num_m, m_start, m_inc, num_processed),
@@ -66,16 +60,17 @@ FROM range ORDER BY p, d, m_start, m_inc;
 SELECT "";
 
 SELECT "Table 'results'/'m_stats'";
-SELECT PRINTF("  P=%-5d D=%-7d M(%-7d) = %-8d to %-8d (last m: %8d, primes: %7d, PRPs: %9d, merit: %5.2f, time: %.0fs)",
+SELECT PRINTF("  P=%-5d D=%-7d M(%-7d) = %-8d to %-8d (last result: %8d, primes: %7d, PRPs: %9d, merit: %5.2f, time: %.0fs)",
               p, d, count(*), min(m), max(m), max(m * (primes != 0)),
               sum(primes), sum(prp_tests), max(merit), sum(test_time))
 FROM (
-  SELECT p,d,m, (next_p!=0)+(prev_p!=0) as primes, prp_prev+prp_next as prp_tests, merit, test_time FROM m_stats
-    UNION
-  SELECT p,d,m, 2 as primes, 2 as prp_tests, merit, 0 as test_time FROM result
+  SELECT p,d,m, (next_p!=0) + (prev_p!=0) as primes, prp_prev + prp_next as prp_tests, merit, test_time FROM m_stats
 )
 GROUP BY p, d ORDER BY p, d;
 SELECT"";
+# Everything in results SHOULD be in m_stats
+#    UNION
+#  SELECT p,d,m, 2 as primes, 2 as prp_tests, merit, 0 as test_time FROM result
 
 SELECT "Table 'result': " || COUNT(*) FROM result;
 SELECT "Table 'm_stats': " || COUNT(*) FROM m_stats;
