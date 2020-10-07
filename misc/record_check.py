@@ -44,6 +44,10 @@ def get_arg_parser():
         default="gaps.db",
         help="Prime gap database see github.com/primegap-list-project/prime-gap-list")
 
+    parser.add_argument('--whoami', type=str,
+        default="S.Troisi",
+        help="Name in gap database to ignore for already submitted records")
+
     return parser
 
 
@@ -78,6 +82,7 @@ def print_record_gaps(args, gaps):
             num_gaps, min_merit, max_merit))
 
         print ("Checking", len(gaps), "gaps against records")
+        own_records = []
         record_lines = []
         for gap in gaps:
                 size = gap[0]
@@ -92,18 +97,25 @@ def print_record_gaps(args, gaps):
                     continue
 
                 existing = conn.execute(
-                    'SELECT merit,primedigits,startprime FROM gaps WHERE'
+                    'SELECT merit,primedigits,startprime,discoverer FROM gaps WHERE'
                     ' gapsize=?', (size,)).fetchone()
                 if (not existing) or (new_merit > existing[0] - 1e-4):
-                    record_lines.append(gap[2])
-#                    print ("\tRecord {:2d} | {}\n\t\tGap={}, merit={} (old: {})".format(
-#                        len(record_lines), gap[3], size, new_merit, existing))
-                    print ("\tRecord {:2d} | {}\tGap={} (old: {})".format(
-                        len(record_lines), gap[3], size, None if not existing else existing[0]))
+                    own_record = existing is not None and existing[3] == args.whoami
+                    if own_record:
+                        own_records.append(gap[2])
+                    else:
+                        record_lines.append(gap[2])
+
+                    print ("\tRecord {:2d}{} | {}\tGap={} (old: {}{})".format(
+                        len(record_lines), "*" * own_record, gap[3], size,
+                        None if not existing else existing[0],
+                        " by you" * own_record))
 
         if record_lines:
             print ()
-            print (f"Records({len(record_lines)}):")
+            print ("Records({}) {}:".format(
+                len(record_lines),
+                f"({len(own_records)} already submitted)" if own_records else ""))
             for line in record_lines:
                 print (line)
             print ()
