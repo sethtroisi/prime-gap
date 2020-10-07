@@ -556,6 +556,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
 * combined\_sieve.cpp
+  * [ ] Test number to be marked combosite would have been marked by 2 / 3 and skip is true (e.g. try to avoid memory lookup)
 * gap\_stats.cpp
 * gap\_test.py
   * [ ] `--top-x-percent` (see THEORY.md)
@@ -586,7 +587,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * gap\_test.py
   * [ ] Plan for minimize memory when using large `--top-x-percent`
   * [ ] Plot average tests count
-* gap\_common.py
+* gap\_common
+  * [ ] Sieve Interval up to 100M instead of using next_prime
   * [ ] Compute smaller PRP and use that to computer larger (slower) PRP estimate
 * benchmarking
   * [ ] Validate `modulo\_search` is >80% execution time for `combined_sieve`.

@@ -63,6 +63,10 @@ uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t
     if (a > (p >> 1)) {
         std::swap(l, r);
         a = p - a; l = p - l; r = p - r;
+
+        // Seems like this should be 1 or 2 ops faster
+        // uint32_t t = p - l
+        // a = p - a; l = p - r; r = t;
     }
 
     if (a <= r) {
