@@ -864,6 +864,8 @@ void prime_gap_parallel(struct Config config) {
     long  s_prime_factors = 0;
     long  s_small_prime_factors_interval = 0;
     long  s_large_prime_factors_interval = 0;
+    long  m_stops_interval = 0;
+
     uint64_t  s_next_print = 0;
     uint64_t  next_mult = SMALL_THRESHOLD <= 10000 ? 10000 : 100000;
     double s_prp_needed = 1 / prob_prime;
@@ -873,6 +875,14 @@ void prime_gap_parallel(struct Config config) {
 
     // Note: Handling small primes here had better localized memory access
     // But wasn't worth the extra code IMHO.
+
+    const int K_mod3 = mpz_fdiv_ui(K, 3); // K % 3
+    const int K_mod5 = mpz_fdiv_ui(K, 5); // K % 5
+    const int K_mod7 = mpz_fdiv_ui(K, 7); // K % 7
+    const int D_mod2 = D % 2 == 0;
+    const int D_mod3 = D % 3 == 0;
+    const int D_mod5 = D % 5 == 0;
+    const int D_mod7 = D % 7 == 0;
 
     size_t pi = 0;
     size_t pi_interval = 0;
@@ -939,6 +949,13 @@ void prime_gap_parallel(struct Config config) {
             modulo_search_euclid_all_small(M_start, M_inc, SL, prime, base_r, [&](const uint32_t mi) {
                 assert (mi < M_inc);
 
+                m_stops_interval += 1;
+
+                // With D even, (ms + mi) must be odd (or share a factor of 2)
+                // Helps avoid wide memory read
+                if (((D & 1) == 0) && ((M_start & 1) == (mi & 1)))
+                    return;
+
                 int32_t mii = m_reindex[mi];
                 if (mii < 0)
                     return;
@@ -962,6 +979,17 @@ void prime_gap_parallel(struct Config config) {
                     uint64_t mod = mpz_fdiv_ui(test, prime);
                     assert( mod == 0 );
                 }
+
+                int64_t dist = first - SIEVE_LENGTH;
+                uint32_t m = M_start + mi;
+                if (D_mod2 && (dist & 1))
+                    return;
+                if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
+                    return;
+                if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
+                    return;
+                if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
+                    return;
 
                 if (!coprime_composite[first]) {
                     return;
@@ -1017,7 +1045,7 @@ void prime_gap_parallel(struct Config config) {
                        "(interval: %'ld avg m/large_prime interval: %.1f)\n",
                     s_prime_factors,
                     s_small_prime_factors_interval + s_large_prime_factors_interval,
-                    1.0 * s_large_prime_factors_interval / pi_interval);
+                    1.0 * m_stops_interval / pi_interval);
                 // count_coprime_sieve * valid_ms also makes sense but leads to smaller numbers
                 printf("\tunknowns %'9ld/%-5ld\t"
                        "(avg/m: %.2f) (composite: %.2f%% +%.3f%% +%'ld)\n",
@@ -1047,6 +1075,7 @@ void prime_gap_parallel(struct Config config) {
 
                 s_small_prime_factors_interval = 0;
                 s_large_prime_factors_interval = 0;
+                m_stops_interval = 0;
                 pi_interval = 0;
             }
             setlocale(LC_NUMERIC, "C");

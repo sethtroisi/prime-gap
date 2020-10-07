@@ -556,7 +556,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
 * combined\_sieve.cpp
-  * [ ] Test number to be marked combosite would have been marked by 2 / 3 and skip is true (e.g. try to avoid memory lookup)
 * gap\_stats.cpp
 * gap\_test.py
   * [ ] `--top-x-percent` (see THEORY.md)
@@ -613,6 +612,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Make method2 the default
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
 * combined\_sieve.cpp
+  * [x] Test number to be marked combosite see if already marked by 2 / 3 and skip (e.g. try to avoid memory lookup)
   * [x] "expect %ld left" doesn't match
   * [x] Write time_sieve into DB
   * Method2 (all composites in memory)
