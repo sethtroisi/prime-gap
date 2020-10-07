@@ -33,7 +33,7 @@ uint64_t modulo_search_euclid_gcd2(
 void modulo_search_euclid_all_small(
         uint32_t M, uint32_t max_m, uint32_t SL,
         uint64_t prime, uint64_t base_r,
-        std::function<void (uint32_t)> lambda);
+        std::function<void (uint32_t, uint64_t)> lambda);
 
 void modulo_search_euclid_all_large(
         uint32_t M, uint32_t max_m, uint64_t SL,

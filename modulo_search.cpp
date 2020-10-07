@@ -255,20 +255,22 @@ uint64_t modulo_search_euclid_gcd(
 void modulo_search_euclid_all_small(
         uint32_t M, uint32_t max_m, uint32_t SL,
         uint64_t prime, uint64_t base_r,
-        std::function<void (uint32_t)> lambda) {
+        std::function<void (uint32_t, uint64_t)> lambda) {
 
     // (M + max_m) * p fits in uint64 (see gap_common.cpp)
 
     uint64_t mi = 0; // mi can be incremented by value up to prime.
     uint64_t modulo = (base_r * M + SL) % prime;
-    uint64_t init = modulo;
+    uint64_t initial_modulo = modulo;
     uint32_t two_SL = SL << 1;
 
     while (true) {
         if ( modulo <= two_SL ) {
             if (mi >= max_m) return;
 
-            lambda(mi);
+            // Note: combined sieve computes first = (base_r * (M_start + mi) + SL) % prime;
+            // this is modulo.
+            lambda(mi, modulo);
             mi += 1;
 
             if (mi >= max_m) return;
@@ -285,8 +287,8 @@ void modulo_search_euclid_all_small(
         mi += modulo_search_euclid(prime, base_r, low, high);
         if (mi >= max_m) return;
 
-        uint64_t mult = base_r * mi + init;
-        modulo = mult % prime;
+        modulo = base_r * mi + initial_modulo;
+        modulo %= prime;
 
         assert( modulo <= two_SL );
     }

@@ -946,7 +946,8 @@ void prime_gap_parallel(struct Config config) {
                 }
             }
         } else {
-            modulo_search_euclid_all_small(M_start, M_inc, SL, prime, base_r, [&](const uint32_t mi) {
+            modulo_search_euclid_all_small(M_start, M_inc, SL, prime, base_r, [&](
+                        const uint32_t mi, uint64_t first) {
                 assert (mi < M_inc);
 
                 m_stops_interval += 1;
@@ -960,15 +961,15 @@ void prime_gap_parallel(struct Config config) {
                 if (mii < 0)
                     return;
 
-                // XXX: first (modulo) can be returned from modulo_search_euclid_all_small
-                // this was a +5% speedup in benchmark but didn't translate to a real speedup.
+                // Returning first from modulo_search_euclid_all_small is
+                // slightly faster on benchmarks, and slightly faster here
 
                 // first = (SL - m * K) % prime
                 //     Computed as
                 // first =  2*SL - ((SL + m*K) % prime)
                 //       =  SL - m * K
                 //     Requires prime > 2*SL
-                uint64_t first = (base_r * (M_start + mi) + SL) % prime;
+                //uint64_t first = (base_r * (M_start + mi) + SL) % prime;
                 assert( first <= 2*SL );
                 first = 2*SL - first;
 

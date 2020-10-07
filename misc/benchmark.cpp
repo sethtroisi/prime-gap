@@ -267,10 +267,11 @@ void benchmark_method_large(
 
             modulo_search_euclid_all_small(
                 M, max_m, SL, p, base_r,
-                [&](const uint32_t mi) {
+                [&](const uint32_t mi, const uint64_t first) {
                     found2++;
-                    uint64_t t = (base_r * (M + mi)) % p;
-                    assert( (t <= SL) || (t + SL) >= p );
+                    uint64_t t = (base_r * (M + mi) + SL) % p;
+                    assert( first == t );
+                    assert( (t <= 2 * SL) );
                 }
             );
             // Did we find any m for this prime?
