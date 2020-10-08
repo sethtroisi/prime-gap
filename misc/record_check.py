@@ -106,7 +106,7 @@ def print_record_gaps(args, gaps):
                     else:
                         record_lines.append(gap[2])
 
-                    print ("\tRecord {:2d}{} | {}\tGap={} (old: {}{})".format(
+                    print ("\tRecord {:3d}{:1} | {}\tGap={} (old: {}{})".format(
                         len(record_lines), "*" * own_record, gap[3], size,
                         None if not existing else existing[0],
                         " by you" * own_record))
@@ -183,7 +183,7 @@ def search_db(args):
         for gap in existing:
             gapsize = gap['next_p_i'] + gap['prev_p_i']
             merit = gap['merit']
-            line = "{}  {:.3f}  {} * {}#/{} -{} to +{}".format(
+            line = "{:6d}  {:.3f}  {} * {}#/{} -{} to +{}".format(
                 gapsize, merit,
                 gap["m"], gap["P"], gap["D"],
                 gap["prev_p_i"], gap["next_p_i"])

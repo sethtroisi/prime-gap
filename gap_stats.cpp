@@ -939,6 +939,13 @@ void prime_gap_stats(const struct Config config) {
 
     // Compute sum_missing_prob, sum_record_prob @1,5,10,20,50,100%
     if (config.verbose >= 1) {
+        vector<float> expected_gap;
+        for (size_t i = 0; i < expected_prev.size(); i++) {
+            expected_gap.push_back(expected_prev[i] + expected_next[i]);
+        }
+
+        prob_stats("EXPECTED GAP", expected_gap);
+        printf("\n");
         prob_stats("RECORD", probs_record);
     }
     if (config.verbose >= 2) {

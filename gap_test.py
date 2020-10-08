@@ -219,7 +219,7 @@ def stats_plots(
                 axis_prob_gap, misc.prob_gap_side, data.experimental_side, 'next')
         axis_prob_gap.set_xlim(0, args.sieve_length)
         axis_prob_gap.set_ylim(bottom=min_y / 10)
-        print(f"Min Prob(gap side): {min_y:.2e}")
+        #print(f"Min Prob(gap side): {min_y:.2e}")
 
         for e_data, color, label in (
                 (data.expected_prev, 'lightskyblue', 'prev'),
@@ -253,7 +253,7 @@ def stats_plots(
         # Combining all probs for a pseudo distribution of P(gap combined)
         min_y, max_y = prob_histogram_all(
                 axis_prob_comb, misc.prob_gap_comb, data.experimental_gap, 'gap')
-        print(f"Min Prob(gap comb): {min_y:.2e}")
+        #print(f"Min Prob(gap comb): {min_y:.2e}")
         min_y = max(1e-7, min_y)
         axis_prob_comb.set_ylim(bottom=min_y, top=max_y)
 
@@ -288,7 +288,7 @@ def stats_plots(
             p_gap_merit_sorted, _ = zip(*sorted(zipped, reverse=True))
             p_gap_merit_ord, gap_real_ord = zip(*zipped)
 
-            print(f"{label:20} | sum(P) = {sum(prob_data):.3f}")
+            print(f"{label:20} | sum(P) = {sum(prob_data):.4f}")
 
             #Experimental
             if row == 1:
@@ -453,6 +453,7 @@ def stats_plots(
 def plot_stuff(
         args, conn, data, sc, misc,
         min_merit_gap, record_gaps, prob_nth):
+
     if args.stats:
         # Not calculated
         data.prob_record_gap = data.prob_merit_gap
@@ -1112,28 +1113,25 @@ def prime_gap_test(args):
 
     if len(existing) == len(valid_mi):
         print(f"All processed!")
-        return
+    else:
+        print(f"\nStarting m({len(valid_mi)}) {data.first_m} to {data.last_m}")
+        print()
 
-    print(f"\nStarting m({len(valid_mi)}) {data.first_m} to {data.last_m}")
-    print()
+        # Load stats for prob_record
+        if not args.stats:
+            data_db, misc_db = load_stats(conn, args)
+            assert len(data_db.prob_merit_gap)  == len(valid_mi), "run ./gap_stats first"
+            assert len(data_db.prob_record_gap) == len(valid_mi), "run ./gap_stats first"
+            data.prob_merit_gap = data_db.prob_merit_gap
+            data.prob_record_gap = data_db.prob_record_gap
 
-    # XXX: consider using all of data_db for resuming partially complete runs
-
-    # Load stats for prob_record
-    if not args.stats:
-        data_db, misc_db = load_stats(conn, args)
-        assert len(data_db.prob_merit_gap)  == len(valid_mi), "run ./gap_stats first"
-        assert len(data_db.prob_record_gap) == len(valid_mi), "run ./gap_stats first"
-        data.prob_merit_gap = data_db.prob_merit_gap
-        data.prob_record_gap = data_db.prob_record_gap
-
-    run_in_parallel(
-        args, conn, unknown_file, record_gaps,
-        prob_nth,
-        existing, valid_mi,
-        K, K_log,
-        data, sc, misc
-    )
+        run_in_parallel(
+            args, conn, unknown_file, record_gaps,
+            prob_nth,
+            existing, valid_mi,
+            K, K_log,
+            data, sc, misc
+        )
 
     # ----- Stats and Plots
     if args.num_plots or args.save_logs:
