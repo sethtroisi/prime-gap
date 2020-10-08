@@ -162,9 +162,10 @@ def stats_plots(
     egap_n = len(data.experimental_gap)
     if len(data.expected_gap) != egap_n:
         print("experimental_gap size mismatch", len(data.expected_gap), egap_n)
-    slope, _, R, _, _ = stats.linregress(data.expected_gap[:egap_n], data.experimental_gap)
+    slope, intercept, R, _, _ = stats.linregress(data.expected_gap[:egap_n], data.experimental_gap)
     print ()
-    print ("R^2 for expected gap: {:.3f}, corr: {:.3f}".format(R**2, slope))
+    print ("R^2 for expected gap: {:.3f}, gap = {:.1f} + {:.3f} * expected".format(
+        R**2, intercept, slope))
     print ()
 
     if args.num_plots > 0:
@@ -1108,6 +1109,11 @@ def prime_gap_test(args):
     valid_mi = [mi for mi in range(M_inc) if math.gcd(M + mi, D) == 1]
     data.first_m = M + valid_mi[0]
     data.last_m = M + valid_mi[-1]
+
+    if len(existing) == len(valid_mi):
+        print(f"All processed!")
+        return
+
     print(f"\nStarting m({len(valid_mi)}) {data.first_m} to {data.last_m}")
     print()
 

@@ -43,7 +43,7 @@ def expected_PRP_gap(max_prime, gap):
 
 def Appendix1():
     for P, mp in [
-            (503, 10e9), (1009, 20e9), (1511, 80e9), (1999, 100e9),
+            (503, 100e6), (1009, 2e9), (1511, 80e9), (1999, 100e9),
             (5003, 200e9), (10007, 400e9), (20011, 500e9), (20011, 4e9)
     ]:
         print (f"{P:5} {mp:.1e}\t", expected_PRP(mp, P))

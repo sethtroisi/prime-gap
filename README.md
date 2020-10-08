@@ -550,8 +550,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 
 ### TODO
 
-* [ ] avg record prob (quick test): changed by two orders of magnitude, why!
 * Flow
+  * [ ] Finalize script (drops all but high merit records, maybe saves to txt?, writes more data to range? or finalized range?)
 * README.md
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
@@ -562,7 +562,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Read `time_sieve` and `time_stats` print optimal to restart search point
     * [ ] Leave XXX note for restart
   * [ ] Sort by expected gap and PRP only top X%
-  * [ ] Correlation between Expected Gap & Gap
 * gap\_test.cpp
   * [ ] remove `--run-prp`
 * missing\_gap\_test.py && missing\_gap\_verify.py
@@ -648,6 +647,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_test.py
+  * [x] Correlation between Expected Gap & Gap
   * [x] Show P(record) / day
   * [x] Multithreaded
   * [x] Update `m_stats` (with `test_time`),
