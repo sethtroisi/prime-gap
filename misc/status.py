@@ -38,21 +38,13 @@ def get_arg_parser():
     return parser
 
 
-def count_num_m(ms, mi, d):
-    # XXX: use inclusion exclusion (probably faster on large ranges?)
-    if d == 1:
-        return mi
-
-    return sum(1 for m in range(ms, ms+mi) if math.gcd(m, d) == 1)
-
-
 def sql_and_file_ranges(sql_ranges, unknown_fns):
     ranges = {}
     # ---- Add sql ranges
     for r in sql_ranges:
         key = tuple(r[key] for key in ('P', 'D', 'm_start', 'm_inc'))
         ranges[key] = [20, r['num_m'], 0]
-        assert r['num_m'] == count_num_m(r['m_start'], r['m_inc'], r['D'])
+        assert r['num_m'] == gap_utils.count_num_m(r['m_start'], r['m_inc'], r['D'])
 
     # ---- Add file only ranges
     names = {}
@@ -66,14 +58,14 @@ def sql_and_file_ranges(sql_ranges, unknown_fns):
         if key in ranges:
             ranges[key][0] = 21
         else:
-            ranges[key] = [10, count_num_m(ms, mi, d), 0]
+            ranges[key] = [10, gap_utils.count_num_m(ms, mi, d), 0]
 
     return ranges, names
 
 
 def build_and_count_pd_results(results, ranges):
     def add_new_range(p, d, start, end, count):
-        count_m = count_num_m(start, end - start - 1, d)
+        count_m = gap_utils.count_num_m(start, end - start - 1, d)
         status = [41 if count_m == count else 30, count_m, count]
         ranges[(p, d, start, end)] = status
 #        print(f"\t\tAdded range ({start}, {end}): {status}")

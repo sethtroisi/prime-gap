@@ -58,15 +58,6 @@ def get_arg_parser():
     return parser
 
 
-def count_num_m(ms, mi, d):
-    # XXX: moved to gap_utils.py (here and status.py)
-    # XXX: use inclusion exclusion (probably faster on large ranges?)
-    if d == 1:
-        return mi
-
-    return sum(1 for m in range(ms, ms+mi) if math.gcd(m, d) == 1)
-
-
 def count_results(conn, p, d, ms, me):
     count_r = conn.execute(
         'SELECT COUNT(*) FROM result WHERE p=? AND d=? AND m BETWEEN ? AND ?',
@@ -122,7 +113,7 @@ def verify_all_results(conn, ranges):
     for r in ranges:
         ms = r['m_start']
         mi = r['m_inc']
-        num_m = count_num_m(ms, mi, args.d)
+        num_m = gap_utils.count_num_m(ms, mi, args.d)
 
         me = ms + mi - 1
         count_r, count_m = count_results(conn, args.p, args.d, ms, me)
