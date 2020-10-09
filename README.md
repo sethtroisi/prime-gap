@@ -551,7 +551,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 ### TODO
 
 * Flow
-  * [ ] Finalize script (drops all but high merit records, maybe saves to txt?, writes more data to range? or finalized range?)
 * README.md
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
@@ -567,12 +566,14 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * missing\_gap\_test.py && missing\_gap\_verify.py
   * [ ] Save to result | figure out plan for gap_test.py to reuse
 * schema.sql
+  * [ ] next_p_i => next_p (fix in finalize and other places)
 * benchmarking
   * [ ] Add instructions to verify `modulo\_search` is >80% of the time.
 
 ### Low Priority TODOs
 
 * New script to update DB (and maybe delete uninteresting results
+  * [ ] Finalize script
   * [ ] Set rid if null (but reasonable range exists)
 * combined\_sieve.cpp
   * [ ] ETA for `combined_sieve` timing.
@@ -680,6 +681,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * prime-gap-search.db
   * [x] A plan for how to clean up [partially] finished ranges
 * misc/
+  * Finalize script
+    * [x] dump to csv, dump stats
   * show\_ranges.sh
     * [x] Update range.`num_processed / num_to_process`
     * [x] Verify every table.`m_stat` result in table.`result`

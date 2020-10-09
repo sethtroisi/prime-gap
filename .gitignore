@@ -9,6 +9,7 @@ benchmark
 
 # data
 *.db
+logs/
 data/
 backup/
 *M.txt
