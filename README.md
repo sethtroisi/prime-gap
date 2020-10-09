@@ -386,6 +386,9 @@ Often I run `combined_sieve` and `gap_stats` for a BUNCH of ranges not I never e
 
 `misc/record_check.py` searches through `prime-gap-search.db` for records (over `gaps.db`)
 
+`misc/finaliz.py -p <P> -d <D>` dumps `m_stats` to `<UNKNOWN>.csv` and `<UNKNOWN>.stats.txt` files.
+It also DELETES DATA from `prime-gap-search.db` use it when you are done searching that `P#/d`
+
 ---
 
 `misc/run.sh <UNKNOWN_FILENAME>` runs `combined_sieve`, `gap_stats`, and prints the `gap_test.py` command
@@ -554,17 +557,18 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * README.md
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
+* Project
+  * [ ] Support --search-db everywhere
+  * [ ] Move UNKNOWN.txt to unknowns/
 * combined\_sieve.cpp
 * gap\_stats.cpp
 * gap\_test.py
+  * [ ] Sort by expected gap and PRP only top X%
   * [ ] `--top-x-percent` (see THEORY.md)
   * [ ] Read `time_sieve` and `time_stats` print optimal to restart search point
     * [ ] Leave XXX note for restart
-  * [ ] Sort by expected gap and PRP only top X%
 * gap\_test.cpp
   * [ ] remove `--run-prp`
-* missing\_gap\_test.py && missing\_gap\_verify.py
-  * [ ] Save to result | figure out plan for gap_test.py to reuse
 * schema.sql
   * [ ] next_p_i => next_p (fix in finalize and other places)
 * benchmarking
@@ -586,6 +590,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * gap\_test.py
   * [ ] Plan for minimize memory when using large `--top-x-percent`
   * [ ] Plot average tests count
+* missing\_gap\_test.py && missing\_gap\_verify.py
+  * [ ] Save to result | figure out plan for gap_test.py to reuse
 * gap\_common
   * [ ] Sieve Interval up to 100M instead of using next_prime
   * [ ] Compute smaller PRP and use that to computer larger (slower) PRP estimate
