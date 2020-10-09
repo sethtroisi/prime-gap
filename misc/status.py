@@ -39,35 +39,45 @@ def get_arg_parser():
 
 
 def sql_and_file_ranges(sql_ranges, unknown_fns):
+    # (P, D, ms, mi): {status, num_m, done}
     ranges = {}
+    # key: [unknown_fn, sql_range]
+    lookup = {}
+
     # ---- Add sql ranges
     for r in sql_ranges:
         key = tuple(r[key] for key in ('P', 'D', 'm_start', 'm_inc'))
         ranges[key] = [20, r['num_m'], 0]
+        fn_fake = gap_utils.generate_unknown_filename(*key, "???", "???")
+        lookup[key] = (fn_fake, r)
         assert r['num_m'] == gap_utils.count_num_m(r['m_start'], r['m_inc'], r['D'])
 
     # ---- Add file only ranges
-    names = {}
     for unknown_fn in unknown_fns:
         parsed = gap_utils.parse_unknown_filename(unknown_fn)
         assert parsed, parsed
 
         p, d, ms, mi, sl, mp, m1 = parsed
         key = (p, d, ms, mi)
-        names[key] = unknown_fn
         if key in ranges:
             ranges[key][0] = 21
+            lookup[key] = (unknown_fn, lookup[key][1])
         else:
             ranges[key] = [10, gap_utils.count_num_m(ms, mi, d), 0]
+            lookup[key] = (unknown_fn, None)
 
-    return ranges, names
+    assert ranges.keys() == lookup.keys()
+    return ranges, lookup
 
 
-def build_and_count_pd_results(results, ranges):
+def build_and_count_pd_results(results, ranges, lookup):
     def add_new_range(p, d, start, end, count):
         count_m = gap_utils.count_num_m(start, end - start - 1, d)
         status = [41 if count_m == count else 30, count_m, count]
-        ranges[(p, d, start, end)] = status
+        k = (p, d, start, end)
+        ranges[key] = status
+        fn_fake = gap_utils.generate_unknown_filename(*key, "???", "???")
+        lookup[key] = (fn_fake, None)
 #        print(f"\t\tAdded range ({start}, {end}): {status}")
 
     pd_m = defaultdict(list)
@@ -156,12 +166,12 @@ def check_processed(args):
         print (f"\tLoaded {len(results):,} results")
 
         # ---- Add file only ranges
-        ranges, names = sql_and_file_ranges(sql_ranges, unknown_fns)
+        ranges, lookup = sql_and_file_ranges(sql_ranges, unknown_fns)
 
         # ---- Find results not belonging to any range
-        build_and_count_pd_results(results, ranges)
+        build_and_count_pd_results(results, ranges, lookup)
 
-        print_results(conn, ranges, names)
+        print_results(conn, ranges, lookup)
 
 def check_mstatus(conn, p, d, ms, me):
     count = conn.execute(
@@ -170,24 +180,26 @@ def check_mstatus(conn, p, d, ms, me):
     return count[0]
 
 
-def print_results(conn, ranges, names):
+def print_results(conn, ranges, lookup):
     # ---- Show Results
     def sort_by_status(range_kv):
         # Sort by status high to low
         # P, D, ms, mi
         return (-range_kv[1][0], range_kv[0])
 
+    print (lookup)
     print()
     display_order = sorted(ranges.items(), key=sort_by_status)
     for key, value in display_order:
         p, d, ms, mi = key
         status, count_m, finished = value
 
+
         assert (status in (40, 41)) == (count_m == finished)
         print("P: {:5} D: {:7} M({:8}) {:9} to {:9} |".format(
             p, d, count_m, ms, ms + mi - 1), end=" ")
         print("Finished: {:8} {:6.1%} (filename: {})".format(
-            finished, finished / count_m, names.get(key, "???")))
+            finished, finished / count_m, lookup[key][0]))
 
     print("\n", "-" * 80, "\n", sep="")
 
@@ -196,8 +208,7 @@ def print_results(conn, ranges, names):
         status, count_m, finished = value
         if status in (40, 41): continue
 
-        fn_fake = gap_utils.generate_unknown_filename(p, d, ms, mi, "???", "???")
-        fn = names.get(key, fn_fake)
+        fn = lookup[key][0]
         unk_fn_param = "--unknown-filename " + fn
 
         if status == 31:
@@ -211,6 +222,11 @@ def print_results(conn, ranges, names):
         elif status in (20, 30):
             print ("File missing (could be recreated with):")
             print (f"\t./combined_sieve --save-unknowns {unk_fn_param}\n")
+            r = lookup[key][1]
+            if r:
+                print ("\tor deleted with")
+                print (f"\tsqlite3 {args.search_db} 'PRAGMA foreign_keys=1; "\
+                       f"DELETE FROM range WHERE rid={r['rid']}; SELECT TOTAL_CHANGES()'\n")
         elif status == 21:
             mstatus = check_mstatus(conn, p, d, ms, ms + mi - 1)
             if mstatus:
