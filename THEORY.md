@@ -167,7 +167,7 @@ Then testing each interval seperatly
 ```bash
 for fn in `ls -tr 1_1009*`; do
   echo -e "\n\nProcessing $fn";
-  /usr/bin/time -f "\nReal\t%E" ./gap_test --run-prp --unknown-filename "$fn" -qq;
+  /usr/bin/time -f "\nReal\t%E" ./gap_test_simple --unknown-filename "$fn" -qq;
 done
 ```
 

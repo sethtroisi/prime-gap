@@ -76,9 +76,6 @@ int main(int argc, char* argv[]) {
         printf("sieve_length: 2x %'d\n", config.sieve_length);
         printf("max_prime:       %'ld\n", config.max_prime);
         printf("\n");
-
-        printf("run_prp:  %d\n", config.run_prp);
-        printf("\n");
     }
     setlocale(LC_NUMERIC, "C");
 
@@ -276,28 +273,25 @@ void prime_gap_test(const struct Config config) {
         // TODO break out to function, also count tests.
         int prev_p = 0;
         int next_p = 0;
-        if (config.run_prp) {
-            test_interval(
-                m, K, SIEVE_LENGTH,
-                s_total_prp_tests,
-                s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next,
-                unknowns, prev_p, next_p);
+        test_interval(
+            m, K, SIEVE_LENGTH,
+            s_total_prp_tests,
+            s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next,
+            unknowns, prev_p, next_p);
 
-            assert( prev_p > 0 && next_p > 0 );
+        assert( prev_p > 0 && next_p > 0 );
 
-            int gap = next_p + prev_p;
-            float merit = gap / (K_log + log(m));
+        int gap = next_p + prev_p;
+        float merit = gap / (K_log + log(m));
 
-            if (merit > min_merit)  {
-                // TODO write to file.
-                printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
-                    gap, merit, m, P, D, prev_p, next_p);
-            }
-            if (merit > s_best_merit_interval) {
-                s_best_merit_interval = merit;
-                s_best_merit_interval_m = m;
-            }
-
+        if (merit > min_merit)  {
+            // TODO write to file.
+            printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
+                gap, merit, m, P, D, prev_p, next_p);
+        }
+        if (merit > s_best_merit_interval) {
+            s_best_merit_interval = merit;
+            s_best_merit_interval_m = m;
         }
 
         s_tests += 1;
@@ -328,21 +322,19 @@ void prime_gap_test(const struct Config config) {
                     100.0 * (1 - s_total_unknown / ((2.0 * SIEVE_LENGTH + 1) * s_tests)),
                     100.0 * s_t_unk_low / s_total_unknown,
                     100.0 * s_t_unk_hgh / s_total_unknown);
-                if (config.run_prp) {
-                    printf("\t    prp tests %-10ld (avg: %.2f) (%.1f tests/sec)\n",
-                        s_total_prp_tests,
-                        s_total_prp_tests / (float) s_tests,
-                        s_total_prp_tests / secs);
+                printf("\t    prp tests %-10ld (avg: %.2f) (%.1f tests/sec)\n",
+                    s_total_prp_tests,
+                    s_total_prp_tests / (float) s_tests,
+                    s_total_prp_tests / secs);
 
-                    if (config.verbose >= 2) {
-                        if (s_gap_out_of_sieve_prev + s_gap_out_of_sieve_next > 0) {
-                            printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
-                                s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / s_tests,
-                                s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / s_tests);
-                        }
-                        printf("\t    best merit this interval: %.3f (at m=%ld)\n",
-                            s_best_merit_interval, s_best_merit_interval_m);
+                if (config.verbose >= 2) {
+                    if (s_gap_out_of_sieve_prev + s_gap_out_of_sieve_next > 0) {
+                        printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
+                            s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / s_tests,
+                            s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / s_tests);
                     }
+                    printf("\t    best merit this interval: %.3f (at m=%ld)\n",
+                        s_best_merit_interval, s_best_merit_interval_m);
                 }
 
                 s_best_merit_interval = 0;

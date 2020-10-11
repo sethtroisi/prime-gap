@@ -35,4 +35,4 @@ for fn in `ls -rt "${fn_base}"*`; do
     ./gap_stats --save-unknowns --unknown-filename $fn || true;
 done
 
-python gap_test.py --run-prp --unknown-filename ${fn_base}10000M.txt --plots
+python gap_test.py --unknown-filename ${fn_base}10000M.txt --plots

@@ -142,7 +142,7 @@ $ ls -sh1tr
 # gap_test (takes ~30m)
 $ time for fn in `ls -tr`; do
 echo -e "\n\nProcessing $fn";
-../gap_test --run-prp --min-merit 12 --unknown-filename "$fn" -qq;
+../gap_test_simple --min-merit 12 --unknown-filename "$fn" -qq;
 done
 
 Processing 1_503_3090_400_s3958_l1000M.txt

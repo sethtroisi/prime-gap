@@ -227,7 +227,7 @@ Quick note, `python gap_test.py ...` and `./gap_test_simple` should be roughly e
 
 ```bash
 $ make gap_test_simple
-$ time ./gap_test_simple --unknown-filename 907_210_1_1000_s15000_l1000M.txt --run-prp -q
+$ time ./gap_test_simple --unknown-filename 907_210_1_1000_s15000_l1000M.txt -q
 ```
 
 <details>
@@ -274,7 +274,7 @@ real	0m5.275s
 or slightly more quiet
 
 ```bash
-$ time ./gap_test_simple --unknown-filename 907_210_1_1000_s15000_l1000M.txt --run-prp -qq
+$ time ./gap_test_simple --unknown-filename 907_210_1_1000_s15000_l1000M.txt -qq
 Testing m * 907#/210, m = 1 + [0, 1,000)
 10920 12.6002  143 * 907#/210 -6796 to +4124
 12164 14.0190  397 * 907#/210 -9644 to +2520
@@ -492,7 +492,7 @@ $ python misc/double_check.py --seed=123 --unknown-filename 907_2190_1_200_s1100
 ecm found 172 composites: known 168 composite, 4 were unknown
 
 
-$ ./gap_test_simple --unknown-filename 907_2190_1_200_s11000_l100M.txt -q --min-merit 8 --run-prp
+$ ./gap_test_simple --unknown-filename 907_2190_1_200_s11000_l100M.txt -q --min-merit 8
 Testing m * 907#/2190, m = 1 + [0, 200)
 Min Gap ~= 7734 (for merit > 9.0)
 
@@ -570,7 +570,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Read `time_sieve` and `time_stats` print optimal to restart search point
     * [ ] Leave XXX note for restart
 * gap\_test.cpp
-  * [ ] remove `--run-prp`
 * schema.sql
   * [ ] next_p_i => next_p (fix in finalize and other places)
 * benchmarking
