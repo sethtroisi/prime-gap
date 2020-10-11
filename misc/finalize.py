@@ -257,13 +257,12 @@ def delete_range_and_low_merit(conn, args, ranges, unknown_files):
 
         condition = """WHERE P=? AND D=? AND m BETWEEN ? AND ? AND """
         condition_m_stats = """
-            ((next_p + prev_p < 50000 AND MERIT < 15) OR
+            ((next_p + prev_p < 30000 AND MERIT < 20) OR
+             (next_p + prev_p < 50000 AND MERIT < 15) OR
              (next_p + prev_p < 100000 AND MERIT < 8))
             """
-        condition_result = """
-            ((next_p_i + prev_p_i < 50000 AND MERIT < 15) OR
-             (next_p_i + prev_p_i < 100000 AND MERIT < 8))
-            """
+        # TODO fix names in schema.sql.
+        condition_result = condition_m_stats.relpace("_p", "_p_i")
 
         cursor.execute(
             "DELETE FROM m_stats " + condition + condition_m_stats,

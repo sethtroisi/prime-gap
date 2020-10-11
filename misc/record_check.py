@@ -93,24 +93,36 @@ def print_record_gaps(args, gaps):
                     continue
                 if size <= 50000 and new_merit < 18:
                     continue
-                if size <= 10000 and new_merit < 10.4:
+                if size <= 100000 and new_merit < 10.4:
                     continue
 
                 existing = conn.execute(
                     'SELECT merit,primedigits,startprime,discoverer FROM gaps WHERE'
                     ' gapsize=?', (size,)).fetchone()
-                if (not existing) or (new_merit - existing[0] > 6e-3):
-                    own_record = existing is not None and existing[3] == args.whoami
-                    if own_record:
+
+                if not existing:
+                    record_lines.append(gap[2])
+                    print ("\tRecord {:3d}  | {}\tGap={} (New!)".format(
+                        len(record_lines), gap[3], size))
+                    continue
+
+                # Works most of the time, could have false positives
+                is_same = existing[2].replace(" ","") in gap[2].replace(" ", "")
+                is_own_record = existing[3] == args.whoami
+
+                if is_same and not is_own_record:
+                    print("\tREDISCOVERD | {} (old: {})".format(gap[3], existing))
+                    continue
+
+                improvement = new_merit - existing[0]
+                if improvement > -6e-3:
+                    if is_own_record:
                         own_records.append(gap[2])
                     else:
                         record_lines.append(gap[2])
-                    print ("Hi", existing, not existing, "{:.6e}".format(new_merit - existing[0]))
-
                     print ("\tRecord {:3d}{:1} | {}\tGap={} (old: {}{})".format(
-                        len(record_lines), "*" * own_record, gap[3], size,
-                        None if not existing else existing[0],
-                        " by you" * own_record))
+                        len(record_lines), "*" * is_own_record, gap[3], size,
+                        existing[0], " by you" * is_own_record))
 
         if record_lines:
             print ()

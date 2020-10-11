@@ -26,6 +26,7 @@ import sqlite3
 from collections import defaultdict
 
 import gap_utils
+import misc_utils
 
 
 def get_arg_parser():
