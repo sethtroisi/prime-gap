@@ -27,6 +27,7 @@ import sqlite3
 import subprocess
 
 import gap_utils
+import misc_utils
 
 
 LOGS_DIR = "logs"
@@ -113,7 +114,7 @@ def verify_all_results(conn, ranges):
     for r in ranges:
         ms = r['m_start']
         mi = r['m_inc']
-        num_m = gap_utils.count_num_m(ms, mi, args.d)
+        num_m = misc_utils.count_num_m(ms, mi, args.d)
 
         me = ms + mi - 1
         count_r, count_m = count_results(conn, args.p, args.d, ms, me)

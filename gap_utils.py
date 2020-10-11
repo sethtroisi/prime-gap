@@ -16,7 +16,6 @@
 
 import contextlib
 import logging
-import math
 import os
 import re
 import subprocess
@@ -176,14 +175,3 @@ def is_prime(num, strnum, dist):
     #    return openPFGW_is_prime(strnum + str(dist))
 
     return gmpy2.is_prime(num)
-
-
-# ---- Random stuff
-
-def count_num_m(ms, mi, d):
-    # NOTE: Could use inclusion-exclusion; only takes ~0.1seconds/M right now.
-    if d == 1:
-        return mi
-
-    return sum(1 for m in range(ms, ms+mi) if math.gcd(m, d) == 1)
-

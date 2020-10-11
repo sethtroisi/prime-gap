@@ -50,7 +50,7 @@ def sql_and_file_ranges(sql_ranges, unknown_fns):
         ranges[key] = [20, r['num_m'], 0]
         fn_fake = gap_utils.generate_unknown_filename(*key, "???", "???")
         lookup[key] = (fn_fake, r)
-        assert r['num_m'] == gap_utils.count_num_m(r['m_start'], r['m_inc'], r['D'])
+        assert r['num_m'] == misc_utils.count_num_m(r['m_start'], r['m_inc'], r['D'])
 
     # ---- Add file only ranges
     for unknown_fn in unknown_fns:
@@ -63,7 +63,7 @@ def sql_and_file_ranges(sql_ranges, unknown_fns):
             ranges[key][0] = 21
             lookup[key] = (unknown_fn, lookup[key][1])
         else:
-            ranges[key] = [10, gap_utils.count_num_m(ms, mi, d), 0]
+            ranges[key] = [10, misc_utils.count_num_m(ms, mi, d), 0]
             lookup[key] = (unknown_fn, None)
 
     assert ranges.keys() == lookup.keys()
@@ -72,7 +72,7 @@ def sql_and_file_ranges(sql_ranges, unknown_fns):
 
 def build_and_count_pd_results(results, ranges, lookup):
     def add_new_range(p, d, start, end, count):
-        count_m = gap_utils.count_num_m(start, end - start - 1, d)
+        count_m = misc_utils.count_num_m(start, end - start - 1, d)
         status = [41 if count_m == count else 30, count_m, count]
         k = (p, d, start, end)
         ranges[key] = status

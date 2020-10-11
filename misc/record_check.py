@@ -99,12 +99,13 @@ def print_record_gaps(args, gaps):
                 existing = conn.execute(
                     'SELECT merit,primedigits,startprime,discoverer FROM gaps WHERE'
                     ' gapsize=?', (size,)).fetchone()
-                if (not existing) or (new_merit > existing[0] - 1e-4):
+                if (not existing) or (new_merit - existing[0] > 6e-3):
                     own_record = existing is not None and existing[3] == args.whoami
                     if own_record:
                         own_records.append(gap[2])
                     else:
                         record_lines.append(gap[2])
+                    print ("Hi", existing, not existing, "{:.6e}".format(new_merit - existing[0]))
 
                     print ("\tRecord {:3d}{:1} | {}\tGap={} (old: {}{})".format(
                         len(record_lines), "*" * own_record, gap[3], size,
