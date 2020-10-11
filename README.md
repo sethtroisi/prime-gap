@@ -424,6 +424,7 @@ $ sudo apt install gmp-ecm
     ```bash
     $ git clone https://github.com/primegap-list-project/prime-gap-list.git
     $ cd prime-gap-list
+    $ mkdir -p logs/ unknowns/
     $ sqlite3 gaps.db < allgaps.sql
     $ cd <prime-gaps>
     $ ln -s ../prime-gap-list/gaps.db .
@@ -557,6 +558,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * README.md
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
+  * [ ] Add prob_record via greater on both sides
 * Project
   * [ ] Support --search-db everywhere
   * [ ] Move UNKNOWN.txt to unknowns/

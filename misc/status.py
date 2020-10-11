@@ -220,7 +220,8 @@ def print_results(conn, ranges, lookup):
             print ("Partially finished resume:")
             print (f"\t./gap_test.py {unk_fn_param}\n")
         elif status in (20, 30):
-            print ("File missing (could be recreated with):")
+            print ("File missing {}(could be recreated with):".format(
+                "(with partial results) " * (status == 30)))
             print (f"\t./combined_sieve --save-unknowns {unk_fn_param}\n")
             r = lookup[key][1]
             if r:

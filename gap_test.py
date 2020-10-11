@@ -721,13 +721,14 @@ def should_print_stats(
         timing_threads = rate(sc.tested, sc.test_time)
 
         # Stats!
-        print("\t    tests      {:<9d} ({}, {})  {:.0f}, {:.0f} secs".format(
-            sc.tested, timing, timing_threads, secs, sc.test_time))
+        if sc.tested:
+            print("\t    tests      {:<9d} ({}, {})  {:.0f}, {:.0f} secs".format(
+                sc.tested, timing, timing_threads, secs, sc.test_time))
 
-        print("\t    sum(prob_minmerit):  {:.2g}, {:.3g}/day\tfound: {}".format(
-            sc.prob_minmerit, 86400 / secs * sc.prob_minmerit, sc.count_minmerit))
-        print("\t    sum(prob_record):    {:.2g}, {:.3g}/day".format(
-            sc.prob_record, 86400  / secs * sc.prob_record))
+            print("\t    sum(prob_minmerit):  {:.2g}, {:.3g}/day\tfound: {}".format(
+                sc.prob_minmerit, 86400 / secs * sc.prob_minmerit, sc.count_minmerit))
+            print("\t    sum(prob_record):    {:.2g}, {:.3g}/day".format(
+                sc.prob_record, 86400  / secs * sc.prob_record))
 
         total_unknown = sc.t_unk_low + sc.t_unk_hgh
         if total_unknown:

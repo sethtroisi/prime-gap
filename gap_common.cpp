@@ -617,10 +617,10 @@ Config Args::argparse(int argc, char* argv[]) {
         cout << "minc > 50M will use to much memory" << endl;
     }
 
-    if (config.max_prime > 500'000'000'000) {
+    if (config.max_prime > 1'000'000'000'000) {
         // This is kinda arbitrary.
         config.valid = 0;
-        cout << "max_prime > 500B not supported" << endl;
+        cout << "max_prime > 1000B not supported" << endl;
     }
 
     uint64_t max_m = (1UL << 62) / config.max_prime;

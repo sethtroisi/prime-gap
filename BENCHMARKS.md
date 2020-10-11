@@ -16,7 +16,6 @@
 Microbenchmarks of `modulo_search_*` are included in `benchmark`.
 80%+ of `combined_sieve` is spent in `modulo_search_*` so optimizing this family of functions is vital.
 
-**TODO**: Updated after `max_a` fix in benchmark
 ```bash
 $ make benchmark
 $ ./benchmark 100000
