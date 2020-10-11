@@ -108,10 +108,10 @@ int main(int argc, char* argv[]) {
 //---------------------------------------------------------------------------//
 
 
-vector<float> get_record_gaps() {
+vector<float> get_record_gaps(const struct Config& config) {
     vector<float> records(MAX_GAP, GAP_INF);
 
-    DB db(DB::records_db);
+    DB db(config.records_db.c_str());
 
     /* Create SQL statement */
     char sql[] = "SELECT gapsize, merit FROM gaps";
@@ -157,7 +157,7 @@ void load_possible_records(
 
 
 bool is_range_already_processed(const struct Config& config) {
-    DB db_helper(DB::search_db);
+    DB db_helper(config.search_db.c_str());
     sqlite3 *db = db_helper.get_db();
 
     uint64_t hash = db_helper.config_hash(config);
@@ -206,10 +206,10 @@ void store_stats(
     assert( M_vals.size() == probs_missing.size() );
     assert( M_vals.size() == probs_highmerit.size() );
 
-    DB db_helper(DB::search_db);
-    sqlite3 *db = db_helper.get_db();
-
     assert( !is_range_already_processed(config) );
+
+    DB db_helper(config.search_db.c_str());
+    sqlite3 *db = db_helper.get_db();
 
     char *zErrMsg = 0;
     if (sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &zErrMsg) != SQLITE_OK) {
@@ -798,7 +798,7 @@ void prime_gap_stats(const struct Config config) {
     }
 
     // ----- Get Record Prime Gaps
-    vector<float> records = get_record_gaps();
+    vector<float> records = get_record_gaps(config);
 
     // gap that would be a record with m*P#/d
     vector<uint32_t> poss_record_gaps;

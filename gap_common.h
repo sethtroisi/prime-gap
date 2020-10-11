@@ -62,6 +62,9 @@ struct Config {
     int verbose = 2;
 
     string unknown_filename;
+
+    string search_db  = "prime-gap-search.db";
+    string records_db = "gaps.db";
 };
 
 

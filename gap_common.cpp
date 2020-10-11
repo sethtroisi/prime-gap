@@ -35,9 +35,6 @@ using namespace std::chrono;
 
 
 
-const char *DB::search_db  = "prime-gap-search.db";
-const char *DB::records_db = "gaps.db";
-
 std::map<uint64_t,uint64_t> common_primepi = {
     {     10'000'000,      664'579},
     {    100'000'000,    5'761'455},
@@ -61,6 +58,14 @@ std::map<uint64_t,uint64_t> common_primepi = {
     {100'000'000'000, 4'118'054'813}
 };
 
+
+static void assert_file_exists(string path) {
+    std::ifstream f(path);
+    if (!f.good()) {
+        printf("'%s' doesn't exist\n", path.c_str());
+        exit(1);
+    }
+}
 
 bool has_prev_prime_gmp() {
     return (
@@ -415,6 +420,7 @@ void Args::show_usage(char* name) {
     cout << "OR" << endl;
     cout << "  --unknown-filename <filename>" << endl;
     cout << "    parse p, d, mstart, minc, sieve-length, max-prime from filename" << endl;
+    cout  << endl;
     cout << "[OPTIONALLY]" << endl;
     cout << "  --min-merit <minmerit>" << endl;
     cout << "    only display prime gaps with merit >= minmerit" << endl;
@@ -423,10 +429,16 @@ void Args::show_usage(char* name) {
     cout << "  --max-prime" << endl;
     cout << "    use primes <= max-prime (in millions) for checking composite" << endl;
     cout  << endl;
-    cout << "  --run-prp" << endl;
-    cout << "    run PRP tests" << endl;
+    //cout << "  --run-prp" << endl;
+    //cout << "    run PRP tests" << endl;
     cout << "  --save-unknowns" << endl;
     cout << "    save unknowns to a temp file where they are processed in a 2nd pass." << endl;
+    cout << endl;
+    cout << "[OPTIONAL]" << endl;
+    cout << "  --search-db" << endl;
+    cout << "    Database for this project (Default: 'prime-gap-search.db')" << endl;
+    cout << "  --prime-gaps-db" << endl;
+    cout << "    Prime gap prime gap search db (Default: 'prime-gap-search.db')" << endl;
     cout << endl;
     cout << "  -q, --quiet" << endl;
     cout << "    suppress some status output (twice for more suppression)" << endl;
@@ -473,6 +485,9 @@ Config Args::argparse(int argc, char* argv[]) {
         {"min-merit",        required_argument, 0,   3  },
         {"run-prp",          no_argument,       0,   6  },
         {"save-unknowns",    no_argument,       0,   7  },
+
+        {"search-db",        required_argument, 0,   9  },
+        {"prime-gaps-db",    required_argument, 0,  10  },
 
         {"method1",          no_argument,       0,   8  },
 
@@ -570,6 +585,15 @@ Config Args::argparse(int argc, char* argv[]) {
                 break;
             case 8:
                 config.method1 = true;
+                break;
+
+            case 9:
+                config.search_db = optarg;
+                assert_file_exists(optarg);
+                break;
+            case 10:
+                config.records_db = optarg;
+                assert_file_exists(optarg);
                 break;
 
             case 0:
@@ -672,13 +696,7 @@ Config Args::argparse(int argc, char* argv[]) {
 
 
 DB::DB(const char* path) {
-    {
-        std::ifstream f(path);
-        if (!f.good()) {
-            printf("database(%s) doesn't exist\n", path);
-            exit(1);
-        }
-    }
+    assert_file_exists(path);
 
     if (sqlite3_open(path, &db) != SQLITE_OK) {
         printf("Can't open database(%s): %s\n", path, sqlite3_errmsg(db));

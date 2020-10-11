@@ -37,11 +37,11 @@ def get_arg_parser():
 
     parser.add_argument('--search-db', type=str,
         default="prime-gap-search.db",
-        help="Prime database from gap_test")
+        help="Database for this project (default: %(default)s)")
 
     parser.add_argument('--prime-gaps-db', type=str,
         default="gaps.db",
-        help="Prime gap database see github.com/primegap-list-project/prime-gap-list")
+        help="Prime gap database (default: %(default)s) see github.com/primegap-list-project/prime-gap-list")
 
     parser.add_argument('--unknown-filename', type=str,
         help="determine p, d, mstart, minc, sieve-length, and max-prime"

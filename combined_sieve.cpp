@@ -256,7 +256,7 @@ void insert_range_db(
         long num_rows,
         float time_sieve) {
 
-    DB db_helper(DB::search_db);
+    DB db_helper(config.search_db.c_str());
     sqlite3 *db = db_helper.get_db();
 
     const uint64_t rid = db_helper.config_hash(config);

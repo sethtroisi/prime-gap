@@ -560,7 +560,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Add some theory for only doing one side test.
   * [ ] Add prob_record via greater on both sides
 * Project
-  * [ ] Support --search-db everywhere
   * [ ] Move UNKNOWN.txt to unknowns/
 * combined\_sieve.cpp
 * gap\_stats.cpp
@@ -612,6 +611,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Fill out gap test section
   * [x] Split out some benchmarking
 * Project level
+  * [x] Support --search-db everywhere
   * [x] change `ms_P_D_minc` to `P_D_ms_minc_`
   * [x] Make =SL included in sieve (e.g. change \< SL to \<= SL)
   * [x] Rename `gap_search` to `combined_sieve`
