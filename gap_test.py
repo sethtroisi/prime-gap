@@ -18,10 +18,9 @@ import argparse
 import itertools
 import math
 import multiprocessing
-import re
+import os
 import signal
 import sqlite3
-import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -442,7 +441,12 @@ def stats_plots(
         #plt.legend(loc='upper left')
 
     if args.save_logs:
-        plt.savefig(args.unknown_filename + ".png", dpi=1080//8)
+        png_path = gap_utils.transform_unknown_filename(
+            args.unknown_filename, "logs/", ".png")
+        if not png_path.startswith("logs/"):
+            print ("No 'logs/' directory to save figure into")
+
+        plt.savefig(png_path, dpi=1080//8)
 
     if args.num_plots:
         plt.show()
@@ -1045,7 +1049,12 @@ def prime_gap_test(args):
     # ----- Open Output file
     print("\tLoading unknowns from {!r}".format(args.unknown_filename))
     print()
-    unknown_file = open(args.unknown_filename, "r")
+    folder_unk = gap_utils.transform_unknown_filename(
+            args.unknown_filename, "unknowns", "txt")
+    if os.path.exists(folder_unk):
+        unknown_file = open(folder_unk, "r")
+    else:
+        unknown_file = open(args.unknown_filename, "r")
 
     # ----- Open Prime-Gap-Search DB
     # Longer timeout so that record_checking doesn't break saving

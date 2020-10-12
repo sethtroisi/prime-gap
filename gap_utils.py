@@ -55,6 +55,10 @@ def logger_context(args):
         return contextlib.suppress()
 
     assert args.unknown_filename
+
+    if os.path.isdir("logs"):
+        transform_unknown_filename(unknown_fn, "logs", "log")
+
     log_fn_base = args.unknown_filename + '.log'
     for num in range(0, 5):
         log_fn = log_fn_base
@@ -67,6 +71,19 @@ def logger_context(args):
 
     assert False, "log file '{}' already exists x5".format(log_fn_base)
     return context
+
+
+def transform_unknown_filename(unknown_fn, directory, extension):
+    '''Return a new path similiar to unknown_fn with corrected extension
+    and in direcotry (if exists) otherwise without directory'''
+    fn = os.path.splitext(os.path.basename(unknown_fn))[0]
+    if not extension.startswith("."):
+        extension = "." + extension
+    fn += extension
+
+    if os.path.isdir(directory):
+        return os.path.join(directory, fn)
+    return fn
 
 
 def parse_unknown_filename(fn):

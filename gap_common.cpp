@@ -25,6 +25,9 @@
 #include <string>
 #include <vector>
 
+/* for dirname(3) */
+#include <libgen.h>
+
 #include "gap_common.h"
 
 using std::cout;
@@ -34,6 +37,8 @@ using std::vector;
 using namespace std::chrono;
 
 
+
+string UNKNOWNS_DIR = "unknowns";
 
 std::map<uint64_t,uint64_t> common_primepi = {
     {     10'000'000,      664'579},
@@ -451,14 +456,14 @@ void Args::show_usage(char* name) {
 
 std::string Args::gen_unknown_fn(const struct Config& config, std::string suffix) {
     if (!config.unknown_filename.empty()) {
-        // If trying to read the unknown_fn can cause issue (with having dropped basename)
-        // handled specially in gap_stats / gap_test
-        string t = config.unknown_filename;
-        assert( 0 == t.compare(t.size() - 4, 4, ".txt") );
-        return t.replace(t.size() - 4, 4, suffix);
+        // dirname (unknown/ or input) handled by parse.
+
+        // re-generating unknown_fn can cause issue (with losing dirname)
+        return config.unknown_filename;
     }
 
-    return std::to_string(config.p) + "_" +
+    return "unknowns/" +
+           std::to_string(config.p) + "_" +
            std::to_string(config.d) + "_" +
            std::to_string(config.mstart) + "_" +
            std::to_string(config.minc) + "_s" +
@@ -526,13 +531,21 @@ Config Args::argparse(int argc, char* argv[]) {
 
             case 'u':
                 {
-                    char* t = optarg;
+                    // Ugh, change to c++17 filesystem::path at some later point
+                    char* t = strdup(optarg);
+                    string dir = dirname(t);
+                    free(t);
+
+                    char* copy = strdup(optarg);
+                    t = basename(optarg);
                     assert(*t != 0);
+                    assert(strcmp(t, ".") != 0);
 
-                    config.unknown_filename = t;
+                    // Add "unknowns/" if no directory present
+                    dir = (dir == ".") ? UNKNOWNS_DIR : dir;
+                    config.unknown_filename = dir + "/" + t;
 
-                    // Don't consider directory for validation.
-                    t = basename(t);
+                    printf("%s || %s || %s\n", optarg, dir.c_str(), t);
 
                     assert( std::count(t, t + strlen(t), '_')  == 5);
 
@@ -564,6 +577,7 @@ Config Args::argparse(int argc, char* argv[]) {
                     config.method1 = (t[3] == '1');
 
                     assert( std::strcmp(t, "M.txt") == 0 || std::strcmp(t, "M.m1.txt") == 0 );
+                    free(copy);
                 }
                 break;
 

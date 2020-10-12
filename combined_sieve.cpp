@@ -479,7 +479,7 @@ void prime_gap_search(const struct Config config) {
     std::ofstream unknown_file;
     if (config.save_unknowns) {
         std::string fn = Args::gen_unknown_fn(config, ".txt");
-        printf("\nSaving unknowns to '%s'\n", fn.c_str());
+        printf("\nSaving to '%s'\n", fn.c_str());
         unknown_file.open(fn, std::ios::out);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
     }
