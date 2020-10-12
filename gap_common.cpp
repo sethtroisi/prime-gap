@@ -368,8 +368,9 @@ static bool isprime_brute(uint32_t n) {
 }
 
 void get_sieve_primes_segmented_lambda(uint64_t n, std::function<bool (uint64_t)> lambda) {
-    // Large enough to be fast and still fit in L1/L2 cache.
+    // Sieve intervals of this size at a time.
     uint32_t BLOCKSIZE = 1 << 16;
+    // Large enough to be fast and still fit in L1/L2 cache.
     uint32_t ODD_BLOCKSIZE = BLOCKSIZE >> 1;
     vector<char> is_prime(ODD_BLOCKSIZE, true);
 
@@ -381,6 +382,9 @@ void get_sieve_primes_segmented_lambda(uint64_t n, std::function<bool (uint64_t)
 
     uint32_t p_lim = 5;
     uint64_t p2_lim = p_lim * p_lim;
+
+    // index of first prime > BLOCKSIZE
+    size_t max_small_pi = BLOCKSIZE;
 
     for (uint64_t B = 0; B < n; B += BLOCKSIZE) {
         uint64_t B_END = B + BLOCKSIZE - 1;
@@ -401,12 +405,18 @@ void get_sieve_primes_segmented_lambda(uint64_t n, std::function<bool (uint64_t)
             //assert( p_lim * p_lim == p2_lim );
         }
 
+        if (max_small_pi == BLOCKSIZE && p_lim > BLOCKSIZE) {
+            max_small_pi = primes.size();
+        }
+
         // reset is_prime
         std::fill(is_prime.begin(), is_prime.end(), true);
         if (B == 0) is_prime[0] = 0; // Skip 1
 
-        // Can skip some large pi up to certain B (would have to set next_mod correctly)
-        for (uint32_t pi = 0; pi < primes.size(); pi++) {
+        // Small primes can divide multiple things, large prime can't
+        uint32_t pi = 0;
+        uint32_t stop_small = std::min(max_small_pi, primes.size());
+        for (; pi < stop_small; pi++) {
             const uint32_t prime = primes[pi];
             uint32_t first = next_mod[pi];
             for (; first < ODD_BLOCKSIZE; first += prime) {
@@ -414,6 +424,18 @@ void get_sieve_primes_segmented_lambda(uint64_t n, std::function<bool (uint64_t)
             }
             next_mod[pi] = first - ODD_BLOCKSIZE;
         }
+        // N=10^12, p_lim=10^6, worst case "miss" ~15 intervals in a row.
+        for (; pi < primes.size(); pi++) {
+            const uint32_t prime = primes[pi];
+            uint32_t first = next_mod[pi];
+            if (first < ODD_BLOCKSIZE) {
+                is_prime[first] = false;
+                first += prime;
+            }
+            next_mod[pi] = first - ODD_BLOCKSIZE;
+        }
+
+
         for (uint32_t prime = 0; prime < ODD_BLOCKSIZE; prime++) {
             if (is_prime[prime]) {
                 if (!lambda(B + 2 * prime + 1)) {
@@ -555,8 +577,6 @@ Config Args::argparse(int argc, char* argv[]) {
                     // Add "unknowns/" if no directory present
                     dir = (dir == ".") ? UNKNOWNS_DIR : dir;
                     config.unknown_filename = dir + "/" + t;
-
-                    printf("%s || %s || %s\n", optarg, dir.c_str(), t);
 
                     assert( std::count(t, t + strlen(t), '_')  == 5);
 

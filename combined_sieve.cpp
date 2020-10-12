@@ -286,6 +286,34 @@ void insert_range_db(
     }
 }
 
+
+// See misc/benchmark.cpp
+static double benchmark_primorial_modulo(mpz_t K, size_t count) {
+    auto t_start = high_resolution_clock::now();
+
+    uint64_t z = 0;
+
+    // Benchmark suggest this doesn't really depend on size but use 34 bits
+    // As this is size of "most" of primes (and > 32)
+    uint64_t p = 1LL << 34;
+    for (size_t i = 0; i < count; i++) {
+        z += mpz_fdiv_ui(K, p + i);
+    }
+
+    double time = duration<double>(high_resolution_clock::now() - t_start).count();
+    // Keep compiler from optimizing out loop.
+    double eps = 1e-100 * z;
+    return time / count + eps;
+}
+
+static size_t estimated_primes(size_t max_prime) {
+    // Lookup primepi for common max_prime values.
+    if (common_primepi.count(max_prime)) {
+        return common_primepi[max_prime];
+    }
+    return 1.04 * max_prime / log(max_prime);
+}
+
 // Method1
 
 
@@ -385,10 +413,7 @@ void prime_gap_search(const struct Config config) {
         // Print "."s during, equal in length to 'Calculat...'
         size_t print_dots = 38;
 
-        // Lookup primepi for common max_prime values.
-        const size_t expected_primes = common_primepi.count(MAX_PRIME) ?
-            common_primepi[MAX_PRIME] :
-            1.04 * MAX_PRIME / log(MAX_PRIME);
+        const size_t expected_primes = estimated_primes(MAX_PRIME);
 
         long first_m_sum = 0;
         double expected_large_primes = 0;
@@ -761,7 +786,7 @@ void prime_gap_parallel(struct Config config) {
     // Also prints estimate if verbose >= 2
     const double prp_time_est = prp_time_estimate_composite(N_log, config.verbose);
 
-    // ----- Allocate memory
+
     // SIEVE_INTERVAL includes endpoints [-SL ... K ... SL]
     uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
 
@@ -779,6 +804,53 @@ void prime_gap_parallel(struct Config config) {
     }
     assert(valid_ms == valid_mi.size());
 
+    // Rough math is MULT  vs  log2(MULT) * (M_inc/valid_ms)
+    const float SMALL_MULT = std::max(8.0, log(8) * M_inc / valid_ms);
+    const uint64_t SMALL_THRESHOLD = SMALL_MULT * 2 * SIEVE_LENGTH;
+
+    // See Merten's Third Theorem
+    size_t expected_m_stops = (log(log(LAST_PRIME)) - log(log(SMALL_THRESHOLD))) * 2*SL * M_inc;
+
+    if (config.verbose >= 2) {
+        const size_t expected_primes = estimated_primes(MAX_PRIME);
+        const double mod_time_est = benchmark_primorial_modulo(
+            K, 100'000 * (K_log < 2000 ? 20 : 1));
+
+        const double prime_time = LAST_PRIME * 1.75 / 1e9;
+        const double k_mod_time = expected_primes * mod_time_est;
+        const double m_search_time = (expected_m_stops + expected_primes) * 130e-9;
+        // Estimate still needs to account for:
+        //      small primes
+        //      marking off factors (small and large)
+        const double total_estimate = prime_time + k_mod_time + m_search_time + 10;
+
+        printf("\n");
+        printf("Estimated PrimePi time: %.0f (%.1f%% total)\n",
+            prime_time, 100.0 * prime_time / total_estimate);
+
+        printf("Estimated K mod/s: %'.0f, estimated time for all mods: %.0f (%.1f%% total)\n",
+            1 / mod_time_est, k_mod_time, 100.0 * k_mod_time / total_estimate);
+
+        // XXX: pull from benchmark somehow.
+        printf("Estimated modulo_searches(million): %ld, total time: %.0f (%.1f%% total)\n",
+                expected_m_stops / 1'000'000, m_search_time, 100.0 * m_search_time / total_estimate);
+        printf("\n");
+    }
+
+    // SMALL_THRESHOLD mult deal with all primes that can mark off two items in SIEVE_LENGTH.
+    assert( SMALL_THRESHOLD > (2 * SIEVE_LENGTH + 1)  );
+
+    if (config.verbose >= 1) {
+        setlocale(LC_NUMERIC, "");
+        printf("sieve_length: 2x %'d\n", config.sieve_length);
+        printf("max_prime:       %'ld   small_threshold:  %'ld (%.1f x SL)\n",
+            config.max_prime, SMALL_THRESHOLD, 2 * SMALL_MULT);
+        //printf("last prime :  %'ld\n", LAST_PRIME);
+        setlocale(LC_NUMERIC, "C");
+    }
+
+
+    // ----- Allocate memory
     // which [i] are coprime to K
     vector<char> coprime_composite(SIEVE_INTERVAL+1, 1);
     // reindex composite[m][i]
@@ -815,22 +887,6 @@ void prime_gap_parallel(struct Config config) {
     const size_t count_coprime_sieve = *std::max_element(i_reindex.begin(), i_reindex.end());
     assert( count_coprime_sieve % 2 == 0 );
 
-    // Rough math is MULT  vs  log2(MULT) * (M_inc/valid_ms)
-    const float SMALL_MULT = std::max(8.0, log(8) * M_inc / valid_ms);
-    const uint64_t SMALL_THRESHOLD = SMALL_MULT * 2 * SIEVE_LENGTH;
-
-    // SMALL_THRESHOLD mult deal with all primes that can mark off two items in SIEVE_LENGTH.
-    assert( SMALL_THRESHOLD > (2 * SIEVE_LENGTH + 1)  );
-
-    if (config.verbose >= 1) {
-        setlocale(LC_NUMERIC, "");
-        printf("sieve_length: 2x %'d\n", config.sieve_length);
-        printf("max_prime:       %'ld   small_threshold:  %'ld (%.1f x SL)\n",
-            config.max_prime, SMALL_THRESHOLD, 2 * SMALL_MULT);
-        //printf("last prime :  %'ld\n", LAST_PRIME);
-        setlocale(LC_NUMERIC, "C");
-    }
-
     /**
      * Much space is saved via a reindexing scheme
      * composite[mi][x] (0 <= mi < M_inc, -SL <= x <= SL) is reindexed to
@@ -864,6 +920,7 @@ void prime_gap_parallel(struct Config config) {
     long  s_prime_factors = 0;
     long  s_small_prime_factors_interval = 0;
     long  s_large_prime_factors_interval = 0;
+    long  m_stops = 0;
     long  m_stops_interval = 0;
 
     uint64_t  s_next_print = 0;
@@ -1029,6 +1086,7 @@ void prime_gap_parallel(struct Config config) {
             pi += pi_interval;
             s_prime_factors += s_small_prime_factors_interval;
             s_prime_factors += s_large_prime_factors_interval;
+            m_stops += m_stops_interval;
 
             bool is_last = (prime == LAST_PRIME) || g_control_c;
 
@@ -1117,7 +1175,11 @@ void prime_gap_parallel(struct Config config) {
         return true;
     });
 
-    // TODO assert s_prime_factors is close to (2 * SL * valid_m) * (log(log(SL)) + M_c)
+    float error_percent = (100.0 * abs(expected_m_stops - m_stops)) / expected_m_stops;
+    if (config.verbose >= 2 || error_percent > 0.5 ) {
+        printf("Estimated modulo searches (m/prime) error %.2f%%,\t%ld vs expected %ld\n",
+            error_percent, m_stops, expected_m_stops);
+    }
 
     if (config.save_unknowns) {
         save_unknowns_method2(

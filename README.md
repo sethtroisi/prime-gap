@@ -579,7 +579,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Finalize script
   * [ ] Set rid if null (but reasonable range exists)
 * combined\_sieve.cpp
-  * [ ] ETA for `combined_sieve` timing.
   * [ ] Option to output m with gcd(m, d) != 1
   * [ ] optimize D helper
 * gap\_stats.cpp
@@ -619,6 +618,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Make method2 the default
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
 * combined\_sieve.cpp
+  * [x] ETA for `combined_sieve` timing.
   * [x] Test number to be marked combosite see if already marked by 2 / 3 and skip (e.g. try to avoid memory lookup)
   * [x] "expect %ld left" doesn't match
   * [x] Write time_sieve into DB
