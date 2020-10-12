@@ -737,8 +737,8 @@ def should_print_stats(
         total_unknown = sc.t_unk_low + sc.t_unk_hgh
         if total_unknown:
             print("\t    unknowns   {:<9d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
-                total_unknown, total_unknown / N,
-                100 * (1 - total_unknown / ((2 * args.sieve_length + 1) * N)),
+                total_unknown, total_unknown / sc.tested,
+                100 * (1 - total_unknown / ((2 * args.sieve_length + 1) * sc.tested)),
                 100 * sc.t_unk_low / total_unknown,
                 100 * sc.t_unk_hgh / total_unknown))
         prp_tests = sc.total_prp_tests
