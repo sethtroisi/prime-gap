@@ -141,9 +141,20 @@ double prp_time_estimate_composite(double K_log, int verbose) {
             size_t bits = K_log * 1.442;
             assert( bits > 50 );
 
-            // Larger static prime
-            mpz_ui_pow_ui(p, 2, bits - 25);
-            mpz_nextprime(p, p);
+            mpz_set_ui(n, 1);
+
+            // Multiply "large" static primes (25 bits+) to get number of size N
+            size_t bit_goal = bits - 24;
+            while (bit_goal > 0) {
+                // Important to not ever choose small p
+                size_t p_size = bit_goal < 50 ? bit_goal : 25;
+                assert(p_size >= 25);
+                mpz_ui_pow_ui(p, 2, p_size);
+                mpz_nextprime(p, p);
+                mpz_mul(n, n, p);
+                bit_goal -= p_size;
+            }
+            mpz_set(p, n);
 
             // Smaller prime for fast nextprime.
             // Large enough to avoid being found with trial division.
@@ -152,8 +163,8 @@ double prp_time_estimate_composite(double K_log, int verbose) {
 
             double t = 0;
             size_t count = 0;
-            // A lot of overhead in nextprime so only time ~1 second of tests.
-            for (; count < 10 || t < 1; count++) {
+            // time a reasonable number (or for 5 seconds)
+            for (; count < 15 || t < 5; count++) {
                 mpz_mul(n, p, q);
                 assert( mpz_sizeinbase(n, 2) >= bits );
 
