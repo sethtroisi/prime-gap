@@ -51,7 +51,7 @@ EOL
 sqlite3 -readonly "prime-gap-search.db" <<EOL
 .timeout 20
 SELECT "Table 'range'";
-SELECT PRINTF("  P=%-5d D=%-7d M(%-7d) = %9d +[0,%9d) processed=%-8d ",
+SELECT PRINTF("  P=%-5d D=%-9d M(%-7d) = %9d +[0,%9d) processed=%-8d ",
               p, d, num_m, m_start, m_inc, num_processed),
        PRINTF(" time(sieve,stats,tests,p)= %6.1f %5.1f %9.1f | per m: %8.3f   %d",
               time_sieve, time_stats, time_tests,
@@ -60,7 +60,7 @@ FROM range ORDER BY p, d, m_start, m_inc;
 SELECT "";
 
 SELECT "Table 'results'/'m_stats'";
-SELECT PRINTF("  P=%-5d D=%-7d M(%-7d) = %-9d to %-9d (last result: %9d, primes: %7d, PRPs: %9d, merit: %5.2f, time: %.0fs)",
+SELECT PRINTF("  P=%-5d D=%-9d M(%-7d) = %-9d to %-9d (last result: %9d, primes: %7d, PRPs: %9d, merit: %5.2f, time: %.0fs)",
               p, d, count(*), min(m), max(m), max(m * (primes != 0)),
               sum(primes), sum(prp_tests), max(merit), sum(test_time))
 FROM (

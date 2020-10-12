@@ -75,11 +75,11 @@ def build_and_count_pd_results(results, ranges, lookup):
     def add_new_range(p, d, start, end, count):
         count_m = misc_utils.count_num_m(start, end - start - 1, d)
         status = [41 if count_m == count else 30, count_m, count]
-        k = (p, d, start, end)
+        key = (p, d, start, end)
         ranges[key] = status
         fn_fake = gap_utils.generate_unknown_filename(*key, "???", "???")
         lookup[key] = (fn_fake, None)
-#        print(f"\t\tAdded range ({start}, {end}): {status}")
+        print(f"\t\tAdded range {p}#/{d}: ({start}, {end}): {status}")
 
     pd_m = defaultdict(list)
     for P, D, m in results:
@@ -132,7 +132,6 @@ def build_and_count_pd_results(results, ranges, lookup):
             elif count > 0:
                 ranges[key][0] = 30 + (status % 10)
 
-
 def check_processed(args):
     """
     Check status of each UNKNOWN_FN, range, m_stats
@@ -155,7 +154,8 @@ def check_processed(args):
         41: results only
     """
 
-    unknown_fns = glob.glob("*M.txt")
+    unknown_fns = glob.glob("*M.txt") + glob.glob("unknowns/*M.txt")
+    unknown_fns = [os.path.basename(fn) for fn in unknown_fns]
 
     with sqlite3.connect(args.search_db) as conn:
         conn.row_factory = sqlite3.Row
@@ -188,16 +188,14 @@ def print_results(conn, ranges, lookup):
         # P, D, ms, mi
         return (-range_kv[1][0], range_kv[0])
 
-    print (lookup)
     print()
     display_order = sorted(ranges.items(), key=sort_by_status)
     for key, value in display_order:
         p, d, ms, mi = key
         status, count_m, finished = value
 
-
         assert (status in (40, 41)) == (count_m == finished)
-        print("P: {:5} D: {:7} M({:8}) {:9} to {:9} |".format(
+        print("P: {:5} D: {:9} M({:8}) {:9} to {:9} |".format(
             p, d, count_m, ms, ms + mi - 1), end=" ")
         print("Finished: {:8} {:6.1%} (filename: {})".format(
             finished, finished / count_m, lookup[key][0]))
@@ -213,7 +211,7 @@ def print_results(conn, ranges, lookup):
         unk_fn_param = "--unknown-filename " + fn
 
         if status == 31:
-            print("P: {:5} D: {:7} M({:8}) {:9} to {:9} |".format(
+            print("P: {:5} D: {:9} M({:8}) {:9} to {:9} |".format(
                 p, d, count_m, ms, ms + mi - 1), end=" ")
             print("Finished: {:8}/{:<8} {:6.1%}".format(
                 finished, count_m, finished/count_m))

@@ -16,9 +16,42 @@
 
 import math
 
+
 def count_num_m(ms, mi, d):
-    # NOTE: Could use inclusion-exclusion; only takes ~0.1seconds/M right now.
     if d == 1:
         return mi
 
-    return sum(1 for m in range(ms, ms+mi) if math.gcd(m, d) == 1)
+    if ms + mi < 10000:
+        return sum(1 for m in range(ms, ms+mi) if math.gcd(m, d) == 1)
+
+    factors_d = factor_simple(d)
+    return (r_count_num_m(ms + mi - 1, factors_d, len(factors_d)-1) -
+            r_count_num_m(ms - 1,      factors_d, len(factors_d)-1))
+
+
+def factor_simple(d):
+    # Most d are a primorial so this is quite quick
+    factors = []
+    for p in range(2, int(math.sqrt(d)+2)):
+        if p*p > d: break
+        while d % p == 0:
+            factors.append(p)
+            d //= p
+    if d > 1:
+        factors.append(d)
+    return factors
+
+
+def r_count_num_m(n, factors_d, i):
+    '''Count of numbers coprime to d less than end; sum( gcd(m, d) == 1 for m in range(end) )
+
+    Uses inclusion exclusion on prime factorization of d
+    '''
+
+    if n == 0:
+        return 0
+
+    if i < 0:
+        return n
+
+    return r_count_num_m(n, factors_d, i-1) - r_count_num_m(n // factors_d[i], factors_d, i-1)
