@@ -111,7 +111,7 @@ def print_record_gaps(args, gaps):
                 is_own_record = existing[3] == args.whoami
 
                 if is_same and not is_own_record:
-                    print("\tREDISCOVERD | {} (old: {})".format(gap[3], existing))
+                    print("\tREDISCOVERED | {:77s} (old: {})".format(gap[3], existing))
                     continue
 
                 improvement = new_merit - existing[0]
@@ -125,9 +125,9 @@ def print_record_gaps(args, gaps):
                         ith = len(own_records)
                         special = ith in (1,2,3,4,5,10,20,30,40,50) or ith % 100 == 0
                         if not special: continue
-                    print ("\tRecord {:4} | {}\tGap={} (old: {}{})".format(
+                    print ("\tRecord {:<5} | {:77s} Gap={:<6} (old: {:.2f}{} +{:.2f})".format(
                         str(len(own_records)) + "*" if is_own_record else len(record_lines), gap[3], size,
-                        existing[0], " by you" * is_own_record))
+                        existing[0], " by you" * is_own_record, gap[1] - existing[0]))
 
         if record_lines:
             print ()

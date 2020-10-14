@@ -42,11 +42,14 @@ def expected_PRP_gap(max_prime, gap):
 
 
 def Appendix1():
+    # 503, 1009, 1511, 5003, 10007
     for P, mp in [
-            (503, 100e6), (1009, 2e9), (1511, 80e9), (1999, 100e9),
-            (5003, 200e9), (10007, 400e9), (20011, 500e9), (20011, 4e9)
+            (2111, 500e9),
+            (4441, 1e12),
+            (8887, 1e12),
     ]:
-        print (f"{P:5} {mp:.1e}\t", expected_PRP(mp, P))
+        ln, prps = expected_PRP(mp, P)
+        print (f"{P:5} & {ln:.0f}\t& {mp/1e9:4.0f}e9  & {prps:.1f} \\\\")
 
 
 def Trick2():

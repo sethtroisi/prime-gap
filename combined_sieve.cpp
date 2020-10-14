@@ -405,6 +405,8 @@ void prime_gap_search(const struct Config config) {
     // vector<m, vector<pi>> for large primes that only rarely divide a sieve
     int s_large_primes_rem = 0;
 
+    double expected_primes_per = 0;
+
     // To save space, only save remainder for primes that divide ANY m in range.
     // This helps with memory usage when MAX_PRIME >> SL * MINC;
     std::vector<p_and_r> *large_prime_queue = new vector<p_and_r>[M_inc];
@@ -423,7 +425,6 @@ void prime_gap_search(const struct Config config) {
         const size_t expected_primes = estimated_primes(MAX_PRIME);
 
         long first_m_sum = 0;
-        double expected_large_primes = 0;
 
         if (config.verbose >= 0) {
             cout << "\t";
@@ -446,7 +447,7 @@ void prime_gap_search(const struct Config config) {
                 continue;
             }
 
-            expected_large_primes += (2.0 * SL + 1) / prime;
+            expected_primes_per += (2.0 * SL + 1) / prime;
 
             // solve base_r * (M + mi) + (SL - 1)) % prime < 2 * SL
             //   0 <= (base_r * M + SL - 1) + base_r * mi < 2 * SL mod prime
@@ -494,10 +495,10 @@ void prime_gap_search(const struct Config config) {
                 (pi - SMALL_PRIME_PI) - pr_pi,
                 100 - (100.0 * pr_pi / (pi - SMALL_PRIME_PI)));
 
-            // TODO print error
             float mertens3 = log(log(MAX_PRIME)) - log(log(SMALL_PRIME_LIMIT_METHOD1));
+            float theory_count = (2 * SL + 1) * mertens3;
             printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
-                expected_large_primes, (2 * SL + 1) * mertens3);
+                expected_primes_per, theory_count);
             setlocale(LC_NUMERIC, "C");
         }
     }
@@ -663,6 +664,17 @@ void prime_gap_search(const struct Config config) {
                 printf("\t    large prime remaining: %d (avg/test: %ld)\n",
                         s_large_primes_rem, s_large_primes_tested / s_tests);
             }
+        }
+    }
+
+    {
+        float primes_per_m = s_large_primes_tested / s_tests;
+        float error_percent = 100.0 * abs(expected_primes_per - primes_per_m) /
+            expected_primes_per;
+        if (config.verbose >= 2 || error_percent > 0.5 ) {
+            printf("\n");
+            printf("Estimated primes/m error %.2f%%,\t%.1f vs expected %.1f\n",
+                error_percent, primes_per_m, expected_primes_per);
         }
     }
 
@@ -866,6 +878,9 @@ void prime_gap_parallel(struct Config config) {
 
     // ----- Timing
     // Also prints estimate if verbose >= 2
+    if (config.verbose >= 2) {
+        printf("\n");
+    }
     const double prp_time_est = prp_time_estimate_composite(N_log, config.verbose);
 
     // See Merten's Third Theorem
@@ -893,8 +908,7 @@ void prime_gap_parallel(struct Config config) {
             5;
         const double total_estimate = k_mod_time + m_search_time + extra_time;
 
-        printf("\n");
-        printf("Estimated misc (PrimePi, count unknows) time: %.0f (%.1f%% total)\n",
+        printf("Estimated misc (PrimePi, count unknown, ...) time: %.0f (%.1f%% total)\n",
             extra_time, 100.0 * extra_time / total_estimate);
 
         printf("Estimated K mod/s: %'.0f, estimated time for all mods: %.0f (%.1f%% total)\n",
@@ -1087,7 +1101,7 @@ void prime_gap_parallel(struct Config config) {
                 size_t all_ten = prime > 10'000'000'000;
                 // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
                 // Print 60,70,80,90 billion because intervals are wider.
-                if (s_next_print == (5 + 5 * all_ten) * next_mult) {
+                if (s_next_print == (5 + 4 * all_ten) * next_mult) {
                     next_mult = 10 * next_mult;
                     s_next_print = 0;
                 }
@@ -1200,10 +1214,12 @@ void prime_gap_parallel(struct Config config) {
         }
     }
 
-    float error_percent = (100.0 * abs(expected_m_stops - m_stops)) / expected_m_stops;
-    if (config.verbose >= 2 || error_percent > 0.5 ) {
-        printf("Estimated modulo searches (m/prime) error %.2f%%,\t%ld vs expected %ld\n",
-            error_percent, m_stops, expected_m_stops);
+    {
+        float error_percent = (100.0 * abs(expected_m_stops - m_stops)) / expected_m_stops;
+        if (config.verbose >= 2 || error_percent > 0.5 ) {
+            printf("Estimated modulo searches (m/prime) error %.2f%%,\t%ld vs expected %ld\n",
+                error_percent, m_stops, expected_m_stops);
+        }
     }
 
     if (config.save_unknowns) {
