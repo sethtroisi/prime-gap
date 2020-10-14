@@ -23,6 +23,7 @@
 #include <vector>
 
 #include <gmp.h>
+#include <primesieve.hpp>
 
 #include "modulo_search.h"
 
@@ -35,7 +36,7 @@ using namespace std::chrono;
 #define DELTA_SINCE(start_time) duration<double>( \
     high_resolution_clock::now() - start_time).count();
 
-uint32_t modulo_search_one_op(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
+uint32_t modulo_search_single_mod(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
     return (p % A) + L - R;
 }
 
@@ -63,8 +64,6 @@ double approx_Hz(unsigned sleeptime) {
  * Store into save
  */
 void generate_primes(int bits, size_t count, vector<uint64_t> &save) {
-    mpz_t p;
-
     uint64_t start = (1UL << (bits-1)) + (1UL << (bits-3));
     uint64_t start_mod = 1000;
     while (start_mod * 100 < start) start_mod *= 10;
@@ -72,21 +71,36 @@ void generate_primes(int bits, size_t count, vector<uint64_t> &save) {
     start -= (start % start_mod);
     assert(start >= (1UL << (bits-1)) );
 
-    mpz_init_set_ui(p, start);
+    uint64_t max_prime = (1UL << bits) - 1;
 
+    /*
+    mpz_t p;
+    mpz_init_set_ui(p, start);
     for (size_t i = 1; i <= count; i++) {
         mpz_nextprime(p, p);
-        save.push_back(mpz_get_ui(p));
+        uint64_t t = mpz_get_ui(p);
+        if (t > max_prime) {
+            break;
+        }
+        save.push_back(t);
         if (0) {
             if (i <= 3 || i + 2 > count) {
-                printf("\t\t%2d, %7ld  %ld\n", bits, i, mpz_get_ui(p));
+                printf("\t\t%2d, %7ld  %ld\n", bits, i, t);
             }
         }
     }
+    mpz_clear(p);
+    */
+
+    primesieve::iterator it(start);
+    uint64_t prime = it.next_prime();
+    for(prime = it.next_prime(); prime <= max_prime; prime = it.next_prime()) {
+        save.push_back(prime);
+        if (save.size() == count) break;
+    }
+
     assert( (1Ul << (bits-1)) <= save.front() );
     assert( save.back() < (1UL << bits) );
-
-    mpz_clear(p);
 }
 
 
@@ -171,7 +185,7 @@ void benchmark_method_small(
         modulo_search_uint32_sig ref_func) {
     if (strstr(ref_name, filter) == NULL) return;
 
-    assert( count <= primes.size() );
+    //assert( count <= primes.size() );
     assert( (primes.size() == A.size()) && (A.size() == L.size()) && (A.size() == R.size()) );
 
     auto t_start = high_resolution_clock::now();
@@ -184,7 +198,7 @@ void benchmark_method_small(
         if ((L[i] <= t) && (t <= R[i])) {
             found++;
         }
-        assert( ref_func == modulo_search_one_op ||
+        assert( ref_func == modulo_search_single_mod ||
                 ((L[i] <= t) && (t <= R[i])) );
     }
 
@@ -276,7 +290,7 @@ void benchmark_method_large(
             );
             // Did we find any m for this prime?
             found += (found2 > previous);
-            // one extra
+            // to account for the final search
             found2++;
 
         } else {
@@ -292,7 +306,7 @@ void benchmark_method_large(
             );
             // Did we find any m for this prime?
             found += (found2 > previous);
-            // one extra
+            // to account for the final search
             found2++;
         }
     }
@@ -312,12 +326,14 @@ void benchmark(int bits, size_t count, const char* filter) {
     auto t_setup = high_resolution_clock::now();
 
     // TODO: describe this somewhere
-    size_t SL = 100000;
+    size_t SL = 100'000;
     size_t S = 2 * SL + 1;  // R - L = S
 
     vector<uint64_t> primes, A, L, R;
     generate_PALR(bits, count, S, primes, A, L, R);
-    assert( primes.size() == count );
+    assert( (primes.size() == count) || (bits <= 25));
+
+    size_t N = primes.size();
 
     if (0) {
         double secs = DELTA_SINCE(t_setup);
@@ -330,61 +346,62 @@ void benchmark(int bits, size_t count, const char* filter) {
 
     // Header
     cout << endl;
-    const auto benchmark_row = "\t| %5d x %7ld | %-30s | %-8ld | %-8ld | %-7.4f | %7.0f | %-8.1f    |\n";
-    printf("\t|  bits x count   | method_name%19s | found    | total    | time(s) | ns/iter | cycles/iter |\n", "");
+    const auto benchmark_row = "\t| %5d x %8ld | %-30s | %-8ld | %-8ld | %-7.4f | %7.0f | %-8.1f    |\n";
+    printf("\t|  bits x count    | method_name%19s | found    | total    | time(s) | ns/iter | cycles/iter |\n", "");
     auto padding = "-------------------------------------------------";
-    printf("\t|%.17s|%.32s|%.10s|%.10s|%.9s|%.9s|%.13s|\n",
+    printf("\t|%.18s|%.32s|%.10s|%.10s|%.9s|%.9s|%.13s|\n",
         padding, padding, padding, padding, padding, padding, padding);
 
     if (bits < 32) {
         // Per Method benchmark
         benchmark_method_small(
-            benchmark_row, "modulo_search_one_op", filter, bits, count,
-            primes, A, L, R, modulo_search_one_op);
+            benchmark_row, "single_mod_op", filter, bits, N,
+            primes, A, L, R, modulo_search_single_mod);
 
         if (bits != 32) {
             benchmark_method_small(
-                benchmark_row, "modulo_search_brute", filter, bits, count,
+                benchmark_row, "modulo_search_brute", filter, bits, N / 10,
                 primes, A, L, R, modulo_search_brute);
         }
 
         benchmark_method_small(
-            benchmark_row, "modulo_search_euclid_small", filter, bits, count,
+            benchmark_row, "modulo_search_euclid_small", filter, bits, N,
             primes, A, L, R, modulo_search_euclid_small);
     }
 
-//    for (size_t max_m : {1'000, 100'000}) {
-    for (size_t max_m : {1'000}) {
-//        cout << "max_m: " << max_m << endl;
 
-        benchmark_method_large(
-            benchmark_row, "modulo_search_verify", filter, bits, count,
-            SL, max_m, primes, A, L, R, 0);
+    benchmark_method_large(
+        benchmark_row, "modulo_search_verify", filter, bits, N,
+        SL, 0, primes, A, L, R, 0);
 
-        benchmark_method_large(
-            benchmark_row, "modulo_search_euclid", filter, bits, count,
-            SL, max_m, primes, A, L, R, 1);
+    benchmark_method_large(
+        benchmark_row, "modulo_search_euclid", filter, bits, N,
+        SL, 0, primes, A, L, R, 1);
 
-        benchmark_method_large(
-            benchmark_row, "modulo_search_euclid_gcd", filter, bits, count,
-            SL, max_m, primes, A, L, R, 2);
+    benchmark_method_large(
+        benchmark_row, "modulo_search_euclid_gcd", filter, bits, N,
+        SL, 0, primes, A, L, R, 2);
 
-        benchmark_method_large(
-            benchmark_row, "modulo_search_euclid_gcd2", filter, bits, count,
-            SL, max_m, primes, A, L, R, 3);
+    benchmark_method_large(
+        benchmark_row, "modulo_search_euclid_gcd2", filter, bits, N,
+        SL, 0, primes, A, L, R, 3);
 
-        // Set max_m so ~1 + 1 m per p
-        size_t all_max_m = std::min(max_m, std::max((size_t) 10, 2 * primes.front() / S));
-        benchmark_method_large(
-            benchmark_row, "modulo_search_euclid_all_small", filter, bits, count,
-            SL, all_max_m, primes, A, L, R, 4);
+    size_t max_m = bits <= 32 ? 100'000 : 1'000'000;
 
-        benchmark_method_large(
-            benchmark_row, "modulo_search_euclid_all_large", filter, bits, count,
-            SL, all_max_m, primes, A, L, R, 5);
-    }
+    // Set max_m to find 1 m per p
+    size_t all_max_m = std::min(max_m, std::max((size_t) 10, 2 * primes.front() / S));
+//    cout << "max_m: " << max_m << " " << all_max_m << endl;
+
+    benchmark_method_large(
+        benchmark_row, "modulo_search_euclid_all_small", filter, bits, N,
+        SL, all_max_m, primes, A, L, R, 4);
+
+    benchmark_method_large(
+        benchmark_row, "modulo_search_euclid_all_large", filter, bits, N,
+        SL, all_max_m, primes, A, L, R, 5);
 
     if (strstr("# mod < bits>p", filter) != NULL) {
+        printf("\n");
         printf("\t|  bits x count   | method_name%19s | found    | total    | time(s) | ns/iter | cycles/limb |\n", "");
         printf("\t|%.17s|%.32s|%.10s|%.10s|%.9s|%.9s|%.13s|\n",
             padding, padding, padding, padding, padding, padding, padding);
@@ -393,12 +410,12 @@ void benchmark(int bits, size_t count, const char* filter) {
         benchmark_primorial_modulo(
             benchmark_row, filter,
             P,
-            bits, count, primes);
+            bits, N, primes);
     }
 }
 
 int main(int argc, char **argv) {
-    set<int> benchmark_sizes = {25, 30, 31, 32, 35, 40};
+    set<int> benchmark_sizes = {25, 30, 31, 32, 35, 40, 45};
     //set<int> benchmark_sizes = {25, 30, 31};
     //set<int> benchmark_sizes = {35, 40, 45};
     //set<int> benchmark_sizes = {55};
@@ -407,7 +424,7 @@ int main(int argc, char **argv) {
     assert(argc == 2 || argc == 3);
 
     uint64_t count_primes = atol(argv[1]);
-    assert( (count_primes > 0) && (count_primes < 1000001) );
+    assert( (count_primes > 0) && (count_primes <= 10'000'000) );
 
     char empty_filter[] = "";
     char *filter = empty_filter;

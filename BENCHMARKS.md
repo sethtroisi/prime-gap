@@ -37,7 +37,7 @@ $ ./benchmark 100000 modulo_search
 
 |  bits x count   | method\_name                     | found    | total    | time(s) | ns/iter | cycles/iter |
 |-----------------|----------------------------------|----------|----------|---------|---------|-------------|
-|    25 x  100000 | `modulo_search_one_op`           | 1033     | 100000   | 0.0020  |      20 | 68.8        |
+|    25 x  100000 | `single_mod_op`                  | 1033     | 100000   | 0.0020  |      20 | 68.8        |
 |    25 x  100000 | `modulo_search_brute`            | 100000   | 100000   | 0.0316  |     316 | 1071.8      |
 |    25 x  100000 | `modulo_search_euclid_small`     | 100000   | 100000   | 0.0074  |      74 | 249.9       |
 |    25 x  100000 | `modulo_search_verify`           | 100000   | 100000   | 0.0253  |     253 | 857.9       |

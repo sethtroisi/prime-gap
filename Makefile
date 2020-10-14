@@ -42,7 +42,7 @@ gap_test_simple: gap_test_simple.cpp gap_common.o
 
 
 benchmark: misc/benchmark.cpp modulo_search.o
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -I.
+	$(CC) -o $@ $^ $(CFLAGS) -lprimesieve $(LDFLAGS) -I.
 
 
 .PHONY: clean
