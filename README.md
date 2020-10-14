@@ -148,6 +148,8 @@ coprime m    228/1000,  coprime i 1991/7554,  ~0MB
 		Estimated ~31.0x faster to just run PRP now (CTRL+C to stop sieving)
 
 Saving unknowns to '907_210_1_1000_s7554_l1000M.txt'
+
+real	0m9.258s
 ```
 
 </p></details>
@@ -155,7 +157,7 @@ Saving unknowns to '907_210_1_1000_s7554_l1000M.txt'
 Verify outputs are the same with
 
 ```bash
-$ md5sum 907_210_1_1000_s7554_l1000M.m1.txt 907_210_1_1000_s7554_l1000M.txt
+$ md5sum unknowns/907_210_1_1000_s7554_l1000M{.m1,}.txt
 bfdb820237b40de0de2af71e8160ee66  907_210_1_1000_s7554_l1000M.m1.txt
 bfdb820237b40de0de2af71e8160ee66  907_210_1_1000_s7554_l1000M.txt
 
@@ -410,6 +412,9 @@ Theory and justifaction for some calculations in present in [THEORY.md](THEORY.m
 # Should probably build and install gmp head for faster next_prime
 $ sudo apt install libgmp10
 
+# slower but acceptable code is present up to commit 093a3b2b
+$ sudo apt install libprimesieve-dev
+
 $ sudo apt install libgmp-dev libmpfr-dev libmpc-dev
 $ sudo apt install sqlite3 libsqlite3-dev
 $ pip install --user gmpy2=2.1.0b5 tqdm
@@ -618,6 +623,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Make method2 the default
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
 * combined\_sieve.cpp
+  * [x] Integrate faster prime iterator (libprimesieve)
   * [x] ETA for `combined_sieve` timing.
   * [x] Test number to be marked combosite see if already marked by 2 / 3 and skip (e.g. try to avoid memory lookup)
   * [x] "expect %ld left" doesn't match

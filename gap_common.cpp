@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "gap_common.h"
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -28,7 +30,9 @@
 /* for dirname(3) */
 #include <libgen.h>
 
-#include "gap_common.h"
+/* for primesieve::iterator */
+#include <primesieve.hpp>
+
 
 using std::cout;
 using std::endl;
@@ -278,7 +282,10 @@ double prob_prime_and_stats(const struct Config& config, mpz_t &K) {
 }
 
 
+// Small sieve of Eratosthenes.
 vector<uint32_t> get_sieve_primes(uint32_t n) {
+    assert(n < 1'001'000); // Use libprimesieve for larger intervals
+
     vector<uint32_t> primes = {2};
     uint32_t half_n = n >> 1;
     vector<bool> is_prime(half_n + 1, true);
@@ -300,64 +307,6 @@ vector<uint32_t> get_sieve_primes(uint32_t n) {
     return primes;
 }
 
-
-// Faster because of better memory access patterns
-vector<uint64_t> get_sieve_primes_segmented(uint64_t n) {
-    assert( n > 10'000 );
-    uint64_t sqrt_n = sqrt(n);
-    while (sqrt_n * sqrt_n < n) sqrt_n++;
-
-    const vector<uint32_t> small_primes = get_sieve_primes(sqrt_n);
-
-    // First number in next block that primes[pi] divides.
-    vector<int32_t> next_mod(small_primes.size(), 0);
-
-    // Large enough to be fast and still fit in L1/L2 cache.
-    uint32_t BLOCKSIZE = 1 << 16;
-    uint32_t ODD_BLOCKSIZE = BLOCKSIZE >> 1;
-    vector<char> is_prime(ODD_BLOCKSIZE, true);
-
-    vector<uint64_t> primes = {2};
-
-    uint32_t max_pi = 0;
-    for (uint64_t B = 0; B < n; B += BLOCKSIZE) {
-        uint64_t B_END = B + BLOCKSIZE - 1;
-        if (B_END > n) {
-            BLOCKSIZE = (n - B);
-            ODD_BLOCKSIZE = (n - B + 1) >> 1;
-            B_END = n;
-        }
-
-        while ((max_pi < small_primes.size()) &&
-               small_primes[max_pi] * small_primes[max_pi] <= B_END) {
-            uint64_t first = small_primes[max_pi] * small_primes[max_pi];
-            next_mod[max_pi] = (first - B) >> 1;
-            max_pi += 1;
-        }
-
-        // reset is_prime
-        std::fill(is_prime.begin(), is_prime.end(), true);
-        if (B == 0) is_prime[0] = 0; // Skip 1
-
-        // Can skip some large pi up to certain B (would have to set next_mod correctly)
-        for (uint32_t pi = 1; pi < max_pi; pi++) {
-            const uint32_t prime = small_primes[pi];
-            uint32_t first = next_mod[pi];
-            for (; first < ODD_BLOCKSIZE; first += prime){
-                is_prime[first] = false;
-            }
-            next_mod[pi] = first - ODD_BLOCKSIZE;
-        }
-        for (uint32_t prime = 0; prime < ODD_BLOCKSIZE; prime++) {
-            if (is_prime[prime]) {
-                primes.push_back(B + 2 * prime + 1);
-            }
-        }
-    }
-    return primes;
-}
-
-
 static bool isprime_brute(uint32_t n) {
     if ((n & 1) == 0)
         return false;
@@ -366,86 +315,6 @@ static bool isprime_brute(uint32_t n) {
             return false;
     return true;
 }
-
-void get_sieve_primes_segmented_lambda(uint64_t n, std::function<bool (uint64_t)> lambda) {
-    // Sieve intervals of this size at a time.
-    uint32_t BLOCKSIZE = 1 << 16;
-    // Large enough to be fast and still fit in L1/L2 cache.
-    uint32_t ODD_BLOCKSIZE = BLOCKSIZE >> 1;
-    vector<char> is_prime(ODD_BLOCKSIZE, true);
-
-    lambda(2L);
-
-    vector<int32_t> primes = {3};
-    // First number in next block that primes[pi] divides.
-    vector<int32_t> next_mod = {9 >> 1};
-
-    uint32_t p_lim = 5;
-    uint64_t p2_lim = p_lim * p_lim;
-
-    // index of first prime > BLOCKSIZE
-    size_t max_small_pi = BLOCKSIZE;
-
-    for (uint64_t B = 0; B < n; B += BLOCKSIZE) {
-        uint64_t B_END = B + BLOCKSIZE - 1;
-        if (B_END > n) {
-            BLOCKSIZE = (n - B);
-            ODD_BLOCKSIZE = (n - B + 1) >> 1;
-            B_END = n;
-        }
-
-        while (p2_lim <= B_END) {
-            if (isprime_brute(p_lim)) {
-                primes.push_back(p_lim);
-                assert( p2_lim >= B );
-                next_mod.push_back((p2_lim - B) >> 1);
-            }
-            p2_lim += 4 * p_lim + 4;
-            p_lim += 2;
-            //assert( p_lim * p_lim == p2_lim );
-        }
-
-        if (max_small_pi == BLOCKSIZE && p_lim > BLOCKSIZE) {
-            max_small_pi = primes.size();
-        }
-
-        // reset is_prime
-        std::fill(is_prime.begin(), is_prime.end(), true);
-        if (B == 0) is_prime[0] = 0; // Skip 1
-
-        // Small primes can divide multiple things, large prime can't
-        uint32_t pi = 0;
-        uint32_t stop_small = std::min(max_small_pi, primes.size());
-        for (; pi < stop_small; pi++) {
-            const uint32_t prime = primes[pi];
-            uint32_t first = next_mod[pi];
-            for (; first < ODD_BLOCKSIZE; first += prime) {
-                is_prime[first] = false;
-            }
-            next_mod[pi] = first - ODD_BLOCKSIZE;
-        }
-        // N=10^12, p_lim=10^6, worst case "miss" ~15 intervals in a row.
-        for (; pi < primes.size(); pi++) {
-            const uint32_t prime = primes[pi];
-            uint32_t first = next_mod[pi];
-            if (first < ODD_BLOCKSIZE) {
-                is_prime[first] = false;
-                first += prime;
-            }
-            next_mod[pi] = first - ODD_BLOCKSIZE;
-        }
-
-
-        for (uint32_t prime = 0; prime < ODD_BLOCKSIZE; prime++) {
-            if (is_prime[prime]) {
-                if (!lambda(B + 2 * prime + 1)) {
-                    return;
-                }
-            }
-        }
-    }
-}
-
 
 
 void Args::show_usage(char* name) {

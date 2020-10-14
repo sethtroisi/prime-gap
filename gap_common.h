@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <cassert>
 #include <functional>
 #include <map>
 #include <string>
@@ -122,5 +123,3 @@ double prob_prime_and_stats(const struct Config& config, mpz_t &K);
 /* Prime Stuff */
 
 vector<uint32_t> get_sieve_primes(uint32_t n);
-vector<uint64_t> get_sieve_primes_segmented(uint64_t n);
-void             get_sieve_primes_segmented_lambda(uint64_t n, std::function<bool (uint64_t)> lambda);
