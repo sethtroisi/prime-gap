@@ -84,11 +84,12 @@ int main(int argc, char* argv[]) {
     }
     setlocale(LC_NUMERIC, "C");
 
-    if ((config.max_prime > 2'000'000'000) &&
-            (config.max_prime / config.minc > 100'000) &&
-            (config.p <= 10000)) {
-        printf("\tmax_prime(%ldB) is probably too large\n",
-            config.max_prime / 1'000'000'000);
+    if (config.max_prime > 500'000'000) {
+        float m_per = config.max_prime / ((float) config.minc * config.sieve_length);
+        if (m_per < .1 && config.p <= 8000) {
+            printf("\tmax_prime(%ldB) is probably too large\n",
+                config.max_prime / 1'000'000'000);
+        }
     }
 
     if (config.save_unknowns) {
@@ -237,14 +238,18 @@ void set_defaults(struct Config& config) {
 
         // Not worth improving given method2 CTRL+C handling.
         if (K_log >= 1500) {
-            config.max_prime =  10'000'000'000;
+            config.max_prime =  100'000'000'000;
         } else {
-            config.max_prime =   1'000'000'000;
+            config.max_prime =   10'000'000'000;
         }
-
+        if (config.method1) {
+            printf("Can't use method1 and not set max_prime");
+            exit(1);
+        }
         if (config.verbose >= 0) {
             printf("AUTO SET: max_prime (log(K) = ~%.0f): %ld\n",
                 K_log, config.max_prime);
+            printf("WATCH for 'Estimated 2x faster (CTRL+C to stop sieving)' warning");
         }
     }
 
@@ -489,6 +494,7 @@ void prime_gap_search(const struct Config config) {
                 (pi - SMALL_PRIME_PI) - pr_pi,
                 100 - (100.0 * pr_pi / (pi - SMALL_PRIME_PI)));
 
+            // TODO print error
             float mertens3 = log(log(MAX_PRIME)) - log(log(SMALL_PRIME_LIMIT_METHOD1));
             printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
                 expected_large_primes, (2 * SL + 1) * mertens3);
@@ -1078,7 +1084,10 @@ void prime_gap_parallel(struct Config config) {
 
         if (prime >= s_next_print) {
             if (prime >= s_next_print) {
-                if (s_next_print == 5 * next_mult) {
+                size_t all_ten = prime > 10'000'000'000;
+                // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
+                // Print 60,70,80,90 billion because intervals are wider.
+                if (s_next_print == (5 + 5 * all_ten) * next_mult) {
                     next_mult = 10 * next_mult;
                     s_next_print = 0;
                 }
@@ -1139,7 +1148,7 @@ void prime_gap_parallel(struct Config config) {
                     skipped_prp / int_secs);
 
                 double run_prp_mult = int_secs / (prp_time_est * skipped_prp);
-                if (run_prp_mult > 4) {
+                if (run_prp_mult > 2) {
                     printf("\t\tEstimated ~%.1fx faster to just run PRP now (CTRL+C to stop sieving)\n",
                         run_prp_mult);
                 }
@@ -1179,7 +1188,7 @@ void prime_gap_parallel(struct Config config) {
             if (config.save_unknowns && prime > 1e8 && prime != LAST_PRIME) {
                 // reset unknown_filename if cached;
                 config.unknown_filename = "";
-                size_t old = config.max_prime;
+                uint64_t old = config.max_prime;
                 config.max_prime = prime - (prime % 1'000'000);
                 save_unknowns_method2(
                     config,
