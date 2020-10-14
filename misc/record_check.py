@@ -120,8 +120,13 @@ def print_record_gaps(args, gaps):
                         own_records.append(gap[2])
                     else:
                         record_lines.append(gap[2])
-                    print ("\tRecord {:3d}{:1} | {}\tGap={} (old: {}{})".format(
-                        len(record_lines), "*" * is_own_record, gap[3], size,
+
+                    if is_own_record:
+                        ith = len(own_records)
+                        special = ith in (1,2,3,4,5,10,20,30,40,50) or ith % 100 == 0
+                        if not special: continue
+                    print ("\tRecord {:4} | {}\tGap={} (old: {}{})".format(
+                        str(len(own_records)) + "*" if is_own_record else len(record_lines), gap[3], size,
                         existing[0], " by you" * is_own_record))
 
         if record_lines:
