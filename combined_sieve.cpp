@@ -908,6 +908,9 @@ void prime_gap_parallel(struct Config config) {
             5;
         const double total_estimate = k_mod_time + m_search_time + extra_time;
 
+        const double estimated_prp_per_m = 1 / (prob_prime * log(config.max_prime) * exp(GAMMA));
+        const double test_estimate = 2 * valid_ms * estimated_prp_per_m * prp_time_est;
+
         printf("Estimated misc (PrimePi, count unknown, ...) time: %.0f (%.1f%% total)\n",
             extra_time, 100.0 * extra_time / total_estimate);
 
@@ -918,8 +921,12 @@ void prime_gap_parallel(struct Config config) {
         printf("Estimated modulo_searches(million): %ld, time: %.0f (%.1f%% total)\n",
                 expected_m_stops / 1'000'000, m_search_time, 100.0 * m_search_time / total_estimate);
 
-        printf("Estimated total time: %.0f seconds (%.2f hours)\n",
-                total_estimate, total_estimate / 3600);
+        printf("Estimated sieve time: %.0f seconds (%.2f hours) (%.3f)\n",
+                total_estimate, total_estimate / 3600,
+                100 * total_estimate / (test_estimate + total_estimate));
+        printf("Estimated test  time: %.0f hours (%.1f%%)\n",
+                test_estimate / 3600,
+                100 * test_estimate / (test_estimate + total_estimate));
 
         printf("\n");
     }
