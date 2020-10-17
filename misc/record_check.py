@@ -116,15 +116,19 @@ def print_record_gaps(args, gaps):
 
                 improvement = new_merit - existing[0]
                 if improvement > -6e-3:
+                    if improvement < 0:
+                        # XXX: primegapverify parse gap and compare.
+                        #print ("Close:", existing, gap[2])
+                        continue
+
                     if is_same and is_own_record:
                         own_records.append(gap[2])
-                    else:
-                        record_lines.append(gap[2])
-
-                    if is_own_record:
                         ith = len(own_records)
                         special = ith in (1,2,3,4,5,10,20,30,40,50) or ith % 100 == 0
                         if not special: continue
+                    else:
+                        record_lines.append(gap[2])
+
                     print ("\tRecord {:<5} | {:77s} Gap={:<6} (old: {:.2f}{} +{:.2f})".format(
                         str(len(own_records)) + "*" if is_own_record else len(record_lines), gap[3], size,
                         existing[0], " by you" * is_own_record, gap[1] - existing[0]))
@@ -194,9 +198,12 @@ def search_db(args):
 
         # Min gap for current record (filters 80% of results)
         existing = conn.execute(
-            'SELECT p, d, m, next_p_i, prev_p_i, merit FROM result '
-            'WHERE  merit > 18 or (next_p_i + prev_p_i) > 50000 '
-#            'ORDER BY p, d, m'
+            'SELECT p, d, m, next_p_i, prev_p_i, next_p_i + prev_p_i as gapsize, merit FROM result '
+            'WHERE  ((merit > 21.9) OR '
+            '        (gapsize > 30000 AND merit > 18.3) OR'
+            '        (gapsize > 50000 AND merit > 10.4) OR'
+            '        (gapsize > 100000))'
+            'ORDER BY p, d, m'
         ).fetchall()
         for gap in existing:
             gapsize = gap['next_p_i'] + gap['prev_p_i']
