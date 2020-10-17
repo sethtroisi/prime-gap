@@ -116,7 +116,7 @@ def print_record_gaps(args, gaps):
 
                 improvement = new_merit - existing[0]
                 if improvement > -6e-3:
-                    if is_own_record:
+                    if is_same and is_own_record:
                         own_records.append(gap[2])
                     else:
                         record_lines.append(gap[2])

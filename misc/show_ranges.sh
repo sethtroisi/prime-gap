@@ -48,15 +48,18 @@ SELECT "";
 #SELECT "";
 EOL
 
+#              num_m * (208.3 / time_sieve), time_tests / num_processed,
 sqlite3 -readonly "prime-gap-search.db" <<EOL
 .timeout 20
 SELECT "Table 'range'";
 SELECT PRINTF("  P=%-5d D=%-9d M(%-7d) = %9d + [0, %9d] ",
               p, d, num_m, m_start, m_inc),
-       PRINTF(" time(sieve(%4dB),stats,tests)= %7.1f %5.1f %9.1f (%5.1f%%) | per %-7d m: %8.3f",
+       PRINTF(" time(sieve(%4dB),stats,tests)= %7.1f %5.1f %9.1f (%5.1f%%) | %.4f %7.3f | %5.4f / %d",
               max_prime / 1000000000,
               time_sieve, time_stats, time_tests, 100 * time_tests / (time_sieve + time_stats + time_tests),
-              num_processed, (time_sieve + time_stats + time_tests) / num_processed)
+              time_sieve / num_m, time_tests / num_processed,
+              (time_sieve + time_stats + time_tests) / num_processed,
+              num_processed)
 FROM range ORDER BY p, d, m_start, m_inc;
 SELECT "";
 
@@ -69,12 +72,11 @@ FROM (
 )
 GROUP BY p, d ORDER BY p, d;
 SELECT"";
-# Everything in results SHOULD be in m_stats
-#    UNION
-#  SELECT p,d,m, 2 as primes, 2 as prp_tests, merit, 0 as test_time FROM result
+EOL
 
+sqlite3 -readonly "prime-gap-search.db" <<EOL
+.timeout 20
 SELECT "Table 'result': " || COUNT(*) FROM result;
 SELECT "Table 'm_stats': " || COUNT(*) FROM m_stats;
 SELECT "Table 'range_stats': " || COUNT(*) FROM range_stats;
-
 EOL

@@ -1140,7 +1140,7 @@ void prime_gap_parallel(struct Config config) {
 
             setlocale(LC_NUMERIC, "");
             if (config.verbose + is_last >= 1) {
-                printf("%'-10ld (primes %'ld/%'ld)\t(seconds: %.2f/%-.1f | per m: %.2g)\n",
+                printf("%'-10ld (primes %'ld/%'ld)\t(seconds: %.2f/%-.1f | per m: %.3g)\n",
                     prime,
                     pi_interval, pi,
                     int_secs, secs,

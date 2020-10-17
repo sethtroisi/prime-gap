@@ -35,21 +35,45 @@ def expected_PRP(max_prime, P):
     ln_n = float(gmpy2.log(gmpy2.primorial(P)))
     return ln_n, sieve_percent(max_prime) / prime_chance(ln_n)
 
+
 def expected_PRP_gap(max_prime, gap):
     return gap * sieve_percent(max_prime)
 
-#print (expected_PRP_gap(40 * 10 ** 6, 155056))
+
+def pgsurround_sieve_limit(ln):
+    logn = ln
+    log2n = ln / math.log(2)
+    assert 900 <= log2n <= 203601, log2n
+    return (0.05 + (log2n/8000.0)) * logn * logn * math.log(logn)
+
+def ParameterSelection():
+    for max_prime, primes in (
+        (10**4, 1229), (10**5, 9592), (10**6, 78498),
+        (10**8, 5761455), (4*10**9, 189961812), (10**10, 4118054813),
+        (10**11, 4118054813), (10**12, 37607912018),
+    ):
+
+        power = math.log10(max_prime)
+        primes = ("{}" if primes < 1e9 else "{:.1e}").format(primes)
+        percent = sieve_percent(max_prime)
+        print(f"$10^{{{power:<2}}}$  & {primes:8}\t& {percent:.6f} &\t\t\\\\")
+
 
 
 def Appendix1():
     # 503, 1009, 1511, 5003, 10007
     for P, mp in [
+            (1511, 250e9),
             (2111, 500e9),
             (4441, 1e12),
+            (5333, 5e12),
             (8887, 1e12),
     ]:
         ln, prps = expected_PRP(mp, P)
-        print (f"{P:5} & {ln:.0f}\t& {mp/1e9:4.0f}e9  & {prps:.1f} \\\\")
+        pg_mp = pgsurround_sieve_limit(ln)
+        speedup = sieve_percent(mp) / sieve_percent(pg_mp)
+
+        print (f"{P:5} & {ln:.0f}\t& {mp/1e9:4.0f}e9\t& {prps:.1f}\t& {pg_mp:.1e}\t& {speedup:.1%}\t\\\\")
 
 
 def Trick2():
@@ -71,5 +95,6 @@ def Trick2():
             count += ((first % p) + 2 * X) >= p
         print (f"{count}/{primes} = {count / primes:.2%}\t", time.time() - t)
 
-#Appendix1()
+#ParameterSelection()
+Appendix1()
 #Trick2()
