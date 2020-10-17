@@ -201,9 +201,10 @@ def search_db(args):
             'SELECT p, d, m, next_p_i, prev_p_i, next_p_i + prev_p_i as gapsize, merit FROM result '
             'WHERE  ((merit > 21.9) OR '
             '        (gapsize > 30000 AND merit > 18.3) OR'
-            '        (gapsize > 50000 AND merit > 10.4) OR'
+            '        (gapsize > 50000 AND merit > 15.3) OR'
+            '        (gapsize > 70000 AND merit > 10.4) OR'
             '        (gapsize > 100000))'
-            'ORDER BY p, d, m'
+#            'ORDER BY p, d, m'
         ).fetchall()
         for gap in existing:
             gapsize = gap['next_p_i'] + gap['prev_p_i']

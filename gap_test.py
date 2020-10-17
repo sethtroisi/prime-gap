@@ -496,14 +496,29 @@ def load_records(conn, log_N):
     # Find records merit <= gap * log_N
     # Stop at merit = 35
 
-    # NOTE: to make sure 'count(records) still count after a gap
-    # record is submitted subtract a small amound from merit
+    # NOTE: to make sure 'count(records)' still counts after a
+    # found record is submitted subtract a small amound from merit
     rv = conn.execute(
         "SELECT gapsize FROM gaps "
         "WHERE gapsize > merit * ? - 0.001"
         "  AND gapsize < 35 * ?",
         (log_N, log_N))
-    return tuple(g[0] for g in sorted(rv))
+    records = [g[0] for g in rv]
+
+    # Handle missing gaps
+    SMALLEST_MISSING = 113326
+    largest_likely = int(log_N * 30)
+    if SMALLEST_MISSING < largest_likely:
+        rv = conn.execute(
+            "SELECT gapsize FROM gaps "
+            "WHERE gapsize BETWEEN ? AND ?",
+            (SMALLEST_MISSING, largest_likely))
+        # Any number not present in this list is 'missing'
+        all_gaps = range(SMALLEST_MISSING, largest_likely+1, 2)
+        missing = list(set(all_gaps) - set(g[0] for g in rv))
+        records.extend(missing)
+
+    return tuple(sorted(records))
 
 
 def load_existing(conn, args):
@@ -591,8 +606,6 @@ def save(conn, p, d, m, next_p_i, prev_p_i, merit,
         "WHERE p=? AND d=? AND m=?",
         (next_p_i, prev_p_i, round(merit,4),
          p_tests, n_tests, test_time, p, d, m))
-
-    conn.commit()
 
 
 def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_prime):
@@ -997,6 +1010,11 @@ def run_in_parallel(
             result = results_q.get(block=False)
             process_result(conn, args, record_gaps, mi_probs, data, sc, result)
 
+            # Only commit records every once in a while to help with very fast results.
+            per_10s = int(10 * args.threads / result[-1])
+            if per_10s == 0 or sc.tested % per_10s == 0 or sc.tested % 200 == 0:
+                conn.commit()
+
     print("Everything Queued, done.set() & pushing STOP")
     done_flag.set()
 
@@ -1009,6 +1027,7 @@ def run_in_parallel(
         print(f"Waiting on {sc.will_test - sc.tested} of {sc.will_test} results")
         result = results_q.get(block=True)
         process_result(conn, args, record_gaps, mi_probs, data, sc, result)
+        conn.commit()
 
     print("Joining work_q")
     work_q.join_thread()
@@ -1044,6 +1063,14 @@ def prime_gap_test(args):
         record_gaps = load_records(conn, M_log)
         print ("\tLoaded {} records ({} to {}) from {!r}".format(
             len(record_gaps), record_gaps[0], record_gaps[-1], args.prime_gaps_db))
+
+        # Calculate min_merit record, min_merit for 50% record, min_merit for 90% record
+        min_record = record_gaps[0] / M_log
+        # Look 250 records later and check if contains more than half of numbers
+        avg_record = next(record_gaps[r] for r in range(len(record_gaps) - 250)
+                if record_gaps[r + 250] - record_gaps[r] < 1000)
+        print ("\tMin merit for record {:.2f}, gapsize for likely record {:.2f} {}".format(
+            min_record, avg_record / M_log, avg_record))
 
     # ----- Open Output file
     print("\tLoading unknowns from {!r}".format(args.unknown_filename))

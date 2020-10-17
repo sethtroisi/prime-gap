@@ -17,6 +17,7 @@
 set -eux
 
 sqlite3 "prime-gap-search.db" <<EOL
+.timeout 20
 UPDATE range AS ra SET
     num_processed =
         (SELECT count(*) FROM result r
@@ -32,11 +33,11 @@ UPDATE range SET num_remaining = num_m - num_processed;
 SELECT changes() || " Count Updates";
 SELECT "";
 
-UPDATE m_stats AS m
-SET rid = NULL
-WHERE m.rid not in (SELECT rid from range);
-SELECT changes() || " m_stats.rid Updates";
-SELECT "";
+#UPDATE m_stats AS m
+#SET rid = NULL
+#WHERE m.rid not in (SELECT rid from range);
+#SELECT changes() || " m_stats.rid Updates";
+#SELECT "";
 
 # Happens from missing_gap, not sure quite what to do.
 #INSERT INTO result (P,D,m, next_p_i,prev_p_i, merit)
