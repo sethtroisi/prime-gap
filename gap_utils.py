@@ -100,7 +100,7 @@ def generate_unknown_filename(p, d, ms, mi, sl, mp, method1 = False, ext = ".txt
 def verify_args(args):
     if args.unknown_filename:
         fn = args.unknown_filename
-        if not os.path.exists(fn):
+        if not (os.path.exists(fn) or os.path.exists("unknowns/" + fn)):
             print ("\"{}\" doesn't exist".format(fn))
             exit(1)
 
