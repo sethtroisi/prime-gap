@@ -417,7 +417,7 @@ $ sudo apt install libprimesieve-dev
 
 $ sudo apt install libgmp-dev libmpfr-dev libmpc-dev
 $ sudo apt install sqlite3 libsqlite3-dev
-$ pip install --user gmpy2=2.1.0b5 tqdm
+$ pip install --user gmpy2=2.1.0b5 tqdm primegapverify
 
 $ sqlite3 prime-gap-search.db < schema.sql
 

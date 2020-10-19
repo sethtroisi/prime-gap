@@ -28,6 +28,9 @@ import sqlite3
 import sys
 from collections import Counter, defaultdict
 
+import gmpy2
+import primegapverify
+
 
 def get_arg_parser():
     parser = argparse.ArgumentParser('Search prime gaps logs')
@@ -85,8 +88,11 @@ def print_record_gaps(args, gaps):
         own_records = []
         record_lines = []
         for gap in gaps:
+                # gapsize, merit, submit, startprime, "line"
                 size = gap[0]
                 new_merit = gap[1]
+                submit = gap[2]
+                startprime = gap[3]
                 # These filters generated with
                 # sqlite3 gaps.db  "select min(merit) from gaps where gapsize BETWEEN 1500 AND 50000;"
                 if size <= 30000 and new_merit < 21.9:
@@ -101,36 +107,42 @@ def print_record_gaps(args, gaps):
                     ' gapsize=?', (size,)).fetchone()
 
                 if not existing:
-                    record_lines.append(gap[2])
+                    record_lines.append(submit)
                     print ("\tRecord {:3d}  | {}\tGap={} (New!)".format(
-                        len(record_lines), gap[3], size))
+                        len(record_lines), submit, size))
                     continue
 
                 # Works most of the time, could have false positives
-                is_same = existing[2].replace(" ","") in gap[2].replace(" ", "")
+                is_same = existing[2].replace(" ","") in startprime.replace(" ", "")
                 is_own_record = existing[3] == args.whoami
 
                 if is_same and not is_own_record:
-                    print("\tREDISCOVERED | {:77s} (old: {})".format(gap[3], existing))
+                    print("\tREDISCOVERED | {:70s} (old: {})".format(gap[2], existing))
                     continue
 
-                improvement = new_merit - existing[0]
-                if improvement > -6e-3:
-                    if improvement < 0:
-                        # XXX: primegapverify parse gap and compare.
-                        #print ("Close:", existing, gap[2])
-                        continue
+                old_n = primegapverify.parse(existing[2])
+                if old_n:
+                    # Strip to just the number section
+                    new_n = primegapverify.parse(startprime)
+                    assert new_n, new_n
+                    improvement = float(size/gmpy2.log(new_n) - size/gmpy2.log(old_n))
+                else:
+                    improvement = new_merit - existing[0] + 6e-3
+
+                if improvement >= 0:
+                    #if improvement < 6e-3:
+                    #    print ("Close:", existing[2], "vs newer", startprime)
 
                     if is_same and is_own_record:
                         own_records.append(gap[2])
                         ith = len(own_records)
-                        special = ith in (1,2,3,4,5,10,20,30,40,50) or ith % 100 == 0
+                        special = ith in (1,2,5,10,20,50) or ith % 100 == 0
                         if not special: continue
                     else:
                         record_lines.append(gap[2])
 
-                    print ("\tRecord {:<5} | {:77s} Gap={:<6} (old: {:.2f}{} +{:.2f})".format(
-                        str(len(own_records)) + "*" if is_own_record else len(record_lines), gap[3], size,
+                    print ("\tRecord {:<5} | {:70s} | Gap={:<6} (old: {:.2f}{} +{:.2f})".format(
+                        str(len(own_records)) + "*" if is_same else len(record_lines), gap[4], size,
                         existing[0], " by you" * is_own_record, gap[1] - existing[0]))
 
         if record_lines:
@@ -170,10 +182,17 @@ def search_logs(args):
                     partial_line = line.split(':')[-1].strip()
                     print ("    Match {} at line {}: {}".format(
                         file_match, li, partial_line))
+
                 gaps.append([
-                    int(match.group(1)), # gap
-                    float(match.group(2)), # merit
+                    # gap
+                    int(match.group(1)),
+                    # merit
+                    float(match.group(2)),
+                    # submit format
                     " ".join(match.groups()),
+                    # number
+                    " ".join(match.groups()[2:]),
+                    # line
                     line,
                 ])
 
@@ -207,17 +226,18 @@ def search_db(args):
 #            'ORDER BY p, d, m'
         ).fetchall()
         for gap in existing:
-            gapsize = gap['next_p_i'] + gap['prev_p_i']
+            gapsize = gap['gapsize']
             merit = gap['merit']
-            line = "{:6d}  {:.3f}  {} * {}#/{} -{} to +{}".format(
+            number = "{} * {}#/{} -{}".format(
+                gap["m"], gap["P"], gap["D"], gap["prev_p_i"])
+
+            submit = "{:6d}  {:.3f}  {} to +{}".format(
                 gapsize, merit,
-                gap["m"], gap["P"], gap["D"],
-                gap["prev_p_i"], gap["next_p_i"])
+                number, gap["next_p_i"])
 
             gaps.append((
-                gapsize, merit,
-                line,
-                ", ".join(f"{k}={gap[k]}" for k in gap.keys()),
+                gapsize, merit, submit, number,
+                ", ".join(f"{k}={gap[k]}" for k in ('p', 'd', 'm', 'prev_p_i', 'next_p_i')),
             ))
 
     describe_found_gaps(gaps)
