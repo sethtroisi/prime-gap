@@ -196,6 +196,37 @@ One sided gap statistics
 Combined (prev + next) gap statistics
 ![Combined Gap Statistics](data/1_3001_2190_100000_s40000_l10000M.txt.comb.png)
 
+`gap_stats` utilizes an extended range (`SL` to `2*SL`) which can help with `prob(record)` when
+the first record is much greater than `SL` (which is common for smaller P. Th extended range
+only looks at `X` where `coprime(K, X) == 1` and a wheel over small factors (2, 3, 5, 7) of `d`.
+It involves a lot of maths that is hard to verify.
+
+It is useful to verify that prob(inner + outer) is fairly stable
+1. `SL` is increased
+2. `max_prime` is increased (individual values will change but `RECORD avg:` shouldn't).
+
+```bash
+$ ./gap_stats --unknown-filename 2003_2310_1_10000_s30000_l1000M.txt
+
+prob record inside sieve: 0.02380   prob outside: 0.02025
+	RECORD : top 100% ( 2077) => sum(prob) = 4.41e-02 (avg: 2.12e-05)
+
+$ ./gap_stats --unknown-filename 2003_2310_1_10000_s35000_l1000M.txt
+
+prob record inside sieve: 0.03517   prob outside: 0.00846
+	RECORD : top 100% ( 2077) => sum(prob) = 4.36e-02 (avg: 2.10e-05)
+
+$ ./gap_stats --unknown-filename 2003_2310_1_10000_s40000_l1000M.txt
+
+prob record inside sieve: 0.04069   prob outside: 0.00277
+	RECORD : top 100% ( 2077) => sum(prob) = 4.35e-02 (avg: 2.09e-05)
+
+$ ./gap_stats --unknown-filename 2003_2310_1_10000_s50000_l1000M.txt
+
+prob record inside sieve: 0.04332   prob outside: 0.00007
+	RECORD : top 100% ( 2077) => sum(prob) = 4.34e-02 (avg: 2.09e-05)
+```
+
 
 ## Choosing `--top-x-percent`
 

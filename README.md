@@ -563,12 +563,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * README.md
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
-  * [ ] Add prob_record via greater on both sides
 * Project
   * [ ] Records / day in status.py or record_check.py
-  * [ ] Allow up to 64 bit (M * prime)?
-    * [ ] Benchmark GMP_VALIDATE_LARGE_FACTORS
-
 * combined\_sieve.cpp
 * gap\_stats.cpp
   * [ ] Wheel for extended range
@@ -591,11 +587,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * combined\_sieve.cpp
   * [ ] Option to output m with gcd(m, d) != 1
   * [ ] optimize D helper
-  * [ ] (M_inc * max_prime < 63)
-    * The trick is to compute (M_start + M_inc) * base_r as the combination of two additions.
-    * While M_start * base_r can overflow, break it into
-      * (max_m * (M_start / max_m) + (M_start % max_m)) * base_r
-      * (d * ((max_m * base_r) % p) + (r * base_r)) % p
+  * [ ] `M_inc * max_prime > 2^64` use `modulo_search_euclid_all_large`
+    * [ ] Benchmark GMP_VALIDATE_LARGE_FACTORS
 * gap\_stats.cpp
   * [ ] Produce P(record) / day estimate
   * [ ] Check if higher prob is related to unique (mi % d)

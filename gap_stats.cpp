@@ -422,7 +422,7 @@ void store_stats(
  * Change that ith unknown number (in sieve) is the first prime
  * Prob_prime_nth[i] = (1 - prob_prime)^(i-1) * prob_prime
  *
- * Change that the first prime is ith or greater unknown
+ * Change that the first prime is later than i'th unknown
  * prod_great_nth[i] = (1 - prob_prime)^i
  */
 const double DOUBLE_NTH_PRIME_CUTOFF = 1e-13;
@@ -467,7 +467,7 @@ void prob_extended_gap(
     // Need to correct for gcd_ui(K, i) below
     double prob_prime_coprime = PROB_PRIME;
     for (auto prime : K_primes) {
-        if (prime % config.d != 0) {
+        if (config.d % prime != 0) {
             prob_prime_coprime /= (1 - 1.0 / prime);
         }
     }
@@ -510,9 +510,11 @@ void prob_extended_gap(
     vector<float> prob_great_nth;
     prob_nth_prime(prob_prime_coprime, prob_prime_nth, prob_great_nth);
 
-	map<int, vector<char>> coprime_ms;
-
     // For each wheel mark off a divisors of small primes in d.
+	map<int, vector<char>> coprime_ms;
+    float average_inner_coprime = 0;
+    float average_extended_coprime = 0;
+
     for (int m = 0; m < wheel; m++) {
         // Don't need any where m is coprime with d
         if (gcd(m, wheel) > 1) continue;
@@ -534,20 +536,25 @@ void prob_extended_gap(
         }
 		coprime_ms[m] = is_coprime_m;
 
+        size_t inner_coprime    = std::count(is_coprime_m.begin(), is_coprime_m.begin() + SL, true);
         size_t extended_coprime = std::count(is_coprime_m.begin() + SL, is_coprime_m.end(), true);
-        gap_probs.average_coprime += extended_coprime;
+        average_inner_coprime += inner_coprime;
+        average_extended_coprime += extended_coprime;
 
-//        printf("\tWheel: %-3d %ld/%d inner, %ld/%d extended coprime)\n",
-//			m,
-//			std::count(is_coprime_m.begin(), is_coprime_m.begin() + SL, true), SL,
-//			extended_coprime, SL);
+        //printf("\tWheel: %-3d %ld/%d inner, %ld/%d extended coprime)\n",
+		//	m, inner_coprime, SL, extended_coprime, SL);
 	}
-    gap_probs.average_coprime /= coprime_ms.size();;
-    gap_probs.prob_extended = prob_great_nth[(int) gap_probs.average_coprime];
+    average_inner_coprime /= coprime_ms.size();
+    average_extended_coprime /= coprime_ms.size();
+    gap_probs.average_coprime = average_extended_coprime;
+    gap_probs.prob_extended = prob_great_nth[(int) average_extended_coprime];
+
     if (config.verbose >= 2) {
         printf("Using Wheel: %d for extended probs\n", wheel);
-        printf("\tAverage %.0f coprimes => %.3f%% prob_greater\n",
-            gap_probs.average_coprime, 100 * gap_probs.prob_extended);
+        printf("\tAverage %5.0f inner    coprimes => %.3g%% prob_greater\n",
+            average_inner_coprime, prob_great_nth[(int) average_inner_coprime]);
+        printf("\tAverage %5.0f extended coprimes => %.3g%% prob_greater\n",
+            gap_probs.average_coprime, gap_probs.prob_extended);
     }
 
     for (int m = 0; m < wheel; m++) {
@@ -616,9 +623,11 @@ void setup_probnth(
     // ----- Sieve stats
     const double PROB_PRIME = 1 / N_log - 1 / (N_log * N_log);
     const double UNKNOWNS_AFTER_SIEVE = 1 / (log(config.max_prime) * exp(GAMMA));
+    const double UNKNOWNS_AFTER_COPRIME = 1 / (log(config.p) * exp(GAMMA));
     const double PROB_PRIME_AFTER_SIEVE = PROB_PRIME / UNKNOWNS_AFTER_SIEVE;
     if (config.verbose >= 2) {
         printf("prob prime             : %.7f\n", PROB_PRIME);
+        printf("prob prime coprime     : %.7f\n", PROB_PRIME / UNKNOWNS_AFTER_COPRIME);
         printf("prob prime after sieve : %.5f\n\n", PROB_PRIME_AFTER_SIEVE);
     }
 
@@ -763,9 +772,18 @@ void run_gap_file(
         // Note slightly different from N_log
         float log_start_prime = K_log + log(m);
 
-        // TODO: should this actually be (1 - prob_great_nth[size] + prob_unknown_extended)^2
-        double prob_seen = (1 - gap_probs.great_nth_sieve[1 + unknown_high.size()]) *
-                           (1 - gap_probs.great_nth_sieve[1 + unknown_low.size()]);
+        const double prob_prev_end = gap_probs.great_nth_sieve[unknown_low.size()];
+        const double prob_next_end = gap_probs.great_nth_sieve[unknown_high.size()];
+        const double prob_extended = gap_probs.prob_extended;
+
+        // Directly examined (1 - prob_prev_end) * (1 - prob_next_end)
+        // +
+        // Extended examined (1 - prob_prev_end) * (prob_next_end * (1 - prob_extended))
+        // =                 (1 - prob_prev_end) * (1 - prob_next_end * prob_extended)
+        const double prob_seen =
+            ((1 - prob_prev_end) * (1 - prob_next_end) +
+             (1 - prob_prev_end) * (prob_next_end * (1 - prob_extended)) +
+             (1 - prob_next_end) * (prob_prev_end * (1 - prob_extended)));
 
         double prob_record = 0;
         double prob_is_missing_gap = 0;
@@ -909,10 +927,10 @@ void run_gap_file(
             cout << endl;
     }
     if (config.verbose >= 2) {
-        printf("prob record inside sieve: %.5f   prob outside: %.5f\n",
+        printf("prob record inside sieve: %.5f   prob outside: %.5f\n\n",
                 sum_prob_inner, sum_prob_outer);
-        printf("\tsum(prob any gap): %.5f\n", average_v(prob_gap_norm) * prob_gap_norm.size());
-        printf("\tavg seen prob:   %.7f\n", average_v(probs_seen));
+        printf("\tsum(prob(gap[X])): %.5f\n", average_v(prob_gap_norm) * prob_gap_norm.size());
+        printf("\tavg seen prob    : %.7f\n", average_v(probs_seen));
     }
 }
 
