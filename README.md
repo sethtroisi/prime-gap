@@ -566,11 +566,12 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Add prob_record via greater on both sides
 * Project
   * [ ] Records / day in status.py or record_check.py
-  * [ ] All 63.8 bit factors?
+  * [ ] Allow up to 64 bit (M * prime)?
     * [ ] Benchmark GMP_VALIDATE_LARGE_FACTORS
 
 * combined\_sieve.cpp
 * gap\_stats.cpp
+  * [ ] Wheel for extended range
 * gap\_test.py
   * [ ] Sort by expected gap and PRP only top X%
   * [ ] `--top-x-percent` (see THEORY.md)
