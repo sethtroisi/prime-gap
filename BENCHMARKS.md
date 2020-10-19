@@ -20,6 +20,10 @@ Microbenchmarks of `modulo_search_*` are included in `benchmark`.
 $ make benchmark
 $ ./benchmark 100000
 $ ./benchmark 100000 "# mod"
+
+# Sometimes this is required to stop turbo
+$ sudo cpupower -c 3 frequency-set --max 2200MHz
+$ taskset -c 3 ./benchmark 100000 modulo
 ```
 
 |  bits x count   | method\_name                    | found    | total    | time(s) | ns/iter | cycles/limb |

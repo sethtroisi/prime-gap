@@ -23,6 +23,7 @@
 #include <fstream>
 #include <getopt.h>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <string>
 #include <tuple>
@@ -691,10 +692,10 @@ Config Args::argparse(int argc, char* argv[]) {
         cout << "max_prime > 5000B not supported" << endl;
     }
 
-    uint64_t max_m = (1UL << 62) / config.max_prime;
-    if (max_m <= last_m) {
+    uint64_t max_m = std::numeric_limits<uint64_t>::max() / config.max_prime;
+    if (max_m < 1000 || max_m + 1000 <= last_m) {
         config.valid = 0;
-        printf("max_prime * last_m(%d) might overflow int64, log2(...) = %.2f\n",
+        printf("max_prime * last_m(%d) would overflow int64, log2(...) = %.3f\n",
             last_m, log2(1.0 * last_m * config.max_prime));
     }
 

@@ -590,6 +590,11 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * combined\_sieve.cpp
   * [ ] Option to output m with gcd(m, d) != 1
   * [ ] optimize D helper
+  * [ ] (M_inc * max_prime < 63)
+    * The trick is to compute (M_start + M_inc) * base_r as the combination of two additions.
+    * While M_start * base_r can overflow, break it into
+      * (max_m * (M_start / max_m) + (M_start % max_m)) * base_r
+      * (d * ((max_m * base_r) % p) + (r * base_r)) % p
 * gap\_stats.cpp
   * [ ] Produce P(record) / day estimate
   * [ ] Check if higher prob is related to unique (mi % d)

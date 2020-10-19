@@ -12,12 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <algorithm>
-#include <cassert>
-#include <cmath>
-#include <cstdint>
+/**
+ * Performs modulo_search (Equation 3 from paper)
+ *
+ * Find m such that
+ *      L <= m * base_r <= R  mod P
+ *
+ * Note that m is always smaller than P
+ *
+ * base_r < P, m_end * P < 64 bits
+ *      modulo_search_euclid
+ *          works for P < 64 bits, because it doesn't use M_start
+ */
+
 
 #include "modulo_search.h"
+
+#include <cassert>
+#include <cstdint>
 
 
 static
@@ -87,6 +99,7 @@ uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t
 
 //    assert( 0 <= new_a && new_a < a );
     uint64_t k = modulo_search_euclid_small(a, new_a, l % a, r % a);
+//    assert(k <= a);
 
     // XXX: A good portion of all execution time is spent on this line
     uint64_t tl = k * p + l;
@@ -117,8 +130,7 @@ uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
 */
     if (l == 0) return 0;
 
-    // Wait for 31 bits to make sure no errors with a + p
-    if (p < 0x8FFFFFFF) {
+    if (p < 0xFFFFFFFF) {
         return modulo_search_euclid_small(p, a, l, r);
     }
 
@@ -215,13 +227,12 @@ uint64_t modulo_search_euclid_gcd2(
     return max_m;
 }
 
-
+/* Only used by Benchmark */
 uint64_t modulo_search_euclid_gcd(
         uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
         uint64_t prime, uint64_t base_r) {
     uint64_t mi = 0;
 
-    // TODO validate no overflow
     uint64_t modulo = (base_r * M) % prime;
     while (mi < max_m) {
         if ( (modulo <= SL) || (modulo + SL) >= prime) {
@@ -242,6 +253,8 @@ uint64_t modulo_search_euclid_gcd(
 
         uint64_t mi2 = modulo_search_euclid(prime, base_r, low, high);
         mi += mi2;
+        if (mi >= max_m)
+            return max_m;
 
         __int128 mult = (__int128) base_r * (M + mi);
         modulo = mult % prime;
@@ -287,7 +300,11 @@ void modulo_search_euclid_all_small(
         mi += modulo_search_euclid(prime, base_r, low, high);
         if (mi >= max_m) return;
 
-        // TODO Can this overflow (mi > mend > 32bits + 40bit prime?)
+        /**
+         * Guarenteed not to overflow.
+         * base_r < P, mi < max_m
+         * P * max_m < uint64_t
+         */
         modulo = base_r * mi + initial_modulo;
         modulo %= prime;
 
@@ -296,6 +313,7 @@ void modulo_search_euclid_all_small(
 }
 
 
+/* Only used in benchmarks */
 void modulo_search_euclid_all_large(
         uint32_t M, uint32_t max_m, uint64_t SL,
         uint64_t prime, uint64_t base_r,
@@ -326,9 +344,7 @@ void modulo_search_euclid_all_large(
         assert( 0 <= low && high < prime );
 
         mi += modulo_search_euclid(prime, base_r, low, high);
-
-        if (mi >= max_m)
-            return;
+        if (mi >= max_m) return;
 
         __int128 mult = (__int128) base_r * (M + mi);
         modulo = mult % prime;

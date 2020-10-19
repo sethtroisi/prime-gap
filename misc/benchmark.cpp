@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <set>
 #include <vector>
@@ -33,12 +34,13 @@ using std::set;
 using std::vector;
 using namespace std::chrono;
 
+
+
 #define DELTA_SINCE(start_time) duration<double>( \
     high_resolution_clock::now() - start_time).count();
 
-uint32_t modulo_search_single_mod(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
-    return (p % A) + L - R;
-}
+const uint32_t M_START = 1000;
+
 
 #include <thread>
 #include <x86intrin.h>
@@ -58,12 +60,12 @@ double approx_Hz(unsigned sleeptime) {
 }
 
 
-
 /**
  * Generate count primes which are between [2 ** (bits-1), 2 ** bits)
  * Store into save
  */
 void generate_primes(int bits, size_t count, vector<uint64_t> &save) {
+    // Start the primes at a nice round number.
     uint64_t start = (1UL << (bits-1)) + (1UL << (bits-3));
     uint64_t start_mod = 1000;
     while (start_mod * 100 < start) start_mod *= 10;
@@ -99,7 +101,7 @@ void generate_primes(int bits, size_t count, vector<uint64_t> &save) {
         if (save.size() == count) break;
     }
 
-    assert( (1Ul << (bits-1)) <= save.front() );
+    assert( (1UL << (bits-1)) <= save.front() );
     assert( save.back() < (1UL << bits) );
 }
 
@@ -113,7 +115,7 @@ void generate_PALR(
 
     generate_primes(bits, count, primes);
 
-    std::mt19937 mt_rand(S);
+    std::mt19937_64 mt_rand(bits + count);
     for (uint64_t p : primes) {
         // Only need 2 * S, but assert plenty of space
         assert( p > 4*S );
@@ -125,12 +127,16 @@ void generate_PALR(
         uint64_t a = 0;
         while (a == 0) a = mt_rand() % p;
 
+        // TODO: for i <= 10 generate using L = SL, R = -SL
+        // and find A[i] such that m=i is a solution.
+        // Tricky way is to find modular_inverse (i, p)
+
         uint64_t l = 0;
         while (l <= S) l = mt_rand() % (p - S);
 
-        // A, L, R <= 64 - p bits
         assert(a < p);
-        assert((l + S) < p);
+        // avoid chance of overflow in l + S
+        assert(l < (p - S));
 
         A.push_back(a);
         L.push_back(l);
@@ -172,6 +178,12 @@ void benchmark_primorial_modulo(
     mpz_clear(K);
 }
 
+
+uint32_t modulo_search_single_mod(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
+    return (p % A) + L - R;
+}
+
+
 // Create a type for pointer to modulo_search uint32 signature
 typedef uint32_t(*modulo_search_uint32_sig)(uint32_t p, uint32_t a, uint32_t l, uint32_t r);
 
@@ -193,7 +205,6 @@ void benchmark_method_small(
     size_t found = 0;
     for (size_t i = 0; i < primes.size(); i++) {
         uint32_t m = ref_func(primes[i], A[i], L[i], R[i]);
-
         uint64_t t = (m * A[i]) % primes[i];
         if ((L[i] <= t) && (t <= R[i])) {
             found++;
@@ -209,6 +220,21 @@ void benchmark_method_small(
         found, count, time,
         time * 1e9 / count, time * freq / count);
 }
+
+/* Used to double check modulo_search_euclid at one point
+uint64_t modulo_search_brute_large(uint64_t p, uint32_t max_m, uint64_t A, uint64_t L, uint64_t R) {
+
+    uint64_t goal = R - L;
+    uint64_t temp = p - L;
+    for (uint32_t i = 0; ; i++) {
+        if (temp <= goal) {
+            return i;
+        }
+        temp += A;
+        if (temp >= p) temp -= p;
+    }
+}
+*/
 
 void benchmark_method_large(
         const char* benchmark_row, const char* ref_name, const char* filter,
@@ -228,12 +254,12 @@ void benchmark_method_large(
 
     size_t found = 0, found2 = 0;
     for (size_t i = 0; i < primes.size(); i++) {
-        const uint64_t M = 123;
         uint64_t p = primes[i];
         uint64_t base_r = A[i];
 
         uint64_t m;
         if (method == 0) {
+            // Can't use L, R as euclid_gcd doesn't accept those.
             uint64_t l = (A[i] + SL) % p;
             if (l <= 2*SL) {
                 m = 0;
@@ -242,9 +268,17 @@ void benchmark_method_large(
                 uint64_t r = l + 2*SL;
                 m = modulo_search_euclid(p, A[i], l, r);
             }
+            // Only verify interesting solutions here
+            if (m == 0 || m >= max_m)
+                continue;
 
-            uint64_t m1 = modulo_search_euclid_gcd(1, 1, m+1, SL, p, base_r);
-            uint64_t m2 = modulo_search_euclid_gcd2(1, 1, m+1, SL, p, base_r);
+            uint64_t m1 = modulo_search_euclid_gcd(1, 1, max_m, SL, p, base_r);
+            uint64_t m2 = modulo_search_euclid_gcd2(1, 1, max_m, SL, p, base_r);
+
+            if (m != m1 || m != m2) {
+                printf("Mismatch | max_m: %ld | m: %ld, m1: %ld, m2: %ld\n",
+                    max_m, m, m1, m2);
+            }
 
             assert( m == m1 );
             assert( m == m2 );
@@ -259,31 +293,31 @@ void benchmark_method_large(
         } else if (method == 2) {
             // M = 1, D = 1, max_m = 1e9
             // D = 1 mean only zero/one modulo_search.
-            m = modulo_search_euclid_gcd(M, 1, max_m, SL, p, base_r);
+            m = modulo_search_euclid_gcd(M_START, 1, max_m, SL, p, base_r);
             found++;
             if (m == max_m) continue;
+            found2++;
 
-            uint64_t t = ((__int128) base_r * (M + m)) % p;
+            uint64_t t = ((__int128) base_r * (M_START + m)) % p;
             assert( (t <= SL) || (t + SL) >= p );
 
         } else if (method == 3) {
-            // M = 1, D = 1, max_m = 1e9
             // D = 1 mean only zero/one modulo_search.
-            m = modulo_search_euclid_gcd2(M, 1, max_m, SL, p, base_r);
+            m = modulo_search_euclid_gcd2(M_START, 1, max_m, SL, p, base_r);
             found++;
             if (m == max_m) continue;
+            found2++;
 
-            uint64_t t = ((__int128) base_r * (M + m)) % p;
+            uint64_t t = ((__int128) base_r * (M_START + m)) % p;
             assert( (t <= SL) || (t + SL) >= p );
 
         } else if (method == 4) {
             uint64_t previous = found2;
-
             modulo_search_euclid_all_small(
-                M, max_m, SL, p, base_r,
+                M_START, max_m, SL, p, base_r,
                 [&](const uint32_t mi, const uint64_t first) {
                     found2++;
-                    uint64_t t = (base_r * (M + mi) + SL) % p;
+                    uint64_t t = (((base_r * M_START) % p) + ((base_r * mi) % p) + SL) % p;
                     assert( first == t );
                     assert( (t <= 2 * SL) );
                 }
@@ -297,10 +331,10 @@ void benchmark_method_large(
             uint64_t previous = found2;
 
             modulo_search_euclid_all_large(
-                M, max_m, SL, p, base_r,
+                M_START, max_m, SL, p, base_r,
                 [&](const uint64_t mi) {
                     found2++;
-                    uint64_t t = ((__int128) base_r * (M + mi)) % p;
+                    uint64_t t = ((__int128) base_r * (M_START + mi)) % p;
                     assert( (t <= SL) || (t + SL) >= p );
                 }
             );
@@ -325,9 +359,13 @@ void benchmark_method_large(
 void benchmark(int bits, size_t count, const char* filter) {
     auto t_setup = high_resolution_clock::now();
 
-    // TODO: describe this somewhere
-    size_t SL = 100'000;
-    size_t S = 2 * SL + 1;  // R - L = S
+    /**
+     * These control how many quickly solutions are found
+     * And how likely large primes are to find solutions
+     */
+    const size_t SL = bits <= 32 ? 100'000 :
+        (bits <= 42 ? 1'000'000 : 100'000'000);
+    const size_t S = 2 * SL + 1;  // R - L = S
 
     vector<uint64_t> primes, A, L, R;
     generate_PALR(bits, count, S, primes, A, L, R);
@@ -369,36 +407,41 @@ void benchmark(int bits, size_t count, const char* filter) {
             primes, A, L, R, modulo_search_euclid_small);
     }
 
+    size_t max_m_overflow = std::numeric_limits<uint64_t>::max() / primes.back() - 10;
 
     benchmark_method_large(
         benchmark_row, "modulo_search_verify", filter, bits, N,
-        SL, 0, primes, A, L, R, 0);
+        SL, max_m_overflow, primes, A, L, R, 0);
 
     benchmark_method_large(
         benchmark_row, "modulo_search_euclid", filter, bits, N,
-        SL, 0, primes, A, L, R, 1);
+        SL, max_m_overflow, primes, A, L, R, 1);
 
     benchmark_method_large(
         benchmark_row, "modulo_search_euclid_gcd", filter, bits, N,
-        SL, 0, primes, A, L, R, 2);
+        SL, max_m_overflow, primes, A, L, R, 2);
 
     benchmark_method_large(
         benchmark_row, "modulo_search_euclid_gcd2", filter, bits, N,
-        SL, 0, primes, A, L, R, 3);
+        SL, max_m_overflow, primes, A, L, R, 3);
 
-    size_t max_m = bits <= 32 ? 100'000 : 1'000'000;
-
-    // Set max_m to find 1 m per p
-    size_t all_max_m = std::min(max_m, std::max((size_t) 10, 2 * primes.front() / S));
-//    cout << "max_m: " << max_m << " " << all_max_m << endl;
+    /**
+     * Try to set max_m so it finds 1m per p
+     * Limit m so doesn't overflow 64 bits
+     */
+    size_t two_found_per = std::max(2UL, (2 * primes.front()) / S);
+    size_t max_m = std::min(max_m_overflow, two_found_per);
+    if (max_m == max_m_overflow) {
+        cout << "max_m_overflow:" << max_m_overflow << endl;
+    }
 
     benchmark_method_large(
         benchmark_row, "modulo_search_euclid_all_small", filter, bits, N,
-        SL, all_max_m, primes, A, L, R, 4);
+        SL, max_m, primes, A, L, R, 4);
 
     benchmark_method_large(
         benchmark_row, "modulo_search_euclid_all_large", filter, bits, N,
-        SL, all_max_m, primes, A, L, R, 5);
+        SL, max_m, primes, A, L, R, 5);
 
     if (strstr("# mod < bits>p", filter) != NULL) {
         printf("\n");
@@ -424,14 +467,13 @@ int main(int argc, char **argv) {
     assert(argc == 2 || argc == 3);
 
     uint64_t count_primes = atol(argv[1]);
-    assert( (count_primes > 0) && (count_primes <= 10'000'000) );
+    //assert( (count_primes > 0) && (count_primes <= 10'000'000) );
 
     char empty_filter[] = "";
     char *filter = empty_filter;
     if (argc == 3) {
         filter = argv[2];
     }
-
 
     // Status output
     cout << "Using " << count_primes << " primes during benchmark" << endl;
