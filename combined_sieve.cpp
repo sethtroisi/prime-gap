@@ -40,12 +40,13 @@ using std::vector;
 using namespace std::chrono;
 
 
-
-// Validate each composite factor (slow)
-#ifndef GMP_VALIDATE_FACTORS
-    #define GMP_VALIDATE_FACTORS 0
-#endif
-
+/**
+ * Two MACROS DEFINEs used to validate results
+ * GMP_VALIDATE_FACTORS (validates all factors)
+ * GMP_VALIDATE_LARGE_FACTORS (validate large factors)
+ *
+ * LARGE_FACTORS only validates the rarer 60+ bit factors
+ */
 
 // Tweaking this doesn't seem to method1 much.
 // method2 is more sensative and set it's own.
@@ -83,6 +84,10 @@ int main(int argc, char* argv[]) {
             config.p, config.d, config.mstart, config.minc);
     }
     setlocale(LC_NUMERIC, "C");
+
+    #ifdef GMP_VALIDATE_FACTORS
+    printf("\tValidating factors with GMP\n");
+    #endif
 
     if (config.max_prime > 500'000'000) {
         float m_per = config.max_prime / ((float) config.minc * config.sieve_length);
@@ -629,10 +634,10 @@ void prime_gap_search(const struct Config config) {
             // When done find next mi where prime divides a number in SIEVE.
             const uint64_t modulo = (remainder * m) % prime;
 
-            if (GMP_VALIDATE_FACTORS) {
+            #ifdef GMP_VALIDATE_FACTORS
                 mpz_mul_ui(test, K, m);
                 assert(modulo == mpz_fdiv_ui(test, prime));
-            }
+            #endif
 
             if (modulo <= SIEVE_LENGTH) {
                 // Just past a multiple
@@ -819,6 +824,7 @@ void prime_gap_parallel(struct Config config) {
     // Method2
     const uint32_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
+
     const uint32_t P = config.p;
     const uint32_t D = config.d;
 
@@ -881,6 +887,16 @@ void prime_gap_parallel(struct Config config) {
         setlocale(LC_NUMERIC, "C");
     }
 
+    uint64_t validated_factors = 0;
+#if defined GMP_VALIDATE_LARGE_FACTORS && !defined GMP_VALIDATE_FACTORS
+    // No overflow from gap_common.cpp checks
+    const uint32_t M_end = M_start + M_inc;
+    const uint64_t LARGE_PRIME_THRESHOLD = (1LL << 38) / M_end;
+    if (LARGE_PRIME_THRESHOLD < LAST_PRIME && config.verbose >= 1) {
+        printf("validating factors from primes > %ld\n", LARGE_PRIME_THRESHOLD);
+    }
+#endif
+
 
     // which [i] are coprime to K
     vector<char> coprime_composite(SIEVE_INTERVAL+1, 1);
@@ -890,12 +906,12 @@ void prime_gap_parallel(struct Config config) {
         for (uint32_t prime : P_primes) {
             if (D % prime != 0) {
                 uint32_t first = SIEVE_LENGTH % prime;
-                if (GMP_VALIDATE_FACTORS) {
+                #ifdef GMP_VALIDATE_FACTORS
                     mpz_set(test, K);
                     mpz_sub_ui(test, test, SIEVE_LENGTH);
                     mpz_add_ui(test, test, first);
                     assert( 0 == mpz_fdiv_ui(test, prime) );
-                }
+                #endif
 
                 assert( 0 <= first && first < prime );
                 assert( (SIEVE_LENGTH - first) % prime == 0 );
@@ -1063,7 +1079,7 @@ void prime_gap_parallel(struct Config config) {
                     bool evenFromLow = (first & 1) == 0;
                     bool firstIsEven = lowIsEven == evenFromLow;
 
-                    if (GMP_VALIDATE_FACTORS) {
+                    #ifdef GMP_VALIDATE_FACTORS
                         mpz_mul_ui(test, K, M_start + mi);
                         mpz_sub_ui(test, test, SIEVE_LENGTH);
                         assert( (mpz_even_p(test) > 0) == lowIsEven );
@@ -1072,7 +1088,7 @@ void prime_gap_parallel(struct Config config) {
                         assert( (mpz_even_p(test) > 0) == firstIsEven );
 
                         assert( 0 == mpz_fdiv_ui(test, prime) );
-                    }
+                    #endif
 
                     if (firstIsEven) {
                         // divisible by 2 move to next multiple (an odd multiple)
@@ -1118,7 +1134,14 @@ void prime_gap_parallel(struct Config config) {
                 assert( first <= 2*SL );
                 first = 2*SL - first;
 
-                if (GMP_VALIDATE_FACTORS) {
+#ifdef GMP_VALIDATE_FACTORS
+                {
+#elif defined GMP_VALIDATE_LARGE_FACTORS
+                if (prime > LARGE_PRIME_THRESHOLD) {
+#else
+                if (0) {
+#endif
+                    validated_factors += 1;
                     mpz_mul_ui(test, K, M_start + mi);
                     mpz_sub_ui(test, test, SIEVE_LENGTH);
                     mpz_add_ui(test, test, first);
@@ -1174,11 +1197,6 @@ void prime_gap_parallel(struct Config config) {
             uint64_t new_composites = s_total_unknowns - t_total_unknowns;
             double skipped_prp = 2 * valid_ms * (s_prp_needed - 1/prob_prime_after_sieve);
 
-            pi += pi_interval;
-            s_prime_factors += s_small_prime_factors_interval;
-            s_prime_factors += s_large_prime_factors_interval;
-            m_stops += m_stops_interval;
-
             bool is_last = (prime == LAST_PRIME) || g_control_c;
 
             setlocale(LC_NUMERIC, "");
@@ -1218,6 +1236,11 @@ void prime_gap_parallel(struct Config config) {
                 }
 
                 printf("\n");
+
+                pi += pi_interval;
+                s_prime_factors += s_small_prime_factors_interval;
+                s_prime_factors += s_large_prime_factors_interval;
+                m_stops += m_stops_interval;
 
                 s_total_unknowns = t_total_unknowns;
                 s_interval_t = s_stop_t;
@@ -1264,12 +1287,21 @@ void prime_gap_parallel(struct Config config) {
         }
     }
 
+    // Likely zerod in the last interval, but needed no printing
+    pi += pi_interval;
+    s_prime_factors += s_small_prime_factors_interval;
+    s_prime_factors += s_large_prime_factors_interval;
+    m_stops += m_stops_interval;
+
     {
         float error_percent = (100.0 * abs(expected_m_stops - m_stops)) / expected_m_stops;
         if (config.verbose >= 2 || error_percent > 0.5 ) {
             printf("Estimated modulo searches (m/prime) error %.2f%%,\t%ld vs expected %ld\n",
                 error_percent, m_stops, expected_m_stops);
         }
+    }
+    if (config.verbose >= 1 && validated_factors) {
+        printf("\tValidated %ld factors\n", validated_factors);
     }
 
     if (config.save_unknowns) {

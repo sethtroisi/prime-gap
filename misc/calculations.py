@@ -65,13 +65,14 @@ def Appendix1():
     for P, mp in [
             (1511, 250e9),
             (2111, 500e9),
+            (4441, 4e11),
             (4441, 1e12),
             (5333, 5e12),
             (8887, 1e12),
     ]:
         ln, prps = expected_PRP(mp, P)
         pg_mp = pgsurround_sieve_limit(ln)
-        speedup = sieve_percent(mp) / sieve_percent(pg_mp)
+        speedup = sieve_percent(pg_mp) / sieve_percent(mp) - 1
 
         print (f"{P:5} & {ln:.0f}\t& {mp/1e9:4.0f}e9\t& {prps:.1f}\t& {pg_mp:.1e}\t& {speedup:.1%}\t\\\\")
 

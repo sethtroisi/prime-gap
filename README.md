@@ -444,7 +444,7 @@ $ sudo apt install gmp-ecm
   * modify `is_prime` in gap\_utils.py
 * Multiple layers of verification of `combined_sieve`
   * Can compare `--method1` output with `--method2`
-  * Can add use `make DEFINES="-DGMP_VALIDATE_FACTORS=1" combined_sieve`
+  * Can add use `make DEFINES="-DGMP_VALIDATE_FACTORS" combined_sieve`
   * `misc/double_check.py` double checks using `ecm`, to check that small factor aren't found for numbers in unknown-file.txt
     * `python misc/double_check.py --unknown-filename <unknown_file.txt> -c 10`
   * `skipped PRP/s` is checked in [THEORY.md](THEORY.md#skipped-prp-tests)
@@ -565,6 +565,10 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Add some theory for only doing one side test.
   * [ ] Add prob_record via greater on both sides
 * Project
+  * [ ] Records / day in status.py or record_check.py
+  * [ ] All 63.8 bit factors?
+    * [ ] Benchmark GMP_VALIDATE_LARGE_FACTORS
+
 * combined\_sieve.cpp
 * gap\_stats.cpp
 * gap\_test.py

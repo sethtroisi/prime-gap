@@ -287,6 +287,7 @@ void modulo_search_euclid_all_small(
         mi += modulo_search_euclid(prime, base_r, low, high);
         if (mi >= max_m) return;
 
+        // TODO Can this overflow (mi > mend > 32bits + 40bit prime?)
         modulo = base_r * mi + initial_modulo;
         modulo %= prime;
 

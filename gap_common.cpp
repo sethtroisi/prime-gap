@@ -664,8 +664,9 @@ Config Args::argparse(int argc, char* argv[]) {
         cout << "mstart must be greater than 0: " << config.mstart << endl;
     }
 
-    uint64_t last_m = ((long) config.mstart) + config.minc;
-    if (last_m >= 1'000'000'001 ) {
+    uint32_t last_m;
+    if (__builtin_uadd_overflow(config.mstart, config.minc, &last_m) ||
+            last_m >= 1'000'000'001 ) {
         config.valid = 0;
         cout << "mstart + minc must be < 1e9" << endl;
     }
@@ -693,7 +694,7 @@ Config Args::argparse(int argc, char* argv[]) {
     uint64_t max_m = (1UL << 62) / config.max_prime;
     if (max_m <= last_m) {
         config.valid = 0;
-        printf("max_prime * last_m(%ld) might overflow int64, log2(...) = %.2f\n",
+        printf("max_prime * last_m(%d) might overflow int64, log2(...) = %.2f\n",
             last_m, log2(1.0 * last_m * config.max_prime));
     }
 
