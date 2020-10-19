@@ -25,6 +25,7 @@
 #include <iostream>
 #include <map>
 #include <string>
+#include <tuple>
 #include <vector>
 
 /* for dirname(3) */
@@ -108,7 +109,10 @@ void K_stats(
     assert(0 == mpz_tdiv_q_ui(K, K, config.d));
     assert(mpz_cmp_ui(K, 1) > 0);  // K <= 1 ?!?
 
-    *K_digits = mpz_sizeinbase(K, 10);
+    int base10 = mpz_sizeinbase(K, 10);
+    if (K_digits != nullptr) {
+        *K_digits = base10;
+    }
 
     long exp;
     double mantis = mpz_get_d_2exp(&exp, K);
@@ -117,7 +121,7 @@ void K_stats(
     if (config.verbose >= 2) {
         int K_bits   = mpz_sizeinbase(K, 2);
         printf("K = %d bits, %d digits, log(K) = %.2f\n",
-            K_bits, *K_digits, *K_log);
+                K_bits, base10, *K_log);
     }
 }
 
@@ -133,10 +137,10 @@ double prp_time_estimate_composite(double K_log, int verbose) {
 
     float K_log_2 = K_log * K_log;
     float t_estimate_poly = -1.1971e-03
-                        +  5.1072e-07 * K_log
-                        +  9.4362e-10 * K_log_2
-                        +  1.8757e-13 * K_log_2 * K_log
-                        + -1.9582e-18 * K_log_2 * K_log_2;
+        +  5.1072e-07 * K_log
+        +  9.4362e-10 * K_log_2
+        +  1.8757e-13 * K_log_2 * K_log
+        + -1.9582e-18 * K_log_2 * K_log_2;
     float t_estimate = std::max(1e-3f, t_estimate_poly);
 
     if (verbose >= 2) {
@@ -190,7 +194,7 @@ double prp_time_estimate_composite(double K_log, int verbose) {
             }
 
             printf("Estimating PRP/s: %ld / %.2f = %.1f/s vs polyfit estimate of %.1f/s\n",
-                count, t, count / t, 1 / t_estimate);
+                    count, t, count / t, 1 / t_estimate);
             t_estimate = t / count;
         }
     }
@@ -198,6 +202,114 @@ double prp_time_estimate_composite(double K_log, int verbose) {
     return t_estimate;
 }
 
+
+/**
+ * Handles approx count of divisors by d
+ * See "Optimizing Choice Of D" in THEORY.md
+ * Return: Counts the number of coprimes of (N, i), -sl <= i <= sl
+ */
+std::tuple<double, uint32_t, double> count_K_d(struct Config& config) {
+    uint64_t K_mod_d;
+    double K_log;
+    const uint64_t d = config.d;
+    {
+        mpz_t K;
+        config.verbose--;
+        K_stats(config, K, nullptr, &K_log);
+        config.verbose++;
+
+        // Looks a little silly (P# / d) % d
+        K_mod_d = mpz_fdiv_ui(K, d);
+        mpz_clear(K);
+    }
+
+    vector<uint32_t> P_primes = get_sieve_primes(config.p);
+    assert( P_primes.back() == config.p );
+
+    // Prob prime if no factor of number less than P
+    double prob_prime_adj = 1 / K_log - 1 / (K_log * K_log);
+    for (uint32_t prime : P_primes) {
+        prob_prime_adj /= (1 - 1.0/prime);
+    }
+
+    // Find factors of D
+    vector<uint32_t> D_primes;
+    for (uint32_t prime : P_primes) {
+        if (d % prime == 0)
+            D_primes.push_back(prime);
+    }
+
+    const size_t sl = config.sieve_length;
+    const size_t length = 2 * sl + 1;
+
+    // composite from coprime K
+    char compositeK[length] = {};
+    for (uint32_t prime : P_primes) {
+        if (d % prime != 0) {
+            // mark off all multiples of prime
+            uint32_t first = (sl % prime);
+            for (size_t m = first; m < length; m += prime) {
+                compositeK[m] = true;
+            }
+        }
+    }
+
+    /**
+     * XXX: Not clear if optimizing expected length is best
+     * Seems better than expected count but just a hunch
+     */
+    double expected_length = 0;
+    size_t expected_count = 0;
+    double remaining_prob = 0;
+
+
+    char composite[length] = {};
+
+    uint64_t m = config.mstart;
+    for (size_t mcount = 0; mcount < config.minc; m++) {
+        if (gcd(m, d) > 1) continue;
+        mcount++;
+
+        // Reset to composites from coprime K
+        std::copy(compositeK, compositeK + length, composite);
+
+        // Handle d primes for this m
+        for (uint32_t p : D_primes) {
+            // -((m * K) - SL) % p => (m * K_mod_d + p - (sl % p)) % p
+            assert(K_mod_d % p != 0);
+            uint64_t first = (p - (((m % p) * (K_mod_d % p) + p - (sl % p)) % p)) % p;
+            for (size_t m = first; m < length; m += p) {
+                composite[m] = true;
+            }
+        }
+
+        if (false && m == 1) {
+            printf("1 * %d#/%ld | ", config.p, d);
+            for (int x = 0; (size_t) x <= sl; x++)
+                if (!composite[sl + x])
+                    printf("%d ", x);
+            printf("\n");
+        }
+
+        for (int dir = -1; dir <= 1; dir += 2) {
+            double expected = 0;
+            double prob = 1.0;
+            for (int x = 0; (size_t) x <= sl; x++) {
+                if (!composite[sl + dir * x]) {
+                    expected += x * prob * prob_prime_adj;
+                    prob *= 1 - prob_prime_adj;
+                    expected_count += 1;
+                }
+            }
+            expected += sl * prob;
+            expected_length += expected;
+            remaining_prob += prob;
+        }
+    }
+    return {expected_length / config.minc,
+            expected_count / config.minc / 2,
+            remaining_prob / config.minc / 2};
+}
 
 /**
  * Handles approx count of divisors by d
@@ -214,6 +326,8 @@ double prob_gap_larger(
         *prob_prime_coprime_p *= (1 - 1.0/prime);
     }
 
+    // TODO replace with count_K_d
+
     // Count remaining coprime X for 0 <= X <= SL over SAMPLE_M m values
     const size_t SAMPLES_M = config.d == 1 ? 1 : 6;
 
@@ -229,6 +343,7 @@ double prob_gap_larger(
     for (uint64_t mi = 0; m_counted < SAMPLES_M; mi++) {
         uint64_t m = config.mstart + mi;
         if (gcd(m, config.d) > 1) continue;
+
         m_counted++;
 
         mpz_mul_ui(N, P, m);
@@ -316,7 +431,8 @@ vector<uint32_t> get_sieve_primes(uint32_t n) {
     return primes;
 }
 
-static bool isprime_brute(uint32_t n) {
+
+bool isprime_brute(uint32_t n) {
     if ((n & 1) == 0)
         return false;
     for (uint32_t p = 3; p * p <= n; p += 2)

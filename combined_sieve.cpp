@@ -115,6 +115,49 @@ void set_defaults(struct Config& config) {
         return;
     }
 
+    if (config.d % 4 == 0) {
+        // AKA min-merit
+        config.sieve_length = config.p * config.min_merit;
+
+        // Start from 1
+        config.mstart = 1;
+
+        // Large prime near P to uniquify (choose semirandomly)
+        config.d /= 4;
+        vector<uint32_t> P_primes = get_sieve_primes(config.p);
+        uint32_t rand_prime = P_primes[P_primes.size() - 2 - (rand() % 10)];
+        uint32_t large_p = config.d > 1 ? config.d : rand_prime;
+        assert(large_p < config.p);
+        assert(isprime_brute(large_p));
+
+        printf("d optimizer for P = %d# | large prime=%d | sl=%d (%.1f merit)\n",
+                config.p, large_p, config.sieve_length, config.min_merit);
+
+        /**
+         * Secret value to optimize d
+         * 1. Test small primorials to find optimal primorial
+         * 2. Multiple by large prime (to make unique)
+         * 3. test that ~same expected
+         */
+        vector<uint32_t> primes = {2,3,5,7,11,13,17,19,23};
+        for (uint32_t lp : {1u, large_p}) {
+            config.d = lp;
+            for (uint32_t p : primes) {
+                if (__builtin_umul_overflow(config.d, p, &config.d)) {
+                    // overflow
+                    break;
+                }
+
+                // Try searching all values of m
+                config.minc = std::min(config.d, 40'000U);
+                auto expected = count_K_d(config);
+                printf("Optimizing D | d = %5d * %2d# | %d remaining, %.1f avg gap | sl insufficient %.1f%% of time\n",
+                    lp, p, std::get<1>(expected), std::get<0>(expected), 100 * std::get<2>(expected));
+            }
+        }
+        exit(0);
+    }
+
     mpz_t K;
     double K_log;
     {

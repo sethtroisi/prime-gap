@@ -18,6 +18,7 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <gmp.h>
@@ -111,6 +112,10 @@ void K_stats(
 
 double prp_time_estimate_composite(double K_log, int verbose);
 
+// Used to optimize d
+std::tuple<double, uint32_t, double> count_K_d(struct Config& config);
+
+
 double prob_gap_larger(
     const struct Config& config,
     double prob_prime,
@@ -122,4 +127,5 @@ double prob_prime_and_stats(const struct Config& config, mpz_t &K);
 
 /* Prime Stuff */
 
+bool isprime_brute(uint32_t n);
 vector<uint32_t> get_sieve_primes(uint32_t n);
