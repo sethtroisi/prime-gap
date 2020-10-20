@@ -361,6 +361,7 @@ $ ./benchmark 100000 _all
 
 1. `combined_sieve`
    * Takes a set of parameters (`[m\_start, m\_start + m\_inc), P#, d, sieve-length, max-prime`)
+     * Use `combined_sieve --mstart 1 --minc 100 --max-prime 1 -d 4 -p <P>` for some insight on choose of `d`
    * Performs combined sieve algorithm
    * Produces `<PARAMS>.txt`, list of all numbers near `m * P#/d` with no small factors.
      * each row is `m: -count_low, +count_high | -18 -50 -80 ... | +6 +10 +12 ...`
@@ -586,7 +587,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Set rid if null (but reasonable range exists)
 * combined\_sieve.cpp
   * [ ] Option to output m with gcd(m, d) != 1
-  * [ ] optimize D helper
+  * [ ] Improve optimize D helper
   * [ ] `M_inc * max_prime > 2^64` use `modulo_search_euclid_all_large`
     * [ ] Benchmark GMP_VALIDATE_LARGE_FACTORS
 * gap\_stats.cpp
@@ -626,6 +627,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Make method2 the default
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
 * combined\_sieve.cpp
+  * [x] Optimize D helper
   * [x] Integrate faster prime iterator (libprimesieve)
   * [x] ETA for `combined_sieve` timing.
   * [x] Test number to be marked combosite see if already marked by 2 / 3 and skip (e.g. try to avoid memory lookup)

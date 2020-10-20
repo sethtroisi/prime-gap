@@ -132,7 +132,6 @@ void set_defaults(struct Config& config) {
         vector<uint32_t> P_primes = get_sieve_primes(config.p);
         uint32_t rand_prime = P_primes[P_primes.size() - 2 - (rand() % 10)];
         uint32_t large_p = config.d > 1 ? config.d : rand_prime;
-        assert(large_p < config.p);
         assert(isprime_brute(large_p));
 
         printf("d optimizer for P = %d# | large prime=%d | sl=%d (%.1f merit)\n",
@@ -148,15 +147,19 @@ void set_defaults(struct Config& config) {
         for (uint32_t lp : {1u, large_p}) {
             config.d = lp;
             for (uint32_t p : primes) {
+                // check if large_p already includes p
+                if (config.d % p == 0)
+                    continue;
+
                 if (__builtin_umul_overflow(config.d, p, &config.d)) {
                     // overflow
                     break;
                 }
 
-                // Try searching all values of m
-                config.minc = std::min(config.d, 40'000U);
+                // Try searching all values of m (up to 20,000)
+                config.minc = std::min(config.d, 20'000U);
                 auto expected = count_K_d(config);
-                printf("Optimizing D | d = %5d * %2d# | %d remaining, %.1f avg gap | sl insufficient %.1f%% of time\n",
+                printf("Optimizing D | d = %5d * %2d# | %d remaining, %5.0f avg gap | sl insufficient %.3f%% of time\n",
                     lp, p, std::get<1>(expected), std::get<0>(expected), 100 * std::get<2>(expected));
             }
         }

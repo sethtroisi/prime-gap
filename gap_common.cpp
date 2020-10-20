@@ -110,19 +110,19 @@ void K_stats(
     assert(0 == mpz_tdiv_q_ui(K, K, config.d));
     assert(mpz_cmp_ui(K, 1) > 0);  // K <= 1 ?!?
 
-    int base10 = mpz_sizeinbase(K, 10);
-    if (K_digits != nullptr) {
-        *K_digits = base10;
-    }
-
     long exp;
     double mantis = mpz_get_d_2exp(&exp, K);
     *K_log = log(mantis) + log(2) * exp;
 
-    if (config.verbose >= 2) {
+    if (K_digits != nullptr) {
+        int base10 = mpz_sizeinbase(K, 10);
+        *K_digits = base10;
+
+        if (config.verbose >= 2) {
         int K_bits   = mpz_sizeinbase(K, 2);
         printf("K = %d bits, %d digits, log(K) = %.2f\n",
                 K_bits, base10, *K_log);
+        }
     }
 }
 
@@ -209,15 +209,13 @@ double prp_time_estimate_composite(double K_log, int verbose) {
  * See "Optimizing Choice Of D" in THEORY.md
  * Return: Counts the number of coprimes of (N, i), -sl <= i <= sl
  */
-std::tuple<double, uint32_t, double> count_K_d(struct Config& config) {
+std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& config) {
     uint64_t K_mod_d;
     double K_log;
     const uint64_t d = config.d;
     {
         mpz_t K;
-        config.verbose--;
         K_stats(config, K, nullptr, &K_log);
-        config.verbose++;
 
         // Looks a little silly (P# / d) % d
         K_mod_d = mpz_fdiv_ui(K, d);
@@ -255,19 +253,20 @@ std::tuple<double, uint32_t, double> count_K_d(struct Config& config) {
         }
     }
 
-    /**
-     * XXX: Not clear if optimizing expected length is best
-     * Seems better than expected count but just a hunch
-     */
+    // XXX: Make insufficient more prominent (this is the vital number?)
     double expected_length = 0;
     size_t expected_count = 0;
     double remaining_prob = 0;
 
-
     char composite[length] = {};
 
     uint64_t m = config.mstart;
-    for (size_t mcount = 0; mcount < config.minc; m++) {
+
+    // Periodic in d, but d might be X00'000'000 so limit to 5'000
+    const uint64_t intervals = std::min(d, 5'000UL);
+    size_t mcount = 0;
+    for (; mcount < intervals; m++) {
+        if (m >= config.mstart + config.minc) break; // Tested all values.
         if (gcd(m, d) > 1) continue;
         mcount++;
 
@@ -307,70 +306,14 @@ std::tuple<double, uint32_t, double> count_K_d(struct Config& config) {
             remaining_prob += prob;
         }
     }
-    return {expected_length / config.minc,
-            expected_count / config.minc / 2,
-            remaining_prob / config.minc / 2};
+    return {expected_length / mcount,
+            expected_count / (mcount * 2),
+            remaining_prob / (mcount * 2),
+            prob_prime_adj
+    };
 }
-
-/**
- * Handles approx count of divisors by d
- * See "Optimizing Choice Of D" in THEORY.md for why this is required
- */
-double prob_gap_larger(
-        const struct Config& config, double prob_prime,
-        double *prob_prime_coprime_p, size_t *count_coprime_p) {
-    vector<uint32_t> P_primes = get_sieve_primes(config.p);
-    assert( P_primes.back() == config.p );
-
-    *prob_prime_coprime_p = 1;
-    for (uint32_t prime : P_primes) {
-        *prob_prime_coprime_p *= (1 - 1.0/prime);
-    }
-
-    // TODO replace with count_K_d
-
-    // Count remaining coprime X for 0 <= X <= SL over SAMPLE_M m values
-    const size_t SAMPLES_M = config.d == 1 ? 1 : 6;
-
-    // Unoptimized but cleaner code is preferred here
-    mpz_t P, N, temp;
-    mpz_init(P);
-    mpz_init(N);
-    mpz_init(temp);
-
-    mpz_primorial_ui(P, config.p);
-
-    size_t m_counted = 0;
-    for (uint64_t mi = 0; m_counted < SAMPLES_M; mi++) {
-        uint64_t m = config.mstart + mi;
-        if (gcd(m, config.d) > 1) continue;
-
-        m_counted++;
-
-        mpz_mul_ui(N, P, m);
-        assert(0 == mpz_tdiv_q_ui(N, N, config.d));
-
-        for (size_t X = 0; X <= config.sieve_length; X++) {
-            mpz_gcd(temp, N, P);
-            if (mpz_cmp_ui(temp, 1) == 0) {
-                *count_coprime_p += 1;
-            }
-            mpz_add_ui(N, N, 1);
-        }
-    }
-    mpz_clear(N);
-    mpz_clear(P);
-    mpz_clear(temp);
-
-    *count_coprime_p /= SAMPLES_M;
-
-    double chance_coprime_composite = 1 - prob_prime / *prob_prime_coprime_p;
-    return pow(chance_coprime_composite, *count_coprime_p);
-}
-
 
 double prob_prime_and_stats(const struct Config& config, mpz_t &K) {
-
     int K_digits;
     double K_log;
     K_stats(config, K, &K_digits, &K_log);
@@ -382,12 +325,12 @@ double prob_prime_and_stats(const struct Config& config, mpz_t &K) {
         const double prob_prime = 1 / N_log - 1 / (N_log * N_log);
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
-        size_t count_coprime_p = 0;
-        double prob_prime_coprime_p = 0;
-        double prob_gap_hypothetical = prob_gap_larger(
-            config, prob_prime, &prob_prime_coprime_p, &count_coprime_p);
+        auto stats = count_K_d(config);
+        size_t count_coprime_p = std::get<1>(stats);
+        double prob_prime_coprime_p = std::get<3>(stats);
+        double prob_gap_hypothetical = std::get<2>(stats);
 
-        float expected = count_coprime_p * (unknowns_after_sieve / prob_prime_coprime_p);
+        float expected = count_coprime_p * (prob_prime_coprime_p / prob_prime_after_sieve);
         printf("\n");
         printf("\texpect %.0f left = 2 * %.0f (%.3f%%) of %u after %ldM\n",
                 2 * expected, expected,  100.0 * expected / (config.sieve_length + 1),

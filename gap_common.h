@@ -113,14 +113,8 @@ void K_stats(
 double prp_time_estimate_composite(double K_log, int verbose);
 
 // Used to optimize d
-std::tuple<double, uint32_t, double> count_K_d(struct Config& config);
-
-
-double prob_gap_larger(
-    const struct Config& config,
-    double prob_prime,
-    double *prob_prime_coprime,
-    size_t *count_coprime);
+std::tuple<double, uint32_t, double, double>
+count_K_d(const struct Config& config);
 
 double prob_prime_and_stats(const struct Config& config, mpz_t &K);
 
