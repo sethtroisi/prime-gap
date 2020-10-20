@@ -568,10 +568,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Records / day in status.py or record_check.py
 * combined\_sieve.cpp
 * gap\_stats.cpp
-  * [ ] Wheel for extended range
 * gap\_test.py
   * [ ] Sort by expected gap and PRP only top X%
-  * [ ] `--top-x-percent` (see THEORY.md)
   * [ ] Read `time_sieve` and `time_stats` print optimal to restart search point
     * [ ] Leave XXX note for restart
 * gap\_test.cpp
@@ -655,6 +653,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Dynamic `sieve_length`
   * [x] Dynamic `max_prime`
 * gap\_stats.cpp
+  * [x] Wheel for extended range
   * [x] Write all data that `gap_test.py` consumes to DB
   * [x] Tweak logging at different verbose levels
   * [x] Move missing gaps behind a compile flag
@@ -666,6 +665,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_test.py
+  * [x] `--top-x-percent` (see THEORY.md)
   * [x] Correlation between Expected Gap & Gap
   * [x] Show P(record) / day
   * [x] Multithreaded

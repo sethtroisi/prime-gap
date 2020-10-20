@@ -61,6 +61,9 @@ def get_arg_parser():
     parser.add_argument('--save-logs', action='store_true',
         help="Save logs and plots about distributions")
 
+    parser.add_argument('--prp-top-percent', type=int, default=None,
+        help="Only test top X% (sorted by prob(record))")
+
     return parser
 
 
@@ -287,6 +290,26 @@ def calculate_expected_gaps(
 
     assert 0 <= p_merit <= 1.00, (p_merit, unknowns)
     data.prob_merit_gap.append(p_merit)
+
+
+def determine_test_threshold(args, valid_mi, data):
+    percent = args.prp_top_percent
+    if not percent or percent == 100:
+        return 0, {
+            mi: (p_merit, p_record) for mi, p_merit, p_record in zip(
+                valid_mi, data.prob_merit_gap, data.prob_record_gap)
+        }
+
+    assert 1 <= percent <= 99
+    # Could be several million datapoints.
+    # XXX: debug/print probs to see they match gap_stats
+    best_probs = sorted(data.prob_record_gap, reverse=True)
+    prob_threshold = best_probs[round(len(best_probs) * percent / 100)]
+    return prob_threshold, {
+        mi: (p_merit, p_record) for mi, p_merit, p_record in zip(
+                valid_mi, data.prob_merit_gap, data.prob_record_gap)
+        if p_record >= prob_threshold
+    }
 
 
 def should_print_stats(
@@ -518,18 +541,22 @@ def run_in_parallel(
         K, K_log,
         data, sc, misc
 ):
-
     # XXX: Cleanup after gmpy2.prev_prime.
     # Remainders of (p#/d) mod prime
     primes = tuple([p for p in range(3, 80000+1) if gmpy2.is_prime(p)])
     remainder = tuple([K % prime for prime in primes])
 
+    # Based on args
+    prob_threshold, mi_probs = determine_test_threshold(
+        args, valid_mi, data)
+    if prob_threshold >= 0:
+        print ("Testing {} m where prob(record) >= {:.3g}".format(
+            len(mi_probs), prob_threshold))
+
+    # Worker setup
     done_flag = multiprocessing.Event()
     work_q    = multiprocessing.Queue(20)
     results_q = multiprocessing.Queue()
-    #import queue
-    #work_q    = queue.Queue(20)
-    #results_q = queue.Queue()
 
     assert args.threads in range(1, 65), args.threads
     processes = []
@@ -541,14 +568,10 @@ def run_in_parallel(
                 i, args.sieve_length, K, args.p, args.d,
                 primes, remainder))
         process.start()
+        time.sleep(0.01)
         processes.append(process)
     print()
-    time.sleep(0.2)
-
-    mi_probs = {
-        mi: (p_merit, p_record) for mi, p_merit, p_record in zip(
-            valid_mi, data.prob_merit_gap, data.prob_record_gap)
-    }
+    time.sleep(0.5)
 
     for mi in valid_mi:
         m = args.mstart + mi
@@ -573,6 +596,9 @@ def run_in_parallel(
                 data, misc)
             mi_probs[mi] = (data.prob_merit_gap[-1], data.prob_record_gap[-1])
 
+        # Check if this prob_record high enough to run
+        if mi not in mi_probs or mi_probs[mi][1] < prob_threshold:
+            continue
 
         if m in existing:
             # XXX: missing_gap_test only sets one side.
@@ -582,7 +608,6 @@ def run_in_parallel(
                 mi, m, log_n, prev_p_i, next_p_i, 0, 0)
 
         else:
-            #print (f"Adding {m} to Queue")
             sc.will_test += 1
             try:
                work_q.put((m, mi, log_n, line), True)
@@ -741,7 +766,7 @@ def prime_gap_test(args):
         print()
 
         # Load stats for prob_record
-        if not args.stats:
+        if not args.stats and (args.num_plots or args.prp_top_percent):
             data_db, misc_db = load_stats(conn, args)
             assert len(data_db.prob_merit_gap)  == len(valid_mi), "run ./gap_stats first"
             assert len(data_db.prob_record_gap) == len(valid_mi), "run ./gap_stats first"
