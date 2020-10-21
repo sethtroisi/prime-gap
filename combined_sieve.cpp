@@ -344,33 +344,6 @@ void insert_range_db(
 }
 
 
-// See misc/benchmark.cpp
-static double benchmark_primorial_modulo(mpz_t K, size_t count) {
-    auto t_start = high_resolution_clock::now();
-
-    uint64_t z = 0;
-
-    // Benchmark suggest this doesn't really depend on size but use 34 bits
-    // As this is size of "most" of primes (and > 32)
-    uint64_t p = 1LL << 34;
-    for (size_t i = 0; i < count; i++) {
-        z += mpz_fdiv_ui(K, p + i);
-    }
-
-    double time = duration<double>(high_resolution_clock::now() - t_start).count();
-    // Keep compiler from optimizing out loop.
-    double eps = 1e-100 * z;
-    return time / count + eps;
-}
-
-static size_t estimated_primes(size_t max_prime) {
-    // Lookup primepi for common max_prime values.
-    if (common_primepi.count(max_prime)) {
-        return common_primepi[max_prime];
-    }
-    return 1.04 * max_prime / log(max_prime);
-}
-
 // Method1
 
 
@@ -473,7 +446,7 @@ void prime_gap_search(const struct Config config) {
         // Print "."s during, equal in length to 'Calculat...'
         size_t print_dots = 38;
 
-        const size_t expected_primes = estimated_primes(MAX_PRIME);
+        const size_t expected_primes = primepi_estimate(MAX_PRIME);
 
         long first_m_sum = 0;
 
@@ -937,61 +910,19 @@ void prime_gap_parallel(struct Config config) {
     const size_t count_coprime_sieve = *std::max_element(i_reindex.begin(), i_reindex.end());
     assert( count_coprime_sieve % 2 == 0 );
 
-
-    // ----- Timing
-    // Also prints estimate if verbose >= 2
-    if (config.verbose >= 2) {
-        printf("\n");
-    }
-    const double prp_time_est = prp_time_estimate_composite(N_log, config.verbose);
-
     // See Merten's Third Theorem
     size_t expected_m_stops = (log(log(LAST_PRIME)) - log(log(SMALL_THRESHOLD))) * 2*SL * M_inc;
 
+
+    // ----- Timing
     if (config.verbose >= 2) {
-        const size_t expected_primes = estimated_primes(MAX_PRIME);
-        const double mod_time_est = benchmark_primorial_modulo(
-            K, 100'000 * (K_log < 2000 ? 20 : 1));
-
-        const double k_mod_time = expected_primes * mod_time_est;
-        const double m_search_time = (expected_m_stops + expected_primes) * 130e-9;
-        // Estimate still needs to account for:
-        //      small primes
-        //      marking off factors (small and large)
-
-        const size_t count_prints = 5 * (log10(MAX_PRIME) - 4);
-        const double extra_time =
-            // PrimePi takes ~0.3s / billion
-            LAST_PRIME * (0.3 / 1e9) +
-            // t_total_unknowns += std::count(...);
-            // 5 prints per log10
-            count_prints * 1.0 * valid_ms * count_coprime_sieve / 6871000500 +
-            // PRP time estimation
-            5;
-        const double total_estimate = k_mod_time + m_search_time + extra_time;
-
-        const double estimated_prp_per_m = 1 / (prob_prime * log(config.max_prime) * exp(GAMMA));
-        const double test_estimate = 2 * valid_ms * estimated_prp_per_m * prp_time_est;
-
-        printf("Estimated misc (PrimePi, count unknown, ...) time: %.0f (%.1f%% total)\n",
-            extra_time, 100.0 * extra_time / total_estimate);
-
-        printf("Estimated K mod/s: %'.0f, estimated time for all mods: %.0f (%.1f%% total)\n",
-            1 / mod_time_est, k_mod_time, 100.0 * k_mod_time / total_estimate);
-
-        // XXX: pull from benchmark somehow.
-        printf("Estimated modulo_searches(million): %ld, time: %.0f (%.1f%% total)\n",
-                expected_m_stops / 1'000'000, m_search_time, 100.0 * m_search_time / total_estimate);
-
-        printf("Estimated sieve time: %.0f seconds (%.2f hours) (%.3f)\n",
-                total_estimate, total_estimate / 3600,
-                100 * total_estimate / (test_estimate + total_estimate));
-        printf("Estimated test  time: %.0f hours (%.1f%%)\n",
-                test_estimate / 3600,
-                100 * test_estimate / (test_estimate + total_estimate));
-
         printf("\n");
     }
+    // Prints estimate of PRP/s
+    const double prp_time_est = prp_time_estimate_composite(N_log, config.verbose);
+
+    // Detailed timing info about different stages
+    combined_sieve_method2_time_estimate(config, K, valid_ms, prp_time_est);
 
 
     /**

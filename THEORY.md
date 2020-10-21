@@ -232,10 +232,11 @@ prob record inside sieve: 0.04332   prob outside: 0.00007
 
 Assumptions:
 
-* Assume that `combined_sieve` is linear (in practice it's faster than linear)
-* Assume that `gap_stats` is linear (it is)
+* Assume that sieving twice as many intervals takes twice as long
+  * `combined_sieve` is linear (in practice it's faster than linear)
+  * Assume that `gap_stats` is linear (it is)
 * Assume that `gap_test` is linear (it is)
-* `prob_record(m)` distribution is independent of m (e.g. `log(k) >> log(m)`)
+* `prob_record(m)` distribution is independent of m (e.g. `log(K) >> log(m)`)
 
 Math:
 

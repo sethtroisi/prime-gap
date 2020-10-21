@@ -474,7 +474,7 @@ void prob_extended_gap(
 
     const size_t EXT_SIZE = 2 * SL;
     // Sieve a lot more (it's fast)
-    vector<char>     is_coprime(EXT_SIZE, true);
+    vector<char> is_coprime(EXT_SIZE, true);
     {
         for (auto prime : K_primes) {
             if (config.d % prime == 0)

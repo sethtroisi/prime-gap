@@ -46,7 +46,7 @@ using namespace std::chrono;
 
 string UNKNOWNS_DIR = "unknowns";
 
-std::map<uint64_t,uint64_t> common_primepi = {
+static const std::map<uint64_t,uint64_t> common_primepi = {
     {       10'000'000,        664'579},
     {      100'000'000,      5'761'455},
     {      200'000'000,     11'078'937},
@@ -102,6 +102,12 @@ uint32_t gcd(uint32_t a, uint32_t b) {
 }
 
 
+double log(const mpz_t &K) {
+    long exp;
+    double mantis = mpz_get_d_2exp(&exp, K);
+    return log(mantis) + log(2) * exp;
+}
+
 void K_stats(
         const struct Config& config,
         mpz_t &K, int *K_digits, double *K_log) {
@@ -110,9 +116,7 @@ void K_stats(
     assert(0 == mpz_tdiv_q_ui(K, K, config.d));
     assert(mpz_cmp_ui(K, 1) > 0);  // K <= 1 ?!?
 
-    long exp;
-    double mantis = mpz_get_d_2exp(&exp, K);
-    *K_log = log(mantis) + log(2) * exp;
+    *K_log = log(K);
 
     if (K_digits != nullptr) {
         int base10 = mpz_sizeinbase(K, 10);
@@ -202,6 +206,110 @@ double prp_time_estimate_composite(double K_log, int verbose) {
 
     return t_estimate;
 }
+
+
+// See misc/benchmark.cpp
+static double benchmark_primorial_modulo(const mpz_t& K, size_t count) {
+    auto t_start = high_resolution_clock::now();
+
+    uint64_t z = 0;
+
+    // Benchmark suggest this doesn't really depend on size but use 34 bits
+    // As this is size of "most" of primes (and > 32)
+    uint64_t p = 1LL << 34;
+    for (size_t i = 0; i < count; i++) {
+        z += mpz_fdiv_ui(K, p + i);
+    }
+
+    double time = duration<double>(high_resolution_clock::now() - t_start).count();
+    // Keep compiler from optimizing out loop.
+    double eps = 1e-100 * z;
+    return time / count + eps;
+}
+
+
+/**
+ * Count of numbers [0, SL] coprime to K
+ */
+static
+size_t count_coprime_sieve(const struct Config& config) {
+    vector<char> is_coprime(config.sieve_length + 1, true);
+    for (auto prime : get_sieve_primes(config.p)) {
+        if (config.d % prime == 0)
+            continue;
+
+        for (size_t i = 0; i < is_coprime.size(); i += prime)
+            is_coprime[i] = false;
+    }
+    return std::count(is_coprime.begin(), is_coprime.end(), true);
+}
+
+
+double combined_sieve_method2_time_estimate(
+        const struct Config& config,
+        const mpz_t &K,
+        uint64_t valid_ms,
+        double prp_time_est) {
+    // XXX: pull these from config file or somewhere
+    const double MODULE_SEARCH_SECS = 130e-9;
+    // much less important to correctly set.
+    const double COUNT_VECTOR_BOOL_PER_SEC = 6871000500;
+    // ~ `primesieve -t1 1e9`
+    const double PRIME_RANGE_SEC = 0.3 / 1e9;
+
+    const double K_log = log(K);
+    const size_t expected_primes = primepi_estimate(config.max_prime);
+    const double mod_time_est = benchmark_primorial_modulo(
+        K, 100'000 * (K_log < 2000 ? 20 : 1));
+
+    const size_t interval = 2 * config.sieve_length;
+    const size_t expected_m_stops =
+        (log(log(config.max_prime)) - log(log(8 * interval))) * interval * config.minc;
+
+    const double k_mod_time = expected_primes * mod_time_est;
+    const double m_search_time = (expected_m_stops + expected_primes) * MODULE_SEARCH_SECS;
+    // Estimate still needs to account for:
+    //      small primes
+    //      marking off factors (small and large)
+
+    const size_t count_prints = 5 * (log10(config.max_prime) - 4);
+    const double extra_time =
+        // PrimePi takes ~0.3s / billion
+        config.max_prime * PRIME_RANGE_SEC +
+        // 5 prints per log10 * std::count(all_unknowns)
+        count_prints * 1.0 * valid_ms * count_coprime_sieve(config) / COUNT_VECTOR_BOOL_PER_SEC;
+    const double total_estimate = k_mod_time + m_search_time + extra_time;
+
+    if (config.verbose >= 2) {
+        const double N_log = K_log + log(config.mstart);
+        const double prob_prime = 1 / N_log - 1 / (N_log * N_log);
+        const double estimated_prp_per_m = 1 / (prob_prime * log(config.max_prime) * exp(GAMMA));
+        const double test_estimate = 2 * valid_ms * estimated_prp_per_m * prp_time_est;
+
+        printf("Estimated misc (PrimePi, count unknown, ...) time: %.0f (%.1f%% total)\n",
+            extra_time, 100.0 * extra_time / total_estimate);
+
+        printf("Estimated K mod/s: %'.0f, estimated time for all mods: %.0f (%.1f%% total)\n",
+            1 / mod_time_est, k_mod_time, 100.0 * k_mod_time / total_estimate);
+
+        // XXX: pull from benchmark somehow.
+        printf("Estimated modulo_searches(million): %ld, time: %.0f (%.1f%% total)\n",
+                expected_m_stops / 1'000'000, m_search_time, 100.0 * m_search_time / total_estimate);
+
+        printf("Estimated sieve time: %.0f seconds (%.2f hours) (%.3f)\n",
+                total_estimate, total_estimate / 3600,
+                100 * total_estimate / (test_estimate + total_estimate));
+        printf("Estimated test  time: %.0f hours (%.1f%%)\n",
+                test_estimate / 3600,
+                100 * test_estimate / (test_estimate + total_estimate));
+
+        printf("\n");
+    }
+
+    return total_estimate;
+}
+
+
 
 
 /**
@@ -384,6 +492,17 @@ bool isprime_brute(uint32_t n) {
             return false;
     return true;
 }
+
+
+size_t primepi_estimate(uint64_t max_prime) {
+    // Lookup primepi for common max_prime values.
+    if (common_primepi.count(max_prime)) {
+        return common_primepi.at(max_prime);
+    }
+    return 1.04 * max_prime / log(max_prime);
+
+}
+
 
 
 void Args::show_usage(char* name) {

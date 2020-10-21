@@ -31,9 +31,6 @@ using std::vector;
 
 const double GAMMA = 0.577215665;
 
-extern std::map<uint64_t,uint64_t> common_primepi;
-
-
 /* Arg Parsing */
 
 struct Config {
@@ -112,6 +109,14 @@ void K_stats(
 
 double prp_time_estimate_composite(double K_log, int verbose);
 
+double combined_sieve_method2_time_estimate(
+        const struct Config& config,
+        const mpz_t &K,
+        uint64_t valid_ms,
+        double prp_time_est);
+
+
+
 // Used to optimize d
 std::tuple<double, uint32_t, double, double>
 count_K_d(const struct Config& config);
@@ -123,3 +128,5 @@ double prob_prime_and_stats(const struct Config& config, mpz_t &K);
 
 bool isprime_brute(uint32_t n);
 vector<uint32_t> get_sieve_primes(uint32_t n);
+
+size_t primepi_estimate(uint64_t max_prime);

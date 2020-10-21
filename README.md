@@ -424,6 +424,10 @@ $ sqlite3 prime-gap-search.db < schema.sql
 
 # For misc/double_check.py
 $ sudo apt install gmp-ecm
+
+# There are a handful of constants (MODULE_SEARCH_SECS, PRIME_RANGE_SEC, ...)
+# in gap_common.cpp `combined_sieve_method2_time_estimate` that can be set for
+# more accurate `combined_sieve` timing.
 ```
 
 * [prime-gap-list](https://github.com/primegap-list-project/prime-gap-list)
@@ -565,6 +569,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * THEORY.md
   * [ ] Add some theory for only doing one side test.
 * Project
+  * [ ] Run length encoding to reduce filesize
   * [ ] Records / day in status.py or record_check.py
 * combined\_sieve.cpp
 * gap\_stats.cpp
