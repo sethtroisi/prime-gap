@@ -194,6 +194,7 @@ def save(conn, p, d, m, next_p_i, prev_p_i, merit,
         "WHERE p=? AND d=? AND m=?",
         (next_p_i, prev_p_i, round(merit,4),
          p_tests, n_tests, test_time, p, d, m))
+    conn.commit()
 
 
 def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_prime):
@@ -622,10 +623,6 @@ def run_in_parallel(
             result = results_q.get(block=False)
             process_result(conn, args, record_gaps, mi_probs, data, sc, result)
 
-            # Only commit records every once in a while to help with very fast results.
-            per_10s = int(10 * args.threads / result[-1])
-            if per_10s == 0 or sc.tested % per_10s == 0 or sc.tested % 200 == 0:
-                conn.commit()
 
     print("Everything Queued, done.set() & pushing STOP")
     done_flag.set()
@@ -639,7 +636,6 @@ def run_in_parallel(
         print(f"Waiting on {sc.will_test - sc.tested} of {sc.will_test} results")
         result = results_q.get(block=True)
         process_result(conn, args, record_gaps, mi_probs, data, sc, result)
-        conn.commit()
 
     print("Joining work_q")
     work_q.join_thread()
