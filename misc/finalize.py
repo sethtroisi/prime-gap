@@ -153,13 +153,13 @@ def merged_ms_mi(ranges, unknown_files):
     unknowns = set()
     for ufn in sorted(unknown_files):
         p, d, ms, mi, _, _, _ = gap_utils.parse_unknown_filename(ufn)
-        assert p == args.p and d == args.d, ufn
+        assert args.p == p and args.d == d, ufn
 
         unknowns.add((ms, mi))
         joined.append((ms, mi, ufn))
 
     for row in ranges:
-        assert p == row['P'] and d == row['D'], row
+        assert args.p == row['p'] and args.d == row['D'], row
 
         if (row['m_start'], row['m_inc']) in unknowns:
             continue
@@ -182,7 +182,7 @@ def dump_to_file(conn, args, ranges, unknown_files):
     # output csv for each range (without unknown_filename)
 
     # elements are (ms, mi, unk)
-    joined = merged_ms_mi(ranges, unknown_files)
+    joined = merged_ms_mi(args, ranges, unknown_files)
     for _, _, ufn in joined:
         if ufn not in unknown_files:
             print (f"\tExtra range: {ufn!r}")
@@ -262,7 +262,7 @@ def delete_range_and_low_merit(conn, args, ranges, unknown_files):
              (next_p + prev_p < 100000 AND MERIT < 8))
             """
         # TODO fix names in schema.sql.
-        condition_result = condition_m_stats.relpace("_p", "_p_i")
+        condition_result = condition_m_stats.replace("_p", "_p_i")
 
         cursor.execute(
             "DELETE FROM m_stats " + condition + condition_m_stats,
@@ -303,7 +303,7 @@ def check_processed(args):
 
         conn.row_factory = None
         # Always dump stats, sometimes dump files
-        #dump_to_file(conn, args, ranges, unknown_files)
+        dump_to_file(conn, args, ranges, unknown_files)
 
         print()
         print("tar'ing results with:")
