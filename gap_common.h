@@ -103,10 +103,18 @@ bool has_prev_prime_gmp();
 
 uint32_t gcd(uint32_t a, uint32_t b);
 
+
+/* K stuff */
+double log(const mpz_t &K);
+
+void init_K(const struct Config& config, mpz_t &K);
+
 void K_stats(
         const struct Config& config,
         mpz_t &K, int *K_digits, double *K_log);
 
+
+/* Utils */
 double prp_time_estimate_composite(double K_log, int verbose);
 
 double combined_sieve_method2_time_estimate(

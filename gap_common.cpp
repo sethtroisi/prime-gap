@@ -108,13 +108,17 @@ double log(const mpz_t &K) {
     return log(mantis) + log(2) * exp;
 }
 
-void K_stats(
-        const struct Config& config,
-        mpz_t &K, int *K_digits, double *K_log) {
+void init_K(const struct Config& config, mpz_t &K) {
     mpz_init(K);
     mpz_primorial_ui(K, config.p);
     assert(0 == mpz_tdiv_q_ui(K, K, config.d));
     assert(mpz_cmp_ui(K, 1) > 0);  // K <= 1 ?!?
+}
+
+void K_stats(
+        const struct Config& config,
+        mpz_t &K, int *K_digits, double *K_log) {
+    init_K(config, K);
 
     *K_log = log(K);
 

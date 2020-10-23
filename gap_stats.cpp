@@ -41,6 +41,8 @@ using std::vector;
 using namespace std::chrono;
 
 
+typedef const double cdouble;
+
 
 // Limits the size of record list
 const uint32_t MAX_GAP = 1'000'000;
@@ -84,7 +86,7 @@ class ProbNth {
 };
 
 
-void prime_gap_stats(const struct Config config);
+void prime_gap_stats(struct Config config);
 bool is_range_already_processed(const struct Config& config);
 
 static double average_v(vector<float> &a) {
@@ -92,6 +94,7 @@ static double average_v(vector<float> &a) {
 }
 
 static void prob_stats(char const *name, vector<float> probs) {
+    // XXX: &probs, save because of copy
     vector<float> sorted = probs;
     std::sort(sorted.begin(), sorted.end(), std::greater<>());
 
@@ -425,10 +428,10 @@ void store_stats(
  * Change that the first prime is later than i'th unknown
  * prod_great_nth[i] = (1 - prob_prime)^i
  */
-const double DOUBLE_NTH_PRIME_CUTOFF = 1e-13;
+cdouble DOUBLE_NTH_PRIME_CUTOFF = 1e-13;
 
 void prob_nth_prime(
-        const double prob_prime,
+        double prob_prime,
         vector<float>& prob_prime_nth,
         vector<float>& prob_great_nth) {
     double prob_still_prime = 1.0;
@@ -441,7 +444,7 @@ void prob_nth_prime(
 
 
 void prob_combined_gap(
-        const double prob_prime,
+        double prob_prime,
         vector<float>& prob_combined) {
     double prob = prob_prime * prob_prime;
     // Want error < 1e-9 | unknown_i * unkown_j * 1e-15 ~= 2000 * 2000 * 2.5e-6 = 1e-9
@@ -454,7 +457,7 @@ void prob_combined_gap(
 
 void prob_extended_gap(
         const struct Config& config,
-        const double PROB_PRIME,
+         double PROB_PRIME,
         const vector<uint32_t>& poss_record_gaps,
         ProbNth &gap_probs) {
 
@@ -616,15 +619,15 @@ void prob_extended_gap(
 
 void setup_probnth(
         const struct Config &config,
-        const double N_log,
+        double N_log,
         const vector<uint32_t> &poss_record_gaps,
         ProbNth &gap_probs) {
 
     // ----- Sieve stats
-    const double PROB_PRIME = 1 / N_log - 1 / (N_log * N_log);
-    const double UNKNOWNS_AFTER_SIEVE = 1 / (log(config.max_prime) * exp(GAMMA));
-    const double UNKNOWNS_AFTER_COPRIME = 1 / (log(config.p) * exp(GAMMA));
-    const double PROB_PRIME_AFTER_SIEVE = PROB_PRIME / UNKNOWNS_AFTER_SIEVE;
+    cdouble PROB_PRIME = 1 / N_log - 1 / (N_log * N_log);
+    cdouble UNKNOWNS_AFTER_SIEVE = 1 / (log(config.max_prime) * exp(GAMMA));
+    cdouble UNKNOWNS_AFTER_COPRIME = 1 / (log(config.p) * exp(GAMMA));
+    cdouble PROB_PRIME_AFTER_SIEVE = PROB_PRIME / UNKNOWNS_AFTER_SIEVE;
     if (config.verbose >= 2) {
         printf("prob prime             : %.7f\n", PROB_PRIME);
         printf("prob prime coprime     : %.7f\n", PROB_PRIME / UNKNOWNS_AFTER_COPRIME);
@@ -709,6 +712,7 @@ void run_gap_file(
         const uint32_t min_record_gap,
         const uint32_t min_gap_min_merit,
         const ProbNth &gap_probs,
+        vector<uint32_t>& valid_m,
         std::ifstream& unknown_file,
         /* output */
         vector<float>& prob_gap_norm,
@@ -723,13 +727,6 @@ void run_gap_file(
         vector<float>& probs_highmerit) {
 
     auto  s_start_t = high_resolution_clock::now();
-
-    vector<uint32_t> valid_m;
-    for (uint64_t mi = 0; mi < config.minc; mi++) {
-        if (gcd(config.mstart + mi, config.d) == 1) {
-            valid_m.push_back(mi);
-        }
-    }
 
     prob_gap_norm.clear();
     prob_gap_low.clear();
@@ -772,15 +769,15 @@ void run_gap_file(
         // Note slightly different from N_log
         float log_start_prime = K_log + log(m);
 
-        const double prob_prev_end = gap_probs.great_nth_sieve[unknown_low.size()];
-        const double prob_next_end = gap_probs.great_nth_sieve[unknown_high.size()];
-        const double prob_extended = gap_probs.prob_extended;
+        cdouble prob_prev_end = gap_probs.great_nth_sieve[unknown_low.size()];
+        cdouble prob_next_end = gap_probs.great_nth_sieve[unknown_high.size()];
+        cdouble prob_extended = gap_probs.prob_extended;
 
         // Directly examined (1 - prob_prev_end) * (1 - prob_next_end)
         // +
         // Extended examined (1 - prob_prev_end) * (prob_next_end * (1 - prob_extended))
         // =                 (1 - prob_prev_end) * (1 - prob_next_end * prob_extended)
-        const double prob_seen =
+        cdouble prob_seen =
             ((1 - prob_prev_end) * (1 - prob_next_end) +
              (1 - prob_prev_end) * (prob_next_end * (1 - prob_extended)) +
              (1 - prob_next_end) * (prob_prev_end * (1 - prob_extended)));
@@ -935,7 +932,75 @@ void run_gap_file(
 }
 
 
-void prime_gap_stats(const struct Config config) {
+void calculate_prp_top_percent(
+        struct Config& config,
+        uint64_t valid_ms,
+        double N_log,
+        vector<float> &probs_record) {
+    // Determine PRP time, time per m
+    cdouble prp_time_est = prp_time_estimate_composite(N_log, 2 /* verbose */);
+    cdouble prob_prime = 1 / N_log - 1 / (N_log * N_log);
+    cdouble estimated_prp_per_m = 1 / (prob_prime * log(config.max_prime) * exp(GAMMA));
+    cdouble time_per_test = prp_time_est * estimated_prp_per_m;
+
+    // Calculate combined_sieve time
+    // XXX: try to load from db, fallback to this estimate.
+    mpz_t K;
+    init_K(config, K);
+    config.verbose = 0;
+    // Inflate slightly to account for gap_stat, starting up...
+    cdouble combined_time = 1.05 * combined_sieve_method2_time_estimate(
+        config, K, valid_ms, 0.0 /* prp_time_est */);
+    mpz_clear(K);
+
+    printf("\n");
+    printf("Estimated sieve time: %.0f seconds (%.2f hours)\n",
+        combined_time, combined_time / 3600);
+    printf("Estimated time/m: %.1f PRP/m * %.1f s/PRP = %.2f seconds\n",
+        estimated_prp_per_m, prp_time_est, time_per_test);
+    printf("\n");
+
+    // Sort probs, greater first
+    vector<float> sorted = probs_record;
+    std::sort(sorted.begin(), sorted.end(), std::greater<>());
+
+    vector<size_t> print_points;
+    for (auto percent : {1, 5, 10, 20, 50, 100}) {
+        size_t count = sorted.size() * percent / 100;
+        if (count == 0)
+            continue;
+        print_points.push_back(count);
+    }
+
+    printf("Sum(prob(record)) at different --prp-top-percent.\n");
+    printf("\tUses estimate for combined_sieve timing.\n");
+    printf("\tEstimate of optimal printed with *\n");
+    printf("\n");
+
+    double sum_prob = 0.0;
+    double time = combined_time;
+    bool max_happened = false;
+    for (size_t i = 1; i <= sorted.size(); i++) {
+        // Print at 1,5,10,20,50,100 AND "optimal"
+        sum_prob += sorted[i-1];
+        time += time_per_test;
+
+        double avg = sum_prob / time;
+        bool is_below_avg = (sorted[i-1] / time_per_test) < avg;
+        bool first_below = !max_happened && is_below_avg;
+        max_happened |= first_below;
+
+        if (first_below || std::count(print_points.begin(), print_points.end(), i)) {
+            cdouble percent = i * 100.0 / sorted.size();
+            printf("\t%6ld %c(%5.1f%%) | sum(prob) = %.6f / (%.0f + %6ld*%.2f) => %.4e/%.1f = %.4g prob/hour\n",
+                i, " *"[first_below], percent, sum_prob, combined_time, i, time_per_test,
+                sum_prob, time / 3600, avg);
+        }
+    }
+}
+
+
+void prime_gap_stats(struct Config config) {
     const unsigned int SIEVE_LENGTH = config.sieve_length;
     const unsigned int SL = SIEVE_LENGTH;
     assert( SL > 1000 );
@@ -961,6 +1026,7 @@ void prime_gap_stats(const struct Config config) {
     double K_log;
     K_stats(config, K, &K_digits, &K_log);
     double N_log = K_log + log(config.mstart);
+    mpz_clear(K);
 
     uint32_t min_gap_min_merit = std::ceil(config.min_merit * N_log);
     if (config.verbose >= 2) {
@@ -1014,7 +1080,12 @@ void prime_gap_stats(const struct Config config) {
         poss_record_gaps,
         gap_probs);
 
-    mpz_clear(K);
+    vector<uint32_t> valid_m;
+    for (uint64_t mi = 0; mi < config.minc; mi++) {
+        if (gcd(config.mstart + mi, config.d) == 1) {
+            valid_m.push_back(mi);
+        }
+    }
 
     /* Over all m values */
     vector<float> prob_gap_norm;
@@ -1037,6 +1108,7 @@ void prime_gap_stats(const struct Config config) {
         config, K_log,
         records, poss_record_gaps.front(), min_gap_min_merit,
         gap_probs,
+        valid_m,
         /* sieve input */
         unknown_file,
         /* output */
@@ -1078,5 +1150,9 @@ void prime_gap_stats(const struct Config config) {
             probs_seen,
             probs_record, probs_missing, probs_highmerit
         );
+    }
+
+    if (config.verbose >= 1) {
+        calculate_prp_top_percent(config, valid_m.size(), N_log, probs_record);
     }
 }
