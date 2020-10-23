@@ -198,7 +198,6 @@ bool is_range_already_processed(const struct Config& config) {
     sprintf(sql, "SELECT count(*) FROM range WHERE rid = %ld and time_stats > 0", hash);
     char *zErrMsg = 0;
 
-
     int count = 0;
     int rc = sqlite3_exec(db, sql, [](void* data, int argc, char **argv, char **azColName)->int {
         assert( argc == 1 );
@@ -212,6 +211,26 @@ bool is_range_already_processed(const struct Config& config) {
         exit(1);
     }
     return count > 0;
+}
+
+
+double get_range_time(const struct Config& config) {
+    DB db_helper(config.search_db.c_str());
+    sqlite3 *db = db_helper.get_db();
+
+    uint64_t hash = db_helper.config_hash(config);
+    char sql[200];
+    sprintf(sql, "SELECT time_sieve + time_stats FROM range WHERE rid = %ld and time_stats > 0", hash);
+    char *zErrMsg = 0;
+
+    double time = 0;
+    sqlite3_exec(db, sql, [](void* data, int argc, char **argv, char **azColName)->int {
+        assert( argc == 1 );
+        *static_cast<double*>(data) = atof(argv[0]);
+        return 0;
+    }, &time, &zErrMsg);
+
+    return time;
 }
 
 
@@ -937,21 +956,25 @@ void calculate_prp_top_percent(
         uint64_t valid_ms,
         double N_log,
         vector<float> &probs_record) {
+
     // Determine PRP time, time per m
     cdouble prp_time_est = prp_time_estimate_composite(N_log, 2 /* verbose */);
     cdouble prob_prime = 1 / N_log - 1 / (N_log * N_log);
     cdouble estimated_prp_per_m = 1 / (prob_prime * log(config.max_prime) * exp(GAMMA));
     cdouble time_per_test = prp_time_est * estimated_prp_per_m;
 
-    // Calculate combined_sieve time
-    // XXX: try to load from db, fallback to this estimate.
-    mpz_t K;
-    init_K(config, K);
-    config.verbose = 0;
-    // Inflate slightly to account for gap_stat, starting up...
-    cdouble combined_time = 1.05 * combined_sieve_method2_time_estimate(
-        config, K, valid_ms, 0.0 /* prp_time_est */);
-    mpz_clear(K);
+    // Try to load combined_time from db, fallback to estimate.
+    double combined_time = get_range_time(config);
+    if (combined_time <= 0) {
+        // Calculate combined_sieve time
+        mpz_t K;
+        init_K(config, K);
+        config.verbose = 0;
+        // Inflate slightly to account for gap_stat, starting up...
+        combined_time = 1.05 * combined_sieve_method2_time_estimate(
+            config, K, valid_ms, 0.0 /* prp_time_est */);
+        mpz_clear(K);
+    }
 
     printf("\n");
     printf("Estimated sieve time: %.0f seconds (%.2f hours)\n",
