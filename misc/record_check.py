@@ -130,8 +130,8 @@ def print_record_gaps(args, gaps):
                     improvement = new_merit - existing[0] + 6e-3
 
                 if improvement >= 0:
-                    #if improvement < 6e-3:
-                    #    print ("Close:", existing[2], "vs newer", startprime)
+#                    if not is_same and improvement < 6e-3:
+#                        print ("Close:", existing[2], "vs newer", startprime)
 
                     if is_same and is_own_record:
                         own_records.append(gap[2])

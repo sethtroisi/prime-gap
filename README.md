@@ -588,6 +588,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * New script to update DB (and maybe delete uninteresting results
   * [ ] Finalize script
   * [ ] Set rid if null (but reasonable range exists)
+  * [ ] Check if range_stats needs cleanup after deleting range?
 * combined\_sieve.cpp
   * [ ] Option to output m with gcd(m, d) != 1
   * [ ] Improve optimize D helper
@@ -603,7 +604,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * missing\_gap\_test.py && missing\_gap\_verify.py
   * [ ] Save to result | figure out plan for gap_test.py to reuse
 * gap\_common
-  * [ ] Sieve Interval up to 100M instead of using next_prime
+  * [ ] Load time estimate values from config file
   * [ ] Compute smaller PRP and use that to computer larger (slower) PRP estimate
 * benchmarking
   * [ ] Validate `modulo\_search` is >80% execution time for `combined_sieve`.

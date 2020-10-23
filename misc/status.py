@@ -159,7 +159,7 @@ def check_processed(args):
 
     with sqlite3.connect(args.search_db) as conn:
         conn.row_factory = sqlite3.Row
-        sql_ranges = conn.execute('SELECT * FROM range').fetchall()
+        sql_ranges = conn.execute('SELECT * FROM range ORDER BY p, d, m_start').fetchall()
 
         # At some later point maybe don't load all (group by thousands or something)
         conn.row_factory = None
@@ -190,12 +190,13 @@ def print_results(conn, ranges, lookup):
 
     print()
     display_order = sorted(ranges.items(), key=sort_by_status)
+
     for key, value in display_order:
         p, d, ms, mi = key
         status, count_m, finished = value
 
         assert (status in (40, 41)) == (count_m == finished)
-        print("P: {:5} D: {:9} M({:8}) {:9} to {:9} |".format(
+        print("P: {:<5} D: {:<9} M({:8}) {:<9} to {:<9} |".format(
             p, d, count_m, ms, ms + mi - 1), end=" ")
         print("Finished: {:8} {:6.1%} (filename: {})".format(
             finished, finished / count_m, lookup[key][0]))
@@ -219,11 +220,13 @@ def print_results(conn, ranges, lookup):
             print ("Partially finished resume:")
             print (f"\t./gap_test.py {unk_fn_param}\n")
         elif status in (20, 30):
-            print ("File missing {}(could be recreated with):".format(
-                "(with partial results) " * (status == 30)))
-            print (f"\t./combined_sieve --save-unknowns {unk_fn_param}\n")
+            # Hard to tell this apart from finalized
+            # Simple logic, if range exists it's not finalized
             r = lookup[key][1]
             if r:
+                print ("File missing {}(could be recreated with):".format(
+                    "(with partial results) " * (status == 30)))
+                print (f"\t./combined_sieve --save-unknowns {unk_fn_param}\n")
                 print ("\tor deleted with")
                 print (f"\tsqlite3 {args.search_db} 'PRAGMA foreign_keys=1; "\
                        f"DELETE FROM range WHERE rid={r['rid']}; SELECT TOTAL_CHANGES()'\n")
