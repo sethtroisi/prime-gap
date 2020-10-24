@@ -867,7 +867,7 @@ void prime_gap_parallel(struct Config config) {
 #if defined GMP_VALIDATE_LARGE_FACTORS && !defined GMP_VALIDATE_FACTORS
     // No overflow from gap_common.cpp checks
     const uint32_t M_end = M_start + M_inc;
-    const uint64_t LARGE_PRIME_THRESHOLD = (1LL << 38) / M_end;
+    const uint64_t LARGE_PRIME_THRESHOLD = (1LL << 55) / M_end;
     if (LARGE_PRIME_THRESHOLD < LAST_PRIME && config.verbose >= 1) {
         printf("validating factors from primes > %ld\n", LARGE_PRIME_THRESHOLD);
     }
@@ -1162,6 +1162,9 @@ void prime_gap_parallel(struct Config config) {
                     1 / prob_prime_after_sieve,
                     skipped_prp,
                     skipped_prp / int_secs);
+                if (validated_factors) {
+                    printf("\tValidated %ld factors\n", validated_factors);
+                }
 
                 double run_prp_mult = int_secs / (prp_time_est * skipped_prp);
                 if (run_prp_mult > 2) {
