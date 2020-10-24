@@ -332,10 +332,14 @@ void benchmark_method_large(
 
             modulo_search_euclid_all_large(
                 M_START, max_m, SL, p, base_r,
-                [&](const uint64_t mi) {
+                [&](const uint32_t mi, const uint64_t first) {
                     found2++;
-                    uint64_t t = ((__int128) base_r * (M_START + mi)) % p;
-                    assert( (t <= SL) || (t + SL) >= p );
+                    __int128 t = base_r;
+                    t *= (M_START + mi);
+                    t += SL;
+                    t %= p;
+                    assert( first == t );
+                    assert( t <= 2 * SL );
                 }
             );
             // Did we find any m for this prime?
@@ -458,7 +462,7 @@ void benchmark(int bits, size_t count, const char* filter) {
 }
 
 int main(int argc, char **argv) {
-    set<int> benchmark_sizes = {25, 30, 31, 32, 35, 40, 45};
+    set<int> benchmark_sizes = {25, 30, 31, 32, 35, 40, 45, 55, 60};
     //set<int> benchmark_sizes = {25, 30, 31};
     //set<int> benchmark_sizes = {35, 40, 45};
     //set<int> benchmark_sizes = {55};

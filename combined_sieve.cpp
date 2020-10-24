@@ -1041,7 +1041,7 @@ void prime_gap_parallel(struct Config config) {
                 }
             }
         } else {
-            modulo_search_euclid_all_small(M_start, M_inc, SL, prime, base_r, [&](
+            modulo_search_euclid_all_large(M_start, M_inc, SL, prime, base_r, [&](
                         const uint32_t mi, uint64_t first) {
                 assert (mi < M_inc);
 

@@ -760,9 +760,10 @@ Config Args::argparse(int argc, char* argv[]) {
 
     uint64_t max_m = std::numeric_limits<uint64_t>::max() / config.max_prime;
     if (max_m < 1000 || max_m + 1000 <= last_m) {
-        config.valid = 0;
+        //config.valid = 0;
         printf("max_prime * last_m(%d) would overflow int64, log2(...) = %.3f\n",
             last_m, log2(1.0 * last_m * config.max_prime));
+        printf("TODO VALIDATE\n");
     }
 
     {
