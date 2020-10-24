@@ -554,6 +554,12 @@ def run_in_parallel(
         print ("Testing {} m where prob(record) >= {:.3g}".format(
             len(mi_probs), prob_threshold))
 
+    # Any non-processed mi_probs?
+    if all(args.mstart + mi in existing for mi in mi_probs):
+        print(f"All prp-top-percent({len(mi_probs)}) already processed!")
+        print()
+        return
+
     # Worker setup
     done_flag = multiprocessing.Event()
     work_q    = multiprocessing.Queue(20)

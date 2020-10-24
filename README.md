@@ -573,6 +573,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Records / day in status.py or record_check.py
 * combined\_sieve.cpp
 * gap\_stats.cpp
+  * [ ] Print (1 - seen) / prob as "unknown"
 * gap\_test.py
   * [ ] Sort by expected gap and PRP only top X%
   * [ ] Read `time_sieve` and `time_stats` print optimal to restart search point

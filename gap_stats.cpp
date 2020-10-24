@@ -385,7 +385,9 @@ void store_stats(
         size_t r = i + 1;
         if (config.verbose >= 2 && (
                     (r <= 5) || (r <= 500 && r % 100 == 0) ||
-                    (r <= 10000 && r % 1000 == 0) || (r % 10000 == 0) ||
+                    (r <= 10000 && r % 1000 == 0) ||
+                    (r <= 10000 && r % 10000 == 0) ||
+                    (r % 100000 == 0) ||
                     (r == num_rows))) {
             printf("Saving Row: %6ld/%ld %6ld: %.1f, %.1f | R: %.1e M: %.1e HM(%.1f): %.1e\n",
                     r, num_rows, m,
