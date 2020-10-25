@@ -228,6 +228,8 @@ static double benchmark_primorial_modulo(const mpz_t& K, size_t count) {
     double time = duration<double>(high_resolution_clock::now() - t_start).count();
     // Keep compiler from optimizing out loop.
     double eps = 1e-100 * z;
+
+//    printf("\tK mod / s Estimated %ld/%.2g = %.2g\n", count, time, count / time);
     return time / count + eps;
 }
 
@@ -264,7 +266,7 @@ double combined_sieve_method2_time_estimate(
     const double K_log = log(K);
     const size_t expected_primes = primepi_estimate(config.max_prime);
     const double mod_time_est = benchmark_primorial_modulo(
-        K, 100'000 * (K_log < 2000 ? 20 : 1));
+        K, 1'00'000 * (K_log < 2000 ? 20 : 1));
 
     const size_t interval = 2 * config.sieve_length;
     const size_t expected_m_stops =
