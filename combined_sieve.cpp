@@ -1086,81 +1086,99 @@ void prime_gap_parallel(struct Config& config) {
     // Used for various stats
     method2_stats stats(config, valid_ms, SMALL_THRESHOLD, prob_prime);
 
-    primesieve::iterator it;
-    uint64_t prime = it.next_prime();
-    for (; prime <= SMALL_THRESHOLD; prime = it.next_prime()) {
-        stats.pi_interval += 1;
-        // Big improvement over surround_prime is reusing this for each m.
-        const uint64_t base_r = mpz_fdiv_ui(K, prime);
 
-        // Handled by coprime_composite above
-        if (D % prime != 0 && prime <= P) {
-            continue;
+    // For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
+    // This makes it harder to print (see akward inner loop)
+    primesieve::iterator stage1_it;
+    while (true) {
+        // Handle primes (+1) <= stats.next_mult
+
+        vector<pair<uint32_t, uint32_t>> p_and_r;
+        uint64_t prime = stage1_it.next_prime();
+        for ( ; ; prime = stage1_it.next_prime()) {
+            stats.pi_interval += 1;
+
+            // Handled by coprime_composite above
+            if (D % prime != 0 && prime <= P)
+                continue;
+
+            const uint32_t base_r = mpz_fdiv_ui(K, prime);
+            p_and_r.push_back({(uint32_t) prime, base_r});
+
+            if (prime >= stats.next_print)
+                break;
         }
+
         for (uint32_t mi : valid_mi) {
             int32_t mii = m_reindex[mi];
             assert(mii >= 0);
 
             uint64_t m = M_start + mi;
-            uint64_t modulo = (base_r * m) % prime;
+            for (auto pr : p_and_r) {
+                uint64_t prime = pr.first;
+                uint64_t base_r = pr.second;
+                // For each interval that prints
 
-            // flip = (m * K - SL) % prime
-            uint32_t flip = modulo + prime - ((SIEVE_LENGTH+1) % prime);
-            if (flip >= prime) flip -= prime;
+                uint64_t modulo = (base_r * m) % prime;
 
-            uint32_t first = prime - flip - 1;
-            assert( first < prime );
+                // flip = (m * K - SL) % prime
+                uint32_t flip = modulo + prime - ((SIEVE_LENGTH+1) % prime);
+                if (flip >= prime) flip -= prime;
 
-            uint32_t shift = prime;
-            if (prime > 2) {
-                bool centerOdd = ((D & 1) == 0) && (m & 1);
-                bool lowIsEven = centerOdd == (SIEVE_LENGTH & 1);
-                bool evenFromLow = (first & 1) == 0;
-                bool firstIsEven = lowIsEven == evenFromLow;
+                uint32_t first = prime - flip - 1;
+                assert( first < prime );
 
-                #ifdef GMP_VALIDATE_FACTORS
-                    mpz_mul_ui(test, K, M_start + mi);
-                    mpz_sub_ui(test, test, SIEVE_LENGTH);
-                    assert( (mpz_even_p(test) > 0) == lowIsEven );
+                uint32_t shift = prime;
+                if (prime > 2) {
+                    bool centerOdd = ((D & 1) == 0) && (m & 1);
+                    bool lowIsEven = centerOdd == (SIEVE_LENGTH & 1);
+                    bool evenFromLow = (first & 1) == 0;
+                    bool firstIsEven = lowIsEven == evenFromLow;
 
-                    mpz_add_ui(test, test, first);
-                    assert( (mpz_even_p(test) > 0) == firstIsEven );
+                    #ifdef GMP_VALIDATE_FACTORS
+                        mpz_mul_ui(test, K, M_start + mi);
+                        mpz_sub_ui(test, test, SIEVE_LENGTH);
+                        assert( (mpz_even_p(test) > 0) == lowIsEven );
 
-                    assert( 0 == mpz_fdiv_ui(test, prime) );
-                #endif
+                        mpz_add_ui(test, test, first);
+                        assert( (mpz_even_p(test) > 0) == firstIsEven );
 
-                if (firstIsEven) {
-                    // divisible by 2 move to next multiple (an odd multiple)
+                        assert( 0 == mpz_fdiv_ui(test, prime) );
+                    #endif
 
-                    assert( (first >= SIEVE_INTERVAL) || composite[mii][i_reindex[first]] );
-                    first += prime;
+                    if (firstIsEven) {
+                        // divisible by 2 move to next multiple (an odd multiple)
+
+                        assert( (first >= SIEVE_INTERVAL) || composite[mii][i_reindex[first]] );
+                        first += prime;
+                    }
+
+                    // Don't need to count cross off even multiples.
+                    shift = 2*prime;
                 }
 
-                // Don't need to count cross off even multiples.
-                shift = 2*prime;
-            }
-
-            for (size_t d = first; d < SIEVE_INTERVAL; d += shift) {
-                composite[mii][i_reindex[d]] = true;
-                stats.small_prime_factors_interval += 1;
+                for (size_t d = first; d < SIEVE_INTERVAL; d += shift) {
+                    composite[mii][i_reindex[d]] = true;
+                    stats.small_prime_factors_interval += 1;
+                }
             }
         }
+        // Calculated here with locals
+        double prob_prime_after_sieve = prob_prime * log(prime) * exp(GAMMA);
+        // See THEORY.md
+        double skipped_prp = 2 * valid_ms * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
+        stats.current_prob_prime = prob_prime_after_sieve;
 
-        if (prime >= stats.next_print) {
-            // Calculated here with locals
-            double prob_prime_after_sieve = prob_prime * log(prime) * exp(GAMMA);
-            // See THEORY.md
-            double skipped_prp = 2 * valid_ms * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
-            stats.current_prob_prime = prob_prime_after_sieve;
+        // Print counters & stats.
+        method2_increment_print(
+            prime, LAST_PRIME,
+            valid_ms,
+            skipped_prp, prp_time_est,
+            composite,
+            stats, config);
 
-            // Print counters & stats.
-            method2_increment_print(
-                prime, LAST_PRIME,
-                valid_ms,
-                skipped_prp, prp_time_est,
-                composite,
-                stats, config);
-        }
+        if (prime >= SMALL_THRESHOLD)
+            break;
     }
 
     // Setup CTRL+C catcher
@@ -1174,8 +1192,10 @@ void prime_gap_parallel(struct Config& config) {
     const int D_mod5 = D % 5 == 0;
     const int D_mod7 = D % 7 == 0;
 
-    for (; prime <= MAX_PRIME; prime = it.next_prime()) {
+    primesieve::iterator it(SMALL_THRESHOLD);
+    for (uint64_t prime = it.next_prime(); prime <= MAX_PRIME; prime = it.next_prime()) {
         stats.pi_interval += 1;
+
         // Big improvement over surround_prime is reusing this for each m.
         const uint64_t base_r = mpz_fdiv_ui(K, prime);
 
