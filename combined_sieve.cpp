@@ -845,6 +845,18 @@ void method2_increment_print(
         method2_stats &stats,
         const struct Config config
 ) {
+        if (prime >= stats.next_print) {
+            size_t all_ten = prime > 10'000'000'000;
+            // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
+            // Print 60,70,80,90 billion because intervals are wider.
+            if (stats.next_print == (5 + 4 * all_ten) * stats.next_mult) {
+                stats.next_mult = 10 * stats.next_mult;
+                stats.next_print = 0;
+            }
+            stats.next_print += stats.next_mult;
+            stats.next_print = std::min(stats.next_print, LAST_PRIME);
+        }
+
         auto   s_stop_t = high_resolution_clock::now();
         // total time, interval time
         double     secs = duration<double>(s_stop_t - stats.start_t).count();
@@ -1074,11 +1086,85 @@ void prime_gap_parallel(struct Config& config) {
     // Used for various stats
     method2_stats stats(config, valid_ms, SMALL_THRESHOLD, prob_prime);
 
+    primesieve::iterator it;
+    uint64_t prime = it.next_prime();
+    for (; prime <= SMALL_THRESHOLD; prime = it.next_prime()) {
+        stats.pi_interval += 1;
+        // Big improvement over surround_prime is reusing this for each m.
+        const uint64_t base_r = mpz_fdiv_ui(K, prime);
+
+        // Handled by coprime_composite above
+        if (D % prime != 0 && prime <= P) {
+            continue;
+        }
+        for (uint32_t mi : valid_mi) {
+            int32_t mii = m_reindex[mi];
+            assert(mii >= 0);
+
+            uint64_t m = M_start + mi;
+            uint64_t modulo = (base_r * m) % prime;
+
+            // flip = (m * K - SL) % prime
+            uint32_t flip = modulo + prime - ((SIEVE_LENGTH+1) % prime);
+            if (flip >= prime) flip -= prime;
+
+            uint32_t first = prime - flip - 1;
+            assert( first < prime );
+
+            uint32_t shift = prime;
+            if (prime > 2) {
+                bool centerOdd = ((D & 1) == 0) && (m & 1);
+                bool lowIsEven = centerOdd == (SIEVE_LENGTH & 1);
+                bool evenFromLow = (first & 1) == 0;
+                bool firstIsEven = lowIsEven == evenFromLow;
+
+                #ifdef GMP_VALIDATE_FACTORS
+                    mpz_mul_ui(test, K, M_start + mi);
+                    mpz_sub_ui(test, test, SIEVE_LENGTH);
+                    assert( (mpz_even_p(test) > 0) == lowIsEven );
+
+                    mpz_add_ui(test, test, first);
+                    assert( (mpz_even_p(test) > 0) == firstIsEven );
+
+                    assert( 0 == mpz_fdiv_ui(test, prime) );
+                #endif
+
+                if (firstIsEven) {
+                    // divisible by 2 move to next multiple (an odd multiple)
+
+                    assert( (first >= SIEVE_INTERVAL) || composite[mii][i_reindex[first]] );
+                    first += prime;
+                }
+
+                // Don't need to count cross off even multiples.
+                shift = 2*prime;
+            }
+
+            for (size_t d = first; d < SIEVE_INTERVAL; d += shift) {
+                composite[mii][i_reindex[d]] = true;
+                stats.small_prime_factors_interval += 1;
+            }
+        }
+
+        if (prime >= stats.next_print) {
+            // Calculated here with locals
+            double prob_prime_after_sieve = prob_prime * log(prime) * exp(GAMMA);
+            // See THEORY.md
+            double skipped_prp = 2 * valid_ms * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
+            stats.current_prob_prime = prob_prime_after_sieve;
+
+            // Print counters & stats.
+            method2_increment_print(
+                prime, LAST_PRIME,
+                valid_ms,
+                skipped_prp, prp_time_est,
+                composite,
+                stats, config);
+        }
+    }
+
     // Setup CTRL+C catcher
     signal(SIGINT, signal_callback_handler);
-
-    // Note: Handling small primes here had better localized memory access
-    // But wasn't worth the extra code IMHO.
 
     const int K_mod3 = mpz_fdiv_ui(K, 3); // K % 3
     const int K_mod5 = mpz_fdiv_ui(K, 5); // K % 5
@@ -1088,141 +1174,73 @@ void prime_gap_parallel(struct Config& config) {
     const int D_mod5 = D % 5 == 0;
     const int D_mod7 = D % 7 == 0;
 
-    primesieve::iterator it;
-    for (uint64_t prime = it.next_prime(); prime <= MAX_PRIME; prime = it.next_prime()) {
+    for (; prime <= MAX_PRIME; prime = it.next_prime()) {
         stats.pi_interval += 1;
         // Big improvement over surround_prime is reusing this for each m.
         const uint64_t base_r = mpz_fdiv_ui(K, prime);
 
-        if (prime <= SMALL_THRESHOLD) {
-            // Handled by coprime_composite above
-            if (D % prime != 0 && prime <= P) {
-                continue;
-            }
-            for (uint32_t mi : valid_mi) {
-                int32_t mii = m_reindex[mi];
-                assert(mii >= 0);
+        modulo_search_euclid_all_large(M_start, M_inc, SL, prime, base_r, [&](
+                    const uint32_t mi, uint64_t first) {
+            assert (mi < M_inc);
 
-                uint64_t m = M_start + mi;
-                uint64_t modulo = (base_r * m) % prime;
+            stats.m_stops_interval += 1;
 
-                // flip = (m * K - SL) % prime
-                uint32_t flip = modulo + prime - ((SIEVE_LENGTH+1) % prime);
-                if (flip >= prime) flip -= prime;
+            // With D even, (ms + mi) must be odd (or share a factor of 2)
+            // Helps avoid wide memory read
+            if (((D & 1) == 0) && ((M_start & 1) == (mi & 1)))
+                return;
 
-                uint32_t first = prime - flip - 1;
-                assert( first < prime );
+            int32_t mii = m_reindex[mi];
+            if (mii < 0)
+                return;
 
-                uint32_t shift = prime;
-                if (prime > 2) {
-                    bool centerOdd = ((D & 1) == 0) && (m & 1);
-                    bool lowIsEven = centerOdd == (SIEVE_LENGTH & 1);
-                    bool evenFromLow = (first & 1) == 0;
-                    bool firstIsEven = lowIsEven == evenFromLow;
+            // Returning first from modulo_search_euclid_all_small is
+            // slightly faster on benchmarks, and slightly faster here
 
-                    #ifdef GMP_VALIDATE_FACTORS
-                        mpz_mul_ui(test, K, M_start + mi);
-                        mpz_sub_ui(test, test, SIEVE_LENGTH);
-                        assert( (mpz_even_p(test) > 0) == lowIsEven );
-
-                        mpz_add_ui(test, test, first);
-                        assert( (mpz_even_p(test) > 0) == firstIsEven );
-
-                        assert( 0 == mpz_fdiv_ui(test, prime) );
-                    #endif
-
-                    if (firstIsEven) {
-                        // divisible by 2 move to next multiple (an odd multiple)
-
-                        assert( (first >= SIEVE_INTERVAL) || composite[mii][i_reindex[first]] );
-                        first += prime;
-                    }
-
-                    // Don't need to count cross off even multiples.
-                    shift = 2*prime;
-                }
-
-                for (size_t d = first; d < SIEVE_INTERVAL; d += shift) {
-                    composite[mii][i_reindex[d]] = true;
-                    stats.small_prime_factors_interval += 1;
-                }
-            }
-        } else {
-            modulo_search_euclid_all_large(M_start, M_inc, SL, prime, base_r, [&](
-                        const uint32_t mi, uint64_t first) {
-                assert (mi < M_inc);
-
-                stats.m_stops_interval += 1;
-
-                // With D even, (ms + mi) must be odd (or share a factor of 2)
-                // Helps avoid wide memory read
-                if (((D & 1) == 0) && ((M_start & 1) == (mi & 1)))
-                    return;
-
-                int32_t mii = m_reindex[mi];
-                if (mii < 0)
-                    return;
-
-                // Returning first from modulo_search_euclid_all_small is
-                // slightly faster on benchmarks, and slightly faster here
-
-                // first = (SL - m * K) % prime
-                //     Computed as
-                // first =  2*SL - ((SL + m*K) % prime)
-                //       =  SL - m * K
-                //     Requires prime > 2*SL
-                //uint64_t first = (base_r * (M_start + mi) + SL) % prime;
-                assert( first <= 2*SL );
-                first = 2*SL - first;
+            // first = (SL - m * K) % prime
+            //     Computed as
+            // first =  2*SL - ((SL + m*K) % prime)
+            //       =  SL - m * K
+            //     Requires prime > 2*SL
+            //uint64_t first = (base_r * (M_start + mi) + SL) % prime;
+            assert( first <= 2*SL );
+            first = 2*SL - first;
 
 #ifdef GMP_VALIDATE_FACTORS
-                {
+            {
 #elif defined GMP_VALIDATE_LARGE_FACTORS
-                if (prime > LARGE_PRIME_THRESHOLD) {
+            if (prime > LARGE_PRIME_THRESHOLD) {
 #else
-                if (0) {
+            if (0) {
 #endif
-                    stats.validated_factors += 1;
-                    mpz_mul_ui(test, K, M_start + mi);
-                    mpz_sub_ui(test, test, SIEVE_LENGTH);
-                    mpz_add_ui(test, test, first);
-                    uint64_t mod = mpz_fdiv_ui(test, prime);
-                    assert( mod == 0 );
-                }
-
-                int64_t dist = first - SIEVE_LENGTH;
-                uint32_t m = M_start + mi;
-                if (D_mod2 && (dist & 1))
-                    return;
-                if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
-                    return;
-                if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
-                    return;
-                if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
-                    return;
-
-                if (!coprime_composite[first]) {
-                    return;
-                }
-
-                composite[mii][i_reindex[first]] = true;
-                stats.large_prime_factors_interval += 1;
-            });
-        }
-
-        if (prime >= stats.next_print) {
-            if (prime >= stats.next_print) {
-                size_t all_ten = prime > 10'000'000'000;
-                // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
-                // Print 60,70,80,90 billion because intervals are wider.
-                if (stats.next_print == (5 + 4 * all_ten) * stats.next_mult) {
-                    stats.next_mult = 10 * stats.next_mult;
-                    stats.next_print = 0;
-                }
-                stats.next_print += stats.next_mult;
-                stats.next_print = std::min(stats.next_print, LAST_PRIME);
+                stats.validated_factors += 1;
+                mpz_mul_ui(test, K, M_start + mi);
+                mpz_sub_ui(test, test, SIEVE_LENGTH);
+                mpz_add_ui(test, test, first);
+                uint64_t mod = mpz_fdiv_ui(test, prime);
+                assert( mod == 0 );
             }
 
+            int64_t dist = first - SIEVE_LENGTH;
+            uint32_t m = M_start + mi;
+            if (D_mod2 && (dist & 1))
+                return;
+            if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
+                return;
+            if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
+                return;
+            if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
+                return;
+
+            if (!coprime_composite[first]) {
+                return;
+            }
+
+            composite[mii][i_reindex[first]] = true;
+            stats.large_prime_factors_interval += 1;
+        });
+
+        if (prime >= stats.next_print) {
             // Calculated here with locals
             double prob_prime_after_sieve = prob_prime * log(prime) * exp(GAMMA);
             // See THEORY.md
