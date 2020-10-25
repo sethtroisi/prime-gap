@@ -53,8 +53,8 @@ using namespace std::chrono;
 #define SMALL_PRIME_LIMIT_METHOD1       400'000
 
 void set_defaults(struct Config& config);
-void prime_gap_search(const struct Config config);
-void prime_gap_parallel(const struct Config config);
+void prime_gap_search(const struct Config& config);
+void prime_gap_parallel(struct Config& config);
 
 
 int main(int argc, char* argv[]) {
@@ -371,7 +371,7 @@ void save_unknowns_method1(
 }
 
 
-void prime_gap_search(const struct Config config) {
+void prime_gap_search(const struct Config& config) {
     //const uint64_t P = config.p;
     const uint64_t D = config.d;
     const uint64_t M_start = config.mstart;
@@ -795,8 +795,45 @@ void signal_callback_handler(int signum) {
 }
 
 
+class method2_stats {
+    public:
+        method2_stats(
+                const struct Config& config,
+                size_t valid_ms,
+                uint64_t small_threshold,
+                double prob_prime
+        ) {
+            start_t = high_resolution_clock::now();
+            interval_t = high_resolution_clock::now();
+            total_unknowns = (2 * config.sieve_length + 1) * valid_ms;
+
+            if (small_threshold <= 10000)
+               next_mult = 10000;
+
+            prp_needed = 1 / prob_prime;
+        }
+
+        high_resolution_clock::time_point  start_t;
+        high_resolution_clock::time_point  interval_t;
+        long  total_unknowns;
+        long  prime_factors = 0;
+        long  small_prime_factors_interval = 0;
+        long  large_prime_factors_interval = 0;
+        long  m_stops = 0;
+        long  m_stops_interval = 0;
+
+        uint64_t  next_print = 0;
+        uint64_t  next_mult = 100000;
+
+        double prp_needed = 0;
+
+        size_t pi = 0;
+        size_t pi_interval = 0;
+};
+
+
 // Would be nice to pass const but CTRL+C handler changes max_prime
-void prime_gap_parallel(struct Config config) {
+void prime_gap_parallel(struct Config& config) {
     // Method2
     const uint32_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
@@ -952,18 +989,7 @@ void prime_gap_parallel(struct Config config) {
     }
 
     // Used for various stats
-    auto  s_start_t = high_resolution_clock::now();
-    auto  s_interval_t = high_resolution_clock::now();
-    long  s_total_unknowns = SIEVE_INTERVAL * valid_ms;
-    long  s_prime_factors = 0;
-    long  s_small_prime_factors_interval = 0;
-    long  s_large_prime_factors_interval = 0;
-    long  m_stops = 0;
-    long  m_stops_interval = 0;
-
-    uint64_t  s_next_print = 0;
-    uint64_t  next_mult = SMALL_THRESHOLD <= 10000 ? 10000 : 100000;
-    double s_prp_needed = 1 / prob_prime;
+    method2_stats stats(config, valid_ms, SMALL_THRESHOLD, prob_prime);
 
     // Setup CTRL+C catcher
     signal(SIGINT, signal_callback_handler);
@@ -979,11 +1005,9 @@ void prime_gap_parallel(struct Config config) {
     const int D_mod5 = D % 5 == 0;
     const int D_mod7 = D % 7 == 0;
 
-    size_t pi = 0;
-    size_t pi_interval = 0;
     primesieve::iterator it;
     for (uint64_t prime = it.next_prime(); prime <= MAX_PRIME; prime = it.next_prime()) {
-        pi_interval += 1;
+        stats.pi_interval += 1;
         // Big improvement over surround_prime is reusing this for each m.
         const uint64_t base_r = mpz_fdiv_ui(K, prime);
 
@@ -1037,7 +1061,7 @@ void prime_gap_parallel(struct Config config) {
 
                 for (size_t d = first; d < SIEVE_INTERVAL; d += shift) {
                     composite[mii][i_reindex[d]] = true;
-                    s_small_prime_factors_interval += 1;
+                    stats.small_prime_factors_interval += 1;
                 }
             }
         } else {
@@ -1045,7 +1069,7 @@ void prime_gap_parallel(struct Config config) {
                         const uint32_t mi, uint64_t first) {
                 assert (mi < M_inc);
 
-                m_stops_interval += 1;
+                stats.m_stops_interval += 1;
 
                 // With D even, (ms + mi) must be odd (or share a factor of 2)
                 // Helps avoid wide memory read
@@ -1099,27 +1123,27 @@ void prime_gap_parallel(struct Config config) {
                 }
 
                 composite[mii][i_reindex[first]] = true;
-                s_large_prime_factors_interval += 1;
+                stats.large_prime_factors_interval += 1;
             });
         }
 
-        if (prime >= s_next_print) {
-            if (prime >= s_next_print) {
+        if (prime >= stats.next_print) {
+            if (prime >= stats.next_print) {
                 size_t all_ten = prime > 10'000'000'000;
                 // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
                 // Print 60,70,80,90 billion because intervals are wider.
-                if (s_next_print == (5 + 4 * all_ten) * next_mult) {
-                    next_mult = 10 * next_mult;
-                    s_next_print = 0;
+                if (stats.next_print == (5 + 4 * all_ten) * stats.next_mult) {
+                    stats.next_mult = 10 * stats.next_mult;
+                    stats.next_print = 0;
                 }
-                s_next_print += next_mult;
-                s_next_print = std::min(s_next_print, LAST_PRIME);
+                stats.next_print += stats.next_mult;
+                stats.next_print = std::min(stats.next_print, LAST_PRIME);
             }
 
             auto   s_stop_t = high_resolution_clock::now();
             // total time, interval time
-            double     secs = duration<double>(s_stop_t - s_start_t).count();
-            double int_secs = duration<double>(s_stop_t - s_interval_t).count();
+            double     secs = duration<double>(s_stop_t - stats.start_t).count();
+            double int_secs = duration<double>(s_stop_t - stats.interval_t).count();
 
             // See THEORY.md
             double prob_prime_after_sieve = prob_prime * log(prime) * exp(GAMMA);
@@ -1128,8 +1152,8 @@ void prime_gap_parallel(struct Config config) {
             for (size_t i = 0; i < valid_ms; i++) {
                 t_total_unknowns += std::count(composite[i].begin(), composite[i].end(), false);
             }
-            uint64_t new_composites = s_total_unknowns - t_total_unknowns;
-            double skipped_prp = 2 * valid_ms * (s_prp_needed - 1/prob_prime_after_sieve);
+            uint64_t new_composites = stats.total_unknowns - t_total_unknowns;
+            double skipped_prp = 2 * valid_ms * (stats.prp_needed - 1/prob_prime_after_sieve);
 
             bool is_last = (prime == LAST_PRIME) || g_control_c;
 
@@ -1137,7 +1161,7 @@ void prime_gap_parallel(struct Config config) {
             if (config.verbose + is_last >= 1) {
                 printf("%'-10ld (primes %'ld/%'ld)\t(seconds: %.2f/%-.1f | per m: %.3g)\n",
                     prime,
-                    pi_interval, pi,
+                    stats.pi_interval, stats.pi,
                     int_secs, secs,
                     secs / valid_ms);
             }
@@ -1145,9 +1169,9 @@ void prime_gap_parallel(struct Config config) {
             if ((config.verbose + 2*is_last + (prime > 1e9)) >= 2) {
                 printf("\tfactors  %'14ld \t"
                        "(interval: %'ld avg m/large_prime interval: %.1f)\n",
-                    s_prime_factors,
-                    s_small_prime_factors_interval + s_large_prime_factors_interval,
-                    1.0 * m_stops_interval / pi_interval);
+                    stats.prime_factors,
+                    stats.small_prime_factors_interval + stats.large_prime_factors_interval,
+                    1.0 * stats.m_stops_interval / stats.pi_interval);
                 // count_coprime_sieve * valid_ms also makes sense but leads to smaller numbers
                 printf("\tunknowns %'9ld/%-5ld\t"
                        "(avg/m: %.2f) (composite: %.2f%% +%.3f%% +%'ld)\n",
@@ -1174,19 +1198,19 @@ void prime_gap_parallel(struct Config config) {
 
                 printf("\n");
 
-                pi += pi_interval;
-                s_prime_factors += s_small_prime_factors_interval;
-                s_prime_factors += s_large_prime_factors_interval;
-                m_stops += m_stops_interval;
+                stats.pi += stats.pi_interval;
+                stats.prime_factors += stats.small_prime_factors_interval;
+                stats.prime_factors += stats.large_prime_factors_interval;
+                stats.m_stops += stats.m_stops_interval;
 
-                s_total_unknowns = t_total_unknowns;
-                s_interval_t = s_stop_t;
-                s_prp_needed = 1 / prob_prime_after_sieve;
+                stats.total_unknowns = t_total_unknowns;
+                stats.interval_t = s_stop_t;
+                stats.prp_needed = 1 / prob_prime_after_sieve;
 
-                s_small_prime_factors_interval = 0;
-                s_large_prime_factors_interval = 0;
-                m_stops_interval = 0;
-                pi_interval = 0;
+                stats.small_prime_factors_interval = 0;
+                stats.large_prime_factors_interval = 0;
+                stats.m_stops_interval = 0;
+                stats.pi_interval = 0;
             }
             setlocale(LC_NUMERIC, "C");
 
@@ -1225,16 +1249,16 @@ void prime_gap_parallel(struct Config config) {
     }
 
     // Likely zerod in the last interval, but needed no printing
-    pi += pi_interval;
-    s_prime_factors += s_small_prime_factors_interval;
-    s_prime_factors += s_large_prime_factors_interval;
-    m_stops += m_stops_interval;
+    stats.pi += stats.pi_interval;
+    stats.prime_factors += stats.small_prime_factors_interval;
+    stats.prime_factors += stats.large_prime_factors_interval;
+    stats.m_stops += stats.m_stops_interval;
 
     {
-        float error_percent = (100.0 * abs(expected_m_stops - m_stops)) / expected_m_stops;
+        float error_percent = (100.0 * abs(expected_m_stops - stats.m_stops)) / expected_m_stops;
         if (config.verbose >= 2 || error_percent > 0.5 ) {
             printf("Estimated modulo searches (m/prime) error %.2f%%,\t%ld vs expected %ld\n",
-                error_percent, m_stops, expected_m_stops);
+                error_percent, stats.m_stops, expected_m_stops);
         }
     }
     if (config.verbose >= 1 && validated_factors) {
@@ -1248,7 +1272,7 @@ void prime_gap_parallel(struct Config config) {
             composite);
 
         auto s_stop_t = high_resolution_clock::now();
-        double   secs = duration<double>(s_stop_t - s_start_t).count();
+        double   secs = duration<double>(s_stop_t - stats.start_t).count();
         insert_range_db(config, valid_mi.size(), secs);
     }
 
