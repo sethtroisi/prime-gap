@@ -810,27 +810,111 @@ class method2_stats {
             if (small_threshold <= 10000)
                next_mult = 10000;
 
-            prp_needed = 1 / prob_prime;
+            current_prob_prime = prob_prime;
         }
-
-        high_resolution_clock::time_point  start_t;
-        high_resolution_clock::time_point  interval_t;
-        long  total_unknowns;
-        long  prime_factors = 0;
-        long  small_prime_factors_interval = 0;
-        long  large_prime_factors_interval = 0;
-        long  m_stops = 0;
-        long  m_stops_interval = 0;
 
         uint64_t  next_print = 0;
         uint64_t  next_mult = 100000;
 
-        double prp_needed = 0;
+        high_resolution_clock::time_point  start_t;
+        high_resolution_clock::time_point  interval_t;
+
+        long  total_unknowns;
+        long  prime_factors = 0;
+        long  small_prime_factors_interval = 0;
+        long  large_prime_factors_interval = 0;
 
         size_t pi = 0;
         size_t pi_interval = 0;
+
+        uint64_t  m_stops = 0;
+        uint64_t  m_stops_interval = 0;
+
+        uint64_t  validated_factors = 0;
+
+        double current_prob_prime = 0;
+
 };
 
+void method2_increment_print(
+        uint64_t prime,
+        uint64_t LAST_PRIME,
+        size_t valid_ms,
+        double skipped_prp, double prp_time_est,
+        vector<bool> *composite,
+        method2_stats &stats,
+        const struct Config config
+) {
+        auto   s_stop_t = high_resolution_clock::now();
+        // total time, interval time
+        double     secs = duration<double>(s_stop_t - stats.start_t).count();
+        double int_secs = duration<double>(s_stop_t - stats.interval_t).count();
+
+        uint32_t SIEVE_INTERVAL = 2 * config.sieve_length + 1;
+
+        bool is_last = (prime == LAST_PRIME) || g_control_c;
+
+        setlocale(LC_NUMERIC, "");
+        if (config.verbose + is_last >= 1) {
+            printf("%'-10ld (primes %'ld/%'ld)\t(seconds: %.2f/%-.1f | per m: %.3g)\n",
+                prime,
+                stats.pi_interval, stats.pi,
+                int_secs, secs,
+                secs / valid_ms);
+        }
+
+        if ((config.verbose + 2*is_last + (prime > 1e9)) >= 2) {
+            uint64_t t_total_unknowns = 0;
+            for (size_t i = 0; i < valid_ms; i++) {
+                t_total_unknowns += std::count(composite[i].begin(), composite[i].end(), false);
+            }
+            uint64_t new_composites = stats.total_unknowns - t_total_unknowns;
+
+            printf("\tfactors  %'14ld \t"
+                   "(interval: %'ld avg m/large_prime interval: %.1f)\n",
+                stats.prime_factors,
+                stats.small_prime_factors_interval + stats.large_prime_factors_interval,
+                1.0 * stats.m_stops_interval / stats.pi_interval);
+            // count_coprime_sieve * valid_ms also makes sense but leads to smaller numbers
+            printf("\tunknowns %'9ld/%-5ld\t"
+                   "(avg/m: %.2f) (composite: %.2f%% +%.3f%% +%'ld)\n",
+                t_total_unknowns, valid_ms,
+                1.0 * t_total_unknowns / valid_ms,
+                100.0 - 100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms),
+                100.0 * new_composites / (SIEVE_INTERVAL * valid_ms),
+                new_composites);
+
+            printf("\t~ 2x %.2f PRP/m\t\t"
+                   "(~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
+                1 / stats.current_prob_prime, skipped_prp,
+                skipped_prp / int_secs);
+            if (stats.validated_factors) {
+                printf("\tValidated %ld factors\n", stats.validated_factors);
+            }
+
+            double run_prp_mult = int_secs / (prp_time_est * skipped_prp);
+            if (run_prp_mult > 2) {
+                printf("\t\tEstimated ~%.1fx faster to just run PRP now (CTRL+C to stop sieving)\n",
+                    run_prp_mult);
+            }
+
+            printf("\n");
+
+            stats.pi += stats.pi_interval;
+            stats.prime_factors += stats.small_prime_factors_interval;
+            stats.prime_factors += stats.large_prime_factors_interval;
+            stats.m_stops += stats.m_stops_interval;
+
+            stats.total_unknowns = t_total_unknowns;
+            stats.interval_t = s_stop_t;
+
+            stats.small_prime_factors_interval = 0;
+            stats.large_prime_factors_interval = 0;
+            stats.m_stops_interval = 0;
+            stats.pi_interval = 0;
+        }
+        setlocale(LC_NUMERIC, "C");
+}
 
 // Would be nice to pass const but CTRL+C handler changes max_prime
 void prime_gap_parallel(struct Config& config) {
@@ -900,7 +984,6 @@ void prime_gap_parallel(struct Config& config) {
         setlocale(LC_NUMERIC, "C");
     }
 
-    uint64_t validated_factors = 0;
 #if defined GMP_VALIDATE_LARGE_FACTORS && !defined GMP_VALIDATE_FACTORS
     // No overflow from gap_common.cpp checks
     const uint32_t M_end = M_start + M_inc;
@@ -1099,7 +1182,7 @@ void prime_gap_parallel(struct Config& config) {
 #else
                 if (0) {
 #endif
-                    validated_factors += 1;
+                    stats.validated_factors += 1;
                     mpz_mul_ui(test, K, M_start + mi);
                     mpz_sub_ui(test, test, SIEVE_LENGTH);
                     mpz_add_ui(test, test, first);
@@ -1140,79 +1223,19 @@ void prime_gap_parallel(struct Config& config) {
                 stats.next_print = std::min(stats.next_print, LAST_PRIME);
             }
 
-            auto   s_stop_t = high_resolution_clock::now();
-            // total time, interval time
-            double     secs = duration<double>(s_stop_t - stats.start_t).count();
-            double int_secs = duration<double>(s_stop_t - stats.interval_t).count();
-
-            // See THEORY.md
+            // Calculated here with locals
             double prob_prime_after_sieve = prob_prime * log(prime) * exp(GAMMA);
+            // See THEORY.md
+            double skipped_prp = 2 * valid_ms * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
+            stats.current_prob_prime = prob_prime_after_sieve;
 
-            uint64_t t_total_unknowns = 0;
-            for (size_t i = 0; i < valid_ms; i++) {
-                t_total_unknowns += std::count(composite[i].begin(), composite[i].end(), false);
-            }
-            uint64_t new_composites = stats.total_unknowns - t_total_unknowns;
-            double skipped_prp = 2 * valid_ms * (stats.prp_needed - 1/prob_prime_after_sieve);
-
-            bool is_last = (prime == LAST_PRIME) || g_control_c;
-
-            setlocale(LC_NUMERIC, "");
-            if (config.verbose + is_last >= 1) {
-                printf("%'-10ld (primes %'ld/%'ld)\t(seconds: %.2f/%-.1f | per m: %.3g)\n",
-                    prime,
-                    stats.pi_interval, stats.pi,
-                    int_secs, secs,
-                    secs / valid_ms);
-            }
-
-            if ((config.verbose + 2*is_last + (prime > 1e9)) >= 2) {
-                printf("\tfactors  %'14ld \t"
-                       "(interval: %'ld avg m/large_prime interval: %.1f)\n",
-                    stats.prime_factors,
-                    stats.small_prime_factors_interval + stats.large_prime_factors_interval,
-                    1.0 * stats.m_stops_interval / stats.pi_interval);
-                // count_coprime_sieve * valid_ms also makes sense but leads to smaller numbers
-                printf("\tunknowns %'9ld/%-5ld\t"
-                       "(avg/m: %.2f) (composite: %.2f%% +%.3f%% +%'ld)\n",
-                    t_total_unknowns, valid_ms,
-                    1.0 * t_total_unknowns / valid_ms,
-                    100.0 - 100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms),
-                    100.0 * new_composites / (SIEVE_INTERVAL * valid_ms),
-                    new_composites);
-
-                printf("\t~ 2x %.2f PRP/m\t\t"
-                       "(~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
-                    1 / prob_prime_after_sieve,
-                    skipped_prp,
-                    skipped_prp / int_secs);
-                if (validated_factors) {
-                    printf("\tValidated %ld factors\n", validated_factors);
-                }
-
-                double run_prp_mult = int_secs / (prp_time_est * skipped_prp);
-                if (run_prp_mult > 2) {
-                    printf("\t\tEstimated ~%.1fx faster to just run PRP now (CTRL+C to stop sieving)\n",
-                        run_prp_mult);
-                }
-
-                printf("\n");
-
-                stats.pi += stats.pi_interval;
-                stats.prime_factors += stats.small_prime_factors_interval;
-                stats.prime_factors += stats.large_prime_factors_interval;
-                stats.m_stops += stats.m_stops_interval;
-
-                stats.total_unknowns = t_total_unknowns;
-                stats.interval_t = s_stop_t;
-                stats.prp_needed = 1 / prob_prime_after_sieve;
-
-                stats.small_prime_factors_interval = 0;
-                stats.large_prime_factors_interval = 0;
-                stats.m_stops_interval = 0;
-                stats.pi_interval = 0;
-            }
-            setlocale(LC_NUMERIC, "C");
+            // Print counters & stats.
+            method2_increment_print(
+                prime, LAST_PRIME,
+                valid_ms,
+                skipped_prp, prp_time_est,
+                composite,
+                stats, config);
 
             // if is_last would truncate .max_prime by 1 million
             if (g_control_c && (prime != LAST_PRIME)) {
@@ -1260,9 +1283,6 @@ void prime_gap_parallel(struct Config& config) {
             printf("Estimated modulo searches (m/prime) error %.2f%%,\t%ld vs expected %ld\n",
                 error_percent, stats.m_stops, expected_m_stops);
         }
-    }
-    if (config.verbose >= 1 && validated_factors) {
-        printf("\tValidated %ld factors\n", validated_factors);
     }
 
     if (config.save_unknowns) {
