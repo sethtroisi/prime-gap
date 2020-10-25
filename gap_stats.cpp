@@ -224,11 +224,17 @@ double get_range_time(const struct Config& config) {
     char *zErrMsg = 0;
 
     double time = 0;
-    sqlite3_exec(db, sql, [](void* data, int argc, char **argv, char **azColName)->int {
+    int rc = sqlite3_exec(db, sql, [](void* data, int argc, char **argv, char **azColName)->int {
         assert( argc == 1 );
         *static_cast<double*>(data) = atof(argv[0]);
         return 0;
     }, &time, &zErrMsg);
+
+    if (rc != SQLITE_OK) {
+        printf("\nrange SELECT failed '%s' | %d: '%s'\n",
+            zErrMsg, rc, sqlite3_errmsg(db));
+        exit(1);
+    }
 
     return time;
 }
@@ -967,6 +973,7 @@ void calculate_prp_top_percent(
 
     // Try to load combined_time from db, fallback to estimate.
     double combined_time = get_range_time(config);
+    bool exact = combined_time > 0;
     if (combined_time <= 0) {
         // Calculate combined_sieve time
         mpz_t K;
@@ -979,8 +986,8 @@ void calculate_prp_top_percent(
     }
 
     printf("\n");
-    printf("Estimated sieve time: %.0f seconds (%.2f hours)\n",
-        combined_time, combined_time / 3600);
+    printf("%sieve time: %.0f seconds (%.2f hours)\n",
+        exact ? "S" : "Estimated s", combined_time, combined_time / 3600);
     printf("Estimated time/m: %.1f PRP/m * %.1f s/PRP = %.2f seconds\n",
         estimated_prp_per_m, prp_time_est, time_per_test);
     printf("\n");
