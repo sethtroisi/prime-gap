@@ -980,32 +980,6 @@ void prime_gap_parallel(struct Config& config) {
     }
     assert(valid_ms == valid_mi.size());
 
-    // Rough math is MULT  vs  log2(MULT) * (M_inc/valid_ms)
-    const float SMALL_MULT = std::max(8.0, log(8) * M_inc / valid_ms);
-    const uint64_t SMALL_THRESHOLD = SMALL_MULT * 2 * SIEVE_LENGTH;
-
-    // SMALL_THRESHOLD mult deal with all primes that can mark off two items in SIEVE_LENGTH.
-    assert( SMALL_THRESHOLD > (2 * SIEVE_LENGTH + 1)  );
-
-    if (config.verbose >= 1) {
-        setlocale(LC_NUMERIC, "");
-        printf("sieve_length: 2x %'d\n", config.sieve_length);
-        printf("max_prime:       %'ld   small_threshold:  %'ld (%.1f x SL)\n",
-            config.max_prime, SMALL_THRESHOLD, 2 * SMALL_MULT);
-        //printf("last prime :  %'ld\n", LAST_PRIME);
-        setlocale(LC_NUMERIC, "C");
-    }
-
-#if defined GMP_VALIDATE_LARGE_FACTORS && !defined GMP_VALIDATE_FACTORS
-    // No overflow from gap_common.cpp checks
-    const uint32_t M_end = M_start + M_inc;
-    const uint64_t LARGE_PRIME_THRESHOLD = (1LL << 55) / M_end;
-    if (LARGE_PRIME_THRESHOLD < LAST_PRIME && config.verbose >= 1) {
-        printf("validating factors from primes > %ld\n", LARGE_PRIME_THRESHOLD);
-    }
-#endif
-
-
     // which [i] are coprime to K
     vector<char> coprime_composite(SIEVE_INTERVAL+1, 1);
     // reindex composite[m][i]
@@ -1042,9 +1016,40 @@ void prime_gap_parallel(struct Config& config) {
     const size_t count_coprime_sieve = *std::max_element(i_reindex.begin(), i_reindex.end());
     assert( count_coprime_sieve % 2 == 0 );
 
+    // Rough math is MULT  vs  log2(MULT) * (M_inc/valid_ms)
+    // Bump this up a little if LARGE M_inc (e.g. memory pressure)
+    float SMALL_MULT = std::max(8.0, log(8) * M_inc / valid_ms);
+    if (valid_ms * count_coprime_sieve > 256 * 8 * 1024 * 1024UL) {
+        SMALL_MULT *= 2;
+    }
+    if (valid_ms * count_coprime_sieve > 1024 * 8 * 1024 * 1024UL) {
+        SMALL_MULT *= 2;
+    }
+    const uint64_t SMALL_THRESHOLD = SMALL_MULT * 2 * SIEVE_LENGTH;
+
+    // SMALL_THRESHOLD mult deal with all primes that can mark off two items in SIEVE_LENGTH.
+    assert( SMALL_THRESHOLD > (2 * SIEVE_LENGTH + 1)  );
+
+    if (config.verbose >= 1) {
+        setlocale(LC_NUMERIC, "");
+        printf("sieve_length: 2x %'d\n", config.sieve_length);
+        printf("max_prime:       %'ld   small_threshold:  %'ld (%.1f x SL)\n",
+            config.max_prime, SMALL_THRESHOLD, 2 * SMALL_MULT);
+        //printf("last prime :  %'ld\n", LAST_PRIME);
+        setlocale(LC_NUMERIC, "C");
+    }
+
+#if defined GMP_VALIDATE_LARGE_FACTORS && !defined GMP_VALIDATE_FACTORS
+    // No overflow from gap_common.cpp checks
+    const uint32_t M_end = M_start + M_inc;
+    const uint64_t LARGE_PRIME_THRESHOLD = (1LL << 55) / M_end;
+    if (LARGE_PRIME_THRESHOLD < LAST_PRIME && config.verbose >= 1) {
+        printf("validating factors from primes > %ld\n", LARGE_PRIME_THRESHOLD);
+    }
+#endif
+
     // See Merten's Third Theorem
     size_t expected_m_stops = (log(log(LAST_PRIME)) - log(log(SMALL_THRESHOLD))) * 2*SL * M_inc;
-
 
     // ----- Timing
     if (config.verbose >= 2) {
@@ -1095,7 +1100,7 @@ void prime_gap_parallel(struct Config& config) {
 
         vector<pair<uint32_t, uint32_t>> p_and_r;
         uint64_t prime = stage1_it.next_prime();
-        for ( ; ; prime = stage1_it.next_prime()) {
+        for ( ; prime <= SMALL_THRESHOLD; prime = stage1_it.next_prime()) {
             stats.pi_interval += 1;
 
             // Handled by coprime_composite above
@@ -1163,6 +1168,11 @@ void prime_gap_parallel(struct Config& config) {
                 }
             }
         }
+
+        // Don't print partial interval.
+        if (prime >= SMALL_THRESHOLD)
+            break;
+
         // Calculated here with locals
         double prob_prime_after_sieve = prob_prime * log(prime) * exp(GAMMA);
         // See THEORY.md
@@ -1177,8 +1187,6 @@ void prime_gap_parallel(struct Config& config) {
             composite,
             stats, config);
 
-        if (prime >= SMALL_THRESHOLD)
-            break;
     }
 
     // Setup CTRL+C catcher
