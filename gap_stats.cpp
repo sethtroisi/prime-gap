@@ -93,8 +93,7 @@ static double average_v(vector<float> &a) {
     return std::accumulate(a.begin(), a.end(), 0.0) / a.size();
 }
 
-static void prob_stats(char const *name, vector<float> probs) {
-    // XXX: &probs, save because of copy
+static void prob_stats(char const *name, vector<float> &probs) {
     vector<float> sorted = probs;
     std::sort(sorted.begin(), sorted.end(), std::greater<>());
 
@@ -1160,14 +1159,31 @@ void prime_gap_stats(struct Config config) {
 
         prob_stats("EXPECTED GAP", expected_gap);
         printf("\n");
+
         prob_stats("RECORD", probs_record);
-    }
-    if (config.verbose >= 2) {
-        if (average_v(probs_missing) > 0) {
-            printf("\n");
-            prob_stats("MISSING", probs_missing);
+
+        double avg_missing = average_v(probs_missing);
+        double avg_record  = average_v(probs_record);
+        // missing mostly incluses > 3 * SL, which is likely to be a record.
+        double uncertainty = avg_missing / (avg_missing + avg_record);
+
+        if (uncertainty > 1e-5) {
+            printf("\tRECORD : avg: %.2e | missing: %.2e | uncertainty: %.2g%% \n",
+                avg_record, avg_missing, 100 * uncertainty);
         }
+
+        if (config.verbose >= 2) {
+            if (avg_missing > 0) {
+                printf("\n");
+                prob_stats("MISSING", probs_missing);
+            }
+        }
+        printf("\n");
     }
+
+    // Make sure probs_record didn't sort our copy.
+    assert(!std::is_sorted(probs_record.begin(), probs_record.end(), std::greater<>()));
+
 
     if (config.save_unknowns) {
         auto s_stop_t = high_resolution_clock::now();
