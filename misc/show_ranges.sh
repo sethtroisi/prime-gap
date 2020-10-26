@@ -49,7 +49,6 @@ SELECT "";
 #SELECT "";
 EOL
 
-#              num_m * (208.3 / time_sieve), time_tests / num_processed,
 sqlite3 -readonly "prime-gap-search.db" <<EOL
 .timeout 20
 SELECT "Table 'range'";
@@ -65,11 +64,16 @@ FROM range ORDER BY p, d, m_start, m_inc;
 SELECT "";
 
 SELECT "Table 'results'/'m_stats'";
-SELECT PRINTF("  P=%-5d D=%-9d M(%-7d) = %-9d to %-9d | last result: %9d, primes: %7d, PRPs: %9d, merit: %5.2f, time: %5.1f hours",
+SELECT PRINTF("  P=%-5d D=%-9d M(%-7d) = %-9d to %-9d | last result: %9d, primes: %7d, PRPs: %9d, prob: %6.1f, merit: %5.2f, time: %6.1f hours",
               p, d, count(*), min(m), max(m), max(m * (primes != 0)),
-              sum(primes), sum(prp_tests), max(merit), sum(test_time) / 3600)
+              sum(primes), sum(prp_tests), sum(prob_record), max(merit), sum(test_time) / 3600)
 FROM (
-  SELECT p,d,m, (next_p!=0) + (prev_p!=0) as primes, prp_prev + prp_next as prp_tests, merit, test_time FROM m_stats
+  SELECT p,d,m,
+         (next_p!=0) + (prev_p!=0) as primes,
+         prp_prev + prp_next as prp_tests,
+         prob_record,
+         merit, test_time
+  FROM m_stats
 )
 GROUP BY p, d ORDER BY p, d;
 SELECT"";
