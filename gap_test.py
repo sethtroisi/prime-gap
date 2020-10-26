@@ -62,7 +62,10 @@ def get_arg_parser():
         help="Save logs and plots about distributions")
 
     parser.add_argument('--prp-top-percent', type=int, default=None,
-        help="Only test top X% (sorted by prob(record))")
+        help="Only test top X%% (sorted by prob(record))")
+
+    parser.add_argument('--no-one-side-skip', action='store_true',
+        help="Don't skip when one prev_prime is very small")
 
     return parser
 
@@ -228,16 +231,16 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_pri
     prob_gap_shorter_hypothetical = chance_coprime_composite ** count_coprime_p
 
     expected = count_coprime_p * (unknowns_after_sieve / prob_prime_coprime_p)
-    print("\texpect {:.0f} left, {:.3f}% of SL={} after {}M".format(
-        expected, 100.0 * expected / (SL + 1), SL, max_prime//1e6))
-    print("\t{:.3f}% of {} digit numbers are prime".format(
-        100 * prob_prime, K_digits))
-    print("\t{:.3f}% of tests should be prime ({:.1f}x speedup)".format(
-        100 * prob_prime_after_sieve, 1 / unknowns_after_sieve))
+    print("\texpect {:.0f} left, {:.3%} of SL={} after {}M".format(
+        expected, expected / (SL + 1), SL, max_prime//1e6))
+    print("\t{:.3%} of {} digit numbers are prime".format(
+        prob_prime, K_digits))
+    print("\t{:.3%} of tests should be prime ({:.1f}x speedup)".format(
+        prob_prime_after_sieve, 1 / unknowns_after_sieve))
     print("\t~2x{:.1f} = {:.1f} PRP tests per m".format(
         1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve))
-    print("\tsieve_length={} is insufficient ~{:.2f}% of time".format(
-        SL, 100 * prob_gap_shorter_hypothetical))
+    print("\tsieve_length={} is insufficient ~{:.2%} of time".format(
+        SL, prob_gap_shorter_hypothetical))
     print()
 
     return prob_prime_after_sieve
@@ -293,6 +296,20 @@ def calculate_expected_gaps(
     data.prob_merit_gap.append(p_merit)
 
 
+def prob_record_one_side(other_side, unknowns, record_gaps, prob_prime_after_sieve):
+    assert other_side > 0
+    prob_record = 0
+
+    next_prob = 1 - prob_prime_after_sieve
+    prob_nth = prob_prime_after_sieve
+    for unknown in unknowns:
+        if unknown + other_side in record_gaps:
+            prob_record += prob_nth
+        prob_nth *= next_prob
+
+    return prob_record + prob_nth
+
+
 def determine_test_threshold(args, valid_mi, data):
     percent = args.prp_top_percent
     if not percent or percent == 100:
@@ -322,7 +339,7 @@ def should_print_stats(
     print_secs = stop_t - sc.last_print_t
 
     # Print a little bit if we resume but mostly as we test.
-    if sc.tested in (1,10,30,100,300,1000) or (sc.tested and sc.tested % 5000 == 0) \
+    if sc.tested in (1,10,30,100,300,1000,3000) or (sc.tested and sc.tested % 5000 == 0) \
             or m == data.last_m or print_secs > 1200:
         secs = stop_t - sc.start_t
 
@@ -351,10 +368,10 @@ def should_print_stats(
             print("\t    tests      {:<9d} ({}, {})  {:.0f}, {:.0f} secs".format(
                 sc.tested, timing, timing_threads, secs, sc.test_time))
 
-            print("\t    sum(prob_minmerit):  {:.2g}, {:.3g}/day\tfound: {}".format(
+            print("\t    sum(prob_minmerit):  {:6.2g}, {:.3g}/day\tfound: {}".format(
                 sc.prob_minmerit, 86400 / secs * sc.prob_minmerit, sc.count_minmerit))
-            print("\t    sum(prob_record):    {:.2g}, {:.3g}/day".format(
-                sc.prob_record, 86400  / secs * sc.prob_record))
+            print("\t    sum(prob_record):    {:6.2g}, {:.3g}/day\tfound: {}".format(
+                sc.prob_record, 86400  / secs * sc.prob_record, sc.count_record))
 
         total_unknown = sc.t_unk_low + sc.t_unk_hgh
         if total_unknown:
@@ -367,10 +384,13 @@ def should_print_stats(
         if sc.tested and prp_tests:
             print("\t    prp tests  {:<9d} (avg: {:.2f}) ({:.3f} tests/sec)".format(
                 prp_tests, prp_tests / sc.tested, prp_tests / secs))
+            if sc.one_side_skips:
+                print("\t    one side skips: {} ({:.1%})".format(
+                    sc.one_side_skips, sc.one_side_skips / sc.tested))
             if sc.gap_out_of_sieve_prev or sc.gap_out_of_sieve_next:
-                print("\t    fallback prev_gap {} ({:.1f}%), next_gap {} ({:.1f}%)".format(
-                    sc.gap_out_of_sieve_prev, 100 * sc.gap_out_of_sieve_prev / sc.tested,
-                    sc.gap_out_of_sieve_next, 100 * sc.gap_out_of_sieve_next / sc.tested))
+                print("\t    fallback prev_gap {} ({:.1%}), next_gap {} ({:.1%})".format(
+                    sc.gap_out_of_sieve_prev, sc.gap_out_of_sieve_prev / sc.tested,
+                    sc.gap_out_of_sieve_next, sc.gap_out_of_sieve_next / sc.tested))
             print("\t    merit {:.3f} (at m={})".format(
                 sc.best_merit_interval, sc.best_merit_interval_m))
 
@@ -424,7 +444,7 @@ def handle_result(
         args, record_gaps, data, sc,
         mi, m, log_n, prev_p_i, next_p_i, unknown_l, unknown_u):
     '''Called for existing and new records'''
-    assert next_p_i > 0 and prev_p_i > 0, (mi, m, next_pi, prev_p_i)
+    assert prev_p_i > 0, (mi, m, next_p_i, prev_p_i)
 
     gap = next_p_i + prev_p_i
     data.experimental_gap.append(gap)
@@ -453,7 +473,11 @@ def handle_result(
 
 
 # NOTE: Manager is prime_gap_test maintains workers wh run process_line.
-def process_line(done_flag, work_q, results_q, thread_i, SL, K, P, D, primes, remainder):
+def process_line(
+        done_flag, work_q, results_q, thread_i,
+        SL, K, P, D,
+        prob_prime_after_sieve, record_gaps, one_side_skip_threshold,
+        primes, remainder):
     def cleanup(*_):
         print (f"Thread {thread_i} stopping")
         work_q.close()
@@ -475,7 +499,7 @@ def process_line(done_flag, work_q, results_q, thread_i, SL, K, P, D, primes, re
 
         #print (f"Work({thread_i}) done({done_flag.is_set()}): {work if work[0] == 'S' else work[:3]}")
 
-        m, mi, log_n, line = work
+        m, mi, prob_record, log_n, line = work
 
         mtest, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
         assert mi == mtest
@@ -486,7 +510,30 @@ def process_line(done_flag, work_q, results_q, thread_i, SL, K, P, D, primes, re
         t0 = time.time()
 
         p_tests, prev_p_i = determine_prev_prime_i(m, strn, K, unknowns[0], SL, primes, remainder)
-        n_tests, next_p_i = determine_next_prime_i(m, strn, K, unknowns[1], SL)
+
+        test_next = True
+        if one_side_skip_threshold:
+            # Check if slower to test a new record or this one
+            new_prob_record = prob_record_one_side(
+                    prev_p_i, unknowns[1],
+                    record_gaps, prob_prime_after_sieve)
+
+            # XXX: this increases effective prob/test (recursievly)
+            #      which is hard to factor here.
+            # Takes 2x (see XXX note above) time to test a new interval.
+            if 2 * new_prob_record < one_side_skip_threshold:
+                test_next = False
+                tested_prob = prob_record - new_prob_record
+
+            #if new_prob_record > 10 * one_side_skip_threshold:
+            #    print ("{:5} | m: {:8} | count: {} {} | {:.3g} => {:.3g}".format(
+            #        prev_p_i, m, unknown_l, unknown_u,
+            #        prob_record, new_prob_record))
+
+        n_tests, next_p_i = 0, 0
+        if test_next:
+            n_tests, next_p_i = determine_next_prime_i(m, strn, K, unknowns[1], SL)
+            tested_prob = prob_record
 
         test_time = time.time() - t0
 
@@ -495,6 +542,7 @@ def process_line(done_flag, work_q, results_q, thread_i, SL, K, P, D, primes, re
             unknown_l, unknown_u,
             n_tests, next_p_i,
             p_tests, prev_p_i,
+            tested_prob,
             test_time,
         ))
 
@@ -504,7 +552,9 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
 
     (m, mi, r_log_n, unknown_l, unknown_u,
      n_tests, next_p_i,
-     p_tests, prev_p_i, test_time) = result
+     p_tests, prev_p_i,
+     tested_prob,
+     test_time) = result
 
     sc.tested += 1
     sc.test_time += test_time
@@ -518,17 +568,26 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     sc.prob_minmerit           += mi_probs[mi][0]
     if merit > args.min_merit:
         sc.count_minmerit += 1
-    sc.prob_record             += mi_probs[mi][1]
 
-    save(conn,
-        args.p, args.d, m, next_p_i, prev_p_i, merit,
-        n_tests, p_tests, test_time)
+    if gap in record_gaps:
+        sc.count_record += 1
+
+    if next_p_i:
+        assert mi_probs[mi][1] == tested_prob
+        sc.prob_record += tested_prob
+    else:
+        sc.prob_record += tested_prob
+        sc.one_side_skips += 1
 
     sc.total_prp_tests += p_tests
     sc.gap_out_of_sieve_prev += prev_p_i > args.sieve_length
 
     sc.total_prp_tests += n_tests
     sc.gap_out_of_sieve_next += next_p_i > args.sieve_length
+
+    save(conn,
+        args.p, args.d, m, next_p_i, prev_p_i, merit,
+        n_tests, p_tests, test_time)
 
     handle_result(
         args, record_gaps, data, sc,
@@ -537,7 +596,7 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
 
 def run_in_parallel(
         args, conn, unknown_file, record_gaps,
-        prob_nth,
+        prob_nth, prob_prime_after_sieve,
         existing, valid_mi,
         K, K_log,
         data, sc, misc
@@ -548,11 +607,11 @@ def run_in_parallel(
     remainder = tuple([K % prime for prime in primes])
 
     # Based on args
-    prob_threshold, mi_probs = determine_test_threshold(
-        args, valid_mi, data)
+    prob_threshold, mi_probs = determine_test_threshold(args, valid_mi, data)
     if prob_threshold >= 0:
         print ("Testing {} m where prob(record) >= {:.3g}".format(
             len(mi_probs), prob_threshold))
+    # XXX: how to set one_side_skip when prp_top_percent == 100
 
     # Any non-processed mi_probs?
     if all(args.mstart + mi in existing for mi in mi_probs):
@@ -562,8 +621,14 @@ def run_in_parallel(
 
     # Worker setup
     done_flag = multiprocessing.Event()
-    work_q    = multiprocessing.Queue(20)
+    work_q    = multiprocessing.Queue(40)
     results_q = multiprocessing.Queue()
+
+    one_sided_args = (
+        prob_prime_after_sieve,
+        record_gaps,
+        0 if args.no_one_side_skip else prob_threshold,
+    )
 
     assert args.threads in range(1, 65), args.threads
     processes = []
@@ -573,7 +638,10 @@ def run_in_parallel(
             args=(
                 done_flag, work_q, results_q,
                 i, args.sieve_length, K, args.p, args.d,
-                primes, remainder))
+                *one_sided_args,
+                primes, remainder
+            )
+        )
         process.start()
         time.sleep(0.01)
         processes.append(process)
@@ -617,7 +685,7 @@ def run_in_parallel(
         else:
             sc.will_test += 1
             try:
-               work_q.put((m, mi, log_n, line), True)
+               work_q.put((m, mi, mi_probs[mi][1], log_n, line), True)
             except KeyboardInterrupt:
                 print(" Breaking from Ctrl+C ^C")
                 for p in processes:
@@ -686,6 +754,8 @@ def prime_gap_test(args):
         print ("\tMin merit for record {:.2f}, gapsize for likely record {:.2f} {}".format(
             min_record, avg_record / M_log, avg_record))
 
+        record_gaps = set(record_gaps)
+
     # ----- Open Output file
     print("\tLoading unknowns from {!r}".format(args.unknown_filename))
     print()
@@ -737,11 +807,11 @@ def prime_gap_test(args):
         will_test = 0
         tested = 0
 
-
         test_time = 0
         t_unk_low = 0
         t_unk_hgh = 0
         total_prp_tests = 0
+        one_side_skips = 0
         gap_out_of_sieve_prev = 0
         gap_out_of_sieve_next = 0
 
@@ -750,6 +820,8 @@ def prime_gap_test(args):
 
         prob_record = 0.0
         prob_minmerit = 0.0
+
+        count_record = 0
         count_minmerit = 0
 
 
@@ -777,7 +849,7 @@ def prime_gap_test(args):
 
         run_in_parallel(
             args, conn, unknown_file, record_gaps,
-            prob_nth,
+            prob_nth, prob_prime_after_sieve,
             existing, valid_mi,
             K, K_log,
             data, sc, misc

@@ -567,13 +567,14 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * Flow
 * README.md
 * THEORY.md
-  * [ ] Add some theory for only doing one side test.
 * Project
   * [ ] Run length encoding to reduce filesize
   * [ ] Records / day in status.py or record_check.py
+  * [ ] Make sure that next_p = 0, is handled correctly in places.
 * combined\_sieve.cpp
 * gap\_stats.cpp
 * gap\_test.py
+  * [ ] Extended gap for one sided tests?
 * gap\_test.cpp
 * schema.sql
   * [ ] next_p_i => next_p (fix in finalize and other places)
@@ -582,6 +583,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 
 ### Low Priority TODOs
 
+* THEORY.md
+  * [ ] Add some theory for only doing one side test.
 * New script to update DB (and maybe delete uninteresting results
   * [ ] Finalize script
   * [ ] Set rid if null (but reasonable range exists)
