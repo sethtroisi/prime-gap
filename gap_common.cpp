@@ -760,13 +760,20 @@ Config Args::argparse(int argc, char* argv[]) {
         cout << "max_prime > 5000B not supported" << endl;
     }
 
+    /**
+     * Overflow happens when base_r * mi > int64.
+     * Given base_r < p, mi < max_m this happens rarely when log2(...) = 65
+     * But more and more frequently after.
+     * For 1-2% performance modulo_search_euclid_all_large handles these safely.
+     */
+    /*
     uint64_t max_m = std::numeric_limits<uint64_t>::max() / config.max_prime;
     if (max_m < 1000 || max_m + 1000 <= last_m) {
-        //config.valid = 0;
+        config.valid = 0;
         printf("max_prime * last_m(%d) would overflow int64, log2(...) = %.3f\n",
             last_m, log2(1.0 * last_m * config.max_prime));
-        printf("TODO VALIDATE\n");
     }
+    */
 
     {
         // check if p is valid

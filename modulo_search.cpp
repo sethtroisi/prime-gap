@@ -265,6 +265,7 @@ uint64_t modulo_search_euclid_gcd(
 }
 
 
+/* Used when (M + max_m) * p fits in uint64 */
 void modulo_search_euclid_all_small(
         uint32_t M, uint32_t max_m, uint32_t SL,
         uint64_t prime, uint64_t base_r,
@@ -313,7 +314,7 @@ void modulo_search_euclid_all_small(
 }
 
 
-/* Only used in benchmarks */
+/* Used when (M + max_m) * p greater than uint64 */
 void modulo_search_euclid_all_large(
         uint32_t M, uint32_t max_m, uint64_t SL,
         uint64_t prime, uint64_t base_r,
