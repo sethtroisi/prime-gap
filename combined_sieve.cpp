@@ -764,11 +764,31 @@ void save_unknowns_method2(
             char prefix = "-+"[d];
             size_t found = 0;
 
-            for (size_t i = 1; i <= SL; i++) {
-                int a = SL + (2*d - 1) * i;
-                if (!comp[i_reindex[a]]) {
-                    unknown_file << " " << prefix << i;
-                    found += 1;
+            if (config.rle) {
+                unknown_file << " ";
+                int last = 0;
+                for (size_t i = 1; i <= SL; i++) {
+                    int a = SL + (2*d - 1) * i;
+                    if (!comp[i_reindex[a]]) {
+                        found += 1;
+
+                        int delta = i - last;
+                        last = i;
+
+                        // Ascii 48 to 122 are all "safe" => 75 characters
+                        assert(0 <= delta && delta < (75L*75));
+                        unsigned char upper = 48 + (delta / 75);
+                        unsigned char lower = 48 + (delta % 75);
+                        unknown_file << upper << lower;
+                    }
+                }
+            } else {
+                for (size_t i = 1; i <= SL; i++) {
+                    int a = SL + (2*d - 1) * i;
+                    if (!comp[i_reindex[a]]) {
+                        unknown_file << " " << prefix << i;
+                        found += 1;
+                    }
                 }
             }
             if (d == 0) {

@@ -50,6 +50,7 @@ struct Config {
     bool save_unknowns = false;
 
     bool method1 = false;
+    bool rle = true;
 
     /**
      * -1: results only

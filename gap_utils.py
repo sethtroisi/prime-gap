@@ -167,8 +167,25 @@ def parse_unknown_line(line):
     assert match, start
     mtest, unknown_l, unknown_u = map(int, match.groups())
 
-    unknowns[0] = list(map(int,c_l.split(" ")))
-    unknowns[1] = list(map(int,c_h.split(" ")))
+    # Check if rle or raw
+    rle = " " not in c_l[:20]
+    if rle:
+        def unrle(sign, bits):
+            print (f"{len(bits)} {bits!r}")
+            # Read bits in pairs (see save_unknowns_method2)
+            values = []
+            accum = 0
+            for i in range(0, len(bits)//2):
+                delta = (ord(bits[2*i]) - 48) * 75 + (ord(bits[2*i+1]) - 48)
+                accum += delta
+                values.append(sign * accum)
+            return values
+
+        unknowns[0] = unrle(-1, c_l)
+        unknowns[1] = unrle(1, c_h[:-1])
+    else:
+        unknowns[0] = list(map(int,c_l.split(" ")))
+        unknowns[1] = list(map(int,c_h.split(" ")))
 
     unknown_l_test = len(unknowns[0])
     unknown_u_test = len(unknowns[1])
