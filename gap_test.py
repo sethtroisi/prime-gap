@@ -385,8 +385,9 @@ def should_print_stats(
             print("\t    prp tests  {:<9d} (avg: {:.2f}) ({:.3f} tests/sec)".format(
                 prp_tests, prp_tests / sc.tested, prp_tests / secs))
             if sc.one_side_skips:
-                print("\t    one side skips: {} ({:.1%})".format(
-                    sc.one_side_skips, sc.one_side_skips / sc.tested))
+                print("\t    one side skips: {} ({:.1%}) (delta: {:.1} avg: {:.3}".format(
+                    sc.one_side_skips, sc.one_side_skips / sc.tested,
+                    sc.prob_one_side_delta, sc.prob_one_side_delta/sc.tested))
             if sc.gap_out_of_sieve_prev or sc.gap_out_of_sieve_next:
                 print("\t    fallback prev_gap {} ({:.1%}), next_gap {} ({:.1%})".format(
                     sc.gap_out_of_sieve_prev, sc.gap_out_of_sieve_prev / sc.tested,
@@ -523,17 +524,17 @@ def process_line(
             # Takes 2x (see XXX note above) time to test a new interval.
             if 2 * new_prob_record < one_side_skip_threshold:
                 test_next = False
-                tested_prob = prob_record - new_prob_record
 
             #if new_prob_record > 10 * one_side_skip_threshold:
             #    print ("{:5} | m: {:8} | count: {} {} | {:.3g} => {:.3g}".format(
             #        prev_p_i, m, unknown_l, unknown_u,
             #        prob_record, new_prob_record))
 
+            # On average sum(new_prob_record) ~= sum(prob_record)
+
         n_tests, next_p_i = 0, 0
         if test_next:
             n_tests, next_p_i = determine_next_prime_i(m, strn, K, unknowns[1], SL)
-            tested_prob = prob_record
 
         test_time = time.time() - t0
 
@@ -542,7 +543,7 @@ def process_line(
             unknown_l, unknown_u,
             n_tests, next_p_i,
             p_tests, prev_p_i,
-            tested_prob,
+            prob_record, new_prob_record,
             test_time,
         ))
 
@@ -553,7 +554,7 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     (m, mi, r_log_n, unknown_l, unknown_u,
      n_tests, next_p_i,
      p_tests, prev_p_i,
-     tested_prob,
+     prob_record, one_sided_prob_record,
      test_time) = result
 
     sc.tested += 1
@@ -573,11 +574,13 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
         sc.count_record += 1
 
     if next_p_i:
-        assert mi_probs[mi][1] == tested_prob
-        sc.prob_record += tested_prob
+        assert mi_probs[mi][1] == prob_record
+        sc.prob_record += prob_record
     else:
-        sc.prob_record += tested_prob
+        sc.prob_record += prob_record - one_sided_prob_record
         sc.one_side_skips += 1
+
+    sc.prob_one_side_delta += prob_record - one_sided_prob_record
 
     sc.total_prp_tests += p_tests
     sc.gap_out_of_sieve_prev += prev_p_i > args.sieve_length
@@ -820,6 +823,9 @@ def prime_gap_test(args):
 
         prob_record = 0.0
         prob_minmerit = 0.0
+
+        # To validate one sided prob is working
+        prob_one_side_delta = 0.0
 
         count_record = 0
         count_minmerit = 0
