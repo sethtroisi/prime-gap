@@ -5,6 +5,7 @@
     * [`--sieve_length`](#--sieve_length)
     * [Optimizing choice of D](#optimizing-choice-of-d)
     * [Skipped PRP Tests](#skipped-prp-tests)
+    * [One Sided Tests](#one-sided-tests)
   * [`gap_stats`](#gap_stats)
   * [Choosing `--top-x-percent`](#choosing---top-x-percent)
   * [Out of order testing](#out-of-order-testing)
@@ -125,6 +126,20 @@ def ExpectedTests(test, m * K, old_limit, new_limit):
         return 1 / (prob_p * math.exp(GAMMA)) * (1/math.log(old_limit) - 1/math.log(new_limit))
 ```
 
+
+### One Sided Tests
+
+Given many `m_n` and `prob_record`.
+
+If `prev_prime` is "small" don't waste time on `next_prime` only to be disappointed by small gap.
+
+Calculate `new_prob_record` taking into account `prev_prime` result.
+
+Simple math says `prob_record` takes 2 "time" to test, if `new_prob_record < 0.5 * prob_record` then skip.
+
+Better analysis says with skipping test more than `prob_record/2` each "time". Let `prob_processed / one sided test` be the average of (`prob_record - new_prob_record` if skip else `prob_record`/2). This is the rate (including skips) `prob_record` is tested at. If `new_prob_record` is less then skip.
+
+In practice `one side skips` is often as high as 90% and the prob record rate is `0.8 * prob / side` for a `0.8 / 0.5 =` 60% speedup!
 
 #### Experimental evidence
 

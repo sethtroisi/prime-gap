@@ -344,6 +344,8 @@ def prob_record_one_side(
 
 def determine_test_threshold(args, valid_mi, data):
     percent = args.prp_top_percent
+    # TODO seems to not work when percent is None?
+    print ("prp top percent:", percent)
     if not percent or percent == 100:
         return 0, {
             mi: (p_merit, p_record) for mi, p_merit, p_record in zip(
@@ -507,9 +509,9 @@ def handle_result(
 
 # NOTE: Manager is prime_gap_test maintains workers wh run process_line.
 def process_line(
-        done_flag, work_q, results_q, thread_i,
-        SL, K, P, D,
-        prob_prime, prob_prime_after_sieve, record_gaps, one_side_skip_threshold,
+        done_flag, work_q, results_q, prob_side_threshold, sides_tested,
+        prob_prime, prob_prime_after_sieve, record_gaps, prob_threshold,
+        thread_i, SL, K, P, D,
         primes, remainder):
     def cleanup(*_):
         print (f"Thread {thread_i} stopping")
@@ -535,6 +537,7 @@ def process_line(
             return
 
         m, mi, prob_record, log_n, line = work
+        assert prob_record >= prob_threshold
 
         mtest, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
         assert mi == mtest
@@ -547,9 +550,11 @@ def process_line(
         p_tests, prev_p_i = determine_prev_prime_i(m, strn, K, unknowns[0], SL, primes, remainder)
 
         test_next = True
-        if one_side_skip_threshold:
-            # Check if slower to test a new record or this one
+        new_prob_record = 0
+        if prob_threshold:
+            # Check if slower to test a new record or next prime
 
+            # On average sum(new_prob_record) should approx equal sum(prob_record)
             new_prob_record = prob_record_one_side(
                     record_gaps, prev_p_i,
                     unknowns[1], prob_prime_after_sieve,
@@ -560,21 +565,14 @@ def process_line(
             #        prob_record, new_prob_record,
             #        one_side_skip_threshold))
 
-            # XXX: this increases effective prob/test (recursievly)
-            #      which is hard to factor here.
-            # Takes 2x (see XXX note above) time to test a new interval.
-            #       (2 - skip_percent)/(tested_prob) x time to test a new interval
-            if 3 * new_prob_record < one_side_skip_threshold:
-                test_next = False
-
-            #if new_prob_record > 10 * one_side_skip_threshold:
-            #    print ("{:5} | m: {:8} | count: {} {} | {:.3g} => {:.3g}".format(
-            #        prev_p_i, m, unknown_l, unknown_u,
-            #        prob_record, new_prob_record))
-
-            # On average sum(new_prob_record) ~= sum(prob_record)
-        else:
-            new_prob_record = 0
+            with prob_side_threshold.get_lock(), sides_tested.get_lock():
+                if new_prob_record < (prob_side_threshold.value / sides_tested.value):
+                    test_next = False
+                    prob_side_threshold.value += prob_record - new_prob_record
+                    sides_tested.value += 1
+                else:
+                    prob_side_threshold.value += prob_record
+                    sides_tested.value += 2
 
         n_tests, next_p_i = 0, 0
         if test_next:
@@ -671,6 +669,18 @@ def run_in_parallel(
     work_q    = multiprocessing.Queue(40)
     results_q = multiprocessing.Queue()
 
+    # Used to dynamically set prob_threshold, See THEORY.md#one-sided-tests
+    prob_side_threshold = multiprocessing.Value('d', prob_threshold)
+    sides_tested = multiprocessing.Value('l', 2)
+
+    shared_args = (
+        done_flag,
+        work_q,
+        results_q,
+        prob_side_threshold,
+        sides_tested,
+    )
+
     one_sided_args = (
         prob_prime,
         prob_prime_after_sieve,
@@ -684,9 +694,9 @@ def run_in_parallel(
         process = multiprocessing.Process(
             target=process_line,
             args=(
-                done_flag, work_q, results_q,
-                i, args.sieve_length, K, args.p, args.d,
+                *shared_args,
                 *one_sided_args,
+                i, args.sieve_length, K, args.p, args.d,
                 primes, remainder
             )
         )
@@ -740,6 +750,14 @@ def run_in_parallel(
             result = results_q.get(block=False)
             process_result(conn, args, record_gaps, mi_probs, data, sc, result)
 
+            if sc.tested and sc.tested % 1000 == 0:
+                with prob_side_threshold.get_lock(), sides_tested.get_lock():
+                    pss = prob_side_threshold.value
+                    avg_pss = pss / sides_tested.value
+                    prob_pss = sc.prob_record / sc.tested / 2
+                    print ("\tProb Record per side | {:.4f}/{} = {:.3g} vs {:.3g} => {:+.2%}".format(
+                        pss, sides_tested.value, avg_pss,
+                        prob_pss, avg_pss / prob_pss - 1))
 
     print("Everything Queued, done.set() & pushing STOP")
     done_flag.set()
