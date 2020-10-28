@@ -687,7 +687,9 @@ void setup_probnth(
     }
 }
 
+/** Parse line (potentially with rle) to two positive lists */
 void read_unknown_line(
+        const struct Config& config,
         uint64_t mi,
         std::ifstream& unknown_file,
         vector<uint32_t>& unknown_low,
@@ -704,6 +706,7 @@ void read_unknown_line(
         assert( (size_t) mtest == mi );
 
         std::string delim;
+        char delim_char;
         unknown_file >> delim;
         assert( delim == ":" );
 
@@ -713,18 +716,38 @@ void read_unknown_line(
 
         unknown_file >> delim;
         assert( delim == "|" );
+        delim_char = unknown_file.get(); // get space character
+        assert( delim_char == ' ');
 
-        int c;
+        unsigned char a, b;
+        int c = 0;
         for (int k = 0; k < unknown_l; k++) {
-            unknown_file >> c;
-            unknown_low.push_back(-c);
+            if (config.rle) {
+                // Read bits in pairs (see save_unknowns_method2)
+                a = unknown_file.get();
+                b = unknown_file.get();
+                c += (a - 48) * 75 + (b - 48);
+            } else {
+                unknown_file >> c;
+                c *= -1;
+            }
+            unknown_low.push_back(c);
         }
 
         unknown_file >> delim;
         assert( delim == "|" );
+        delim_char = unknown_file.get(); // get space character
+        assert( delim_char == ' ');
 
+        c = 0;
         for (int k = 0; k < unknown_u; k++) {
-            unknown_file >> c;
+            if (config.rle) {
+                a = unknown_file.get();
+                b = unknown_file.get();
+                c += (a - 48) * 75 + (b - 48);
+            } else {
+                unknown_file >> c;
+            }
             unknown_high.push_back(c);
         }
     }
@@ -732,7 +755,7 @@ void read_unknown_line(
 
 void run_gap_file(
         /* input */
-        const struct Config config,
+        const struct Config& config,
         const float K_log,
         const vector<float>& records,
         const uint32_t min_record_gap,
@@ -776,7 +799,7 @@ void run_gap_file(
         uint64_t m = config.mstart + mi;
 
         vector<uint32_t> unknown_low, unknown_high;
-        read_unknown_line(mi, unknown_file, unknown_low, unknown_high);
+        read_unknown_line(config, mi, unknown_file, unknown_low, unknown_high);
 
         if (config.verbose >= 2 && probs_seen.empty()) {
             for (size_t i = 0; i < unknown_low.size(); i += 1) {
@@ -963,6 +986,8 @@ void calculate_prp_top_percent(
         uint64_t valid_ms,
         double N_log,
         vector<float> &probs_record) {
+
+    printf("\n");
 
     // Determine PRP time, time per m
     cdouble prp_time_est = prp_time_estimate_composite(N_log, 2 /* verbose */);

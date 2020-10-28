@@ -171,7 +171,6 @@ def parse_unknown_line(line):
     rle = " " not in c_l[:20]
     if rle:
         def unrle(sign, bits):
-            print (f"{len(bits)} {bits!r}")
             # Read bits in pairs (see save_unknowns_method2)
             values = []
             accum = 0
