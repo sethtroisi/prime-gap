@@ -296,17 +296,49 @@ def calculate_expected_gaps(
     data.prob_merit_gap.append(p_merit)
 
 
-def prob_record_one_side(other_side, unknowns, record_gaps, prob_prime_after_sieve):
+def setup_extended_gap(SL, K, P, D, prob_prime):
+    K_primes = [p for p in range(2, P+1) if gmpy2.is_prime(p)]
+    prob_prime_coprime = prob_prime
+    for p in K_primes:
+        # multiples of d are handled in prob_record_one_side
+        prob_prime_coprime /= (1 - 1 / p)
+
+    is_coprime = [True for i in range(2 * SL)]
+    for p in K_primes:
+        if D % p == 0:
+            continue
+
+        for i in range(0, len(is_coprime), p):
+            is_coprime[i] = False
+
+    coprime_x = [i for i, v in enumerate(is_coprime) if v and i > SL]
+    return prob_prime_coprime, coprime_x
+
+
+def prob_record_one_side(
+        record_gaps, other_side,
+        unknowns_high, prob_prime_after_sieve,
+        m, K_mod_d, d, coprime_extended, prob_prime_coprime):
     assert other_side > 0
     prob_record = 0
 
-    next_prob = 1 - prob_prime_after_sieve
-    prob_nth = prob_prime_after_sieve
-    for unknown in unknowns:
+    prob_nth = 1
+    for unknown in unknowns_high:
         if unknown + other_side in record_gaps:
-            prob_record += prob_nth
-        prob_nth *= next_prob
+            prob_record += prob_nth * prob_prime_after_sieve
+        prob_nth *= 1 - prob_prime_after_sieve
 
+    # Use -m if wanted to consider unknowns_low
+    for x in coprime_extended:
+        if math.gcd(m * K_mod_d + x, d) > 1:
+            continue
+
+        if x + other_side in record_gaps:
+            prob_record += prob_nth * prob_prime_coprime
+
+        prob_nth *= 1 - prob_prime_coprime
+
+    # Anything larger than 2*SL is likely record
     return prob_record + prob_nth
 
 
@@ -384,7 +416,7 @@ def should_print_stats(
         if sc.tested and prp_tests:
             print("\t    prp tests  {:<9d} (avg: {:.2f}) ({:.3f} tests/sec)".format(
                 prp_tests, prp_tests / sc.tested, prp_tests / secs))
-            if sc.one_side_skips:
+            if True or sc.one_side_skips:
                 print("\t    one side skips: {} ({:.1%}) (delta: {:.1} avg: {:.3}".format(
                     sc.one_side_skips, sc.one_side_skips / sc.tested,
                     sc.prob_one_side_delta, sc.prob_one_side_delta/sc.tested))
@@ -477,7 +509,7 @@ def handle_result(
 def process_line(
         done_flag, work_q, results_q, thread_i,
         SL, K, P, D,
-        prob_prime_after_sieve, record_gaps, one_side_skip_threshold,
+        prob_prime, prob_prime_after_sieve, record_gaps, one_side_skip_threshold,
         primes, remainder):
     def cleanup(*_):
         print (f"Thread {thread_i} stopping")
@@ -486,6 +518,10 @@ def process_line(
         results_q.close()
         results_q.join_thread()
         exit(0)
+
+    # Calculate extended gap (see gap_stats)
+    prob_prime_coprime, coprime_extended = setup_extended_gap(SL, K, P, D, prob_prime)
+    K_mod_d = K % D
 
     # Ignore KeyboardInterrupt and let Manager terminate us.
     signal.signal(signal.SIGINT, cleanup)
@@ -497,8 +533,6 @@ def process_line(
             assert done_flag.is_set()
             cleanup()
             return
-
-        #print (f"Work({thread_i}) done({done_flag.is_set()}): {work if work[0] == 'S' else work[:3]}")
 
         m, mi, prob_record, log_n, line = work
 
@@ -515,14 +549,22 @@ def process_line(
         test_next = True
         if one_side_skip_threshold:
             # Check if slower to test a new record or this one
+
             new_prob_record = prob_record_one_side(
-                    prev_p_i, unknowns[1],
-                    record_gaps, prob_prime_after_sieve)
+                    record_gaps, prev_p_i,
+                    unknowns[1], prob_prime_after_sieve,
+                    m, K_mod_d, D, coprime_extended, prob_prime_coprime)
+
+            #print ("{:5} | m: {:8} | count: {} {} | {:.3g} => {:.3g} | {:.3g}".format(
+            #        prev_p_i, m, unknown_l, unknown_u,
+            #        prob_record, new_prob_record,
+            #        one_side_skip_threshold))
 
             # XXX: this increases effective prob/test (recursievly)
             #      which is hard to factor here.
             # Takes 2x (see XXX note above) time to test a new interval.
-            if 2 * new_prob_record < one_side_skip_threshold:
+            #       (2 - skip_percent)/(tested_prob) x time to test a new interval
+            if 3 * new_prob_record < one_side_skip_threshold:
                 test_next = False
 
             #if new_prob_record > 10 * one_side_skip_threshold:
@@ -531,6 +573,8 @@ def process_line(
             #        prob_record, new_prob_record))
 
             # On average sum(new_prob_record) ~= sum(prob_record)
+        else:
+            new_prob_record = 0
 
         n_tests, next_p_i = 0, 0
         if test_next:
@@ -599,7 +643,7 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
 
 def run_in_parallel(
         args, conn, unknown_file, record_gaps,
-        prob_nth, prob_prime_after_sieve,
+        prob_nth, prob_prime, prob_prime_after_sieve,
         existing, valid_mi,
         K, K_log,
         data, sc, misc
@@ -628,6 +672,7 @@ def run_in_parallel(
     results_q = multiprocessing.Queue()
 
     one_sided_args = (
+        prob_prime,
         prob_prime_after_sieve,
         record_gaps,
         0 if args.no_one_side_skip else prob_threshold,
@@ -855,7 +900,7 @@ def prime_gap_test(args):
 
         run_in_parallel(
             args, conn, unknown_file, record_gaps,
-            prob_nth, prob_prime_after_sieve,
+            prob_nth, prob_prime, prob_prime_after_sieve,
             existing, valid_mi,
             K, K_log,
             data, sc, misc
