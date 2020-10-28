@@ -344,8 +344,6 @@ def prob_record_one_side(
 
 def determine_test_threshold(args, valid_mi, data):
     percent = args.prp_top_percent
-    # TODO seems to not work when percent is None?
-    print ("prp top percent:", percent)
     if not percent or percent == 100:
         return 0, {
             mi: (p_merit, p_record) for mi, p_merit, p_record in zip(
@@ -402,11 +400,6 @@ def should_print_stats(
             print("\t    tests      {:<9d} ({}, {})  {:.0f}, {:.0f} secs".format(
                 sc.tested, timing, timing_threads, secs, sc.test_time))
 
-            print("\t    sum(prob_minmerit):  {:6.2g}, {:.3g}/day\tfound: {}".format(
-                sc.prob_minmerit, 86400 / secs * sc.prob_minmerit, sc.count_minmerit))
-            print("\t    sum(prob_record):    {:6.2g}, {:.3g}/day\tfound: {}".format(
-                sc.prob_record, 86400  / secs * sc.prob_record, sc.count_record))
-
         total_unknown = sc.t_unk_low + sc.t_unk_hgh
         if total_unknown:
             print("\t    unknowns   {:<9d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
@@ -416,17 +409,25 @@ def should_print_stats(
                 100 * sc.t_unk_hgh / total_unknown))
         prp_tests = sc.total_prp_tests
         if sc.tested and prp_tests:
-            print("\t    prp tests  {:<9d} (avg: {:.2f}) ({:.3f} tests/sec)".format(
-                prp_tests, prp_tests / sc.tested, prp_tests / secs))
-            if True or sc.one_side_skips:
-                print("\t    one side skips: {} ({:.1%}) (delta: {:.1} avg: {:.3}".format(
+            print("\t    prp tests  {:<9d} (avg: {:.2f}/side, {:.2f}/m) ({:.3f} tests/sec)".format(
+                prp_tests, prp_tests / sc.sides_processed, prp_tests / sc.tested, prp_tests / secs))
+            if sc.one_side_skips:
+                avg_prob_side = sc.prob_record_processed / sc.sides_processed
+                avg_prob_no_skip = sc.prob_record_all / (2 * sc.tested)
+                print("\t    side skips {:<9d} ({:.1%}) (avg prob_record {:.3g}/side, {:.3g}/m/2, {:+.1%})".format(
                     sc.one_side_skips, sc.one_side_skips / sc.tested,
-                    sc.prob_one_side_delta, sc.prob_one_side_delta/sc.tested))
+                    avg_prob_side, avg_prob_no_skip, avg_prob_side / avg_prob_no_skip - 1))
+
+            print("\t    sum(prob_minmerit):  {:7.2g}, {:.3g}/day\tfound: {}".format(
+                sc.prob_minmerit, 86400 / secs * sc.prob_minmerit, sc.count_minmerit))
+            print("\t    sum(prob_record):    {:7.2g}, {:.3g}/day\tfound: {}".format(
+                sc.prob_record_processed, sc.prob_record_processed / secs * 86400, sc.count_record))
+
             if sc.gap_out_of_sieve_prev or sc.gap_out_of_sieve_next:
                 print("\t    fallback prev_gap {} ({:.1%}), next_gap {} ({:.1%})".format(
                     sc.gap_out_of_sieve_prev, sc.gap_out_of_sieve_prev / sc.tested,
                     sc.gap_out_of_sieve_next, sc.gap_out_of_sieve_next / sc.tested))
-            print("\t    merit {:.3f} (at m={})".format(
+            print("\t    merit      {:<6.3f}    (at m={})".format(
                 sc.best_merit_interval, sc.best_merit_interval_m))
 
         return True
@@ -510,7 +511,7 @@ def handle_result(
 # NOTE: Manager is prime_gap_test maintains workers wh run process_line.
 def process_line(
         done_flag, work_q, results_q, prob_side_threshold, sides_tested,
-        prob_prime, prob_prime_after_sieve, record_gaps, prob_threshold,
+        prob_prime, prob_prime_after_sieve, record_gaps, side_skip_enabled,
         thread_i, SL, K, P, D,
         primes, remainder):
     def cleanup(*_):
@@ -537,7 +538,6 @@ def process_line(
             return
 
         m, mi, prob_record, log_n, line = work
-        assert prob_record >= prob_threshold
 
         mtest, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
         assert mi == mtest
@@ -551,7 +551,7 @@ def process_line(
 
         test_next = True
         new_prob_record = 0
-        if prob_threshold:
+        if side_skip_enabled:
             # Check if slower to test a new record or next prime
 
             # On average sum(new_prob_record) should approx equal sum(prob_record)
@@ -596,7 +596,7 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     (m, mi, r_log_n, unknown_l, unknown_u,
      n_tests, next_p_i,
      p_tests, prev_p_i,
-     prob_record, one_sided_prob_record,
+     prob_record, new_prob_record,
      test_time) = result
 
     sc.tested += 1
@@ -615,14 +615,19 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     if gap in record_gaps:
         sc.count_record += 1
 
-    if next_p_i:
-        assert mi_probs[mi][1] == prob_record
-        sc.prob_record += prob_record
-    else:
-        sc.prob_record += prob_record - one_sided_prob_record
-        sc.one_side_skips += 1
+    assert mi_probs[mi][1] == prob_record
+    sc.prob_record_all += prob_record
 
-    sc.prob_one_side_delta += prob_record - one_sided_prob_record
+    # Should mirror logic in process_line
+    if next_p_i:
+        sc.prob_record_processed += prob_record
+        sc.sides_processed += 2
+    else:
+        sc.one_side_skips += 1
+        sc.prob_record_processed += prob_record - new_prob_record
+        sc.sides_processed += 1
+
+    sc.prob_one_side_delta += prob_record - new_prob_record
 
     sc.total_prp_tests += p_tests
     sc.gap_out_of_sieve_prev += prev_p_i > args.sieve_length
@@ -685,7 +690,7 @@ def run_in_parallel(
         prob_prime,
         prob_prime_after_sieve,
         record_gaps,
-        0 if args.no_one_side_skip else prob_threshold,
+        not args.no_one_side_skip,
     )
 
     assert args.threads in range(1, 65), args.threads
@@ -749,15 +754,6 @@ def run_in_parallel(
         while not results_q.empty():
             result = results_q.get(block=False)
             process_result(conn, args, record_gaps, mi_probs, data, sc, result)
-
-            if sc.tested and sc.tested % 1000 == 0:
-                with prob_side_threshold.get_lock(), sides_tested.get_lock():
-                    pss = prob_side_threshold.value
-                    avg_pss = pss / sides_tested.value
-                    prob_pss = sc.prob_record / sc.tested / 2
-                    print ("\tProb Record per side | {:.4f}/{} = {:.3g} vs {:.3g} => {:+.2%}".format(
-                        pss, sides_tested.value, avg_pss,
-                        prob_pss, avg_pss / prob_pss - 1))
 
     print("Everything Queued, done.set() & pushing STOP")
     done_flag.set()
@@ -878,9 +874,12 @@ def prime_gap_test(args):
         best_merit_interval = 0
         best_merit_interval_m = -1
 
-        prob_record = 0.0
+        prob_record_all = 0.0
         prob_minmerit = 0.0
 
+        # handles one sided testes
+        prob_record_processed = 0.0
+        sides_processed = 0.0
         # To validate one sided prob is working
         prob_one_side_delta = 0.0
 

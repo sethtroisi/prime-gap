@@ -574,7 +574,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * combined\_sieve.cpp
 * gap\_stats.cpp
 * gap\_test.py
-  * [ ] Extended gap for one sided tests?
 * gap\_test.cpp
 * schema.sql
   * [ ] next_p_i => next_p (fix in finalize and other places)
@@ -673,6 +672,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_test.py
+  * [x] Dynamic one sided test threshold and logging.
+  * [x] Extended gap for one sided tests?
   * [x] `--top-x-percent` (see THEORY.md)
   * [x] Correlation between Expected Gap & Gap
   * [x] Show P(record) / day
