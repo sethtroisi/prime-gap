@@ -816,7 +816,7 @@ def prime_gap_test(args):
 
     # ----- Open Prime-Gap-Search DB
     # Longer timeout so that record_checking doesn't break saving
-    conn = sqlite3.connect(args.search_db, timeout=15)
+    conn = sqlite3.connect(args.search_db, timeout=30)
     conn.row_factory = sqlite3.Row
     existing = load_existing(conn, args)
     print (f"Found {len(existing)} existing results")
