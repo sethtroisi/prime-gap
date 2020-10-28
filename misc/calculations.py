@@ -15,12 +15,6 @@
 import math
 import time
 
-import gmpy2
-import sympy
-
-def next_prime(start):
-    return gmpy2.next_prime(start)
-
 
 def sieve_percent(max_prime):
     GAMMA = 0.577215
@@ -32,6 +26,7 @@ def prime_chance(ln_n):
 
 
 def expected_PRP(max_prime, P):
+    import gmpy2
     ln_n = float(gmpy2.log(gmpy2.primorial(P)))
     return ln_n, sieve_percent(max_prime) / prime_chance(ln_n)
 
@@ -46,6 +41,51 @@ def pgsurround_sieve_limit(ln):
     assert 900 <= log2n <= 203601, log2n
     return (0.05 + (log2n/8000.0)) * logn * logn * math.log(logn)
 
+
+def Runtime():
+    from math import log, log2
+    import sympy
+
+    Mc = 0.26149
+
+    K  = 19805
+    M  = 10000
+    sl = 10 ** 10
+    Cf = 1/5
+    c = 10 / Cf
+    S = 2 * 20 * 20000 + 1
+    m_log = 4/64
+    m_eq3 = 30
+
+    P = 455052511
+    Psmall = int(sympy.primepi(S * c))
+    Plarge = P - Psmall
+
+    llsl = log(log(sl))
+
+    A1 = (P * K * m_log)
+    B1 = S * (llsl + Mc)
+    print (f"{M} * ({A1:.2e} + {B1:.2e})")
+    print (f"{M *(A1+B1):.2e}")
+    print ()
+
+
+    print ("{:,}*{:,}*{:,}/{} + {:,}*{:,} + {:,}*{:,}({:.2f}+{:.2f})+ ({:,}*{:,}*{}*({:.2f}-{:.2f}) + {:,})*{}log2({}/{:,})".format(
+        P, M, K, int(1/m_log),
+        M, Psmall,
+        M, S, llsl, Mc,
+        M, S, 1/Cf, llsl, log(log(c * S)), Plarge,
+        m_eq3, sl, S))
+
+    A = (P) * K * m_log
+    B = M * Psmall
+    C = M * B1
+    Da = M * S * 1/Cf * (llsl - log(log(c * S))) + Plarge
+    Db = 30 * log2(sl/S)
+    print (f"{A:.2e} + {B:.2e} + {C:.2e} + {Da*Db:.2e}")
+    print (f"{A + B + C + Da*Db:.2e}")
+
+
 def ParameterSelection():
     for max_prime, primes in (
         (10**4, 1229), (10**5, 9592), (10**6, 78498),
@@ -59,6 +99,65 @@ def ParameterSelection():
         print(f"$10^{{{power:<2}}}$  & {primes:8}\t& {percent:.6f} &\t\t\\\\")
 
 
+def Speedup():
+    import matplotlib.pyplot as plt
+    import numpy as np
+
+    # for mi in {100,300,1000,3000,10000,30000,100000,300000,1000000}; do ./combined_sieve --save-unknowns --unknown-filename 1511_2190_2000000_${mi}_s20000_l100000M.txt; done
+    # time ./large_sieve 73 1511 2190 -15000 30000 100''000''000''000 1>test.txt
+
+    M_single = 224.6
+    M_cost = {
+        (1,1): M_single,
+        (100, 26): 931,
+        (300, 79): 945,
+        (1000, 262): 934,
+        (3000, 789): 944,
+        (10000, 2629): 950,
+        (30000, 7891): 1054.6,
+        (100000, 26301): 1184.3,
+        (300000, 78905): 1776.1,
+        (1000000, 263013): 3966,
+        (3000000, 789041): 10550,
+        (10000000, 2630136): 34814,
+    }
+
+    line = "{:>10}\t& {:>7}\t& {:5.0f}\t& {:.4g} \t& {:.0f} \t&\\"
+
+    first = line.format("M", "coprime", 0.0, 1.1, 2.2)
+    first = (first.replace("0.0", "time(s)")
+                  .replace("1.1", "time(s)/coprime")
+                  .replace("2.2", "speedup (vs sequential sieve)")
+                  .replace("\\", "\rule{0pt}{1em}\\"))
+
+    for (m, coprime), time in M_cost.items():
+      print(line.format(m, coprime, time, time / coprime, M_single / (time / coprime)))
+
+    fig = plt.figure(figsize=(32/3,9/3), dpi=200)
+
+    # M = coprime count.
+    M, time = zip(*[(coprime,time) for (_, coprime), time in M_cost.items()])
+    M = np.array(M)
+
+    ax1 = fig.gca()
+    ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+
+    p1 = ax1.plot(M, time,                   marker="o", label="combined sieve time(s)")
+    p2 = ax2.plot(M, M_single * M / time,    marker="o", label="speedup", color="C1")
+    plt.grid(which="major", axis="y")
+    plt.xscale("log")
+    ax1.set_yscale("log")
+    ax2.set_yscale("log")
+
+    ax1.set_xlabel("Parallel M")
+
+    ax1.set_ylabel("time(s)")
+    ax2.set_ylabel("speedup")
+
+    ax2.legend(p1 + p2, ["time(s)", "speedup"], loc="upper left", framealpha=0.9)
+    plt.tight_layout()
+    plt.show()
+
 
 def Appendix1():
     # 503, 1009, 1511, 5003, 10007
@@ -69,6 +168,7 @@ def Appendix1():
             (4441, 100e9),
             (5333, 5000e9),
             (8887, 1000e9),
+            (20007, 4000e9),
     ]:
         ln, prps = expected_PRP(mp, P)
         pg_mp = pgsurround_sieve_limit(ln)
@@ -79,6 +179,7 @@ def Appendix1():
 
 def Trick2():
     # SLOW (~250s in python3, ~70s in pypy3)
+    import sympy
 
     N = sympy.prod(sympy.primerange(2, 503+1)) // 210
     # N = gmpy2.primorial(503) // 210
@@ -96,6 +197,8 @@ def Trick2():
             count += ((first % p) + 2 * X) >= p
         print (f"{count}/{primes} = {count / primes:.2%}\t", time.time() - t)
 
+Runtime()
 #ParameterSelection()
-Appendix1()
+#Speedup()
+#Appendix1()
 #Trick2()
