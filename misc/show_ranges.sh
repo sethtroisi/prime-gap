@@ -47,6 +47,11 @@ SELECT "";
 #        AND (next_p != 0 OR prev_p != 0);
 #SELECT changes() || " m_stats results added to result";
 #SELECT "";
+
+# Happens when gap_stats is rerun
+#UPDATE m_stats SET (next_p, prev_p) =
+#       (SELECT next_p_i, prev_p_i FROM result r WHERE m_stats.p = r.p AND m_stats.d = r.d AND m_stats.m = r.m)
+#WHERE (next_p = 0 OR prev_p = 0) AND p = 3001 AND d = 2190;
 EOL
 
 sqlite3 -readonly "prime-gap-search.db" <<EOL

@@ -703,11 +703,6 @@ def run_in_parallel(
         # Read a line from the file
         line = unknown_file.readline()
 
-        if len(data.valid_m) <= 3:
-            _, _, _, unknowns = gap_utils.parse_unknown_line(line)
-            misc.test_unknowns.append(unknowns)
-
-
         if args.stats and (args.save_logs or args.num_plots):
             # NOTES: calculate_expected_gaps is really slow,
             # only real use is to doublecheck gap_stats.cpp
@@ -810,9 +805,8 @@ def prime_gap_test(args):
     folder_unk = gap_utils.transform_unknown_filename(
             args.unknown_filename, "unknowns", "txt")
     if os.path.exists(folder_unk):
-        unknown_file = open(folder_unk, "r")
-    else:
-        unknown_file = open(args.unknown_filename, "r")
+        args.unknown_filename = folder_unk
+    unknown_file = open(args.unknown_filename, "r")
 
     # ----- Open Prime-Gap-Search DB
     # Longer timeout so that record_checking doesn't break saving
@@ -879,6 +873,8 @@ def prime_gap_test(args):
     sc = StatCounters(time.time(), time.time())
     data = Datas()
     misc = Misc()
+    data_db = None
+    misc_db = None
 
     valid_mi = [mi for mi in range(M_inc) if math.gcd(M + mi, D) == 1]
     data.first_m = M + valid_mi[0]
@@ -891,12 +887,11 @@ def prime_gap_test(args):
         print()
 
         # Load stats for prob_record
-        if not args.stats and (args.num_plots or args.prp_top_percent):
-            data_db, misc_db = load_stats(conn, args)
-            assert len(data_db.prob_merit_gap)  == len(valid_mi), "run ./gap_stats first"
-            assert len(data_db.prob_record_gap) == len(valid_mi), "run ./gap_stats first"
-            data.prob_merit_gap = data_db.prob_merit_gap
-            data.prob_record_gap = data_db.prob_record_gap
+        data_db, misc_db = load_stats(conn, args)
+        assert len(data_db.prob_merit_gap)  == len(valid_mi), "run ./gap_stats first"
+        assert len(data_db.prob_record_gap) == len(valid_mi), "run ./gap_stats first"
+        data.prob_merit_gap = data_db.prob_merit_gap
+        data.prob_record_gap = data_db.prob_record_gap
 
         run_in_parallel(
             args, conn, unknown_file, record_gaps,
@@ -908,8 +903,21 @@ def prime_gap_test(args):
 
     # ----- Plots
     if args.num_plots:
+        if data_db is None:
+            # Load stats from gap_stats
+            data_db, misc_db = load_stats(conn, args)
+
+        with open(args.unknown_filename, "r") as unknwn_filename:
+            data.valid_m = valid_mi
+
+            for i in range(3):
+                line = unknown_file.readline()
+                _, _, _, unknowns = gap_utils.parse_unknown_line(line)
+                misc.test_unknowns.append(unknowns)
+
         gap_test_plotting.plot_stuff(
-            args, conn, data, sc, misc,
+            args, conn, sc, data, misc,
+            data_db, misc_db,
             min_merit_gap, record_gaps, prob_nth)
 
 

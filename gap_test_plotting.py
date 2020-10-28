@@ -147,7 +147,7 @@ def stats_plots(
             n = min(len(prob_nth), len(unknowns))
             axis.scatter(
                 unknowns[:n], prob_nth[:n],
-                marker='.', s=12, color=color, label=label)
+                marker='.', s=12, color=color)
             # calculate expected value = sum(i * prob(i))
             E = sum(u * p for u, p in zip(unknowns, prob_nth))
             axis.axvline(
@@ -157,11 +157,11 @@ def stats_plots(
         if misc.test_unknowns:
             # prob_prev, prev_next for individual m
             # See Prob_nth in gap_stats
-            colors = ['lightskyblue', 'tomato', 'seagreen']
-            for m, c, (u_p, u_n) in zip(valid_m, colors, misc.test_unknowns):
-                label = f"m={m}"
-                plot_prob_nth(axis_prev, u_p, c, label)
-                plot_prob_nth(axis_next, u_n, c, label)
+            colors = plt.cm.tab10
+            for i, (u_p, u_n) in enumerate(misc.test_unknowns):
+                label = f"m={valid_m[i]}"
+                plot_prob_nth(axis_prev, u_p, colors(i), label)
+                plot_prob_nth(axis_next, u_n, colors(i), label)
 
             axis_prev.legend(loc='upper left')
             axis_next.legend(loc='upper right')
@@ -198,7 +198,7 @@ def stats_plots(
         fig = plt.figure(
             "Combined Gap Statistics",
             constrained_layout=True,
-            figsize=(12, 12))
+            figsize=(12, 8), dpi=150)
         gs = fig.add_gridspec(3, 3)
 
         axis_prob_comb     = fig.add_subplot(gs[0, 0])
@@ -411,8 +411,12 @@ def stats_plots(
 
 
 def plot_stuff(
-        args, conn, data, sc, misc,
+        args, conn, sc, data, misc,
+        data_db, misc_db,
         min_merit_gap, record_gaps, prob_nth):
+
+    assert data_db.expected_prev
+    assert misc_db.prob_gap_comb, len(misc.prob_gap_comb)
 
     if args.stats:
         # Not calculated
@@ -421,11 +425,6 @@ def plot_stuff(
         stats_plots(
             args, min_merit_gap, record_gaps, prob_nth,
             data.valid_m, data, misc)
-
-    # Load stats from gap_stats
-    data_db, misc_db = load_stats(conn, args)
-    assert data_db.expected_prev
-    assert misc_db.prob_gap_comb, len(misc.prob_gap_comb)
 
     # test_unknowns come from unknown-file not DB.
     misc_db.test_unknowns = misc.test_unknowns
