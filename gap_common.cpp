@@ -345,6 +345,12 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
         prob_prime_adj /= (1 - 1.0/prime);
     }
 
+    if (false) {
+        printf("prob_prime: %.6f => %.6f\n",
+            1 / K_log - 1 / (K_log * K_log),
+            prob_prime_adj);
+    }
+
     // Find factors of D
     vector<uint32_t> D_primes;
     for (uint32_t prime : P_primes) {
@@ -381,7 +387,7 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
     size_t mcount = 0;
     for (; mcount < intervals; m++) {
         if (m >= config.mstart + config.minc) break; // Tested all values.
-        if (gcd(m, d) > 1) continue;
+        if (d > 1 && gcd(m, d) > 1) continue;
         mcount++;
 
         // Reset to composites from coprime K
@@ -397,8 +403,10 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
             }
         }
 
-        if (false && m == 1) {
-            printf("1 * %d#/%ld | ", config.p, d);
+        if (false && m <= 6) {
+            size_t count_unknown = std::count(composite + sl, composite + 2*sl, false);
+            printf("%ld * %d#/%ld | %ld | ", m, config.p, d, count_unknown);
+
             for (int x = 0; (size_t) x <= sl; x++)
                 if (!composite[sl + x])
                     printf("%d ", x);

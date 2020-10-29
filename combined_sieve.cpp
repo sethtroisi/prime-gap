@@ -134,7 +134,7 @@ void set_defaults(struct Config& config) {
         uint32_t large_p = config.d > 1 ? config.d : rand_prime;
         assert(isprime_brute(large_p));
 
-        printf("d optimizer for P = %d# | large prime=%d | sl=%d (%.1f merit)\n",
+        printf("d optimizer for P = %d# | large prime=%d | SL=%d (%.1f merit)\n",
                 config.p, large_p, config.sieve_length, config.min_merit);
 
         /**
@@ -143,12 +143,12 @@ void set_defaults(struct Config& config) {
          * 2. Multiple by large prime (to make unique)
          * 3. test that ~same expected
          */
-        vector<uint32_t> primes = {2,3,5,7,11,13,17,19,23};
+        vector<uint32_t> primes = {1,2,3,5,7,11,13,17,19,23};
         for (uint32_t lp : {1u, large_p}) {
             config.d = lp;
             for (uint32_t p : primes) {
                 // check if large_p already includes p
-                if (config.d % p == 0)
+                if (p != 1 && config.d % p == 0)
                     continue;
 
                 if (__builtin_umul_overflow(config.d, p, &config.d)) {
@@ -159,7 +159,7 @@ void set_defaults(struct Config& config) {
                 // Try searching all values of m (up to 20,000)
                 config.minc = std::min(config.d, 20'000U);
                 auto expected = count_K_d(config);
-                printf("Optimizing D | d = %5d * %2d# | %d remaining, %5.0f avg gap | sl insufficient %.3f%% of time\n",
+                printf("Optimizing | d = %5d * %2d# | %d remaining, %5.0f avg gap | SL insufficient %.3f%% of time\n",
                     lp, p, std::get<1>(expected), std::get<0>(expected), 100 * std::get<2>(expected));
             }
         }
