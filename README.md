@@ -418,7 +418,7 @@ $ sudo apt install libprimesieve-dev
 
 $ sudo apt install libgmp-dev libmpfr-dev libmpc-dev
 $ sudo apt install sqlite3 libsqlite3-dev
-$ pip install --user gmpy2=2.1.0b5 tqdm primegapverify
+$ pip install --user gmpy2==2.1.0b5 tqdm primegapverify
 
 $ sqlite3 prime-gap-search.db < schema.sql
 
@@ -462,7 +462,7 @@ This saves ~60% space, but makes it harder to visually debug data, can be built 
     * `make clean combined_sieve SAVE_INCREMENT=1` saves at each interval >= 1B.
 * Dev GMPlib | GMP 6.2.99
   * GMP 6.2.0 hasn't yet accepted my `mpz_prevprime` patch
-    * `hg apply <patch>` from https://gmplib.org/list-archives/gmp-devel/2020-August/005851.html
+    * `hg import --no-commit <patch>` from https://gmplib.org/list-archives/gmp-devel/2020-August/005851.html
     * If you are a developer consider asking telling them that `mpz_prevprime` would be useful
 
 

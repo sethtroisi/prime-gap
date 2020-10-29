@@ -232,7 +232,6 @@ double get_range_time(const struct Config& config) {
     if (rc != SQLITE_OK) {
         printf("\nrange SELECT failed '%s' | %d: '%s'\n",
             zErrMsg, rc, sqlite3_errmsg(db));
-        exit(1);
     }
 
     return time;
@@ -581,9 +580,9 @@ void prob_extended_gap(
     if (config.verbose >= 2) {
         printf("Using Wheel: %d for extended probs\n", wheel);
         printf("\tAverage %5.0f inner    coprimes => %.3g%% prob_greater\n",
-            average_inner_coprime, prob_great_nth[(int) average_inner_coprime]);
+            average_inner_coprime, 100 * prob_great_nth[(int) average_inner_coprime]);
         printf("\tAverage %5.0f extended coprimes => %.3g%% prob_greater\n",
-            gap_probs.average_coprime, gap_probs.prob_extended);
+            gap_probs.average_coprime, 100 * gap_probs.prob_extended);
     }
 
     for (int m = 0; m < wheel; m++) {
@@ -1012,8 +1011,8 @@ void calculate_prp_top_percent(
     printf("\n");
     printf("%sieve time: %.0f seconds (%.2f hours)\n",
         exact ? "S" : "Estimated s", combined_time, combined_time / 3600);
-    printf("Estimated time/m: 2 * %.1f PRP/m * %.1f s/PRP = %.2f seconds\n",
-        estimated_prp_per_m, prp_time_est, 2 * time_per_side);
+    printf("Estimated time/m: 2 * (%.1f PRP/m / %.1f PRP/s) = %.2f seconds\n",
+        estimated_prp_per_m, 1 / prp_time_est, 2 * time_per_side);
     printf("\n");
 
     // Sort probs, greater first
@@ -1058,7 +1057,7 @@ void calculate_prp_top_percent(
                 cdouble percent = i * 100.0 / sorted.size();
 
                 // testing one side and other side smaller percent
-                printf("\t%6ld %c(%5.1f%%) | sum(prob) = %.6f / (%.0f + %6ld * %3g * %.2f) => %.5f/%.1f = %.6f prob/hour\n",
+                printf("\t%6ld %c(%5.1f%%) | sum(prob) = %9.5f / (%.0f + %6ld * %3g * %.2f) => %.5f/%.1f hr = %.6f prob/hour\n",
                     i, " *"[first_below], percent,
                     sum_prob, combined_time, i, sides_tested, time_per_side,
                     sum_prob, time / 3600, avg);

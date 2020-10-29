@@ -29,6 +29,7 @@ import gmpy2
 
 import gap_utils
 import gap_test_plotting
+import misc.misc_utils as misc_utils
 
 
 def get_arg_parser():
@@ -827,7 +828,9 @@ def prime_gap_test(args):
     conn = sqlite3.connect(args.search_db, timeout=30)
     conn.row_factory = sqlite3.Row
     existing = load_existing(conn, args)
-    print (f"Found {len(existing)} existing results")
+    n_exist = len(existing)
+    count_m = misc_utils.count_num_m(M, M_inc, D)
+    print (f"Found {n_exist} ({n_exist/count_m:.1%}) results")
 
     # used in next_prime
     assert P <= 80000
