@@ -219,7 +219,7 @@ double get_range_time(const struct Config& config) {
 
     uint64_t hash = db_helper.config_hash(config);
     char sql[200];
-    sprintf(sql, "SELECT time_sieve + time_stats FROM range WHERE rid = %ld and time_stats > 0", hash);
+    sprintf(sql, "SELECT time_sieve + time_stats FROM range WHERE rid = %ld and time_sieve > 0", hash);
     char *zErrMsg = 0;
 
     double time = 0;
@@ -993,7 +993,7 @@ void calculate_prp_top_percent(
     cdouble prp_time_est = prp_time_estimate_composite(N_log, 2 /* verbose */);
     cdouble prob_prime = 1 / N_log - 1 / (N_log * N_log);
     cdouble estimated_prp_per_m = 1 / (prob_prime * log(config.max_prime) * exp(GAMMA));
-    cdouble time_per_test = prp_time_est * estimated_prp_per_m;
+    cdouble time_per_side = prp_time_est * estimated_prp_per_m;
 
     // Try to load combined_time from db, fallback to estimate.
     double combined_time = get_range_time(config);
@@ -1012,8 +1012,8 @@ void calculate_prp_top_percent(
     printf("\n");
     printf("%sieve time: %.0f seconds (%.2f hours)\n",
         exact ? "S" : "Estimated s", combined_time, combined_time / 3600);
-    printf("Estimated time/m: %.1f PRP/m * %.1f s/PRP = %.2f seconds\n",
-        estimated_prp_per_m, prp_time_est, time_per_test);
+    printf("Estimated time/m: 2 * %.1f PRP/m * %.1f s/PRP = %.2f seconds\n",
+        estimated_prp_per_m, prp_time_est, 2 * time_per_side);
     printf("\n");
 
     // Sort probs, greater first
@@ -1033,25 +1033,39 @@ void calculate_prp_top_percent(
     printf("\tEstimate of optimal printed with *\n");
     printf("\n");
 
-    double sum_prob = 0.0;
-    double time = combined_time;
-    bool max_happened = false;
-    for (size_t i = 1; i <= sorted.size(); i++) {
-        // Print at 1,5,10,20,50,100 AND "optimal"
-        sum_prob += sorted[i-1];
-        time += time_per_test;
+    // Both sides & One sided at 20% (assume 80% of prob also)
+    for (size_t side_percent : {100, 20}) {
 
-        double avg = sum_prob / time;
-        bool is_below_avg = (sorted[i-1] / time_per_test) < avg;
-        bool first_below = !max_happened && is_below_avg;
-        max_happened |= first_below;
+        double sum_prob = 0.0;
+        double time = combined_time;
 
-        if (first_below || std::count(print_points.begin(), print_points.end(), i)) {
-            cdouble percent = i * 100.0 / sorted.size();
-            printf("\t%6ld %c(%5.1f%%) | sum(prob) = %.6f / (%.0f + %6ld*%.2f) => %.4e/%.1f = %.4g prob/hour\n",
-                i, " *"[first_below], percent, sum_prob, combined_time, i, time_per_test,
-                sum_prob, time / 3600, avg);
+        bool max_happened = false;
+        for (size_t i = 1; i <= sorted.size(); i++) {
+            // Print at 1,5,10,20,50,100 AND "optimal"
+            double sides_tested = 1 + side_percent / 100.0;
+            double add_t = sides_tested * time_per_side;
+            double add_p = sorted[i-1] * (side_percent == 100 ? 1.0 : 0.8);
+
+            time += add_t;
+            sum_prob += add_p;
+
+            double avg = sum_prob / time;
+            bool is_below_avg = (add_p / add_t) < avg;
+            bool first_below = !max_happened && is_below_avg;
+            max_happened |= first_below;
+
+            if (first_below || std::count(print_points.begin(), print_points.end(), i)) {
+                cdouble percent = i * 100.0 / sorted.size();
+
+                // testing one side and other side smaller percent
+                printf("\t%6ld %c(%5.1f%%) | sum(prob) = %.6f / (%.0f + %6ld * %3g * %.2f) => %.5f/%.1f = %.6f prob/hour\n",
+                    i, " *"[first_below], percent,
+                    sum_prob, combined_time, i, sides_tested, time_per_side,
+                    sum_prob, time / 3600, avg);
+            }
         }
+
+        printf("\n");
     }
 }
 
@@ -1193,7 +1207,7 @@ void prime_gap_stats(struct Config config) {
         double uncertainty = avg_missing / (avg_missing + avg_record);
 
         if (uncertainty > 1e-5) {
-            printf("\tRECORD : avg: %.2e | missing: %.2e | uncertainty: %.2g%% \n",
+            printf("\tRECORD : avg: %.2e | missing: %.2e | uncertainty: %.4f%% \n",
                 avg_record, avg_missing, 100 * uncertainty);
         }
 
