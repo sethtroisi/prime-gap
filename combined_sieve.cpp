@@ -1322,7 +1322,7 @@ void prime_gap_parallel(struct Config& config) {
             }
 
             #ifdef SAVE_INCREMENTS
-            if (config.save_unknowns && prime > 1e8 && prime != LAST_PRIME) {
+            if (config.save_unknowns && prime > 1e9 && prime != LAST_PRIME) {
                 // reset unknown_filename if cached;
                 config.unknown_filename = "";
                 uint64_t old = config.max_prime;

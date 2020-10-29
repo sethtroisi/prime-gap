@@ -22,8 +22,21 @@ LDFLAGS	= -L /usr/local/lib
 #LDFLAGS	=
 DEFINES =
 
+ifdef RLE
+DEFINES += -DRLE
+endif
+ifdef VALIDATE_FACTORS
+DEFINES += -DGMP_VALIDATE_FACTORS
+endif
+ifdef VALIDATE_LARGE
+DEFINES += -DGMP_VALIDATE_LARGE_FACTORS
+endif
+ifdef SAVE_INCREMENT
+DEFINES += -DSAVE_INCREMENT
+endif
+
 %.o: %.cpp
-	$(CC) -c -o $@ $< $(CFLAGS)
+	$(CC) -c -o $@ $< $(CFLAGS) $(DEFINES)
 
 
 all: $(OUT)
@@ -38,7 +51,7 @@ gap_stats: gap_stats.cpp gap_common.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 gap_test_simple: gap_test_simple.cpp gap_common.o
-	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(DEFINES)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 
 benchmark: misc/benchmark.cpp modulo_search.o
