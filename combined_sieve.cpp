@@ -866,11 +866,14 @@ void method2_increment_print(
         const struct Config config
 ) {
         if (prime >= stats.next_print) {
-            size_t all_ten = prime > 10'000'000'000;
+            const size_t max_mult = 100'000'000'000;
+
             // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
             // Print 60,70,80,90 billion because intervals are wider.
-            if (stats.next_print == (5 + 4 * all_ten) * stats.next_mult) {
-                stats.next_mult = 10 * stats.next_mult;
+            size_t all_ten = prime > 10'000'000'000;
+            size_t next_next_mult = (5 + 4 * all_ten) * stats.next_mult;
+            if (next_next_mult <= max_mult && stats.next_print == next_next_mult) {
+                stats.next_mult *= 10;
                 stats.next_print = 0;
             }
             stats.next_print += stats.next_mult;
