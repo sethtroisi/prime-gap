@@ -774,14 +774,14 @@ Config Args::argparse(int argc, char* argv[]) {
      * But more and more frequently after.
      * For 1-2% performance modulo_search_euclid_all_large handles these safely.
      */
-    /*
-    uint64_t max_m = std::numeric_limits<uint64_t>::max() / config.max_prime;
-    if (max_m < 1000 || max_m + 1000 <= last_m) {
-        config.valid = 0;
-        printf("max_prime * last_m(%d) would overflow int64, log2(...) = %.3f\n",
-            last_m, log2(1.0 * last_m * config.max_prime));
+    if (config.method1) {
+        uint64_t max_m = std::numeric_limits<uint64_t>::max() / config.max_prime;
+        if (max_m < 1000 || max_m + 1000 <= last_m) {
+            config.valid = 0;
+            printf("max_prime * last_m(%d) would overflow int64, log2(...) = %.3f\n",
+                last_m, log2(1.0 * last_m * config.max_prime));
+        }
     }
-    */
 
     {
         // check if p is valid

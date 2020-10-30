@@ -53,9 +53,6 @@ const float    GAP_INF = std::numeric_limits<float>::max();   // log(starting_pr
 const uint32_t MISSING_GAPS_LOW  = 113326;
 const uint32_t MISSING_GAPS_HIGH = 132928;
 
-// TODO make this an option (enabled or percent).
-const float MISSING_GAP_SAVE_PERCENT = 0.05;
-
 
 class ProbNth {
     public:
@@ -325,7 +322,7 @@ void store_stats(
         if (prob_gap_norm[g] < 1e-10 &&
             prob_gap_low[g]  < 1e-10 &&
             prob_gap_high[g] < 1e-10) {
-            // XXX: Consider summing the misc prob at g=0.
+            // XXX: Consider summing the missing prob at g=0.
             skipped_gap_stats += 1;
             continue;
         }
@@ -1057,7 +1054,7 @@ void calculate_prp_top_percent(
                 cdouble percent = i * 100.0 / sorted.size();
 
                 // testing one side and other side smaller percent
-                printf("\t%6ld %c(%5.1f%%) | sum(prob) = %9.5f / (%.0f + %6ld * %3g * %.2f) => %.5f/%.1f hr = %.6f prob/hour\n",
+                printf("\t%7ld %c(%5.1f%%) | sum(prob) = %9.5f / (%.0f + %6ld * %3g * %.2f) => %6.3f/%.1f hr = %.6f prob/hour\n",
                     i, " *"[first_below], percent,
                     sum_prob, combined_time, i, sides_tested, time_per_side,
                     sum_prob, time / 3600, avg);

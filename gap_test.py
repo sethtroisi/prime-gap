@@ -214,7 +214,7 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_pri
     for prime in P_primes:
         prob_prime_coprime_p *= (1 - 1/prime)
 
-    # TODO can improve by doing gmpy2.gcd(K, i) in setup.
+    K_coprime = [math.gcd(K, i) == 1 for i in range(SL+1)]
 
     # See "Optimizing Choice Of D" in THEORY.md for why this is required
     count_coprime_p = 0
@@ -223,7 +223,8 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_pri
         N0 = m * K
         for i in range(1, SL+1):
             N = N0 + i
-            if math.gcd(N, D) == 1 and gmpy2.gcd(N, K) == 1:
+            if K_coprime[i] and math.gcd(N, D) == 1:
+                # assert gmpy2.gcd(N, K*D) == 1,
                 count_coprime_p += 1
 
     count_coprime_p //= len(m_tests)
@@ -353,7 +354,6 @@ def determine_test_threshold(args, valid_mi, data):
 
     assert 1 <= percent <= 99
     # Could be several million datapoints.
-    # XXX: debug/print probs to see they match gap_stats
     best_probs = sorted(data.prob_record_gap, reverse=True)
     prob_threshold = best_probs[round(len(best_probs) * percent / 100)]
     return prob_threshold, {
@@ -662,7 +662,6 @@ def run_in_parallel(
     if prob_threshold >= 0:
         print ("Testing {} m where prob(record) >= {:.3g}".format(
             len(mi_probs), prob_threshold))
-    # XXX: how to set one_side_skip when prp_top_percent == 100
 
     # Any non-processed mi_probs?
     if all(args.mstart + mi in existing for mi in mi_probs):
@@ -735,7 +734,7 @@ def run_in_parallel(
             continue
 
         if m in existing:
-            # XXX: missing_gap_test only sets one side.
+            # NOTE: Often only prev_p_i is set
             prev_p_i, next_p_i = existing[m]
             handle_result(
                 args, record_gaps, data, sc,

@@ -270,7 +270,6 @@ void prime_gap_test(const struct Config config) {
         s_t_unk_low += unknown_l;
         s_t_unk_hgh += unknown_u;
 
-        // TODO break out to function, also count tests.
         int prev_p = 0;
         int next_p = 0;
         test_interval(
@@ -285,7 +284,7 @@ void prime_gap_test(const struct Config config) {
         float merit = gap / (K_log + log(m));
 
         if (merit > min_merit)  {
-            // TODO write to file.
+            // XXX: write to file or database
             printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
                 gap, merit, m, P, D, prev_p, next_p);
         }

@@ -176,11 +176,13 @@ uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
  *      0 <= mi < max_m (valid solution)
  *      max_m (no more solutions)
  */
+/* Only used by Benchmark */
 uint64_t modulo_search_euclid_gcd2(
         uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
         uint64_t prime, uint64_t base_r) {
 
-    // TODO validate no overflow
+    // NOTE: this overflows with large M, prime
+    // This should be guarded by gap_common.argparse
     uint64_t modulo = (base_r * M + SL) % prime;
     uint64_t init = modulo;
     uint32_t two_SL = SL << 1;
@@ -227,12 +229,13 @@ uint64_t modulo_search_euclid_gcd2(
     return max_m;
 }
 
-/* Only used by Benchmark */
 uint64_t modulo_search_euclid_gcd(
         uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
         uint64_t prime, uint64_t base_r) {
     uint64_t mi = 0;
 
+    // NOTE: this overflows with large M, prime
+    // This should be guarded by gap_common.argparse
     uint64_t modulo = (base_r * M) % prime;
     while (mi < max_m) {
         if ( (modulo <= SL) || (modulo + SL) >= prime) {
