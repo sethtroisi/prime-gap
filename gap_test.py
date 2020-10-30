@@ -493,9 +493,11 @@ def handle_result(
     data.experimental_side.append(prev_p_i)
 
     merit = gap / log_n
-    if gap in record_gaps or merit > args.min_merit:
-        print("{}  {:.4f}  {} * {}#/{} -{} to +{}".format(
-            gap, merit, m, args.p, args.d, prev_p_i, next_p_i))
+    is_record = gap in record_gaps
+    if is_record or merit > args.min_merit:
+        print("{}  {:.4f}  {} * {}#/{} -{} to +{}{}".format(
+            gap, merit, m, args.p, args.d, prev_p_i, next_p_i,
+            "\tRECORD!" if is_record else ""))
 
     if merit > sc.best_merit_interval:
         sc.best_merit_interval = merit
@@ -612,7 +614,7 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     gap = next_p_i + prev_p_i
     merit = gap / r_log_n
 
-    sc.prob_minmerit           += mi_probs[mi][0]
+    sc.prob_minmerit += mi_probs[mi][0]
     if merit > args.min_merit:
         sc.count_minmerit += 1
 
