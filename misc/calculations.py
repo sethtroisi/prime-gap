@@ -167,8 +167,8 @@ def Appendix1():
             (4441, 400e9),
             (4441, 100e9),
             (5333, 5000e9),
+            (6663,  500e9),
             (8887, 1000e9),
-            (20007, 4000e9),
     ]:
         ln, prps = expected_PRP(mp, P)
         pg_mp = pgsurround_sieve_limit(ln)
@@ -197,8 +197,8 @@ def Trick2():
             count += ((first % p) + 2 * X) >= p
         print (f"{count}/{primes} = {count / primes:.2%}\t", time.time() - t)
 
-Runtime()
+#Runtime()
 #ParameterSelection()
 #Speedup()
-#Appendix1()
+Appendix1()
 #Trick2()

@@ -410,13 +410,26 @@ Theory and justifaction for some calculations in present in [THEORY.md](THEORY.m
 ## Setup
 
 ```bash
-# Should probably build and install gmp head for faster next_prime
-$ sudo apt install libgmp10
+#$ sudo apt install libgmp10 libgmp-dev
+# Building gmp from source is required until maintainers merge prev_prime; patch has been pending for 1+ year
+$ hg clone https://gmplib.org/repo/gmp/
+$ cd gmp
+$ wget https://gmplib.org/list-archives/gmp-devel/attachments/20200829/aebda025/attachment-0001.bin
+$ hg import --no-commit attachment-0001.bin
+$ ./.bootstrap
+$ mkdir build
+$ cd build
+$ ../configure
+$ make
+$ make check
+$ make install
+
+
 
 # slower but acceptable code is present up to commit 093a3b2b
 $ sudo apt install libprimesieve-dev
 
-$ sudo apt install libgmp-dev libmpfr-dev libmpc-dev
+$ sudo apt install libmpfr-dev libmpc-dev
 $ sudo apt install sqlite3 libsqlite3-dev
 $ pip install --user gmpy2==2.1.0b5 tqdm primegapverify
 
@@ -424,6 +437,8 @@ $ sqlite3 prime-gap-search.db < schema.sql
 
 # For misc/double_check.py
 $ sudo apt install gmp-ecm
+
+$ mkdir unknowns
 
 # There are a handful of constants (MODULE_SEARCH_SECS, PRIME_RANGE_SEC, ...)
 # in gap_common.cpp `combined_sieve_method2_time_estimate` that can be set for
@@ -442,7 +457,7 @@ $ sudo apt install gmp-ecm
 
 ## Notes
 
-* Anecdotally `combined_sieve` is ~8% faster when using `CC=clang++-11`
+* Clang (`CC=clang++-12`) might speed up `combined_sieve` slightly.
 * There is some support for using OpenPFGW [PrimeWiki](https://www.rieselprime.de/ziki/PFGW) [SourceForge](https://sourceforge.net/projects/openpfgw/)
   * Unpack somewhere and link binary as `pfgw64`
   * may also need to `chmod a+x pfgw64`
@@ -460,10 +475,6 @@ This saves ~60% space, but makes it harder to visually debug data, can be built 
 * Incremental saving
   * If you run very large/long sieves and afraid of crashes or restarts.
     * `make clean combined_sieve SAVE_INCREMENT=1` saves at each interval >= 1B.
-* Dev GMPlib | GMP 6.2.99
-  * GMP 6.2.0 hasn't yet accepted my `mpz_prevprime` patch
-    * `hg import --no-commit <patch>` from https://gmplib.org/list-archives/gmp-devel/2020-August/005851.html
-    * If you are a developer consider asking telling them that `mpz_prevprime` would be useful
 
 
 ### Quick test of all functions

@@ -693,7 +693,7 @@ void prime_gap_search(const struct Config& config) {
 
     {
         float primes_per_m = s_large_primes_tested / s_tests;
-        float error_percent = 100.0 * abs(expected_primes_per - primes_per_m) /
+        float error_percent = 100.0 * fabs(expected_primes_per - primes_per_m) /
             expected_primes_per;
         if (config.verbose >= 2 || error_percent > 0.5 ) {
             printf("\n");
@@ -1069,7 +1069,7 @@ void prime_gap_parallel(struct Config& config) {
 #endif
 
     // See Merten's Third Theorem
-    size_t expected_m_stops = (log(log(LAST_PRIME)) - log(log(SMALL_THRESHOLD))) * 2*SL * M_inc;
+    float expected_m_stops = (log(log(LAST_PRIME)) - log(log(SMALL_THRESHOLD))) * 2*SL * M_inc;
 
     // ----- Timing
     if (config.verbose >= 2) {
@@ -1344,9 +1344,9 @@ void prime_gap_parallel(struct Config& config) {
     stats.m_stops += stats.m_stops_interval;
 
     {
-        float error_percent = (100.0 * abs(expected_m_stops - stats.m_stops)) / expected_m_stops;
+        float error_percent = (100.0 * fabs(expected_m_stops - stats.m_stops)) / expected_m_stops;
         if (config.verbose >= 2 || error_percent > 0.5 ) {
-            printf("Estimated modulo searches (m/prime) error %.2f%%,\t%ld vs expected %ld\n",
+            printf("Estimated modulo searches (m/prime) error %.2f%%,\t%ld vs expected %.0f\n",
                 error_percent, stats.m_stops, expected_m_stops);
         }
     }

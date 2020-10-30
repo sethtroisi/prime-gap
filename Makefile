@@ -16,9 +16,9 @@
 OBJS	= gap_common.o modulo_search.o
 OUT	= combined_sieve gap_stats gap_test_simple benchmark
 CC	= g++
-CFLAGS	= -Wall -Werror -O3 -lgmp -lsqlite3
+CFLAGS	= -Wall -Werror -O3
 # Need for local gmp / primesieve
-LDFLAGS	= -L /usr/local/lib
+LDFLAGS	= -L /usr/local/lib -lgmp -lsqlite3
 #LDFLAGS	=
 DEFINES =
 

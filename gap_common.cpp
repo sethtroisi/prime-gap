@@ -362,7 +362,9 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
     const size_t length = 2 * sl + 1;
 
     // composite from coprime K
-    char compositeK[length] = {};
+    char compositeK[length];
+    std::fill(compositeK, compositeK + length, false);
+
     for (uint32_t prime : P_primes) {
         if (d % prime != 0) {
             // mark off all multiples of prime
@@ -378,7 +380,7 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
     size_t expected_count = 0;
     double remaining_prob = 0;
 
-    char composite[length] = {};
+    char composite[length];
 
     uint64_t m = config.mstart;
 

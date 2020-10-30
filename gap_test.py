@@ -53,6 +53,9 @@ def get_arg_parser():
     parser.add_argument('--threads', type=int, default=1,
         help="Number of threads to use for searching (default: %(default)s)")
 
+    parser.add_argument('--taskset', action='store_true',
+        help="taskset each thread, helps when using more than 50% of CPU threads")
+
     parser.add_argument('--num-plots', type=int, default=0,
         help="Show plots about distributions")
 
@@ -706,10 +709,13 @@ def run_in_parallel(
             )
         )
         process.start()
+        if args.taskset:
+            os.system("taskset -p -c {} {}".format(i, process.pid))
         time.sleep(0.01)
         processes.append(process)
+
+    time.sleep(1)
     print()
-    time.sleep(0.5)
 
     for mi in valid_mi:
         m = args.mstart + mi

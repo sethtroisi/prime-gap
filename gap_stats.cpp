@@ -928,7 +928,7 @@ void run_gap_file(
         if (prob_record_combined > max_p_record) {
             max_p_record = prob_record_combined;
             if (config.verbose >= 1) {
-                printf("RECORD :%-6ld line %-5ld  unknowns: %4ld, %4ld "
+                printf("RECORD :%-6ld line %-6ld  unknowns: %3ld, %3ld "
                         "| e: %.1f, %.1f\t| "
                         "prob record: %.2e (%.2e + %.2e)\t| %.7f\n",
                         m, M_vals.size(),
@@ -942,7 +942,7 @@ void run_gap_file(
         if (prob_is_missing_gap > max_m_record) {
             max_m_record = prob_is_missing_gap;
             if (config.verbose >= 2) {
-                printf("MISSING:%-6ld line %-5ld  unknowns: %4ld, %4ld "
+                printf("MISSING:%-6ld line %-6ld  unknowns: %3ld, %3ld "
                         "|\t\t\t| prob record: %.2e  missing: %.4e\t| %.7f\n",
                         m, M_vals.size(),
                         unknown_low.size(), unknown_high.size(),
@@ -1017,7 +1017,7 @@ void calculate_prp_top_percent(
     std::sort(sorted.begin(), sorted.end(), std::greater<>());
 
     vector<size_t> print_points;
-    for (auto percent : {1, 5, 10, 20, 50, 100}) {
+    for (auto percent : {1, 5, 10, 20, 30, 50, 100}) {
         size_t count = sorted.size() * percent / 100;
         if (count == 0)
             continue;
@@ -1037,7 +1037,7 @@ void calculate_prp_top_percent(
 
         bool max_happened = false;
         for (size_t i = 1; i <= sorted.size(); i++) {
-            // Print at 1,5,10,20,50,100 AND "optimal"
+            // Print at print_points (1, 5, 10, ... 100% and also at "optimal" percent)
             double sides_tested = 1 + side_percent / 100.0;
             double add_t = sides_tested * time_per_side;
             double add_p = sorted[i-1] * (side_percent == 100 ? 1.0 : 0.8);
