@@ -492,27 +492,6 @@ def handle_result(
     data.experimental_side.append(next_p_i)
     data.experimental_side.append(prev_p_i)
 
-    merit = gap / log_n
-    is_record = gap in record_gaps
-    if is_record or merit > args.min_merit:
-        print("{}  {:.4f}  {} * {}#/{} -{} to +{}{}".format(
-            gap, merit, m, args.p, args.d, prev_p_i, next_p_i,
-            "\tRECORD!" if is_record else ""))
-
-    if merit > sc.best_merit_interval:
-        sc.best_merit_interval = merit
-        sc.best_merit_interval_m = m
-
-    if should_print_stats(
-            args, sc, data,
-            mi, m,
-            unknown_l, unknown_u,
-            prev_p_i, next_p_i,
-            ):
-        sc.best_merit_interval = 0
-        sc.best_merit_interval_m = -1
-        sc.last_print_t = time.time()
-
 
 # NOTE: Manager is prime_gap_test maintains workers wh run process_line.
 def process_line(
@@ -648,6 +627,26 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     handle_result(
         args, record_gaps, data, sc,
         mi, m, r_log_n, prev_p_i, next_p_i, unknown_l, unknown_u)
+
+    is_record = gap in record_gaps
+    if is_record or merit > args.min_merit:
+        print("{}  {:.4f}  {} * {}#/{} -{} to +{}{}".format(
+            gap, merit, m, args.p, args.d, prev_p_i, next_p_i,
+            "\tRECORD!" if is_record else ""))
+
+    if merit > sc.best_merit_interval:
+        sc.best_merit_interval = merit
+        sc.best_merit_interval_m = m
+
+    if should_print_stats(
+            args, sc, data,
+            mi, m,
+            unknown_l, unknown_u,
+            prev_p_i, next_p_i,
+            ):
+        sc.best_merit_interval = 0
+        sc.best_merit_interval_m = -1
+        sc.last_print_t = time.time()
 
 
 def run_in_parallel(
