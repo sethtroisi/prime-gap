@@ -150,3 +150,9 @@ CREATE TABLE IF NOT EXISTS result (
 
 CREATE INDEX IF NOT EXISTS    r_p_d_m ON             result(P,D,m);
 CREATE INDEX IF NOT EXISTS   ms_p_d_m ON            m_stats(P,D,m);
+
+CREATE INDEX IF NOT EXISTS    r_p_d ON             result(P,D);
+CREATE INDEX IF NOT EXISTS   ms_p_d ON            m_stats(P,D);
+
+CREATE INDEX IF NOT EXISTS    r_p ON             result(P);
+CREATE INDEX IF NOT EXISTS   ms_p ON            m_stats(P);
