@@ -104,16 +104,17 @@ CREATE TABLE IF NOT EXISTS m_stats (
         D INTEGER,
         m INTEGER,
 
-        /* next_p_interval, prev_p_interval (both positive) */
+        /* next_prime_gap, prev_prime_gap (both positive) */
         /**
          * positive => distance to next/prev is X
-         * 0        => ???
+         * 0        => skipped (probably from one side skip)
+         * -1       => partial result (other side should be checked but was interupted)
          * negative => X is prime but haven't checked all values less
          */
         next_p INTEGER DEFAULT 0,
         prev_p INTEGER DEFAULT 0,
 
-        /* (next_p_i + prev_p_i) / log(N) */
+        /* (next_p + prev_p) / log(N) */
         merit REAL,
 
         /* apriori probability of P(record gap), P(missing gap), P(merit > rid.min_merit) */
@@ -139,9 +140,9 @@ CREATE TABLE IF NOT EXISTS result (
         D INTEGER,
         m INTEGER,
 
-        /* next_p_interval, prev_p_interval */
-        next_p_i INTEGER,
-        prev_p_i INTEGER,
+        /* next_prime_gap, prev_prime_gap */
+        next_p INTEGER,
+        prev_p INTEGER,
 
         merit REAL,
 

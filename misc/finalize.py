@@ -210,10 +210,10 @@ def dump_to_file(conn, args, ranges, unknown_files):
                     'SELECT * FROM m_stats WHERE P=? AND D=? AND m BETWEEN ? AND ?',
                     (p, d, ms, me))
                 # Verify results got written to m_stats
-                next_p_i = header.index("next_p")
-                prev_p_i = header.index("prev_p")
+                next_p = header.index("next_p")
+                prev_p = header.index("prev_p")
                 for row in m_stats:
-                    assert row[next_p_i] != 0 or row[prev_p_i] != 0, row
+                    assert row[next_p] != 0 or row[prev_p] != 0, row
 
         size = size_or_zero(stats_fn)
         if size < 2 * 1024:
@@ -255,22 +255,19 @@ def delete_range_and_low_merit(conn, args, ranges, unknown_files):
         me = ms + mi - 1
         print(f"\tDeleting range / low_merit results from {ufn!r}")
 
-        condition = """WHERE P=? AND D=? AND m BETWEEN ? AND ? AND """
-        condition_m_stats = """
+        condition = """WHERE P=? AND D=? AND m BETWEEN ? AND ? AND
             ((next_p + prev_p < 30000 AND MERIT < 20) OR
              (next_p + prev_p < 50000 AND MERIT < 15) OR
              (next_p + prev_p < 100000 AND MERIT < 8))
             """
-        # TODO fix names in schema.sql.
-        condition_result = condition_m_stats.replace("_p", "_p_i")
 
         cursor.execute(
-            "DELETE FROM m_stats " + condition + condition_m_stats,
+            "DELETE FROM m_stats " + condition
             (args.p, args.d, ms, me))
         m_stat_deletes = cursor.rowcount
 
         cursor.execute(
-            "DELETE FROM result " + condition + condition_result,
+            "DELETE FROM result " + condition
             (args.p, args.d, ms, me))
         m_stat_deletes = cursor.rowcount
 

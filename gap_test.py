@@ -118,10 +118,10 @@ def load_records(conn, log_N):
 
 def load_existing(conn, args):
     rv = conn.execute(
-        "SELECT m, next_p_i, prev_p_i FROM result"
+        "SELECT m, next_p, prev_p FROM result"
         " WHERE P = ? AND D = ? AND m BETWEEN ? AND ?",
         (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
-    return {row['m']: [row['prev_p_i'], row['next_p_i']] for row in rv}
+    return {row['m']: [row['prev_p'], row['next_p']] for row in rv}
 
 
 @dataclass
@@ -186,20 +186,20 @@ def load_stats(conn, args):
     return data, misc
 
 
-def save(conn, p, d, m, next_p_i, prev_p_i, merit,
+def save(conn, p, d, m, next_p, prev_p, merit,
          n_tests, p_tests, test_time):
     assert p in range(201, 80000, 2), (p, d, m)
     conn.execute(
-        "INSERT INTO result(P,D,m,next_p_i,prev_p_i,merit)"
+        "INSERT INTO result(P,D,m,next_p,prev_p,merit)"
         "VALUES(?,?,?,  ?,?,  ?)",
-        (p, d, m, next_p_i, prev_p_i,  round(merit,4)))
+        (p, d, m, next_p, prev_p,  round(merit,4)))
 
     conn.execute(
         "UPDATE m_stats "
         "SET next_p=?, prev_p=?, merit=?,"
         "    prp_next=?, prp_prev=?, test_time=?"
         "WHERE p=? AND d=? AND m=?",
-        (next_p_i, prev_p_i, round(merit,4),
+        (next_p, prev_p, round(merit,4),
          p_tests, n_tests, test_time, p, d, m))
     conn.commit()
 
@@ -369,7 +369,7 @@ def determine_test_threshold(args, valid_mi, data):
 def should_print_stats(
         args, sc, data, mi, m,
         unknown_l, unknown_u,
-        prev_p_i, next_p_i):
+        prev_p, next_p):
 
     stop_t = time.time()
     print_secs = stop_t - sc.last_print_t
@@ -380,9 +380,7 @@ def should_print_stats(
         secs = stop_t - sc.start_t
 
         print("\t{:3d} {:4d} <- unknowns -> {:-4d}\t{:4d} <- gap -> {:-4d}".format(
-            m,
-            unknown_l, unknown_u,
-            prev_p_i, next_p_i))
+            m, unknown_l, unknown_u, prev_p, next_p))
         if mi <= 10 and secs < 6:
             return False
 
@@ -438,7 +436,7 @@ def should_print_stats(
     return False
 
 
-def determine_next_prime_i(m, strn, K, unknowns, SL):
+def determine_next_prime(m, strn, K, unknowns, SL):
     center = m * K
     tests = 0
 
@@ -450,11 +448,11 @@ def determine_next_prime_i(m, strn, K, unknowns, SL):
     # XXX: parse to version and verify > 6.2.99
     assert gmpy2.mp_version() == 'GMP 6.2.99'
     # Double checks center + SL.
-    next_p_i = int(gmpy2.next_prime(center + SL) - center)
-    return tests, next_p_i
+    next_p = int(gmpy2.next_prime(center + SL) - center)
+    return tests, next_p
 
 
-def determine_prev_prime_i(m, strn, K, unknowns, SL, primes, remainder):
+def determine_prev_prime(m, strn, K, unknowns, SL, primes, remainder):
     center = m * K
     tests = 0
 
@@ -482,15 +480,15 @@ def determine_prev_prime_i(m, strn, K, unknowns, SL, primes, remainder):
 
 def handle_result(
         args, record_gaps, data, sc,
-        mi, m, log_n, prev_p_i, next_p_i, unknown_l, unknown_u):
+        mi, m, log_n, prev_p, next_p, unknown_l, unknown_u):
     '''Called for existing and new records'''
-    assert prev_p_i > 0, (mi, m, next_p_i, prev_p_i)
+    assert prev_p > 0, (mi, m, next_p, prev_p)
 
-    gap = next_p_i + prev_p_i
+    gap = next_p + prev_p
     data.experimental_gap.append(gap)
     data.valid_m.append(m)
-    data.experimental_side.append(next_p_i)
-    data.experimental_side.append(prev_p_i)
+    data.experimental_side.append(next_p)
+    data.experimental_side.append(prev_p)
 
 
 # NOTE: Manager is prime_gap_test maintains workers wh run process_line.
@@ -532,7 +530,7 @@ def process_line(
 
         t0 = time.time()
 
-        p_tests, prev_p_i = determine_prev_prime_i(m, strn, K, unknowns[0], SL, primes, remainder)
+        p_tests, prev_p = determine_prev_prime(m, strn, K, unknowns[0], SL, primes, remainder)
 
         test_next = True
         new_prob_record = 0
@@ -541,12 +539,12 @@ def process_line(
 
             # On average sum(new_prob_record) should approx equal sum(prob_record)
             new_prob_record = prob_record_one_side(
-                    record_gaps, prev_p_i,
+                    record_gaps, prev_p,
                     unknowns[1], prob_prime_after_sieve,
                     m, K_mod_d, D, coprime_extended, prob_prime_coprime)
 
             #print ("{:5} | m: {:8} | count: {} {} | {:.3g} => {:.3g} | {:.3g}".format(
-            #        prev_p_i, m, unknown_l, unknown_u,
+            #        prev_p, m, unknown_l, unknown_u,
             #        prob_record, new_prob_record,
             #        one_side_skip_threshold))
 
@@ -559,17 +557,17 @@ def process_line(
                     prob_side_threshold.value += prob_record
                     sides_tested.value += 2
 
-        n_tests, next_p_i = 0, 0
+        n_tests, next_p = 0, 0
         if test_next:
-            n_tests, next_p_i = determine_next_prime_i(m, strn, K, unknowns[1], SL)
+            n_tests, next_p = determine_next_prime(m, strn, K, unknowns[1], SL)
 
         test_time = time.time() - t0
 
         results_q.put((
             m, mi, log_n,
             unknown_l, unknown_u,
-            n_tests, next_p_i,
-            p_tests, prev_p_i,
+            n_tests, next_p,
+            p_tests, prev_p,
             prob_record, new_prob_record,
             test_time,
         ))
@@ -579,8 +577,8 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     ''' Handles new results '''
 
     (m, mi, r_log_n, unknown_l, unknown_u,
-     n_tests, next_p_i,
-     p_tests, prev_p_i,
+     n_tests, next_p,
+     p_tests, prev_p,
      prob_record, new_prob_record,
      test_time) = result
 
@@ -590,7 +588,7 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     sc.t_unk_low += unknown_l
     sc.t_unk_hgh += unknown_u
 
-    gap = next_p_i + prev_p_i
+    gap = next_p + prev_p
     merit = gap / r_log_n
 
     sc.prob_minmerit += mi_probs[mi][0]
@@ -604,7 +602,7 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     sc.prob_record_all += prob_record
 
     # Should mirror logic in process_line
-    if next_p_i:
+    if next_p:
         sc.prob_record_processed += prob_record
         sc.sides_processed += 2
     else:
@@ -615,23 +613,23 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     sc.prob_one_side_delta += prob_record - new_prob_record
 
     sc.total_prp_tests += p_tests
-    sc.gap_out_of_sieve_prev += prev_p_i > args.sieve_length
+    sc.gap_out_of_sieve_prev += prev_p > args.sieve_length
 
     sc.total_prp_tests += n_tests
-    sc.gap_out_of_sieve_next += next_p_i > args.sieve_length
+    sc.gap_out_of_sieve_next += next_p > args.sieve_length
 
     save(conn,
-        args.p, args.d, m, next_p_i, prev_p_i, merit,
+        args.p, args.d, m, next_p, prev_p, merit,
         n_tests, p_tests, test_time)
 
     handle_result(
         args, record_gaps, data, sc,
-        mi, m, r_log_n, prev_p_i, next_p_i, unknown_l, unknown_u)
+        mi, m, r_log_n, prev_p, next_p, unknown_l, unknown_u)
 
     is_record = gap in record_gaps
     if is_record or merit > args.min_merit:
         print("{}  {:.4f}  {} * {}#/{} -{} to +{}{}".format(
-            gap, merit, m, args.p, args.d, prev_p_i, next_p_i,
+            gap, merit, m, args.p, args.d, prev_p, next_p,
             "\tRECORD!" if is_record else ""))
 
     if merit > sc.best_merit_interval:
@@ -642,7 +640,7 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
             args, sc, data,
             mi, m,
             unknown_l, unknown_u,
-            prev_p_i, next_p_i,
+            prev_p, next_p,
             ):
         sc.best_merit_interval = 0
         sc.best_merit_interval_m = -1
@@ -741,11 +739,11 @@ def run_in_parallel(
             continue
 
         if m in existing:
-            # NOTE: Often only prev_p_i is set
-            prev_p_i, next_p_i = existing[m]
+            # NOTE: Often only prev_p is set
+            prev_p, next_p = existing[m]
             handle_result(
                 args, record_gaps, data, sc,
-                mi, m, log_n, prev_p_i, next_p_i, 0, 0)
+                mi, m, log_n, prev_p, next_p, 0, 0)
 
         else:
             sc.will_test += 1

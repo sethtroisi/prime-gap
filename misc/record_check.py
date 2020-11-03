@@ -217,7 +217,7 @@ def search_db(args):
 
         # Min gap for current record (filters 80% of results)
         existing = conn.execute(
-            'SELECT p, d, m, next_p_i, prev_p_i, next_p_i + prev_p_i as gapsize, merit FROM result '
+            'SELECT p, d, m, next_p, prev_p, next_p + prev_p as gapsize, merit FROM result '
             'WHERE  ((merit > 21.9) OR '
             '        (gapsize > 30000 AND merit > 18.3) OR'
             '        (gapsize > 50000 AND merit > 15.3) OR'
@@ -229,15 +229,15 @@ def search_db(args):
             gapsize = gap['gapsize']
             merit = gap['merit']
             number = "{} * {}#/{} -{}".format(
-                gap["m"], gap["P"], gap["D"], gap["prev_p_i"])
+                gap["m"], gap["P"], gap["D"], gap["prev_p"])
 
             submit = "{:6d}  {:.3f}  {} to +{}".format(
                 gapsize, merit,
-                number, gap["next_p_i"])
+                number, gap["next_p"])
 
             gaps.append((
                 gapsize, merit, submit, number,
-                ", ".join(f"{k}={gap[k]}" for k in ('p', 'd', 'm', 'prev_p_i', 'next_p_i')),
+                ", ".join(f"{k}={gap[k]}" for k in ('p', 'd', 'm', 'prev_p', 'next_p')),
             ))
 
     describe_found_gaps(gaps)
