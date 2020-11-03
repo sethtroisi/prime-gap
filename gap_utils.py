@@ -170,18 +170,18 @@ def parse_unknown_line(line):
     # Check if rle or raw
     rle = " " not in c_l[:20]
     if rle:
-        def unrle(sign, bits):
-            # Read bits in pairs (see save_unknowns_method2)
+        def unrle(sign, digits):
+            # Read digits in pairs (see save_unknowns_method2)
             values = []
             accum = 0
-            for i in range(0, len(bits)//2):
-                delta = (ord(bits[2*i]) - 48) * 75 + (ord(bits[2*i+1]) - 48)
+            for i in range(0, len(digits)//2):
+                delta = 128 * digits[2*i] + digits[2*i+1]
                 accum += delta
                 values.append(sign * accum)
             return values
 
-        unknowns[0] = unrle(-1, c_l)
-        unknowns[1] = unrle(1, c_h[:-1])
+        unknowns[0] = unrle(-1, [ord(b) - 48 for b in c_l])
+        unknowns[1] = unrle(+1, [ord(b) - 48 for b in c_h[:-1]])
     else:
         unknowns[0] = list(map(int,c_l.split(" ")))
         unknowns[1] = list(map(int,c_h.split(" ")))

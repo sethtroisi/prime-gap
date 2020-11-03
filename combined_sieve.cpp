@@ -775,10 +775,12 @@ void save_unknowns_method2(
                         int delta = i - last;
                         last = i;
 
-                        // Ascii 48 to 122 are all "safe" => 75 characters
-                        assert(0 <= delta && delta < (75L*75));
-                        unsigned char upper = 48 + (delta / 75);
-                        unsigned char lower = 48 + (delta % 75);
+                        // Ascii 48 to 122 are all "safe" -> 75 characters -> 5625
+                        // Not quite enough so we use 48 + 128 which includes
+                        // non printable characters.
+                        assert(0 <= delta && delta < (128L*128));
+                        unsigned char upper = 48 + (delta / 128);
+                        unsigned char lower = 48 + (delta % 128);
                         unknown_file << upper << lower;
                     }
                 }

@@ -722,7 +722,7 @@ void read_unknown_line(
                 // Read bits in pairs (see save_unknowns_method2)
                 a = unknown_file.get();
                 b = unknown_file.get();
-                c += (a - 48) * 75 + (b - 48);
+                c += (a - 48) * 128 + (b - 48);
             } else {
                 unknown_file >> c;
                 c *= -1;
@@ -740,7 +740,7 @@ void read_unknown_line(
             if (config.rle) {
                 a = unknown_file.get();
                 b = unknown_file.get();
-                c += (a - 48) * 75 + (b - 48);
+                c += (a - 48) * 128 + (b - 48);
             } else {
                 unknown_file >> c;
             }
@@ -841,7 +841,10 @@ void run_gap_file(
 
             size_t max_j = std::min(unknown_high.size(), gap_probs.combined_sieve.size() - i);
 
-            for (size_t j = 0; j < max_j; j++) {
+            // Starting at min_j causes some `prob_this_gap` to be skipped,
+            // but is a sizeable speedup for large gaps.
+            size_t j = config.sieve_length >= 100'000 ? min_j : 0
+            for (; j < max_j; j++) {
                 uint32_t gap_high = unknown_high[j];
                 uint32_t gap = gap_low + gap_high;
 
