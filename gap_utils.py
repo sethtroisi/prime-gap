@@ -161,17 +161,17 @@ def K_and_stats(args):
 def parse_unknown_line(line):
     unknowns = [[], []]
 
-    start, c_l, c_h = line.split(" | ")
+    start, c_l, c_h = line.split(b" | ")
 
-    match = re.match(r"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
+    match = re.match(b"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
     assert match, start
     mtest, unknown_l, unknown_u = map(int, match.groups())
 
     # Check if rle or raw
-    rle = " " not in c_l[:20]
+    rle = b" " not in c_l[:20]
     if rle:
         def unrle(sign, digits):
-            # Read digits in pairs (see save_unknowns_method2)
+            # Read digits(bytes) in pairs (see save_unknowns_method2)
             values = []
             accum = 0
             for i in range(0, len(digits)//2):
@@ -180,11 +180,11 @@ def parse_unknown_line(line):
                 values.append(sign * accum)
             return values
 
-        unknowns[0] = unrle(-1, [ord(b) - 48 for b in c_l])
-        unknowns[1] = unrle(+1, [ord(b) - 48 for b in c_h[:-1]])
+        unknowns[0] = unrle(-1, c_l)
+        unknowns[1] = unrle(+1, c_h[:-1])
     else:
-        unknowns[0] = list(map(int,c_l.split(" ")))
-        unknowns[1] = list(map(int,c_h.split(" ")))
+        unknowns[0] = list(map(int,c_l.split(b" ")))
+        unknowns[1] = list(map(int,c_h.split(b" ")))
 
     unknown_l_test = len(unknowns[0])
     unknown_u_test = len(unknowns[1])

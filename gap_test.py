@@ -50,6 +50,9 @@ def get_arg_parser():
     parser.add_argument('--min-merit', type=int, default=12,
         help="only display prime gaps with merit >= minmerit")
 
+    parser.add_argument('--megagap', type=int, default=0,
+        help="Search for megagaps (of this size or greater)")
+
     parser.add_argument('--threads', type=int, default=1,
         help="Number of threads to use for searching (default: %(default)s)")
 
@@ -190,14 +193,14 @@ def save(conn, p, d, m, next_p, prev_p, merit,
          n_tests, p_tests, test_time):
     assert p in range(201, 80000, 2), (p, d, m)
     conn.execute(
-        "INSERT INTO result(P,D,m,next_p,prev_p,merit)"
+        "REPLACE INTO result(P,D,m,next_p,prev_p,merit)"
         "VALUES(?,?,?,  ?,?,  ?)",
         (p, d, m, next_p, prev_p,  round(merit,4)))
 
     conn.execute(
         "UPDATE m_stats "
         "SET next_p=?, prev_p=?, merit=?,"
-        "    prp_next=?, prp_prev=?, test_time=?"
+        "    prp_next=?, prp_prev=?, test_time=test_time+?"
         "WHERE p=? AND d=? AND m=?",
         (next_p, prev_p, round(merit,4),
          p_tests, n_tests, test_time, p, d, m))
@@ -355,6 +358,9 @@ def determine_test_threshold(args, valid_mi, data):
                 valid_mi, data.prob_merit_gap, data.prob_record_gap)
         }
 
+    # MEGAGAP
+    data.prob_record_gap = data.prob_merit_gap
+
     assert 1 <= percent <= 99
     # Could be several million datapoints.
     best_probs = sorted(data.prob_record_gap, reverse=True)
@@ -375,7 +381,7 @@ def should_print_stats(
     print_secs = stop_t - sc.last_print_t
 
     # Print a little bit if we resume but mostly as we test.
-    if sc.tested in (1,10,30,100,300,1000,3000) or (sc.tested and sc.tested % 5000 == 0) \
+    if True or sc.tested in (1,10,30,100,300,1000,3000) or (sc.tested and sc.tested % 5000 == 0) \
             or m == data.last_m or print_secs > 1200:
         secs = stop_t - sc.start_t
 
@@ -484,18 +490,19 @@ def handle_result(
     '''Called for existing and new records'''
     assert prev_p > 0, (mi, m, next_p, prev_p)
 
-    gap = next_p + prev_p
-    data.experimental_gap.append(gap)
-    data.valid_m.append(m)
-    data.experimental_side.append(next_p)
-    data.experimental_side.append(prev_p)
+    if args.num_plots:
+        gap = next_p + prev_p
+        data.experimental_gap.append(gap)
+        data.valid_m.append(m)
+        data.experimental_side.append(next_p)
+        data.experimental_side.append(prev_p)
 
 
-# NOTE: Manager is prime_gap_test maintains workers wh run process_line.
+# NOTE: Manager is prime_gap_test maintains workers who run process_line.
 def process_line(
         done_flag, work_q, results_q, prob_side_threshold, sides_tested,
         prob_prime, prob_prime_after_sieve, record_gaps, side_skip_enabled,
-        thread_i, SL, K, P, D,
+        thread_i, SL, K, P, D, megagap,
         primes, remainder):
     def cleanup(*_):
         print (f"Thread {thread_i} stopping")
@@ -520,7 +527,7 @@ def process_line(
             cleanup()
             return
 
-        m, mi, prob_record, log_n, line = work
+        m, mi, prev_p, next_p, prob_record, log_n, line = work
 
         mtest, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
         assert mi == mtest
@@ -530,7 +537,10 @@ def process_line(
 
         t0 = time.time()
 
-        p_tests, prev_p = determine_prev_prime(m, strn, K, unknowns[0], SL, primes, remainder)
+        p_tests = 0
+        if prev_p <= 0:
+            # prev_p > 0 means we loaded a partial result
+            p_tests, prev_p = determine_prev_prime(m, strn, K, unknowns[0], SL, primes, remainder)
 
         test_next = True
         new_prob_record = 0
@@ -543,13 +553,14 @@ def process_line(
                     unknowns[1], prob_prime_after_sieve,
                     m, K_mod_d, D, coprime_extended, prob_prime_coprime)
 
-            #print ("{:5} | m: {:8} | count: {} {} | {:.3g} => {:.3g} | {:.3g}".format(
-            #        prev_p, m, unknown_l, unknown_u,
-            #        prob_record, new_prob_record,
-            #        one_side_skip_threshold))
-
             with prob_side_threshold.get_lock(), sides_tested.get_lock():
-                if new_prob_record < (prob_side_threshold.value / sides_tested.value):
+                threshold = prob_side_threshold.value / sides_tested.value
+
+                print ("{:5} | m: {:8} | count: {} {} | {:.3g} => {:.3g} | {:.3g}".format(
+                        prev_p, m, unknown_l, unknown_u,
+                        prob_record, new_prob_record, threshold))
+
+                if new_prob_record < threshold:
                     test_next = False
                     prob_side_threshold.value += prob_record - new_prob_record
                     sides_tested.value += 1
@@ -559,6 +570,17 @@ def process_line(
 
         n_tests, next_p = 0, 0
         if test_next:
+            prev_time = time.time() - t0
+            if p_tests and prev_time > 8:
+                print ("Saving Partial for", m, prev_p)
+                # Save partial before starting next_prime
+                results_q.put((
+                    m, mi, log_n,
+                    unknown_l, unknown_u,
+                    0, -1, # next_p = -1, indicates partial result
+                    p_tests, prev_p,
+                    0, 0, prev_time))
+
             n_tests, next_p = determine_next_prime(m, strn, K, unknowns[1], SL)
 
         test_time = time.time() - t0
@@ -575,21 +597,29 @@ def process_line(
 
 def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     ''' Handles new results '''
-
     (m, mi, r_log_n, unknown_l, unknown_u,
      n_tests, next_p,
      p_tests, prev_p,
      prob_record, new_prob_record,
      test_time) = result
 
+    gap = next_p + prev_p
+    merit = gap / r_log_n
+
+    save(conn,
+        args.p, args.d, m, next_p, prev_p, merit,
+        n_tests, p_tests, test_time)
+
+    if next_p < 0 or prev_p < 0:
+        print ("Partial save for", m, prev_p, next_p)
+        # partial result don't print anything
+        return
+
     sc.tested += 1
     sc.test_time += test_time
 
     sc.t_unk_low += unknown_l
     sc.t_unk_hgh += unknown_u
-
-    gap = next_p + prev_p
-    merit = gap / r_log_n
 
     sc.prob_minmerit += mi_probs[mi][0]
     if merit > args.min_merit:
@@ -618,10 +648,7 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     sc.total_prp_tests += n_tests
     sc.gap_out_of_sieve_next += next_p > args.sieve_length
 
-    save(conn,
-        args.p, args.d, m, next_p, prev_p, merit,
-        n_tests, p_tests, test_time)
-
+    # Saving results for plotting
     handle_result(
         args, record_gaps, data, sc,
         mi, m, r_log_n, prev_p, next_p, unknown_l, unknown_u)
@@ -672,13 +699,18 @@ def run_in_parallel(
         return
 
     # Worker setup
+    assert args.threads in range(1, 65), args.threads
+
     done_flag = multiprocessing.Event()
-    work_q    = multiprocessing.Queue(40)
+    work_q    = multiprocessing.Queue(3 * args.threads)
     results_q = multiprocessing.Queue()
 
+    # Try to keep at least this many in the queue
+    min_work_queued = args.threads + 2
+
     # Used to dynamically set prob_threshold, See THEORY.md#one-sided-tests
-    prob_side_threshold = multiprocessing.Value('d', prob_threshold)
-    sides_tested = multiprocessing.Value('l', 2)
+    prob_side_threshold = multiprocessing.Value('d', 5 * prob_threshold)
+    sides_tested = multiprocessing.Value('l', 10)
 
     shared_args = (
         done_flag,
@@ -695,7 +727,6 @@ def run_in_parallel(
         not args.no_one_side_skip,
     )
 
-    assert args.threads in range(1, 65), args.threads
     processes = []
     for i in range(args.threads):
         process = multiprocessing.Process(
@@ -704,6 +735,7 @@ def run_in_parallel(
                 *shared_args,
                 *one_sided_args,
                 i, args.sieve_length, K, args.p, args.d,
+                args.megagap,
                 primes, remainder
             )
         )
@@ -738,27 +770,38 @@ def run_in_parallel(
         if mi not in mi_probs or mi_probs[mi][1] < prob_threshold:
             continue
 
+        prev_p, next_p = 0, 0
         if m in existing:
-            # NOTE: Often only prev_p is set
-            prev_p, next_p = existing[m]
-            handle_result(
-                args, record_gaps, data, sc,
-                mi, m, log_n, prev_p, next_p, 0, 0)
+            prev_p, next_pi = existing[m]
+            # next_p < -1, related to missing_gap
+            # next_p = -1, is partial result (should be continued)
+            if next_p >= 0:
+                # next_p = 0, is side skip
+                # next_p > 0, result
+                handle_result(
+                    args, record_gaps, data, sc,
+                    mi, m, log_n, prev_p, next_p, 0, 0)
+            else:
+                print ("Loaded Partial!", m, prev_p, next_p)
 
         else:
+            # TODO if work_q will block would prefer to wait on
             sc.will_test += 1
+            # Should never wait because of lower wait
+            work_q.put_no_wait((m, mi, prev_p, next_p, mi_probs[mi][1], log_n, line))
+
+        # Process any finished results
+        while (not results_q.empty()) or (work_q.qsize() > 5:
             try:
-               work_q.put((m, mi, mi_probs[mi][1], log_n, line), True)
+                result = results_q.get()
+                process_result(conn, args, record_gaps, mi_probs, data, sc, result)
             except KeyboardInterrupt:
+                # TODO Would be nice to break on 2nd Ctrl+C
+                # flush queue and wait on current results
                 print(" Breaking from Ctrl+C ^C")
                 for p in processes:
                     p.terminate()
                 return
-
-        # Process any finished results
-        while not results_q.empty():
-            result = results_q.get(block=False)
-            process_result(conn, args, record_gaps, mi_probs, data, sc, result)
 
     print("Everything Queued, done.set() & pushing STOP")
     done_flag.set()
@@ -769,7 +812,8 @@ def run_in_parallel(
     work_q.close()
 
     while sc.tested < sc.will_test:
-        print(f"Waiting on {sc.will_test - sc.tested} of {sc.will_test} results")
+        # Partial results cause multiple prints of "waiting on X..."
+        print(f"Waiting on {sc.will_test-sc.tested} of {sc.will_test} results")
         result = results_q.get(block=True)
         process_result(conn, args, record_gaps, mi_probs, data, sc, result)
 
@@ -825,7 +869,7 @@ def prime_gap_test(args):
             args.unknown_filename, "unknowns", "txt")
     if os.path.exists(folder_unk):
         args.unknown_filename = folder_unk
-    unknown_file = open(args.unknown_filename, "r")
+    unknown_file = open(args.unknown_filename, "rb")
 
     # ----- Open Prime-Gap-Search DB
     # Longer timeout so that record_checking doesn't break saving

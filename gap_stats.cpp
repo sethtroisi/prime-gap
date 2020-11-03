@@ -843,7 +843,7 @@ void run_gap_file(
 
             // Starting at min_j causes some `prob_this_gap` to be skipped,
             // but is a sizeable speedup for large gaps.
-            size_t j = config.sieve_length >= 100'000 ? min_j : 0
+            size_t j = config.sieve_length >= 100'000 ? min_j : 0;
             for (; j < max_j; j++) {
                 uint32_t gap_high = unknown_high[j];
                 uint32_t gap = gap_low + gap_high;

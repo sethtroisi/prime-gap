@@ -617,8 +617,9 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Check if higher prob is related to unique (mi % d)
   * [ ] Option to starting at m > mstart
 * gap\_test.py
+  * [ ] MEGAGAPS
+  * [ ] First Ctrl+C stops new results, 2nd breaks.
   * [ ] Do PRP top X% in order (for more dynamic cutoff)
-  * [ ] Plan for minimize memory when using large `--top-x-percent`
   * [ ] Plot average tests count
 * missing\_gap\_test.py && missing\_gap\_verify.py
   * [ ] Save to result | figure out plan for gap_test.py to reuse
