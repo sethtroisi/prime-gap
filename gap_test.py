@@ -362,8 +362,8 @@ def determine_test_threshold(args, valid_mi, data):
                 valid_mi, data.prob_merit_gap, data.prob_record_gap)
         }
 
-    # MEGAGAP
-    data.prob_record_gap = data.prob_merit_gap
+    if args.megagap:
+        data.prob_record_gap = data.prob_merit_gap
 
     assert 1 <= percent <= 99
     # Could be several million datapoints.
@@ -385,7 +385,8 @@ def should_print_stats(
     print_secs = stop_t - sc.last_print_t
 
     # Print a little bit if we resume but mostly as we test.
-    if True or sc.tested in (1,10,30,100,300,1000,3000) or (sc.tested and sc.tested % 5000 == 0) \
+    if args.megagap or sc.tested in (1,10,30,100,300,1000,3000) \
+            or (sc.tested and sc.tested % 5000 == 0) \
             or m == data.last_m or print_secs > 1200:
         secs = stop_t - sc.start_t
 
@@ -543,7 +544,8 @@ def process_line(
 
         t0 = time.time()
 
-        print("\t", strn, "\t", thread_i, done_flag.is_set())
+        if megagap:
+            print("\t", strn, "\t", thread_i)
 
         p_tests = 0
         if prev_p <= 0:
@@ -850,6 +852,7 @@ def run_in_parallel(
 
     print(f"Joining {len(processes)} processes")
     for i, process in enumerate(processes):
+        process.terminate()
         process.join(timeout=0.1)
     print("Done!")
 
@@ -932,8 +935,6 @@ def prime_gap_test(args):
         prob_gap_longer *= (1 - prob_prime_after_sieve)
     assert min(prob_nth) > 0
     assert min(prob_longer) > 0
-    #print(f"|prob_nth| = {len(prob_nth)}")
-
 
     # ----- Main sieve loop.
 

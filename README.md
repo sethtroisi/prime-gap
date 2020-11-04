@@ -414,7 +414,7 @@ Theory and justifaction for some calculations in present in [THEORY.md](THEORY.m
 # Building gmp from source is required until maintainers merge prev_prime; patch has been pending for 1+ year
 $ hg clone https://gmplib.org/repo/gmp/
 $ cd gmp
-$ wget https://gmplib.org/list-archives/gmp-devel/attachments/20200829/aebda025/attachment-0001.bin
+$ wget https://gmplib.org/list-archives/gmp-devel/attachments/20201016/1c305533/attachment-0001.bin
 $ hg import --no-commit attachment-0001.bin
 $ ./.bootstrap
 $ mkdir build
@@ -423,22 +423,27 @@ $ ../configure
 $ make
 $ make check
 $ make install
+```
 
-
-
+```
 # slower but acceptable code is present up to commit 093a3b2b
 $ sudo apt install libprimesieve-dev
 
 $ sudo apt install libmpfr-dev libmpc-dev
 $ sudo apt install sqlite3 libsqlite3-dev
-$ pip install --user gmpy2==2.1.0b5 tqdm primegapverify
+$ python -m pip install --user gmpy2==2.1.0b5 primegapverify
 
-$ sqlite3 prime-gap-search.db < schema.sql
 
 # For misc/double_check.py
 $ sudo apt install gmp-ecm
+```
 
-$ mkdir unknowns
+```
+$ git clone https://github.com/sethtroisi/prime-gap.git
+$ cd prime-gap
+
+$ mkdir -p logs/ unknowns/
+$ sqlite3 prime-gap-search.db < schema.sql
 
 # There are a handful of constants (MODULE_SEARCH_SECS, PRIME_RANGE_SEC, ...)
 # in gap_common.cpp `combined_sieve_method2_time_estimate` that can be set for
@@ -447,12 +452,8 @@ $ mkdir unknowns
 
 * [prime-gap-list](https://github.com/primegap-list-project/prime-gap-list)
     ```bash
-    $ git clone https://github.com/primegap-list-project/prime-gap-list.git
-    $ cd prime-gap-list
-    $ mkdir -p logs/ unknowns/
-    $ sqlite3 gaps.db < allgaps.sql
-    $ cd <prime-gaps>
-    $ ln -s ../prime-gap-list/gaps.db .
+    $ git clone --depth 10 https://github.com/primegap-list-project/prime-gap-list.git
+    $ sqlite3 gaps.db < prime-gap-list/allgaps.sql
     ```
 
 ## Notes
@@ -587,7 +588,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * README.md
 * THEORY.md
 * Project
-  * [ ] Run length encoding to reduce filesize
   * [ ] Records / day in status.py or record_check.py
   * [ ] Make sure that next_p = 0, is handled correctly in places.
 * combined\_sieve.cpp
@@ -595,7 +595,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * gap\_test.py
 * gap\_test.cpp
 * schema.sql
-  * [ ] next_p_i => next_p (fix in finalize and other places)
 * benchmarking
   * [ ] Add instructions to verify `modulo\_search` is >80% of the time.
 
@@ -642,6 +641,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Fill out gap test section
   * [x] Split out some benchmarking
 * Project level
+  * [x] Run length encoding to reduce filesize
   * [x] Move UNKNOWN.txt to unknowns/
   * [x] Support --search-db everywhere
   * [x] change `ms_P_D_minc` to `P_D_ms_minc_`

@@ -212,7 +212,7 @@ def search_db(args):
         conn.row_factory = sqlite3.Row
 
         num_gaps = conn.execute('SELECT COUNT(*) FROM result').fetchone()[0]
-        assert num_gaps > 1000, num_gaps
+        assert num_gaps > 100, num_gaps
         print (f"{num_gaps} results in {args.search_db!r}")
 
         # Min gap for current record (filters 80% of results)
