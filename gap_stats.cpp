@@ -94,6 +94,7 @@ static void prob_stats(char const *name, vector<float> &probs) {
     vector<float> sorted = probs;
     std::sort(sorted.begin(), sorted.end(), std::greater<>());
 
+    printf("\n");
     for (auto percent : {1, 5, 10, 20, 50, 100}) {
         size_t count = probs.size() * percent / 100;
         if (count == 0)
@@ -385,9 +386,9 @@ void store_stats(
 
         size_t r = i + 1;
         if (config.verbose >= 2 && (
-                    (r <= 5) || (r <= 500 && r % 100 == 0) ||
-                    (r <= 10000 && r % 1000 == 0) ||
-                    (r <= 10000 && r % 10000 == 0) ||
+                    (r <= 5) || (r <= 300 && r % 100 == 0) ||
+                    (r <= 3000 && r % 1000 == 0) ||
+                    (r <= 30000 && r % 10000 == 0) ||
                     (r % 100000 == 0) ||
                     (r == num_rows))) {
             printf("Saving Row: %6ld/%ld %6ld: %.1f, %.1f | R: %.1e M: %.1e HM(%.1f): %.1e\n",
@@ -787,29 +788,22 @@ void run_gap_file(
     float sum_prob_inner = 0.0;
     float sum_prob_outer = 0.0;
 
-    // max_prob_record and max_prob_missing_record
+    // max_prob_record, max_minmerit_record, and max_prob_missing_record
     float max_p_record = 1e-10;
-    float max_m_record = 1e-10;
+    float max_mm_record = 1e-10;
+    float max_mi_record = 1e-10;
+
+    if (config.verbose >= 1) {
+        printf("\n%ld tests M_start(%ld) + mi(%d to %d)\n\n",
+            valid_m.size(), config.mstart,
+            valid_m.front(), valid_m.back());
+    }
 
     for (uint32_t mi : valid_m) {
         uint64_t m = config.mstart + mi;
 
         vector<uint32_t> unknown_low, unknown_high;
         read_unknown_line(config, mi, unknown_file, unknown_low, unknown_high);
-
-        if (config.verbose >= 2 && probs_seen.empty()) {
-            for (size_t i = 0; i < unknown_low.size(); i += 1) {
-                if (2 * unknown_low[i] > MISSING_GAPS_LOW) {
-                    printf("MISSING_GAP prob pair: ~%.2e (%ld in middle) "
-                            "if both prime: ~%.2e (~%.0f tests per record)\n",
-                            gap_probs.combined_sieve[2*i],
-                            2 * i - 2,
-                            gap_probs.great_nth_sieve[2*i-2],
-                            1 / gap_probs.great_nth_sieve[2*i-2]);
-                    break;
-                }
-            }
-        }
 
         // Note slightly different from N_log
         float log_start_prime = K_log + log(m);
@@ -928,9 +922,9 @@ void run_gap_file(
         probs_missing.push_back(prob_is_missing_gap);
         probs_highmerit.push_back(prob_highmerit);
 
-        if (prob_record_combined > max_p_record) {
-            max_p_record = prob_record_combined;
-            if (config.verbose >= 1) {
+        if (config.verbose >= 1) {
+            if (prob_record_combined > max_p_record) {
+                max_p_record = prob_record_combined;
                 printf("RECORD :%-6ld line %-6ld  unknowns: %3ld, %3ld "
                         "| e: %.0f, %.0f\t| "
                         "prob record: %.2e (%.2e + %.2e)\t| %.7f\n",
@@ -940,11 +934,22 @@ void run_gap_file(
                         prob_record_combined, prob_record, prob_record_outer,
                         prob_seen);
             }
+
+            if (prob_highmerit > max_mm_record) {
+                max_mm_record = prob_highmerit;
+                printf("MERIT  :%-6ld line %-6ld  unknowns: %3ld, %3ld "
+                        "| e: %.0f, %.0f\t| "
+                        "prob record: %.2e    merit: %.4e\t| %.7f\n",
+                        m, M_vals.size(),
+                        unknown_low.size(), unknown_high.size(),
+                        e_prev, e_next,
+                        prob_record_combined, prob_highmerit, prob_seen);
+            }
         }
 
-        if (prob_is_missing_gap > max_m_record) {
-            max_m_record = prob_is_missing_gap;
-            if (config.verbose >= 2) {
+        if (config.verbose >= 2) {
+            if (prob_is_missing_gap > max_mi_record) {
+                max_mi_record = prob_is_missing_gap;
                 printf("MISSING:%-6ld line %-6ld  unknowns: %3ld, %3ld "
                         "|\t\t\t| prob record: %.2e  missing: %.4e\t| %.7f\n",
                         m, M_vals.size(),
@@ -1113,17 +1118,6 @@ void prime_gap_stats(struct Config config) {
         if (config.verbose >= 1) {
             printf("Found %ld possible record gaps (%d to %d)\n",
                 poss_record_gaps.size(), poss_record_gaps.front(), poss_record_gaps.back());
-
-            #if SEARCH_MISSING_GAPS
-            {
-                size_t missing_gaps = 0;
-                for (size_t gap = MISSING_GAPS_LOW; gap <= MISSING_GAPS_HIGH; gap += 2) {
-                    missing_gaps += (records[gap] == GAP_INF);
-                }
-                printf("Found %ld missing gaps between %d and %d\n",
-                    missing_gaps, MISSING_GAPS_LOW, MISSING_GAPS_HIGH);
-            }
-            #endif  // SEARCH_MISSING_GAPS
         }
         if (config.verbose >= 2) {
             for (int gi = 0; gi <= 2; gi++) {
@@ -1196,7 +1190,6 @@ void prime_gap_stats(struct Config config) {
         }
 
         prob_stats("EXPECTED GAP", expected_gap);
-        printf("\n");
 
         prob_stats("RECORD", probs_record);
 
@@ -1211,8 +1204,12 @@ void prime_gap_stats(struct Config config) {
         }
 
         if (config.verbose >= 2) {
-            if (avg_missing > 0) {
-                printf("\n");
+            double avg_merit = average_v(probs_highmerit);
+            if (avg_merit > 1e-5) {
+                prob_stats("MERIT", probs_highmerit);
+            }
+
+            if (avg_missing > 1e-5) {
                 prob_stats("MISSING", probs_missing);
             }
         }
