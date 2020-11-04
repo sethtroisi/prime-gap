@@ -217,12 +217,13 @@ def search_db(args):
 
         # Min gap for current record (filters 80% of results)
         existing = conn.execute(
-            'SELECT p, d, m, next_p, prev_p, next_p + prev_p as gapsize, merit FROM result '
-            'WHERE  ((merit > 21.9) OR '
-            '        (gapsize > 30000 AND merit > 18.3) OR'
-            '        (gapsize > 50000 AND merit > 15.3) OR'
-            '        (gapsize > 70000 AND merit > 10.4) OR'
-            '        (gapsize > 100000))'
+            """SELECT p, d, m, next_p, prev_p, next_p + prev_p as gapsize, merit FROM result
+            WHERE  (next_p > 0 AND prev_p > 0) AND
+                    ((merit > 21.9) OR
+                    (gapsize > 30000 AND merit > 18.3) OR
+                    (gapsize > 50000 AND merit > 15.3) OR
+                    (gapsize > 70000 AND merit > 10.4) OR
+                    (gapsize > 100000))"""
 #            'ORDER BY p, d, m'
         ).fetchall()
         for gap in existing:

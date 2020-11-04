@@ -932,7 +932,7 @@ void run_gap_file(
             max_p_record = prob_record_combined;
             if (config.verbose >= 1) {
                 printf("RECORD :%-6ld line %-6ld  unknowns: %3ld, %3ld "
-                        "| e: %.1f, %.1f\t| "
+                        "| e: %.0f, %.0f\t| "
                         "prob record: %.2e (%.2e + %.2e)\t| %.7f\n",
                         m, M_vals.size(),
                         unknown_low.size(), unknown_high.size(),

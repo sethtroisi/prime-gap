@@ -175,7 +175,7 @@ def parse_unknown_line(line):
             values = []
             accum = 0
             for i in range(0, len(digits)//2):
-                delta = 128 * digits[2*i] + digits[2*i+1]
+                delta = 128 * (digits[2*i] - 48) + (digits[2*i+1] - 48)
                 accum += delta
                 values.append(sign * accum)
             return values
