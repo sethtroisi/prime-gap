@@ -195,6 +195,7 @@ def parse_unknown_line(line):
 
 
 def openPFGW_is_prime(strn):
+    # XXX: getstatusoutput runs in a shell, does this double the overhead?
     # Overhead of subprocess calls seems to be ~0.03
     # Process seems to use more than 1 thread, accounting for this gmp is quite competitive.
     s = subprocess.getstatusoutput("./pfgw64 -f0 -q" + strn)
@@ -204,7 +205,7 @@ def openPFGW_is_prime(strn):
 
 def is_prime(num, strnum, dist):
     # TODO print log of which library is being used.
-    #if gmpy2.num_digits(num, 2) > 5000:
-    #    return openPFGW_is_prime(strnum + str(dist))
+    if gmpy2.num_digits(num, 2) > 8000:
+        return openPFGW_is_prime(strnum + str(dist))
 
     return gmpy2.is_prime(num)

@@ -58,7 +58,7 @@ def get_arg_parser():
         help="Number of threads to use for searching (default: %(default)s)")
 
     parser.add_argument('--taskset', action='store_true',
-        help="taskset each thread, helps when using more than 50% of CPU threads")
+        help="taskset each thread, helps when using more than 50%% of CPU threads")
 
     parser.add_argument('--num-plots', type=int, default=0,
         help="Show plots about distributions")
@@ -199,10 +199,11 @@ def save(conn, p, d, m, next_p, prev_p, merit,
         (p, d, m, next_p, prev_p,  round(merit,4)))
 
     conn.execute(
-        "UPDATE m_stats "
-        "SET next_p=?, prev_p=?, merit=?,"
-        "    prp_next=?, prp_prev=?, test_time=test_time+?"
-        "WHERE p=? AND d=? AND m=?",
+        """UPDATE m_stats
+        SET next_p=?, prev_p=?, merit=?,
+            prp_next=prp_next+?, prp_prev=prp_prev+?,
+            test_time=test_time+?
+        WHERE p=? AND d=? AND m=?""",
         (next_p, prev_p, round(merit,4),
          n_tests, p_tests, test_time, p, d, m))
     conn.commit()
@@ -227,10 +228,9 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_pri
     count_coprime_p = 0
     m_tests = [M+i for i in range(100) if math.gcd(M+i, D) == 1][:6]
     for m in m_tests:
-        N0 = m * K
+        N_mod_D = m * K % D
         for i in range(1, SL+1):
-            N = N0 + i
-            if K_coprime[i] and math.gcd(N, D) == 1:
+            if K_coprime[i] and math.gcd(N_mod_D + i, D) == 1:
                 # assert gmpy2.gcd(N, K*D) == 1,
                 count_coprime_p += 1
 
@@ -241,7 +241,7 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_pri
 
     expected = count_coprime_p * (unknowns_after_sieve / prob_prime_coprime_p)
     print("\texpect {:.0f} left, {:.3%} of SL={} after {}M".format(
-        expected, expected / (SL + 1), SL, max_prime//1e6))
+        expected, expected / (SL + 1), SL, max_prime//10 ** 6))
     print("\t{:.3%} of {} digit numbers are prime".format(
         prob_prime, K_digits))
     print("\t{:.3%} of tests should be prime ({:.1f}x speedup)".format(
@@ -341,14 +341,11 @@ def prob_record_one_side(
     # Use -m if wanted to consider unknowns_low
     for x in coprime_extended:
         test_gap = x + other_side
-        if (megagap and test_gap > megagap) or (not megagap and test_gap in record_gaps):
-            # slower than set lookup.
-            if math.gcd(m * K_mod_d + x, d) > 1:
-                continue
+        if math.gcd(m * K_mod_d + x, d) > 1:
+            if (megagap and test_gap > megagap) or (not megagap and test_gap in record_gaps):
+                prob_record += prob_nth * prob_prime_coprime
 
-            prob_record += prob_nth * prob_prime_coprime
-
-        prob_nth *= 1 - prob_prime_coprime
+            prob_nth *= 1 - prob_prime_coprime
 
     # Anything larger than 2*SL is likely record
     return prob_record + prob_nth
@@ -356,10 +353,11 @@ def prob_record_one_side(
 
 def determine_test_threshold(args, valid_mi, data):
     percent = args.prp_top_percent
+    valid_m = (args.mstart + mi for mi in valid_mi)
     if not percent or percent == 100:
         return 0, {
-            mi: (p_merit, p_record) for mi, p_merit, p_record in zip(
-                valid_mi, data.prob_merit_gap, data.prob_record_gap)
+            m: (p_merit, p_record) for m, p_merit, p_record in zip(
+                valid_m, data.prob_merit_gap, data.prob_record_gap)
         }
 
     if args.megagap:
@@ -370,8 +368,8 @@ def determine_test_threshold(args, valid_mi, data):
     best_probs = sorted(data.prob_record_gap, reverse=True)
     prob_threshold = best_probs[round(len(best_probs) * percent / 100)]
     return prob_threshold, {
-        mi: (p_merit, p_record) for mi, p_merit, p_record in zip(
-                valid_mi, data.prob_merit_gap, data.prob_record_gap)
+        m: (p_merit, p_record) for m, p_merit, p_record in zip(
+                valid_m, data.prob_merit_gap, data.prob_record_gap)
         if p_record >= prob_threshold
     }
 
@@ -385,7 +383,7 @@ def should_print_stats(
     print_secs = stop_t - sc.last_print_t
 
     # Print a little bit if we resume but mostly as we test.
-    if args.megagap or sc.tested in (1,10,30,100,300,1000,3000) \
+    if (args.megagap and sc.tested % 10 == 0) or sc.tested in (1,10,30,100,300,1000,3000) \
             or (sc.tested and sc.tested % 5000 == 0) \
             or m == data.last_m or print_secs > 1200:
         secs = stop_t - sc.start_t
@@ -545,7 +543,8 @@ def process_line(
         t0 = time.time()
 
         if megagap:
-            print("\t", strn, "\t", thread_i)
+            action = "Starting" if prev_p == next_p == 0 else "Resuming"
+            print(f"\t{action} {strn:25} on thread {thread_i}")
 
         p_tests = 0
         if prev_p <= 0:
@@ -577,15 +576,17 @@ def process_line(
                     sides_tested.value += 2
 
         prev_time = time.time() - t0
-        if megagap or (p_tests and prev_time > 8):
-            print("{:5} | m: {:8} | count: {} {} | {:.3g} => {:.3g} | {:.3g}".format(
+        # XXX consider doing this for non-megagap
+        should_save_partial = megagap or (p_tests and prev_time > 20)
+        if should_save_partial:
+            print("\t{:5} | m: {:8} | count: {} {} | {:.3g} => {:.3g} | {:.3g}".format(
                     prev_p, m, unknown_l, unknown_u,
                     prob_record, new_prob_record, threshold))
 
         n_tests, next_p = 0, 0
         if test_next:
-            # XXX consider doing this for non-megagap
-            if megagap and (p_tests and prev_time > 10):
+            if should_save_partial:
+                # XXX: consider updating prob_record to new_prob_record
                 # Save partial before starting next_prime
                 results_q.put((
                     m, mi, log_n,
@@ -612,7 +613,7 @@ def process_line(
         ))
 
 
-def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
+def process_result(conn, args, record_gaps, m_probs, data, sc, result):
     ''' Handles new results '''
     (m, mi, r_log_n, unknown_l, unknown_u,
      n_tests, next_p,
@@ -637,14 +638,14 @@ def process_result(conn, args, record_gaps, mi_probs, data, sc, result):
     sc.t_unk_low += unknown_l
     sc.t_unk_hgh += unknown_u
 
-    sc.prob_minmerit += mi_probs[mi][0]
+    sc.prob_minmerit += m_probs[m][0]
     if merit > args.min_merit:
         sc.count_minmerit += 1
 
     if gap in record_gaps:
         sc.count_record += 1
 
-    assert mi_probs[mi][1] == prob_record
+    assert m_probs[m][1] == prob_record
     sc.prob_record_all += prob_record
 
     # Should mirror logic in process_line
@@ -703,14 +704,14 @@ def run_in_parallel(
     remainder = tuple([K % prime for prime in primes])
 
     # Based on args
-    prob_threshold, mi_probs = determine_test_threshold(args, valid_mi, data)
+    prob_threshold, m_probs = determine_test_threshold(args, valid_mi, data)
     if prob_threshold >= 0:
         print("Testing {} m where prob(record) >= {:.3g}".format(
-            len(mi_probs), prob_threshold))
+            len(m_probs), prob_threshold))
 
-    # Any non-processed mi_probs?
-    if all(args.mstart + mi in existing for mi in mi_probs):
-        print(f"All prp-top-percent({len(mi_probs)}) already processed!")
+    # Any non-processed (or partial) m_probs?
+    if all(m in existing and existing[m][1] >= 0 for m in m_probs ):
+        print(f"All prp-top-percent({len(m_probs)}) already processed!")
         print()
         return
 
@@ -783,15 +784,15 @@ def run_in_parallel(
                     log_n, unknowns,
                     # Results saved to data / misc
                     data, misc)
-                mi_probs[mi] = (data.prob_merit_gap[-1], data.prob_record_gap[-1])
+                m_probs[m] = (data.prob_merit_gap[-1], data.prob_record_gap[-1])
 
             # Check if this prob_record high enough to run
-            if mi not in mi_probs or mi_probs[mi][1] < prob_threshold:
+            if m not in m_probs or m_probs[m][1] < prob_threshold:
                 continue
 
             prev_p, next_p = 0, 0
             if m in existing:
-                prev_p, next_pi = existing[m]
+                prev_p, next_p = existing[m]
                 # next_p < -1, related to missing_gap
                 # next_p = -1, is partial result (should be continued)
                 if next_p >= 0:
@@ -804,12 +805,12 @@ def run_in_parallel(
 
             sc.will_test += 1
             # Should never wait because of lower min_work_queued blocking below
-            work_q.put_nowait((m, mi, prev_p, next_p, mi_probs[mi][1], log_n, line))
+            work_q.put_nowait((m, mi, prev_p, next_p, m_probs[m][1], log_n, line))
 
             # Process any finished results
             while (sc.will_test - sc.tested) >= min_work_queued:
                     result = results_q.get(block=True)
-                    process_result(conn, args, record_gaps, mi_probs, data, sc, result)
+                    process_result(conn, args, record_gaps, m_probs, data, sc, result)
 
     except (KeyboardInterrupt, queue.Empty):
         print("Received first  Ctrl+C | Waiting for current work to finish")
@@ -833,10 +834,10 @@ def run_in_parallel(
             result = results_q.get(block=True)
 
             # megagap will return partial (-1) which wouldn't decrement will_test
-            if args.megagap and result[5] == -1:
+            if args.megagap and result[6] == -1:
                 sc.tested += 1
 
-            process_result(conn, args, record_gaps, mi_probs, data, sc, result)
+            process_result(conn, args, record_gaps, m_probs, data, sc, result)
         except KeyboardInterrupt:
             print("Receeved second Ctrl+C | Terminating now")
             for p in processes:
