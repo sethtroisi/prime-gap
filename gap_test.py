@@ -340,10 +340,12 @@ def prob_record_one_side(
 
     # Use -m if wanted to consider unknowns_low
     for x in coprime_extended:
-        if math.gcd(m * K_mod_d + x, d) > 1:
-            continue
+        test_gap = x + other_side
+        if (megagap and test_gap > megagap) or (not megagap and test_gap in record_gaps):
+            # slower than set lookup.
+            if math.gcd(m * K_mod_d + x, d) > 1:
+                continue
 
-        if x + other_side in record_gaps:
             prob_record += prob_nth * prob_prime_coprime
 
         prob_nth *= 1 - prob_prime_coprime
@@ -580,7 +582,8 @@ def process_line(
 
         n_tests, next_p = 0, 0
         if test_next:
-            if done_flag.is_set() or (p_tests and prev_time > 8):
+            # XXX consider doing this for non-megagap
+            if megagap and (p_tests and prev_time > 10):
                 # Save partial before starting next_prime
                 results_q.put((
                     m, mi, log_n,
@@ -589,8 +592,9 @@ def process_line(
                     p_tests, prev_p,
                     0, 0, prev_time))
 
-            if done_flag.is_set():
-                cleanup()
+                # Megagap can quit early with only one side done
+                if done_flag.is_set():
+                    cleanup()
 
             n_tests, next_p = determine_next_prime(m, strn, K, unknowns[1], SL)
 
@@ -794,16 +798,17 @@ def run_in_parallel(
                     handle_result(
                         args, record_gaps, data, sc,
                         mi, m, log_n, prev_p, next_p, 0, 0)
+                    continue
 
-            else:
-                sc.will_test += 1
-                # Should never wait because of lower min_work_queued blocking below
-                work_q.put_nowait((m, mi, prev_p, next_p, mi_probs[mi][1], log_n, line))
+            sc.will_test += 1
+            # Should never wait because of lower min_work_queued blocking below
+            work_q.put_nowait((m, mi, prev_p, next_p, mi_probs[mi][1], log_n, line))
 
             # Process any finished results
             while (sc.will_test - sc.tested) >= min_work_queued:
                     result = results_q.get(block=True)
                     process_result(conn, args, record_gaps, mi_probs, data, sc, result)
+
     except (KeyboardInterrupt, queue.Empty):
         print("Received first  Ctrl+C | Waiting for current work to finish")
         done_flag.set()
@@ -819,14 +824,15 @@ def run_in_parallel(
         print("Everything Queued, done.set")
         done_flag.set()
 
-    work_q.close()
-
     while sc.tested < sc.will_test:
         # Partial results cause multiple prints of "waiting on X..."
         print(f"Waiting on {sc.will_test-sc.tested} of {sc.will_test} results")
         try:
             result = results_q.get(block=True)
-            # XXX: will test has problem with partial not decrementing during done
+
+            # megagap will return partial (-1) which wouldn't decrement will_test
+            if args.megagap and result[5] == -1:
+                sc.tested += 1
 
             process_result(conn, args, record_gaps, mi_probs, data, sc, result)
         except KeyboardInterrupt:
@@ -838,11 +844,12 @@ def run_in_parallel(
             return
 
     print("Joining work_q")
+    work_q.close()
     work_q.join_thread()
     time.sleep(0.2)
 
+    print(f"Joining {len(processes)} processes")
     for i, process in enumerate(processes):
-        print(f"Joining process({i})")
         process.join(timeout=0.1)
     print("Done!")
 
