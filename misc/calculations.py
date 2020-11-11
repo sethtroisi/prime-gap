@@ -45,17 +45,18 @@ def pgsurround_sieve_limit(ln):
 def Runtime():
     from math import log, log2
     import sympy
+    import gmpy2
 
     Mc = 0.26149
 
-    K  = 19805
+    logK = int(gmpy2.log(gmpy2.primorial(20011) // gmpy2.primorial(13)))
     M  = 10000
     sl = 10 ** 10
     Cf = 1/5
     c = 10 / Cf
     S = 2 * 20 * 20000 + 1
-    m_log = 4/64
-    m_eq3 = 30
+    C_mod = 4/64
+    C_eq3 = 30
 
     P = 455052511
     Psmall = int(sympy.primepi(S * c))
@@ -63,27 +64,33 @@ def Runtime():
 
     llsl = log(log(sl))
 
-    A1 = (P * K * m_log)
+    A1 = P * logK * C_mod
     B1 = S * (llsl + Mc)
-    print (f"{M} * ({A1:.2e} + {B1:.2e})")
-    print (f"{M *(A1+B1):.2e}")
+    traditional = M * Cf * (A1 + B1)
+    print (f"{M} \\times {Cf} \\times ({A1:.2e} + {B1:.2e})")
+    print (f"{traditional:.2e}")
     print ()
 
+    print ("{:,}*{:,}/{} + {:,}/{}*{:,} + {:,}/{}*{:,}({:.2f}+{:.2f}) + ({:,}*{:,}*({:.2f}-{:.2f}) + {:,})*{}log2({}/{:,})".format(
+        P, logK, int(1/C_mod),
+        M, 1/Cf, Psmall,
+        M, 1/Cf, S, llsl, Mc,
+        M, S, llsl, log(log(c * S)), Plarge,
+        C_eq3, sl, S))
 
-    print ("{:,}*{:,}*{:,}/{} + {:,}*{:,} + {:,}*{:,}({:.2f}+{:.2f})+ ({:,}*{:,}*{}*({:.2f}-{:.2f}) + {:,})*{}log2({}/{:,})".format(
-        P, M, K, int(1/m_log),
-        M, Psmall,
-        M, S, llsl, Mc,
-        M, S, 1/Cf, llsl, log(log(c * S)), Plarge,
-        m_eq3, sl, S))
-
-    A = (P) * K * m_log
-    B = M * Psmall
-    C = M * B1
-    Da = M * S * 1/Cf * (llsl - log(log(c * S))) + Plarge
+    A = P * logK * C_mod
+    B = M * Cf * Psmall
+    C = M * Cf * B1
+    Da = M * S * (llsl - log(log(c * S))) + Plarge
     Db = 30 * log2(sl/S)
+
+    total = A + B + C + Da * Db
+
     print (f"{A:.2e} + {B:.2e} + {C:.2e} + {Da*Db:.2e}")
-    print (f"{A + B + C + Da*Db:.2e}")
+    print (f"{total:.2e}")
+
+    print ()
+    print (f"{traditional/total:.0f}x speedup")
 
 
 def ParameterSelection():
@@ -200,5 +207,5 @@ def Trick2():
 #Runtime()
 #ParameterSelection()
 #Speedup()
-Appendix1()
+#Appendix1()
 #Trick2()
