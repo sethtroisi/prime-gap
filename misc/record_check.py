@@ -108,7 +108,7 @@ def print_record_gaps(args, gaps):
 
                 if not existing:
                     record_lines.append(submit)
-                    print ("\tRecord {:3d}  | {}\tGap={} (New!)".format(
+                    print ("\tRecord {:5} | {:70s} | Gap={:<6} (New!)".format(
                         len(record_lines), submit, size))
                     continue
 
@@ -141,7 +141,7 @@ def print_record_gaps(args, gaps):
                     else:
                         record_lines.append(gap[2])
 
-                    print ("\tRecord {:<5} | {:70s} | Gap={:<6} (old: {:.2f}{} +{:.2f})".format(
+                    print ("\tRecord {:5} | {:70s} | Gap={:<6} (old: {:.2f}{} +{:.2f})".format(
                         str(len(own_records)) + "*" if is_same else len(record_lines), gap[4], size,
                         existing[0], " by you" * is_own_record, gap[1] - existing[0]))
 

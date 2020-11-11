@@ -576,8 +576,7 @@ def process_line(
                     sides_tested.value += 2
 
         prev_time = time.time() - t0
-        # XXX consider doing this for non-megagap
-        should_save_partial = megagap or (p_tests and prev_time > 20)
+        should_save_partial = megagap or (p_tests and prev_time > 100)
         if should_save_partial:
             print("\t{:5} | m: {:8} | count: {} {} | {:.3g} => {:.3g} | {:.3g}".format(
                     prev_p, m, unknown_l, unknown_u,
@@ -596,7 +595,7 @@ def process_line(
                     0, 0, prev_time))
 
                 # Megagap can quit early with only one side done
-                if done_flag.is_set():
+                if megagap and done_flag.is_set():
                     cleanup()
 
             n_tests, next_p = determine_next_prime(m, strn, K, unknowns[1], SL)
@@ -710,7 +709,7 @@ def run_in_parallel(
             len(m_probs), prob_threshold))
 
     # Any non-processed (or partial) m_probs?
-    if all(m in existing and existing[m][1] >= 0 for m in m_probs ):
+    if all(m in existing and existing[m][1] >= 0 for m in m_probs):
         print(f"All prp-top-percent({len(m_probs)}) already processed!")
         print()
         return
@@ -810,6 +809,10 @@ def run_in_parallel(
             # Process any finished results
             while (sc.will_test - sc.tested) >= min_work_queued:
                     result = results_q.get(block=True)
+                    # partial (-1) doesn't decrement will_test in process_result
+                    if args.megagap and result[6] == -1:
+                        sc.tested += 1
+
                     process_result(conn, args, record_gaps, m_probs, data, sc, result)
 
     except (KeyboardInterrupt, queue.Empty):
@@ -833,7 +836,7 @@ def run_in_parallel(
         try:
             result = results_q.get(block=True)
 
-            # megagap will return partial (-1) which wouldn't decrement will_test
+            # partial (-1) doesn't decrement will_test in process_result
             if args.megagap and result[6] == -1:
                 sc.tested += 1
 
@@ -906,8 +909,8 @@ def prime_gap_test(args):
     unknown_file = open(args.unknown_filename, "rb")
 
     # ----- Open Prime-Gap-Search DB
-    # Longer timeout so that record_checking doesn't break saving
-    conn = sqlite3.connect(args.search_db, timeout=30)
+    # Longer timeout so that record_checking doesn't break when saving
+    conn = sqlite3.connect(args.search_db, timeout=60)
     conn.row_factory = sqlite3.Row
     existing = load_existing(conn, args)
     n_exist = len(existing)
