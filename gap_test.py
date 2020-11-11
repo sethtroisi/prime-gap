@@ -503,35 +503,35 @@ def handle_result(
 
 # NOTE: Manager is prime_gap_test maintains workers who run process_line.
 def process_line(
-        done_flag, work_q, results_q, prob_side_threshold, sides_tested,
+        early_stop_flag, work_q, results_q, prob_side_threshold, sides_tested,
         prob_prime, prob_prime_after_sieve, record_gaps, side_skip_enabled,
         thread_i, SL, K, P, D, megagap,
         primes, remainder):
     def cleanup(*_):
-        print(f"Thread {thread_i} stopping")
+        #print(f"\tThread {thread_i} stopping")
         work_q.close()
         work_q.join_thread()
         results_q.close()
         results_q.join_thread()
+        print(f"\tThread {thread_i} stopped")
         exit(0)
 
     # Calculate extended gap (see gap_stats)
     prob_prime_coprime, coprime_extended = setup_extended_gap(SL, K, P, D, prob_prime)
     K_mod_d = K % D
 
-    # Ignore KeyboardInterrupt
-    # Manager first sets done_flag (and waits)
-    # Or can more simple terminate us.
+    # Ignore KeyboardInterrupt (Manager catches first and sets early_stop_flag)
+    # Normal flow is recieve sentinel (None) stop
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, cleanup)
 
-    print(f"Thread {thread_i} started")
+    print(f"\tThread {thread_i} started")
     while True:
-        if done_flag.is_set():
-            cleanup()
-            return
-
         work = work_q.get()
+        if work == None or early_stop_flag.is_set():
+            work_q.task_done()
+            cleanup()
+
         m, mi, prev_p, next_p, prob_record, log_n, line = work
 
         mtest, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
@@ -578,15 +578,13 @@ def process_line(
         prev_time = time.time() - t0
         should_save_partial = megagap or (p_tests and prev_time > 100)
         if should_save_partial:
-            print("\t{:5} | m: {:8} | count: {} {} | {:.3g} => {:.3g} | {:.3g}".format(
-                    prev_p, m, unknown_l, unknown_u,
-                    prob_record, new_prob_record, threshold))
+            print("\t{:5} | m: {:8} | count: {}/{} {} | {:.3g} => {:.3g} | {:.0f} secs".format(
+                    prev_p, m, p_tests, unknown_l, unknown_u,
+                    prob_record, new_prob_record, prev_time))
 
-        n_tests, next_p = 0, 0
-        if test_next:
-            if should_save_partial:
-                # XXX: consider updating prob_record to new_prob_record
+            if test_next:
                 # Save partial before starting next_prime
+                # XXX: consider updating prob_record to new_prob_record
                 results_q.put((
                     m, mi, log_n,
                     unknown_l, unknown_u,
@@ -594,10 +592,13 @@ def process_line(
                     p_tests, prev_p,
                     0, 0, prev_time))
 
-                # Megagap can quit early with only one side done
-                if megagap and done_flag.is_set():
+                # Can take A LONG TIME, so allow early quitting if partial is saved
+                if early_stop_flag.is_set():
+                    work_q.task_done()
                     cleanup()
 
+        n_tests, next_p = 0, 0
+        if test_next:
             n_tests, next_p = determine_next_prime(m, strn, K, unknowns[1], SL)
 
         test_time = time.time() - t0
@@ -610,6 +611,7 @@ def process_line(
             prob_record, new_prob_record,
             test_time,
         ))
+        work_q.task_done()
 
 
 def process_result(conn, args, record_gaps, m_probs, data, sc, result):
@@ -717,8 +719,8 @@ def run_in_parallel(
     # Worker setup
     assert args.threads in range(1, 65), args.threads
 
-    done_flag = multiprocessing.Event()
-    work_q    = multiprocessing.Queue()
+    early_stop_flag = multiprocessing.Event()
+    work_q    = multiprocessing.JoinableQueue()
     results_q = multiprocessing.Queue()
 
     # Try to keep at least this many in the queue
@@ -729,7 +731,7 @@ def run_in_parallel(
     sides_tested = multiprocessing.Value('l', 10)
 
     shared_args = (
-        done_flag,
+        early_stop_flag,
         work_q,
         results_q,
         prob_side_threshold,
@@ -803,60 +805,58 @@ def run_in_parallel(
                     continue
 
             sc.will_test += 1
+
             # Should never wait because of lower min_work_queued blocking below
             work_q.put_nowait((m, mi, prev_p, next_p, m_probs[m][1], log_n, line))
 
             # Process any finished results
             while (sc.will_test - sc.tested) >= min_work_queued:
-                    result = results_q.get(block=True)
-                    # partial (-1) doesn't decrement will_test in process_result
-                    if args.megagap and result[6] == -1:
-                        sc.tested += 1
-
-                    process_result(conn, args, record_gaps, m_probs, data, sc, result)
+                result = results_q.get()
+                process_result(conn, args, record_gaps, m_probs, data, sc, result)
 
     except (KeyboardInterrupt, queue.Empty):
         print("Received first  Ctrl+C | Waiting for current work to finish")
-        done_flag.set()
+
+        early_stop_flag.set()
+
         # Flush queue and wait on current results
         try:
             while True:
                 work_q.get_nowait()
+                work_q.task_done()
                 sc.will_test -= 1
         except queue.Empty:
             pass
 
-    if not done_flag.is_set():
-        print("Everything Queued, done.set")
-        done_flag.set()
+    for p in processes:
+        work_q.put(None)
 
     while sc.tested < sc.will_test:
         # Partial results cause multiple prints of "waiting on X..."
         print(f"Waiting on {sc.will_test-sc.tested} of {sc.will_test} results")
         try:
-            result = results_q.get(block=True)
+            result = results_q.get()
 
-            # partial (-1) doesn't decrement will_test in process_result
-            if args.megagap and result[6] == -1:
+            # partial (-1) doesn't increment tested in process_result
+            if early_stop_flag.is_set() and result[6] == -1:
                 sc.tested += 1
 
             process_result(conn, args, record_gaps, m_probs, data, sc, result)
         except KeyboardInterrupt:
-            print("Receeved second Ctrl+C | Terminating now")
-            for p in processes:
-                p.terminate()
-            for p in processes:
-                p.join(timeout=0.05)
-            return
+            print("Received second Ctrl+C | Terminating now")
+            for i, p in enumerate(processes):
+                if p.is_alive():
+                    print("\tTerminating thread", i)
+                    p.terminate()
+            exit(1)
 
-    print("Joining work_q")
-    work_q.close()
+    print("Joining work_q (should be instant)")
+    work_q.join()
+    work_q.close();
     work_q.join_thread()
-    time.sleep(0.2)
 
     print(f"Joining {len(processes)} processes")
     for i, process in enumerate(processes):
-        process.terminate()
         process.join(timeout=0.1)
     print("Done!")
 
