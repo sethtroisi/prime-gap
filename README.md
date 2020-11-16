@@ -411,11 +411,9 @@ Theory and justifaction for some calculations in present in [THEORY.md](THEORY.m
 
 ```bash
 #$ sudo apt install libgmp10 libgmp-dev
-# Building gmp from source is required until maintainers merge prev_prime; patch has been pending for 1+ year
+# Building gmp from source is required until 6.3
 $ hg clone https://gmplib.org/repo/gmp/
 $ cd gmp
-$ wget https://gmplib.org/list-archives/gmp-devel/attachments/20201016/1c305533/attachment-0001.bin
-$ hg import --no-commit attachment-0001.bin
 $ ./.bootstrap
 $ mkdir build
 $ cd build
