@@ -755,9 +755,9 @@ Config Args::argparse(int argc, char* argv[]) {
         cout << "minc must be greater than 0: " << config.minc << endl;
     }
 
-    if (config.minc >= 50'000'000) {
+    if (config.minc >= 100'000'000) {
         config.valid = 0;
-        cout << "minc > 50M will use to much memory" << endl;
+        cout << "minc > 100M will use to much memory" << endl;
     }
 
     if (config.max_prime > 10'000'000'000'000) {

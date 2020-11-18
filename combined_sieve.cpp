@@ -1160,12 +1160,21 @@ void prime_gap_parallel(struct Config& config) {
     vector<bool> *composite = new vector<bool>[valid_ms];
     {
         int align_print = 0;
+        size_t guess = valid_ms * (count_coprime_sieve + 1) / 8 / 1024 / 1024;
         if (config.verbose >= 1) {
             align_print = printf("coprime m    %ld/%d,  ", valid_ms, M_inc);
             printf("coprime i     %ld/%d, ~%'ldMB\n",
-                count_coprime_sieve / 2, SIEVE_LENGTH,
-                valid_ms * (count_coprime_sieve + 1) / 8 / 1024 / 1024);
+                count_coprime_sieve / 2, SIEVE_LENGTH, guess);
         }
+
+#if METHOD2_WHEEL
+        // Guess with first wheel count
+        guess = valid_ms * (i_reindex_wheel_count[1] + 1) / 8 / 1024 / 1024;
+#endif
+
+        // Less than 7GB allocation
+        assert(guess < 7 * 1024);
+
         size_t allocated = 0;
         for (size_t i = 0; i < valid_ms; i++) {
             int m_wheel = (M_start + valid_mi[i]) % reindex_m_wheel;
@@ -1189,6 +1198,7 @@ void prime_gap_parallel(struct Config& config) {
                 allocated / 8 / 1024 / 1024);
         }
 #endif  // METHOD2_WHEEL
+
         if (config.verbose >= 1) {
             align_print += 1;  // avoid unused warning
             printf("\n");
@@ -1197,7 +1207,6 @@ void prime_gap_parallel(struct Config& config) {
 
     // Used for various stats
     method2_stats stats(config, valid_ms, SMALL_THRESHOLD, prob_prime);
-
 
     // For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
     // This makes it harder to print (see akward inner loop)
