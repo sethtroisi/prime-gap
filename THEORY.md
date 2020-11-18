@@ -207,9 +207,9 @@ Can compute how many real PRP tests were skipped by each increase in `--sieve-ra
 `gap_stats` produces a number of useful predictions. They are somewhat validated in `gap_test.py --stats`
 
 One sided gap statistics
-![One Sided Gap Statistics](data/1_3001_2190_100000_s40000_l10000M.txt.side.png)
+![One Sided Gap Statistics](data/3001_2190_1_100000_s40000_l10000M.txt.side.png)
 Combined (prev + next) gap statistics
-![Combined Gap Statistics](data/1_3001_2190_100000_s40000_l10000M.txt.comb.png)
+![Combined Gap Statistics](data/3001_2190_1_100000_s40000_l10000M.txt.comb.png)
 
 `gap_stats` utilizes an extended range (`SL` to `2*SL`) which can help with `prob(record)` when
 the first record is much greater than `SL` (which is common for smaller P. Th extended range

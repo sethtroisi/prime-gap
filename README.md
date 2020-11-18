@@ -598,8 +598,9 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 
 ### Low Priority TODOs
 
+* Project
+  * [ ] Figure out how to load (in c & python) and set config occasionally
 * THEORY.md
-  * [ ] Add some theory for only doing one side test.
 * New script to update DB (and maybe delete uninteresting results
   * [ ] Finalize script
   * [ ] Set rid if null (but reasonable range exists)
@@ -649,6 +650,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Make method2 the default
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
 * combined\_sieve.cpp
+  * [x] Wheel for coprime i (saves 50-80% of space)
+  * [x] Add some theory for only doing one side test.
   * [x] Optimize D helper
   * [x] Integrate faster prime iterator (libprimesieve)
   * [x] ETA for `combined_sieve` timing.

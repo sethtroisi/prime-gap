@@ -52,6 +52,10 @@ using namespace std::chrono;
 // method2 is more sensative and set it's own.
 #define SMALL_PRIME_LIMIT_METHOD1       400'000
 
+// Compresses composite by 50-80%,
+// Seems to be slightly slower for large p (> 15000?)
+#define METHOD2_WHEEL   true
+
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config& config);
 void prime_gap_parallel(struct Config& config);
@@ -584,14 +588,14 @@ void prime_gap_search(const struct Config& config) {
             //            const auto& [prime, remainder] = prime_and_remainder[pi];
             //            const uint64_t modulo = (remainder * m) % prime;
 
-            for (size_t d = modulo; d <= SIEVE_LENGTH; d += pr.first) {
-                composite[0][d] = true;
+            for (size_t x = modulo; x <= SIEVE_LENGTH; x += pr.first) {
+                composite[0][x] = true;
             }
 
             // Not technically correct but fine to skip modulo == 0
             int first_negative = pr.first - modulo;
-            for (size_t d = first_negative; d <= SIEVE_LENGTH; d += pr.first) {
-                composite[1][d] = true;
+            for (size_t x = first_negative; x <= SIEVE_LENGTH; x += pr.first) {
+                composite[1][x] = true;
             }
         }
 
@@ -729,6 +733,8 @@ void save_unknowns_method2(
         const vector<int32_t> &valid_mi,
         const vector<int32_t> &m_reindex,
         const vector<uint32_t> &i_reindex,
+        const uint32_t reindex_m_wheel,
+        const vector<uint32_t> *i_reindex_wheel,
         const vector<bool> *composite) {
 
     // ----- Open and Save to Output file
@@ -744,20 +750,36 @@ void save_unknowns_method2(
     const uint32_t D = config.d;
     const uint32_t SL = config.sieve_length;
 
-    const size_t count_coprime_sieve = *std::max_element(i_reindex.begin(), i_reindex.end());
-
     for (uint64_t mi : valid_mi) {
-        assert(gcd(M_start + mi, D) == 1);
+        uint64_t m = M_start + mi;
+        assert(gcd(m, D) == 1);
         int32_t mii = m_reindex[mi];
         assert( mii >= 0 );
 
         const auto& comp = composite[mii];
+        const vector<uint32_t> &i_reindex_m = reindex_m_wheel > 1 ?
+            i_reindex_wheel[m % reindex_m_wheel] : i_reindex;
+        assert(i_reindex_m.size() == 2 * SL + 1);
 
+        //const size_t count_coprime_sieve = *std::max_element(i_reindex.begin(), i_reindex.end());
+        //const size_t size_side = count_coprime_sieve / 2;
         // composite[0] isn't a real entry.
-        const size_t size_side = count_coprime_sieve / 2;
-        auto real_begin = comp.begin() + 1;
-        size_t unknown_l = std::count(real_begin, real_begin + size_side, false);
-        size_t unknown_u = std::count(real_begin + size_side, comp.end(), false);
+        //auto real_begin = comp.begin() + 1;
+        //size_t unknown_l = std::count(real_begin, real_begin + size_side, false);
+        //size_t unknown_u = std::count(real_begin + size_side, comp.end(), false);
+
+        // XXX: Could be improved
+        size_t unknown_l = 0;
+        size_t unknown_u = 0;
+        for (size_t i = 0; i < i_reindex_m.size(); i++) {
+            if (!comp[i_reindex_m[i]]) {
+                if (i <= SL) {
+                    unknown_l++;
+                } else {
+                    unknown_u++;
+                }
+            }
+        }
 
         unknown_file << mi << " : -" << unknown_l << " +" << unknown_u << " |";
         for (int d = 0; d <= 1; d++) {
@@ -769,7 +791,7 @@ void save_unknowns_method2(
                 int last = 0;
                 for (size_t i = 1; i <= SL; i++) {
                     int a = SL + (2*d - 1) * i;
-                    if (!comp[i_reindex[a]]) {
+                    if (!comp[i_reindex_m[a]]) {
                         found += 1;
 
                         int delta = i - last;
@@ -787,7 +809,7 @@ void save_unknowns_method2(
             } else {
                 for (size_t i = 1; i <= SL; i++) {
                     int a = SL + (2*d - 1) * i;
-                    if (!comp[i_reindex[a]]) {
+                    if (!comp[i_reindex_m[a]]) {
                         unknown_file << " " << prefix << i;
                         found += 1;
                     }
@@ -1006,9 +1028,22 @@ void prime_gap_parallel(struct Config& config) {
     assert(valid_ms == valid_mi.size());
 
     // which [i] are coprime to K
-    vector<char> coprime_composite(SIEVE_INTERVAL+1, 1);
+    vector<char> coprime_composite(SIEVE_INTERVAL, 1);
     // reindex composite[m][i]
-    vector<uint32_t> i_reindex(SIEVE_INTERVAL+1, 0);
+    vector<uint32_t> i_reindex(SIEVE_INTERVAL, 0);
+
+    // reindex composite[m][i] using (m, wheel) (wheel is 1!,2!,3!,5!)
+    // This could be first indexed by i_reindex,
+    // Would reduce size from wheel * (2*SL+1) to wheel * coprime_i
+#if METHOD2_WHEEL
+    uint32_t reindex_m_wheel = gcd(D, 2*3*5);
+    vector<uint32_t> i_reindex_wheel[reindex_m_wheel];
+    vector<size_t> i_reindex_wheel_count(reindex_m_wheel, 0);
+#else
+    uint32_t reindex_m_wheel = 1;
+    vector<uint32_t> *i_reindex_wheel = nullptr;
+#endif  // METHOD2_WHEEL
+
     {
         for (uint32_t prime : P_primes) {
             if (D % prime != 0) {
@@ -1023,21 +1058,46 @@ void prime_gap_parallel(struct Config& config) {
                 assert( 0 <= first && first < prime );
                 assert( (SIEVE_LENGTH - first) % prime == 0 );
 
-                for (size_t d = first; d <= SIEVE_INTERVAL; d += prime) {
-                    coprime_composite[d] = 0;
+                for (size_t x = first; x < SIEVE_INTERVAL; x += prime) {
+                    coprime_composite[x] = 0;
                 }
             }
         }
         // Center should be marked composite by every prime.
         assert(coprime_composite[SL] == 0);
 
-        size_t count = 1;
+        size_t coprime_count = 1;
         for (size_t i = 0; i < SIEVE_INTERVAL; i++) {
             if (coprime_composite[i] > 0) {
-                i_reindex[i] = count++;
+                i_reindex[i] = coprime_count;
+                coprime_count += 1;
             }
         }
+
+#if METHOD2_WHEEL
+        for (size_t m_wheel = 1; m_wheel < reindex_m_wheel; m_wheel++) {
+            if (gcd(reindex_m_wheel, m_wheel) > 1) continue;
+            i_reindex_wheel[m_wheel].resize(SIEVE_INTERVAL, 0);
+
+            // (m * K - SL) % wheel => (m_wheel - SL) % wheel
+            uint32_t mod_center = m_wheel * mpz_fdiv_ui(K, reindex_m_wheel);
+            uint32_t mod_low = (mod_center + reindex_m_wheel - (SL % reindex_m_wheel)) % reindex_m_wheel;
+
+            // XXX: slow, but fast enough for a small number of d
+            size_t coprime_count = 0;
+            for (size_t i = 0; i < SIEVE_INTERVAL; i++) {
+                if (coprime_composite[i] > 0) {
+                    if (gcd(mod_low + i, reindex_m_wheel) == 1) {
+                        coprime_count += 1;
+                        i_reindex_wheel[m_wheel][i] = coprime_count;
+                    }
+                }
+            }
+            i_reindex_wheel_count[m_wheel] = coprime_count;
+        }
+#endif  // METHOD2_WHEEL
     }
+
     const size_t count_coprime_sieve = *std::max_element(i_reindex.begin(), i_reindex.end());
     assert( count_coprime_sieve % 2 == 0 );
 
@@ -1099,18 +1159,40 @@ void prime_gap_parallel(struct Config& config) {
     // Need to change here and in `save_unknowns_method2` signature.
     vector<bool> *composite = new vector<bool>[valid_ms];
     {
+        int align_print = 0;
         if (config.verbose >= 1) {
-            printf("coprime m    %ld/%d,  coprime i %ld/%d,  ~%'ldMB\n",
-                valid_ms, M_inc, count_coprime_sieve / 2, SIEVE_LENGTH,
-                valid_ms * count_coprime_sieve / 8 / 1024 / 1024);
+            align_print = printf("coprime m    %ld/%d,  ", valid_ms, M_inc);
+            printf("coprime i     %ld/%d, ~%'ldMB\n",
+                count_coprime_sieve / 2, SIEVE_LENGTH,
+                valid_ms * (count_coprime_sieve + 1) / 8 / 1024 / 1024);
+        }
+        size_t allocated = 0;
+        for (size_t i = 0; i < valid_ms; i++) {
+            int m_wheel = (M_start + valid_mi[i]) % reindex_m_wheel;
+            assert(gcd(m_wheel, reindex_m_wheel) == 1);
+
+            // +1 reserves extra 0th entry for i_reindex[x] = 0
+#if METHOD2_WHEEL
+            composite[i].resize(i_reindex_wheel_count[m_wheel] + 1, 0);
+#else
+            composite[i].resize(count_coprime_sieve + 1, false);
+#endif  // METHOD2_WHEEL
+
+            composite[i][0] = true;
+            allocated += composite[i].size();
+        }
+#if METHOD2_WHEEL
+        if (config.verbose >= 1) {
+            printf("%*s", align_print, "");
+            printf("coprime wheel %ld/%d, ~%'ldMB\n",
+                allocated / (2 * valid_ms), SIEVE_LENGTH,
+                allocated / 8 / 1024 / 1024);
+        }
+#endif  // METHOD2_WHEEL
+        if (config.verbose >= 1) {
+            align_print += 1;  // avoid unused warning
             printf("\n");
         }
-        for (size_t i = 0; i < valid_ms; i++) {
-            // Improve this setup (segfaults at ~0.5GB required)
-            // +1 reserves extra 0th entry for i_reindex[x] = 0
-            composite[i].resize(count_coprime_sieve + 1, false);
-            composite[i][0] = true;
-        };
     }
 
     // Used for various stats
@@ -1144,6 +1226,13 @@ void prime_gap_parallel(struct Config& config) {
             assert(mii >= 0);
 
             uint64_t m = M_start + mi;
+#if METHOD2_WHEEL
+            uint32_t m_wheel = m % reindex_m_wheel;
+            const vector<uint32_t> &i_reindex_m = i_reindex_wheel[m_wheel];
+#else
+            const vector<uint32_t> &i_reindex_m = i_reindex;
+#endif  // METHOD2_WHEEL
+
             for (auto pr : p_and_r) {
                 uint64_t prime = pr.first;
                 uint64_t base_r = pr.second;
@@ -1177,9 +1266,9 @@ void prime_gap_parallel(struct Config& config) {
                     #endif
 
                     if (firstIsEven) {
-                        // divisible by 2 move to next multiple (an odd multiple)
+                        assert( (first >= SIEVE_INTERVAL) || composite[mii][i_reindex_m[first]] );
 
-                        assert( (first >= SIEVE_INTERVAL) || composite[mii][i_reindex[first]] );
+                        // divisible by 2 move to next multiple (an odd multiple)
                         first += prime;
                     }
 
@@ -1187,8 +1276,8 @@ void prime_gap_parallel(struct Config& config) {
                     shift = 2*prime;
                 }
 
-                for (size_t d = first; d < SIEVE_INTERVAL; d += shift) {
-                    composite[mii][i_reindex[d]] = true;
+                for (size_t x = first; x < SIEVE_INTERVAL; x += shift) {
+                    composite[mii][i_reindex_m[x]] = true;
                     stats.small_prime_factors_interval += 1;
                 }
             }
@@ -1289,7 +1378,12 @@ void prime_gap_parallel(struct Config& config) {
                 return;
             }
 
+            // if coprime with K, try to toggle off factor.
+#if METHOD2_WHEEL
+            composite[mii][i_reindex_wheel[m % reindex_m_wheel][first]] = true;
+#else
             composite[mii][i_reindex[first]] = true;
+#endif  // METHOD2_WHEEL
             stats.large_prime_factors_interval += 1;
         });
 
@@ -1335,6 +1429,7 @@ void prime_gap_parallel(struct Config& config) {
                 save_unknowns_method2(
                     config,
                     valid_mi, m_reindex, i_reindex,
+                    reindex_m_wheel, i_reindex_wheel,
                     composite);
                 config.max_prime = old;
             }
@@ -1360,6 +1455,7 @@ void prime_gap_parallel(struct Config& config) {
         save_unknowns_method2(
             config,
             valid_mi, m_reindex, i_reindex,
+            reindex_m_wheel, i_reindex_wheel,
             composite);
 
         auto s_stop_t = high_resolution_clock::now();
