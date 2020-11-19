@@ -139,7 +139,10 @@ int main(int argc, char* argv[]) {
 
 
 vector<float> get_record_gaps(const struct Config& config) {
-    vector<float> records(MAX_GAP, GAP_INF);
+    uint32_t sieve_interval = 2 * config.sieve_length + 1;
+    const size_t records_size = std::max(MAX_GAP, sieve_interval);
+
+    vector<float> records(records_size, GAP_INF);
 
     DB db(config.records_db.c_str());
 
@@ -150,9 +153,10 @@ vector<float> get_record_gaps(const struct Config& config) {
     /* Execute SQL statement */
     int rc = sqlite3_exec(db.get_db(), sql, [](void* recs, int argc, char **argv, char **azColName)->int {
         uint64_t gap = atol(argv[0]);
-        if (gap < MAX_GAP) {
+        vector<float> *records = static_cast<vector<float>*>(recs);
+        if (gap < records->size()) {
             // Recover log(startprime)
-            (*static_cast<vector<float>*>(recs))[gap] = gap / atof(argv[1]);
+            (*records)[gap] = gap / atof(argv[1]);
         }
         return 0;
     }, (void*)&records, &zErrMsg);
@@ -170,7 +174,7 @@ void load_possible_records(
         const double N_log,
         const vector<float> &records,
         vector<uint32_t> &poss_record_gaps) {
-    for (size_t g = 2; g < MAX_GAP; g += 2) {
+    for (size_t g = 2; g < records.size(); g += 2) {
         // Ignore the infintesimal odds of finding >merit 35 gap.
         if (g / N_log > 35) {
             break;
