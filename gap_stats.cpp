@@ -309,7 +309,7 @@ void store_stats(
 
     /* Create SQL statement to INSERT into range_stats. */
     char insert_range_stats[] = (
-        "INSERT INTO range_stats(rid, gap, prob_combined, prob_low_side, prob_high_side)"
+        "INSERT OR IGNORE INTO range_stats(rid, gap, prob_combined, prob_low_side, prob_high_side)"
         " VALUES(?,?, ?,?,?)"
     );
     sqlite3_stmt *insert_range_stmt;
@@ -354,7 +354,7 @@ void store_stats(
         }
     }
     if (config.verbose >= 0) {
-        printf("Saved %ld rows to 'gap_stats' table\n", prob_gap_norm.size() - skipped_gap_stats);
+        printf("Saved %ld rows to 'aange_stats' table\n", prob_gap_norm.size() - skipped_gap_stats);
     }
 
     /* Create SQL statement to INSERT into m_stats. */

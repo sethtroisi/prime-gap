@@ -302,7 +302,7 @@ double combined_sieve_method2_time_estimate(
         printf("Estimated modulo_searches(million): %ld, time: %.0f (%.1f%% total)\n",
                 expected_m_stops / 1'000'000, m_search_time, 100.0 * m_search_time / total_estimate);
 
-        printf("Estimated sieve time: %.0f seconds (%.2f hours) (%.3f)\n",
+        printf("Estimated sieve time: %.0f seconds (%.2f hours) (%.3f%%)\n",
                 total_estimate, total_estimate / 3600,
                 100 * total_estimate / (test_estimate + total_estimate));
         printf("Estimated test  time: %.0f hours (%.1f%%)\n",

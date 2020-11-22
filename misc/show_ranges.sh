@@ -18,15 +18,15 @@ set -eux
 
 sqlite3 "prime-gap-search.db" <<EOL
 .timeout 20
-UPDATE range AS ra SET
-    num_processed =
-        (SELECT count(*) FROM result r
-         WHERE r.p = ra.p AND r.d = ra.d AND
-               r.m BETWEEN ra.m_start AND ra.m_start + ra.m_inc - 1 ),
-    time_tests =
-        (SELECT COALESCE(SUM(test_time), 0.0) FROM m_stats m
-         WHERE m.p = ra.p AND m.d = ra.d AND
-               m.m BETWEEN ra.m_start AND ra.m_start + ra.m_inc - 1 );
+#UPDATE range AS ra SET
+#    num_processed =
+#        (SELECT count(*) FROM result r
+#         WHERE r.p = ra.p AND r.d = ra.d AND
+#               r.m BETWEEN ra.m_start AND ra.m_start + ra.m_inc - 1 ),
+#    time_tests =
+#        (SELECT COALESCE(SUM(test_time), 0.0) FROM m_stats m
+#         WHERE m.p = ra.p AND m.d = ra.d AND
+#               m.m BETWEEN ra.m_start AND ra.m_start + ra.m_inc - 1 );
 SELECT changes() || " Range Updates";
 
 UPDATE range SET num_remaining = num_m - num_processed;

@@ -71,16 +71,16 @@ def Runtime():
     print (f"{traditional:.2e}")
     print ()
 
-    print ("{:,}*{:,}/{} + {:,}/{}*{:,} + {:,}/{}*{:,}({:.2f}+{:.2f}) + ({:,}*{:,}*({:.2f}-{:.2f}) + {:,})*{}log2({}/{:,})".format(
+    print ("{:,}*{:,}/{} + {:,}/{}*{:,}({:.2f}+{:.2f}) + {:,}/{}*{:,} + ({:,}*{:,}*({:.2f}-{:.2f}) + {:,})*{}log2({}/{:,})".format(
         P, logK, int(1/C_mod),
-        M, 1/Cf, Psmall,
         M, 1/Cf, S, llsl, Mc,
+        M, 1/Cf, Psmall,
         M, S, llsl, log(log(c * S)), Plarge,
         C_eq3, sl, S))
 
     A = P * logK * C_mod
-    B = M * Cf * Psmall
-    C = M * Cf * B1
+    B = M * Cf * B1
+    C = M * Cf * Psmall
     Da = M * S * (llsl - log(log(c * S))) + Plarge
     Db = 30 * log2(sl/S)
 

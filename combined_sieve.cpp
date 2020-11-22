@@ -915,7 +915,7 @@ void method2_increment_print(
 
         setlocale(LC_NUMERIC, "");
         if (config.verbose + is_last >= 1) {
-            printf("%'-10ld (primes %'ld/%'ld)\t(seconds: %.2f/%-.1f | per m: %.3g)\n",
+            printf("%'-10ld (primes %'ld/%ld)\t(seconds: %.2f/%-.1f | per m: %.3g)\n",
                 prime,
                 stats.pi_interval, stats.pi,
                 int_secs, secs,
@@ -1168,11 +1168,12 @@ void prime_gap_parallel(struct Config& config) {
         }
 
 #if METHOD2_WHEEL
-        // Guess with first wheel count
+        // Update guess with first wheel count for OOM prevention check
         guess = valid_ms * (i_reindex_wheel_count[1] + 1) / 8 / 1024 / 1024;
 #endif
 
-        // Less than 7GB allocation
+        // Try to prevent OOM, check composite < 7GB allocation,
+        // combined_sieve seems to use ~5-20% extra space for i_reindex_wheel + extra
         assert(guess < 7 * 1024);
 
         size_t allocated = 0;
