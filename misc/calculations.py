@@ -47,14 +47,14 @@ def Runtime():
     import sympy
     import gmpy2
 
-    Mc = 0.26149
+    M_m = 0.26149
 
     logK = int(gmpy2.log(gmpy2.primorial(20011) // gmpy2.primorial(13)))
     M  = 10000
     sl = 10 ** 10
-    Cf = 1/5
-    c = 10 / Cf
-    S = 2 * 20 * 20000 + 1
+    M_c = 1917
+    c = 50
+    S = 2 * 10 * 20000 + 1
     C_mod = 4/64
     C_eq3 = 30
 
@@ -65,39 +65,40 @@ def Runtime():
     llsl = log(log(sl))
 
     A1 = P * logK * C_mod
-    B1 = S * (llsl + Mc)
-    traditional = M * Cf * (A1 + B1)
-    print (f"{M} \\times {Cf} \\times ({A1:.2e} + {B1:.2e})")
-    print (f"{traditional:.2e}")
+    B1 = S * (llsl + M_m)
+    traditional = M_c * (A1 + B1)
+    print (f"{M_c} \\times ({A1:.2e} + {B1:.2e})")
+    print (f"{traditional=:.2e}")
     print ()
 
-    print ("{:,}*{:,}/{} + {:,}/{}*{:,}({:.2f}+{:.2f}) + {:,}/{}*{:,} + ({:,}*{:,}*({:.2f}-{:.2f}) + {:,})*{}log2({}/{:,})".format(
+    print ("{:,}*{:,}/{} + {:,}*{:,}({:.2f}+{:.2f}) + {:,}*{:,} + ({:,}*{:,}*({:.2f}-{:.2f}) + {:,})*{}log2({}/{:,})".format(
         P, logK, int(1/C_mod),
-        M, 1/Cf, S, llsl, Mc,
-        M, 1/Cf, Psmall,
+        M_c, S, llsl, M_m,
+        M_c, Psmall,
         M, S, llsl, log(log(c * S)), Plarge,
         C_eq3, sl, S))
 
     A = P * logK * C_mod
-    B = M * Cf * B1
-    C = M * Cf * Psmall
+    B = M_c * B1
+    C = M_c * Psmall
     Da = M * S * (llsl - log(log(c * S))) + Plarge
     Db = 30 * log2(sl/S)
 
     total = A + B + C + Da * Db
 
-    print (f"{A:.2e} + {B:.2e} + {C:.2e} + {Da*Db:.2e}")
-    print (f"{total:.2e}")
+    print (f"{A:.2e} + {B:.2e} + {C:.2e} + {Da*Db:.2e}".replace("e+", " \\times 10^"))
+    print ()
+    print (f"{total=:.2e}".replace("e+", " \\times 10^"))
 
     print ()
     print (f"{traditional/total:.0f}x speedup")
 
 
-def ParameterSelection():
+def MertensThird():
     for max_prime, primes in (
         (10**4, 1229), (10**5, 9592), (10**6, 78498),
         (10**8, 5761455), (4*10**9, 189961812), (10**10, 4118054813),
-        (10**11, 4118054813), (10**12, 37607912018),
+        (10**11, 4118054813), (10**12, 37607912018), (10**13, 346965536839),
     ):
 
         power = math.log10(max_prime)
@@ -181,7 +182,9 @@ def Appendix1():
         pg_mp = pgsurround_sieve_limit(ln)
         speedup = sieve_percent(pg_mp) / sieve_percent(mp) - 1
 
-        print (f"{P:5} & {ln:.0f}\t& {mp/1e9:4.0f}e9\t& {prps:.1f}\t& {pg_mp:.1e}\t& {speedup:.1%}\t\\\\")
+        pg_mp_str = f"{pg_mp:.1e}".replace("e+0", " \\times 10^")
+
+        print (f"{P:5} & {ln:.0f}\t& {mp/1e9:4.0f} \\times 10^9\t& {prps:.1f}\t& {pg_mp_str}\t& {speedup:.1%}\t\\\\")
 
 
 def Trick2():
@@ -204,8 +207,8 @@ def Trick2():
             count += ((first % p) + 2 * X) >= p
         print (f"{count}/{primes} = {count / primes:.2%}\t", time.time() - t)
 
-#Runtime()
-#ParameterSelection()
+Runtime()
+#MertensThird()
 #Speedup()
 #Appendix1()
 #Trick2()
