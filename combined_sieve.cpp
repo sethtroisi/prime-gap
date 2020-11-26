@@ -1224,6 +1224,13 @@ void prime_gap_parallel(struct Config& config) {
             if (D % prime != 0 && prime <= P)
                 continue;
 
+            if (reindex_m_wheel % prime == 0) {
+                if (config.verbose >= 2) {
+                    printf("\t%ld handled by coprime wheel(%d)\n", prime, reindex_m_wheel);
+                }
+                continue;
+            }
+
             const uint32_t base_r = mpz_fdiv_ui(K, prime);
             p_and_r.push_back({(uint32_t) prime, base_r});
 

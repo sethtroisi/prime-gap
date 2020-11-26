@@ -481,6 +481,7 @@ def determine_prev_prime(m, strn, K, unknowns, SL, primes, remainder):
                 composite = True
                 break
         if not composite:
+            tests += 1;
             if gap_utils.is_prime(center - i, strn, -i):
                 return tests, i
 
@@ -527,9 +528,16 @@ def process_line(
 
     print(f"\tThread {thread_i} started")
     while True:
-        work = work_q.get()
-        if work == None or early_stop_flag.is_set():
-            work_q.task_done()
+        # timeout should never happen, but might happen
+        # if iterating the file without queuing anything on large file (or slow filesystem)
+        work = work_q.get(timeout=50)
+        # Always mark the item as done, progress is tracked with sc.will_test
+        work_q.task_done()
+
+        if early_stop_flag.is_set():
+            assert work is None
+
+        if work == None:
             cleanup()
 
         m, mi, prev_p, next_p, prob_record, log_n, line = work
@@ -594,8 +602,8 @@ def process_line(
 
                 # Can take A LONG TIME, so allow early quitting if partial is saved
                 if early_stop_flag.is_set():
-                    work_q.task_done()
-                    cleanup()
+                    # will cleanup at top
+                    continue
 
         n_tests, next_p = 0, 0
         if test_next:
@@ -611,7 +619,6 @@ def process_line(
             prob_record, new_prob_record,
             test_time,
         ))
-        work_q.task_done()
 
 
 def process_result(conn, args, record_gaps, m_probs, data, sc, result):
@@ -724,7 +731,7 @@ def run_in_parallel(
     results_q = multiprocessing.Queue()
 
     # Try to keep at least this many in the queue
-    min_work_queued = args.threads + 2
+    min_work_queued = 2 * args.threads + 2
 
     # Used to dynamically set prob_threshold, See THEORY.md#one-sided-tests
     prob_side_threshold = multiprocessing.Value('d', 5 * prob_threshold)
@@ -817,8 +824,6 @@ def run_in_parallel(
     except (KeyboardInterrupt, queue.Empty):
         print("Received first  Ctrl+C | Waiting for current work to finish")
 
-        early_stop_flag.set()
-
         # Flush queue and wait on current results
         try:
             while True:
@@ -828,6 +833,9 @@ def run_in_parallel(
         except queue.Empty:
             pass
 
+        early_stop_flag.set()
+
+    print("No more work pushing NONE")
     for p in processes:
         work_q.put(None)
 
