@@ -171,11 +171,9 @@ def Appendix1():
     # 503, 1009, 1511, 5003, 10007
     for P, mp in [
             (1511, 250e9),
-            (2111, 800e9),
-            (4441, 400e9),
-            (4441, 100e9),
-            (5333, 5000e9),
-            (6663,  500e9),
+            (2111, 1800e9),
+            (4441, 2000e9),
+            (5333, 2000e9),
             (8887, 1000e9),
     ]:
         ln, prps = expected_PRP(mp, P)
@@ -207,8 +205,8 @@ def Trick2():
             count += ((first % p) + 2 * X) >= p
         print (f"{count}/{primes} = {count / primes:.2%}\t", time.time() - t)
 
-Runtime()
+#Runtime()
 #MertensThird()
 #Speedup()
-#Appendix1()
+Appendix1()
 #Trick2()
