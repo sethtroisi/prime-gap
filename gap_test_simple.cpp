@@ -84,13 +84,15 @@ int main(int argc, char* argv[]) {
 
 
 void load_and_verify_unknowns(
+        const bool rle,
         const uint64_t mi,
         const int SIEVE_LENGTH,
         std::ifstream &unknown_file,
         vector<int32_t> (&unknowns)[2]) {
     int unknown_l;
     int unknown_u;
-    // Read a line from the file
+
+    // XXX: could peek 10 characters and look for space instead of using config.rle
     {
         uint32_t mtest;
         unknown_file >> mtest;
@@ -108,19 +110,39 @@ void load_and_verify_unknowns(
         unknown_file >> delim;
         assert( delim == "|" );
 
-        int c;
-        for (int k = 0; k < unknown_l; k++) {
-            unknown_file >> c;
-            assert( 1 <= -c && -c <= SIEVE_LENGTH );
-            unknowns[0].push_back(-c);
-        }
-        unknown_file >> delim;
-        assert( delim == "|" );
+        if (rle) {
+            for (int group = 0; group <= 1; group++) {
+                unsigned char c1, c2;
+                int accum = 0;
+                int unknown_count = group == 0 ? unknown_l : unknown_u;
+                for (int k = 0; k < unknown_count; k++) {
+                    unknown_file >> c1;
+                    unknown_file >> c2;
+                    int delta = 128 * (c1 - 48) + (c2 - 48);
+                    accum += delta;
+                    assert( 1 <= accum && accum <= SIEVE_LENGTH );
+                    unknowns[group].push_back(accum);
+                }
+                if (group == 0) {
+                    unknown_file >> delim;
+                    assert( delim == "|" );
+                }
+            }
+        } else {
+            int c;
+            for (int k = 0; k < unknown_l; k++) {
+                unknown_file >> c;
+                assert( 1 <= -c && -c <= SIEVE_LENGTH );
+                unknowns[0].push_back(-c);
+            }
+            unknown_file >> delim;
+            assert( delim == "|" );
 
-        for (int k = 0; k < unknown_u; k++) {
-            unknown_file >> c;
-            assert( 1 <= c && c <= SIEVE_LENGTH );
-            unknowns[1].push_back(c);
+            for (int k = 0; k < unknown_u; k++) {
+                unknown_file >> c;
+                assert( 1 <= c && c <= SIEVE_LENGTH );
+                unknowns[1].push_back(c);
+            }
         }
     }
 
@@ -137,7 +159,7 @@ void test_interval(
         size_t &s_total_prp_tests,
         size_t &s_gap_out_of_sieve_prev, size_t &s_gap_out_of_sieve_next,
         vector<int32_t> (&unknowns)[2],
-        int &next_p, int &prev_p) {
+        int &prev_p, int &next_p) {
 
     mpz_t center, ptest;
     mpz_init(center); mpz_init(ptest);
@@ -261,6 +283,7 @@ void prime_gap_test(const struct Config config) {
         vector<int32_t> unknowns[2];
 
         load_and_verify_unknowns(
+            config.rle,
             mi, SIEVE_LENGTH, unknown_file, unknowns);
 
         size_t unknown_l = unknowns[0].size();
@@ -277,7 +300,6 @@ void prime_gap_test(const struct Config config) {
             s_total_prp_tests,
             s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next,
             unknowns, prev_p, next_p);
-
         assert( prev_p > 0 && next_p > 0 );
 
         int gap = next_p + prev_p;
@@ -295,9 +317,9 @@ void prime_gap_test(const struct Config config) {
 
         s_tests += 1;
         bool is_last = (mi == last_mi);
-        if ( is_last || (s_tests == 1 || s_tests == 10 || s_tests == 30 ||
-                         s_tests == 100 || s_tests == 300 || s_tests == 1000)
-                     || (s_tests % 5000 == 0)) {
+        if ( is_last || (s_tests % 5000 == 0) || (
+              s_tests == 1   || s_tests == 10 || s_tests == 30  ||
+              s_tests == 100 || s_tests == 300 || s_tests == 500 || s_tests == 1000) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
 

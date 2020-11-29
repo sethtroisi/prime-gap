@@ -522,6 +522,8 @@ size_t primepi_estimate(uint64_t max_prime) {
 
 
 void Args::show_usage(char* name) {
+    Config defaults;
+
     cout << "Usage: " << name << endl;
     cout << "[REQUIRED]" << endl;
     cout << "  -p <p>" << endl;
@@ -547,9 +549,9 @@ void Args::show_usage(char* name) {
     cout << endl;
     cout << "[OPTIONAL]" << endl;
     cout << "  --search-db" << endl;
-    cout << "    Database for this project (Default: 'prime-gap-search.db')" << endl;
-    cout << "  --prime-gaps-db" << endl;
-    cout << "    Prime gap prime gap search db (Default: 'prime-gap-search.db')" << endl;
+    cout << "    Database for this project (Default: '" << defaults.search_db << "')" << endl;
+    cout << "  --records-db" << endl;
+    cout << "    Prime gap prime gap search db (Default: '" << defaults.records_db << "')" << endl;
     cout << endl;
     cout << "  -q, --quiet" << endl;
     cout << "    suppress some status output (twice for more suppression)" << endl;
