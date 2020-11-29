@@ -49,14 +49,17 @@ def Runtime():
 
     M_m = 0.26149
 
-    logK = int(gmpy2.log(gmpy2.primorial(20011) // gmpy2.primorial(13)))
+    K = gmpy2.primorial(8887) // gmpy2.primorial(13)
+    log2K = int(gmpy2.log2(K))
     M  = 10000
     sl = 10 ** 10
     M_c = 1917
     c = 50
-    S = 2 * 10 * 20000 + 1
+    S = 2 * 10 * (1000 * round(float(gmpy2.log(K)) / 1000)) + 1
     C_mod = 4/64
+
     C_eq3 = 30
+    print (f"log2(K) = {log2K}, S = {S}")
 
     P = 455052511
     Psmall = int(sympy.primepi(S * c))
@@ -64,7 +67,7 @@ def Runtime():
 
     llsl = log(log(sl))
 
-    A1 = P * logK * C_mod
+    A1 = P * log2K * C_mod
     B1 = S * (llsl + M_m)
     traditional = M_c * (A1 + B1)
     print (f"{M_c} \\times ({A1:.2e} + {B1:.2e})")
@@ -72,13 +75,13 @@ def Runtime():
     print ()
 
     print ("{:,}*{:,}/{} + {:,}*{:,}({:.2f}+{:.2f}) + {:,}*{:,} + ({:,}*{:,}*({:.2f}-{:.2f}) + {:,})*{}log2({}/{:,})".format(
-        P, logK, int(1/C_mod),
+        P, log2K, int(1/C_mod),
         M_c, S, llsl, M_m,
         M_c, Psmall,
         M, S, llsl, log(log(c * S)), Plarge,
         C_eq3, sl, S))
 
-    A = P * logK * C_mod
+    A = P * log2K * C_mod
     B = M_c * B1
     C = M_c * Psmall
     Da = M * S * (llsl - log(log(c * S))) + Plarge
@@ -205,8 +208,8 @@ def Trick2():
             count += ((first % p) + 2 * X) >= p
         print (f"{count}/{primes} = {count / primes:.2%}\t", time.time() - t)
 
-#Runtime()
+Runtime()
 #MertensThird()
 #Speedup()
-Appendix1()
+#Appendix1()
 #Trick2()

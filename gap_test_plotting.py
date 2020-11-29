@@ -234,7 +234,7 @@ def stats_plots(
 
             # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
             # sorted and unsorted order
-            axis.set_xlabel(" # of m's tests")
+            axis.set_xlabel(" # of m's tested")
             axis.set_ylabel(f'Sum(P(gap {label})')
 
             #assert len(prob_data) == len(data.experimental_gap)
@@ -346,7 +346,7 @@ def stats_plots(
         # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
         # sorted and unsorted order
         fig.add_subplot(gs[2, 2])
-        plt.xlabel(" # of m's tests")
+        plt.xlabel(" # of m's tested")
         plt.ylabel(f'Sum(P(gap > min_merit)')
 
         p_gap_merit_sorted, _ = zip(*sorted(zipped, reverse=True))
