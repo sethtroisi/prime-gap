@@ -1011,9 +1011,11 @@ void calculate_prp_top_percent(
         mpz_t K;
         init_K(config, K);
         config.verbose = 0;
+
+        const uint64_t threshold = 8 * (2 * config.sieve_length + 1);
         // Inflate slightly to account for gap_stat, starting up...
         combined_time = 1.05 * combined_sieve_method2_time_estimate(
-            config, K, valid_ms, 0.0 /* prp_time_est */);
+            config, K, valid_ms, threshold, 0.0 /* prp_time_est */);
         mpz_clear(K);
     }
 

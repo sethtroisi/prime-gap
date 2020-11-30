@@ -264,8 +264,11 @@ double combined_sieve_method2_time_estimate(
     // ~ `primesieve -t1 1e9`
     const double PRIME_RANGE_SEC = 0.3 / 1e9;
 
+    threshold = std::min(threshold, config.max_prime);
+
     const double K_log = log(K);
     const size_t expected_primes = primepi_estimate(config.max_prime);
+    const size_t threshold_primes = primepi_estimate(threshold);
     const double mod_time_est = benchmark_primorial_modulo(
         K, 1'00'000 * (K_log < 2000 ? 20 : 1));
 
@@ -274,11 +277,8 @@ double combined_sieve_method2_time_estimate(
         (log(log(config.max_prime)) - log(log(threshold))) * interval * config.minc;
 
     const double k_mod_time = expected_primes * mod_time_est;
-    const double m_search_time = (expected_m_stops + expected_primes) * MODULE_SEARCH_SECS;
-    // Estimate still needs to account for:
-    //      small primes
-    //      middle primes
-    //      marking off factors (small and large)
+    const double m_search_time =
+        (expected_m_stops + (expected_primes - threshold_primes)) * MODULE_SEARCH_SECS;
 
     const size_t count_prints = 5 * (log10(config.max_prime) - 4);
     const double extra_time =
@@ -287,6 +287,11 @@ double combined_sieve_method2_time_estimate(
         // 5 prints per log10 * std::count(all_unknowns)
         count_prints * 1.0 * valid_ms * count_coprime_sieve(config) / COUNT_VECTOR_BOOL_PER_SEC;
     const double total_estimate = k_mod_time + m_search_time + extra_time;
+
+    // Estimate still needs to account for:
+    //      small primes
+    //      middle primes
+    //      marking off factors (small and large)
 
     if (config.verbose >= 2) {
         const double N_log = K_log + log(config.mstart);
@@ -302,7 +307,8 @@ double combined_sieve_method2_time_estimate(
 
         // XXX: pull from benchmark somehow.
         printf("Estimated modulo_searches(million): %ld, time: %.0f (%.1f%% total)\n",
-                expected_m_stops / 1'000'000, m_search_time, 100.0 * m_search_time / total_estimate);
+                (expected_m_stops + expected_primes) / 1'000'000,
+                m_search_time, 100.0 * m_search_time / total_estimate);
 
         printf("Estimated sieve time: %.0f seconds (%.2f hours) (%.3f%%)\n",
                 total_estimate, total_estimate / 3600,
