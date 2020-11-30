@@ -255,6 +255,7 @@ double combined_sieve_method2_time_estimate(
         const struct Config& config,
         const mpz_t &K,
         uint64_t valid_ms,
+        uint64_t threshold,
         double prp_time_est) {
     // XXX: pull these from config file or somewhere
     const double MODULE_SEARCH_SECS = 130e-9;
@@ -268,14 +269,15 @@ double combined_sieve_method2_time_estimate(
     const double mod_time_est = benchmark_primorial_modulo(
         K, 1'00'000 * (K_log < 2000 ? 20 : 1));
 
-    const size_t interval = 2 * config.sieve_length;
+    const size_t interval = 2 * config.sieve_length + 1;
     const size_t expected_m_stops =
-        (log(log(config.max_prime)) - log(log(8 * interval))) * interval * config.minc;
+        (log(log(config.max_prime)) - log(log(threshold))) * interval * config.minc;
 
     const double k_mod_time = expected_primes * mod_time_est;
     const double m_search_time = (expected_m_stops + expected_primes) * MODULE_SEARCH_SECS;
     // Estimate still needs to account for:
     //      small primes
+    //      middle primes
     //      marking off factors (small and large)
 
     const size_t count_prints = 5 * (log10(config.max_prime) - 4);

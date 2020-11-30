@@ -650,6 +650,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Make method2 the default
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
 * combined\_sieve.cpp
+  * [X] Calculating coprime [L, R] * K^-1 mod p for medium p
   * [x] Wheel for coprime i (saves 50-80% of space)
   * [x] Add some theory for only doing one side test.
   * [x] Optimize D helper

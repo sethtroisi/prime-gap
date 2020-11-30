@@ -126,6 +126,7 @@ double combined_sieve_method2_time_estimate(
         const struct Config& config,
         const mpz_t &K,
         uint64_t valid_ms,
+        uint64_t threshold,
         double prp_time_est);
 
 
