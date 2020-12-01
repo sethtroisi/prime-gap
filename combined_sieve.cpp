@@ -727,6 +727,39 @@ void prime_gap_search(const struct Config& config) {
 
 // Method 2
 
+pair<uint32_t, uint32_t> calculate_thresholds_method2(
+        const struct Config config,
+        size_t count_coprime_sieve,
+        size_t valid_ms) {
+    uint32_t sieve_interval = 2 * config.sieve_length + 1;
+
+    // (small vs modulo_search)  MULT  vs  log2(MULT) * (M_inc/valid_ms)
+    float SMALL_MULT = std::max(8.0, log(8) * config.minc / valid_ms);
+
+    // (small vs medium)         valid_m  vs  count_coprime_sieve * (M_inc / prime)
+    uint64_t MEDIUM_CROSSOVER_SMALL = 1.0 * count_coprime_sieve * config.minc / valid_ms;
+
+    // (medium vs modulo_search)  count_coprime_sieve vs M*S/P
+    //uint64_t MEDIUM_CROSSOVER_SEARCH = (1.9 * config.minc * sieve_interval) / count_coprime_sieve;
+
+    // XXX: What would it look like to do this more dynamically?
+    // XXX: Everytime prime >= next_mult run a couple through both MEDIUM & LARGE prime and choose faster.
+
+    uint64_t SMALL_THRESHOLD = std::min((uint64_t) SMALL_MULT * sieve_interval, MEDIUM_CROSSOVER_SMALL);
+    uint64_t MEDIUM_THRESHOLD = 250'000'000l; //std::max(SMALL_THRESHOLD, MEDIUM_CROSSOVER_SEARCH);
+    if (MEDIUM_THRESHOLD > config.max_prime) {
+        MEDIUM_THRESHOLD = config.max_prime;
+    }
+
+    if (config.verbose >= 1) {
+        setlocale(LC_NUMERIC, "");
+        printf("small_threshold:  %'ld  \tmin(%.1f x SL, %ld)\n",
+            SMALL_THRESHOLD, 2 * SMALL_MULT, MEDIUM_CROSSOVER_SMALL);
+        printf("middle_threshold: %'ld\n", MEDIUM_THRESHOLD);
+        setlocale(LC_NUMERIC, "C");
+    }
+    return {SMALL_THRESHOLD, MEDIUM_THRESHOLD};
+}
 
 void save_unknowns_method2(
         const struct Config config,
@@ -1108,35 +1141,23 @@ void prime_gap_parallel(struct Config& config) {
     const size_t count_coprime_sieve = coprime_X.size();
     assert( count_coprime_sieve % 2 == 0 );
 
-    //TODO: refactor to calc_thresholds().
+    if (config.verbose >= 1) {
+        setlocale(LC_NUMERIC, "");
+        printf("sieve_length:  2x %'d\n", config.sieve_length);
+        printf("max_prime:        %'ld\n", config.max_prime);
+        setlocale(LC_NUMERIC, "C");
+    }
 
-    // (small vs modulo_search)  MULT  vs  log2(MULT) * (M_inc/valid_ms)
-    const float SMALL_MULT = std::max(8.0, log(8) * M_inc / valid_ms);
-    // (small vs medium)         valid_m  vs  count_coprime_sieve * (M_inc / prime)
-    const uint64_t MEDIUM_CROSSOVER_SMALL =
-        std::max((uint64_t) SIEVE_INTERVAL, (uint64_t) 1.0 * count_coprime_sieve * M_inc / valid_ms);
-
-    // (medium vs modulo_search)  count_coprime_sieve vs M*S/P
-    const uint64_t MEDIUM_CROSSOVER_SEARCH =
-        std::min(config.max_prime, (uint64_t) (1.9 * M_inc * SIEVE_INTERVAL) / count_coprime_sieve);
-
-    const uint64_t SMALL_THRESHOLD = std::min((uint64_t) SMALL_MULT * SIEVE_INTERVAL, MEDIUM_CROSSOVER_SMALL);
-    const uint64_t MEDIUM_THRESHOLD = std::max(SMALL_THRESHOLD, MEDIUM_CROSSOVER_SEARCH);
+    // Prints relavant settings
+    const auto THRESHOLDS =
+        calculate_thresholds_method2(config, count_coprime_sieve, valid_ms);
+    const uint64_t SMALL_THRESHOLD = THRESHOLDS.first;
+    const uint64_t MEDIUM_THRESHOLD = THRESHOLDS.second;
 
     // SMALL_THRESHOLD must handle all primes that can mark off two items in SIEVE_INTERVAL.
     assert( SMALL_THRESHOLD >= SIEVE_INTERVAL );
     assert( MEDIUM_THRESHOLD >= SMALL_THRESHOLD );
     assert( MEDIUM_THRESHOLD <= config.max_prime );
-
-    if (config.verbose >= 1) {
-        setlocale(LC_NUMERIC, "");
-        printf("sieve_length:  2x %'d\n", config.sieve_length);
-        printf("max_prime:        %'ld\n", config.max_prime);
-        printf("small_threshold:  %'ld  \tmin(%.1f x SL, %ld)\n",
-            SMALL_THRESHOLD, 2 * SMALL_MULT, MEDIUM_CROSSOVER_SMALL);
-        printf("middle_threshold: %'ld\n", MEDIUM_THRESHOLD);
-        setlocale(LC_NUMERIC, "C");
-    }
 
 #if defined GMP_VALIDATE_LARGE_FACTORS && !defined GMP_VALIDATE_FACTORS
     // No overflow from gap_common.cpp checks
@@ -1356,9 +1377,7 @@ void prime_gap_parallel(struct Config& config) {
         const int32_t m_start_shift = (prime - (M_start % prime)) % prime;
 
         // Find m*K = [L, R]
-        for (size_t i = 0; i < coprime_X.size(); i++) {
-            int64_t X = coprime_X[i];
-
+        for (int64_t X : coprime_X) {
             // (m + M_start) * K = (X - SIEVE_LENGTH)
             // m = ((SL-X)*K^-1 - M_start) % p
             int64_t m0 = ((prime - X + SIEVE_LENGTH) * inv_K + m_start_shift) % prime;
@@ -1374,8 +1393,8 @@ void prime_gap_parallel(struct Config& config) {
                 size_t m = M_start + mi;
                 int32_t mii = m_reindex[mi];
 
-                stats.small_prime_factors_interval += 1;
                 if (mii >= 0) {
+                    stats.small_prime_factors_interval += 1;
                     // TODO: benchmark storing and sorting (mii,i) so memory access is more ordered?
 #if METHOD2_WHEEL
                     composite[mii][i_reindex_wheel[m % reindex_m_wheel][X]] = true;
