@@ -739,14 +739,17 @@ pair<uint32_t, uint32_t> calculate_thresholds_method2(
     // (small vs medium)         valid_m  vs  count_coprime_sieve * (M_inc / prime)
     uint64_t MEDIUM_CROSSOVER_SMALL = 1.0 * count_coprime_sieve * config.minc / valid_ms;
 
-    // (medium vs modulo_search)  count_coprime_sieve vs M*S/P
-    //uint64_t MEDIUM_CROSSOVER_SEARCH = (1.9 * config.minc * sieve_interval) / count_coprime_sieve;
+    // (medium vs modulo_search)  count_coprime_sieve vs M*S/P * (log2(P) - log2(SL))
+    float M_PER_P_CROSSOVER = 1.0 * config.minc * sieve_interval / count_coprime_sieve;
+    // correct for how much work it takes to skip to next m
+    float MEDIUM_MULT = std::max(1.9, 0.5 * log2(M_PER_P_CROSSOVER / count_coprime_sieve));
+    uint64_t MEDIUM_CROSSOVER_SEARCH = MEDIUM_MULT * M_PER_P_CROSSOVER;
 
     // XXX: What would it look like to do this more dynamically?
     // XXX: Everytime prime >= next_mult run a couple through both MEDIUM & LARGE prime and choose faster.
 
     uint64_t SMALL_THRESHOLD = std::min((uint64_t) SMALL_MULT * sieve_interval, MEDIUM_CROSSOVER_SMALL);
-    uint64_t MEDIUM_THRESHOLD = 250'000'000l; //std::max(SMALL_THRESHOLD, MEDIUM_CROSSOVER_SEARCH);
+    uint64_t MEDIUM_THRESHOLD = std::max(SMALL_THRESHOLD, MEDIUM_CROSSOVER_SEARCH);
     if (MEDIUM_THRESHOLD > config.max_prime) {
         MEDIUM_THRESHOLD = config.max_prime;
     }
