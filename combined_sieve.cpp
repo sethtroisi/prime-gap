@@ -749,6 +749,10 @@ pair<uint32_t, uint32_t> calculate_thresholds_method2(
     // XXX: Everytime prime >= next_mult run a couple through both MEDIUM & LARGE prime and choose faster.
 
     uint64_t SMALL_THRESHOLD = std::min((uint64_t) SMALL_MULT * sieve_interval, MEDIUM_CROSSOVER_SMALL);
+    if (SMALL_THRESHOLD < sieve_interval) {
+        SMALL_THRESHOLD = sieve_interval + 1;
+    }
+
     uint64_t MEDIUM_THRESHOLD = std::max(SMALL_THRESHOLD, MEDIUM_CROSSOVER_SEARCH);
     if (MEDIUM_THRESHOLD > config.max_prime) {
         MEDIUM_THRESHOLD = config.max_prime;
@@ -1313,6 +1317,8 @@ void prime_gap_parallel(struct Config& config) {
                         bool firstIsEven = lowIsEven == evenFromLow;
 
                         #ifdef GMP_VALIDATE_FACTORS
+                            stats.validated_factors += 1;
+
                             mpz_mul_ui(test, K, M_start + mi);
                             mpz_sub_ui(test, test, SIEVE_LENGTH);
                             assert( (mpz_even_p(test) > 0) == lowIsEven );
@@ -1321,6 +1327,7 @@ void prime_gap_parallel(struct Config& config) {
                             assert( (mpz_even_p(test) > 0) == firstIsEven );
 
                             assert( 0 == mpz_fdiv_ui(test, prime) );
+                            assert( mpz_odd_p(test) != firstIsEven );
                         #endif  // GMP_VALIDATE_FACTORS
 
                         if (firstIsEven) {
@@ -1383,20 +1390,53 @@ void prime_gap_parallel(struct Config& config) {
         for (int64_t X : coprime_X) {
             // (m + M_start) * K = (X - SIEVE_LENGTH)
             // m = ((SL-X)*K^-1 - M_start) % p
-            int64_t m0 = ((prime - X + SIEVE_LENGTH) * inv_K + m_start_shift) % prime;
+            int64_t mi_0 = ((prime - X + SIEVE_LENGTH) * inv_K + m_start_shift) % prime;
 
-            // (base_r * (m0 + M_start)) % prime == -X
-            assert( (base_r * (m0 + M_start) + X - SIEVE_LENGTH) % prime == 0 );
+            // (base_r * (mi_0 + M_start)) % prime == -X
+            assert( (base_r * (mi_0 + M_start) + X - SIEVE_LENGTH) % prime == 0 );
 
-            // m must be odd (otherwise 2 will divide this)
-            assert(D % 2 == 0);
-            size_t mi = (m0 + M_start) % 2 == 1 ? m0 : m0 + prime;
+            // (X & 1) == X_odd_test <-> ((X + SIEVE_LENGTH) % 2 == 1)
+            const bool X_odd_test = (SIEVE_LENGTH & 1) == 0;
 
-            for (; mi < M_inc; mi += 2 * prime) {
+            // K and X never both even
+            const bool K_even = (D & 1) != 0;
+            assert( !(K_even && ((X & 1) == X_odd_test)) );
+
+            size_t m_test = M_start + mi_0;
+            uint32_t shift = prime;
+            /* If K is odd can count by 2*prime */
+            if ((D & 1) == 0) {
+                shift += prime;
+                /**
+                 * When K is odd
+                 * m parity (even/odd) must not match X parity
+                 * odd m * odd K + odd X   -> even
+                 * even m * odd K + even X -> even
+                 */
+                if (((X & 1) == X_odd_test) == (m_test & 1)) {
+                    mi_0 += prime;
+                }
+            }
+
+            for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
                 size_t m = M_start + mi;
                 int32_t mii = m_reindex[mi];
 
                 if (mii >= 0) {
+                    // TODO: test && add comment
+                    /*
+                    int64_t dist = first - SIEVE_LENGTH;
+                    uint32_t m = M_start + mi;
+                    if (D_mod2 && (dist & 1))
+                        return;
+                    if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
+                        return;
+                    if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
+                        return;
+                    if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
+                        return;
+                    */
+
                     stats.small_prime_factors_interval += 1;
                     // TODO: benchmark storing and sorting (mii,i) so memory access is more ordered?
 #if METHOD2_WHEEL
@@ -1414,6 +1454,7 @@ void prime_gap_parallel(struct Config& config) {
                     mpz_add_ui(test, test, X);
                     uint64_t mod = mpz_fdiv_ui(test, prime);
                     assert( mod == 0 );
+                    assert( mpz_odd_p(test) );
                 }
 #endif  // GMP_VALIDATE_FACTORS
             }
@@ -1462,8 +1503,10 @@ void prime_gap_parallel(struct Config& config) {
 
             // With D even, (ms + mi) must be odd (or share a factor of 2)
             // Helps avoid wide memory read
-            if (((D & 1) == 0) && ((M_start & 1) == (mi & 1)))
+            uint32_t m = M_start + mi;
+            if (((D & 1) == 0) && ((m & 1) == 0)) {
                 return;
+            }
 
             int32_t mii = m_reindex[mi];
             if (mii < 0)
@@ -1494,10 +1537,10 @@ void prime_gap_parallel(struct Config& config) {
                 mpz_add_ui(test, test, first);
                 uint64_t mod = mpz_fdiv_ui(test, prime);
                 assert( mod == 0 );
+                assert( mpz_odd_p(test) );
             }
 
             int64_t dist = first - SIEVE_LENGTH;
-            uint32_t m = M_start + mi;
             if (D_mod2 && (dist & 1))
                 return;
             if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
