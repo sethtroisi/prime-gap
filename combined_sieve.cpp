@@ -1371,6 +1371,14 @@ void prime_gap_parallel(struct Config& config) {
 
     assert(SIEVE_INTERVAL < prime);
 
+    const int K_mod3 = mpz_fdiv_ui(K, 3); // K % 3
+    const int K_mod5 = mpz_fdiv_ui(K, 5); // K % 5
+    const int K_mod7 = mpz_fdiv_ui(K, 7); // K % 7
+    const int D_mod2 = D % 2 == 0;
+    const int D_mod3 = D % 3 == 0;
+    const int D_mod5 = D % 5 == 0;
+    const int D_mod7 = D % 7 == 0;
+
     // Middle primes
     for (; prime <= MEDIUM_THRESHOLD; prime = it.next_prime()) {
         stats.pi_interval += 1;
@@ -1388,12 +1396,14 @@ void prime_gap_parallel(struct Config& config) {
 
         // Find m*K = [L, R]
         for (int64_t X : coprime_X) {
+            int32_t dist = X - SIEVE_LENGTH;
+
             // (m + M_start) * K = (X - SIEVE_LENGTH)
             // m = ((SL-X)*K^-1 - M_start) % p
-            int64_t mi_0 = ((prime - X + SIEVE_LENGTH) * inv_K + m_start_shift) % prime;
+            int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
 
             // (base_r * (mi_0 + M_start)) % prime == -X
-            assert( (base_r * (mi_0 + M_start) + X - SIEVE_LENGTH) % prime == 0 );
+            assert( (base_r * (mi_0 + M_start) + dist) % prime == 0 );
 
             // (X & 1) == X_odd_test <-> ((X + SIEVE_LENGTH) % 2 == 1)
             const bool X_odd_test = (SIEVE_LENGTH & 1) == 0;
@@ -1423,22 +1433,16 @@ void prime_gap_parallel(struct Config& config) {
                 int32_t mii = m_reindex[mi];
 
                 if (mii >= 0) {
-                    // TODO: test && add comment
-                    /*
-                    int64_t dist = first - SIEVE_LENGTH;
-                    uint32_t m = M_start + mi;
-                    if (D_mod2 && (dist & 1))
-                        return;
-                    if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
-                        return;
-                    if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
-                        return;
-                    if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
-                        return;
-                    */
-
                     stats.small_prime_factors_interval += 1;
-                    // TODO: benchmark storing and sorting (mii,i) so memory access is more ordered?
+                    /*
+                    // Doesn't seem to help, slightly tested.
+                    if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
+                        continue;
+                    if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
+                        continue;
+                    if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
+                        continue;
+                    // */
 #if METHOD2_WHEEL
                     composite[mii][i_reindex_wheel[m % reindex_m_wheel][X]] = true;
 #else
@@ -1480,14 +1484,6 @@ void prime_gap_parallel(struct Config& config) {
 
     // Setup CTRL+C catcher
     signal(SIGINT, signal_callback_handler);
-
-    const int K_mod3 = mpz_fdiv_ui(K, 3); // K % 3
-    const int K_mod5 = mpz_fdiv_ui(K, 5); // K % 5
-    const int K_mod7 = mpz_fdiv_ui(K, 7); // K % 7
-    const int D_mod2 = D % 2 == 0;
-    const int D_mod3 = D % 3 == 0;
-    const int D_mod5 = D % 5 == 0;
-    const int D_mod7 = D % 7 == 0;
 
     for (; prime <= MAX_PRIME; prime = it.next_prime()) {
         stats.pi_interval += 1;
