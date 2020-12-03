@@ -51,6 +51,9 @@ def get_arg_parser():
         default="S.Troisi",
         help="Name in gap database to ignore for already submitted records")
 
+    parser.add_argument('--ignore-small', action='store_true',
+        help="Ignore 'records' with small merit")
+
     return parser
 
 
@@ -85,13 +88,14 @@ def print_record_gaps(args, gaps):
             num_gaps, min_merit, max_merit))
 
         print ("Checking", len(gaps), "gaps against records")
+        small_merit = 0
         own_records = []
         record_lines = []
         for gap in gaps:
-                # gapsize, merit, submit, startprime, "line"
+                # gapsize, merit, raw_data, startprime, "line"
                 size = gap[0]
                 new_merit = gap[1]
-                submit = gap[2]
+                raw_data = gap[2]
                 startprime = gap[3]
                 # These filters generated with
                 # sqlite3 gaps.db  "select min(merit) from gaps where gapsize BETWEEN 1500 AND 50000;"
@@ -107,9 +111,13 @@ def print_record_gaps(args, gaps):
                     ' gapsize=?', (size,)).fetchone()
 
                 if not existing:
-                    record_lines.append(submit)
+                    if new_merit < 8 and size < 1000000:
+                        small_merit += 1
+                        if args.ignore_small:
+                            continue
+                    record_lines.append(raw_data)
                     print ("\tRecord {:5} | {:70s} | Gap={:<6} (New!)".format(
-                        len(record_lines), submit, size))
+                        len(record_lines), raw_data, size))
                     continue
 
                 # Works most of the time, could have false positives
@@ -117,7 +125,7 @@ def print_record_gaps(args, gaps):
                 is_own_record = existing[3] == args.whoami
 
                 if is_same and not is_own_record:
-                    print("\tREDISCOVERED | {:70s} (old: {})".format(gap[2], existing))
+                    print("\tREDISCOVERED | {:70s} (old: {})".format(raw_data, existing))
                     continue
 
                 old_n = primegapverify.parse(existing[2])
@@ -134,24 +142,26 @@ def print_record_gaps(args, gaps):
 #                        print ("Close:", existing[2], "vs newer", startprime)
 
                     if is_same and is_own_record:
-                        own_records.append(gap[2])
+                        own_records.append(raw_data)
                         ith = len(own_records)
                         special = ith in (1,2,5,10,20,50) or ith % 100 == 0
                         if not special: continue
                     else:
-                        record_lines.append(gap[2])
+                        record_lines.append(raw_data)
 
                     print ("\tRecord {:5} | {:70s} | Gap={:<6} (old: {:.2f}{} +{:.2f})".format(
                         str(len(own_records)) + "*" if is_same else len(record_lines), gap[4], size,
-                        existing[0], " by you" * is_own_record, gap[1] - existing[0]))
+                        existing[0], " by you" * is_own_record, new_merit - existing[0]))
 
         if record_lines:
             print ()
-            print ("Records({}) {}:".format(
-                len(record_lines),
-                f"({len(own_records)} already submitted)" if own_records else ""))
             for line in record_lines:
                 print (line)
+            print ("Records({}) {}".format(
+                len(record_lines),
+                f"({len(own_records)} already submitted)" if own_records else ""))
+            if small_merit:
+                print(f'\tHid {small_merit} new "records" with merit < 8')
             print ()
 
 
