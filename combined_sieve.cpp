@@ -19,6 +19,7 @@
 #include <cmath>
 #include <csignal>
 #include <cstdio>
+#include <ctime>
 #include <fstream>
 #include <functional>
 #include <iostream>
@@ -934,7 +935,7 @@ void method2_increment_print(
 
             // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
             // Print 60,70,80,90 billion because intervals are wider.
-            size_t all_ten = prime > 10'000'000'000;
+            size_t all_ten = prime > 1'000'000'000;
             size_t next_next_mult = (5 + 4 * all_ten) * stats.next_mult;
             if (next_next_mult <= max_mult && stats.next_print == next_next_mult) {
                 stats.next_mult *= 10;
@@ -955,11 +956,19 @@ void method2_increment_print(
 
         setlocale(LC_NUMERIC, "");
         if (config.verbose + is_last >= 1) {
-            printf("%'-10ld (primes %'ld/%ld)\t(seconds: %.2f/%-.1f | per m: %.3g)\n",
+            printf("%'-10ld (primes %'ld/%ld)\t(seconds: %.2f/%-.1f | per m: %.3g)",
                 prime,
                 stats.pi_interval, stats.pi,
                 int_secs, secs,
                 secs / valid_ms);
+            if (int_secs > 240) {
+                // Add " @ HH:MM:SS" so that it is easier to predict when the next print will happen
+                time_t rawtime = std::time(NULL);
+                struct tm *tm = localtime( &rawtime );
+                tm->tm_hour = 5;
+                printf(" @ %d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec);
+            }
+            printf("\n");
             stats.interval_t = s_stop_t;
         }
 

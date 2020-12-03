@@ -606,12 +606,13 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Set rid if null (but reasonable range exists)
   * [ ] Check if range_stats needs cleanup after deleting range?
 * combined\_sieve.cpp
-  * [ ] Option to output m with gcd(m, d) != 1
   * [ ] Improve optimize D helper
+    * [ ] Document D helper
   * [ ] `M_inc * max_prime > 2^64` use `modulo_search_euclid_all_large`
     * [ ] Benchmark GMP_VALIDATE_LARGE_FACTORS
 * gap\_stats.cpp
-  * [ ] Produce P(record) / day estimate
+  * [ ] Check that records from m < mstart aren't being counted as improvable
+  * [ ] Produce P(record) / day / core estimate
   * [ ] Check if higher prob is related to unique (mi % d)
   * [ ] Option to starting at m > mstart
 * gap\_test.py
@@ -650,6 +651,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Make method2 the default
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
 * combined\_sieve.cpp
+  * [X] (Not going to do this) option to output m with gcd(m, d) != 1
   * [X] Calculating coprime [L, R] * K^-1 mod p for medium p
   * [x] Wheel for coprime i (saves 50-80% of space)
   * [x] Add some theory for only doing one side test.
