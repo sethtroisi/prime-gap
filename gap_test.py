@@ -32,6 +32,13 @@ import gap_utils
 import gap_test_plotting
 import misc.misc_utils as misc_utils
 
+try:
+    # primegapverify is only alpha so don't require it yet
+    import primegapverify
+    has_pgv = True
+except:
+    has_pgv = False
+
 
 def get_arg_parser():
     parser = argparse.ArgumentParser('Test prime gaps')
@@ -470,6 +477,12 @@ def determine_prev_prime(m, strn, K, unknowns, SL, primes, remainder):
         tests += 1;
         if gap_utils.is_prime(center + i, strn, i):
             return tests, -i
+
+    #if has_pgv:
+        # primegapverify sieve a couple merit at a time
+    #    first = center - SL
+    #    while True:
+    #        composites = primegapverify.sieve(first - SL, SL)
 
     # Double checks center + SL.
     # Medium ugly fallback.

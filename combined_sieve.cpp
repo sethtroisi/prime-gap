@@ -965,7 +965,6 @@ void method2_increment_print(
                 // Add " @ HH:MM:SS" so that it is easier to predict when the next print will happen
                 time_t rawtime = std::time(NULL);
                 struct tm *tm = localtime( &rawtime );
-                tm->tm_hour = 5;
                 printf(" @ %d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec);
             }
             printf("\n");
@@ -1088,7 +1087,9 @@ void prime_gap_parallel(struct Config& config) {
     // This could be first indexed by i_reindex,
     // Would reduce size from wheel * (2*SL+1) to wheel * coprime_i
 #if METHOD2_WHEEL
-    uint32_t reindex_m_wheel = gcd(D, 2*3*5);
+    // TODO: choose wheel as cache size / (wheel * SIEVE_INTERVAL);
+    // TODO: BENCHMARK
+    uint32_t reindex_m_wheel = gcd(D, 2*3);
     vector<uint32_t> i_reindex_wheel[reindex_m_wheel];
     vector<size_t> i_reindex_wheel_count(reindex_m_wheel, 0);
 #else
@@ -1297,6 +1298,8 @@ void prime_gap_parallel(struct Config& config) {
             uint64_t m = M_start + mi;
 #if METHOD2_WHEEL
             uint32_t m_wheel = m % reindex_m_wheel;
+            // TODO think about how large this could be and use vector<unsigned short>
+            // SL = 260K?
             const vector<uint32_t> &i_reindex_m = i_reindex_wheel[m_wheel];
 #else
             const vector<uint32_t> &i_reindex_m = i_reindex;
