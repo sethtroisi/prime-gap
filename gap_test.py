@@ -478,14 +478,40 @@ def determine_prev_prime(m, strn, K, unknowns, SL, primes, remainder):
         if gap_utils.is_prime(center + i, strn, i):
             return tests, -i
 
-    #if has_pgv:
-        # primegapverify sieve a couple merit at a time
-    #    first = center - SL
-    #    while True:
-    #        composites = primegapverify.sieve(first - SL, SL)
+    if has_pgv:
+        t0 = time.time()
+        tests0 = tests
+
+        # primegapverify sieve a big interval below
+        interval = 4 * SL
+        top = center - SL
+        bottom = top - interval
+        assert bottom > 0
+        assert interval < 10 ** 7, SL
+        # Cover [center - 5 * SL, center - SL]
+        # technically last is included multiple times but safer is better.
+        composites = primegapverify.sieve(bottom, 4 * SL)
+        assert len(composites) == len(range(bottom, top+1))
+
+        for i, composite in enumerate(reversed(composites)):
+            if not composite:
+                tests += 1
+                if gap_utils.is_prime(center -(SL+i), strn, -(SL+i)):
+                    t1 = time.time()
+                    print("\tprimegapverify prev_prime({}{}) took {:.2f} second ({} tests, {:.3f}s/test"
+                        .format(strn, -SL, t1 - t0, tests - tests0, (t1 - t0)/(tests - tests0)))
+                    z = SL+i
+                    break
+                    #return tests, SL+i
+                    # i counts from last
+
+        #assert False, ("Huge prev_prime!", strn, ">", 5 * SL)
 
     # Double checks center + SL.
-    # Medium ugly fallback.
+    # Very ugly fallback.
+    print("Falling back to slow prev_prime for {}{}-???".format(strn, SL))
+    t0 = time.time()
+    tests0 = tests
     for i in range(SL, 5*SL+1):
         composite = False
         for prime, remain in zip(primes, remainder):
@@ -496,6 +522,10 @@ def determine_prev_prime(m, strn, K, unknowns, SL, primes, remainder):
         if not composite:
             tests += 1;
             if gap_utils.is_prime(center - i, strn, -i):
+                t1 = time.time()
+                print("\tfallback prev_prime({}{}) took {:.2f} second ({} tests, {:.3f}s/test"
+                    .format(strn, -SL, t1 - t0, tests - tests0, (t1 - t0)/(tests - tests0)))
+                assert z == i, (z, i)
                 return tests, i
 
     assert False
@@ -846,6 +876,7 @@ def run_in_parallel(
         except queue.Empty:
             pass
 
+        time.sleep(0.01)
         early_stop_flag.set()
 
     print("No more work pushing NONE")
