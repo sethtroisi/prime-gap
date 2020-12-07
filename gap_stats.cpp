@@ -390,10 +390,12 @@ void store_stats(
 
         size_t r = i + 1;
         if (config.verbose >= 2 && (
-                    (r <= 5) || (r <= 300 && r % 100 == 0) ||
-                    (r <= 3000 && r % 1000 == 0) ||
-                    (r <= 30000 && r % 10000 == 0) ||
-                    (r % 100000 == 0) ||
+                    (r <= 2) ||
+                    (r <= 200 && r % 100 == 0) ||
+                    (r <= 2000 && r % 1000 == 0) ||
+                    (r <= 20000 && r % 10000 == 0) ||
+                    (r <= 200000 && r % 100000 == 0) ||
+                    (r % 1000000 == 0) ||
                     (r == num_rows))) {
             printf("Saving Row: %6ld/%ld %6ld: %.1f, %.1f | R: %.1e M: %.1e HM(%.1f): %.1e\n",
                     r, num_rows, m,
@@ -1039,15 +1041,21 @@ void calculate_prp_top_percent(
     }
 
     printf("Sum(prob(record)) at different --prp-top-percent.\n");
-    printf("\tUses estimate for combined_sieve timing.\n");
+    if (!exact) {
+        printf("\tUsed estimate for combined_sieve timing.\n");
+    }
     printf("\tEstimate of optimal printed with *\n");
     printf("\n");
 
-    // Both sides & One sided at 20% (assume 80% of prob also)
-    for (size_t side_percent : {100, 20}) {
+    // Both sides & One sided at 10% (assume 90% of prob also)
+    for (size_t side_percent : {100, 10}) {
 
         double sum_prob = 0.0;
         double time = combined_time;
+
+        if (side_percent != 100)
+            printf("\tAssuming %d%% of next_prime(...) are skipped\n", 100 - side_percent);
+        }
 
         bool max_happened = false;
         for (size_t i = 1; i <= sorted.size(); i++) {

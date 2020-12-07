@@ -498,18 +498,16 @@ def determine_prev_prime(m, strn, K, unknowns, SL, primes, remainder):
                 tests += 1
                 if gap_utils.is_prime(center -(SL+i), strn, -(SL+i)):
                     t1 = time.time()
-                    print("\tprimegapverify prev_prime({}{}) took {:.2f} second ({} tests, {:.3f}s/test"
-                        .format(strn, -SL, t1 - t0, tests - tests0, (t1 - t0)/(tests - tests0)))
-                    z = SL+i
-                    break
-                    #return tests, SL+i
-                    # i counts from last
+                    if (t1 - t0) > 60:
+                        print("\tprimegapverify prev_prime({}{}) took {:.2f} second ({} tests, {:.3f}s/test"
+                            .format(strn, -SL, t1 - t0, tests - tests0, (t1 - t0)/(tests - tests0)))
+                    return tests, SL+i
 
-        #assert False, ("Huge prev_prime!", strn, ">", 5 * SL)
+        assert False, ("Huge prev_prime!", strn, ">", 5 * SL)
 
     # Double checks center + SL.
     # Very ugly fallback.
-    print("Falling back to slow prev_prime for {}{}-???".format(strn, SL))
+    print("Falling back to slow prev_prime({}{})".format(strn, -SL))
     t0 = time.time()
     tests0 = tests
     for i in range(SL, 5*SL+1):
@@ -523,9 +521,9 @@ def determine_prev_prime(m, strn, K, unknowns, SL, primes, remainder):
             tests += 1;
             if gap_utils.is_prime(center - i, strn, -i):
                 t1 = time.time()
-                print("\tfallback prev_prime({}{}) took {:.2f} second ({} tests, {:.3f}s/test"
-                    .format(strn, -SL, t1 - t0, tests - tests0, (t1 - t0)/(tests - tests0)))
-                assert z == i, (z, i)
+                if (t1 - t0) > 60:
+                    print("\tfallback prev_prime({}{}) took {:.2f} second ({} tests, {:.3f}s/test"
+                        .format(strn, -SL, t1 - t0, tests - tests0, (t1 - t0)/(tests - tests0)))
                 return tests, i
 
     assert False
