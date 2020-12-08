@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS m_stats (
         prev_p INTEGER DEFAULT 0,
 
         /* (next_p + prev_p) / log(N) */
-        merit REAL,
+        merit REAL DEFAULT 0,
 
         /* apriori probability of P(record gap), P(missing gap), P(merit > rid.min_merit) */
         prob_record REAL,

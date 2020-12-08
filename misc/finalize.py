@@ -267,10 +267,13 @@ def delete_range_and_low_merit(conn, args, ranges, unknown_files):
         me = ms + mi - 1
         print(f"\tDeleting range / low_merit results from {ufn!r}")
 
-        condition = """WHERE P=? AND D=? AND m BETWEEN ? AND ? AND
-            ((next_p + prev_p < 30000 AND MERIT < 20) OR
-             (next_p + prev_p < 50000 AND MERIT < 15) OR
-             (next_p + prev_p < 100000 AND MERIT < 8))
+        # TODO
+        condition = """
+            WHERE P=? AND D=? AND (m BETWEEN ? AND ?) AND
+                ((next_p >= 0 and prev_p >= 0) AND
+                 ((next_p + prev_p < 30000 AND merit < 20) OR
+                  (next_p + prev_p < 50000 AND merit < 15) OR
+                  (next_p + prev_p < 100000 AND merit < 8)))
             """
 
         cursor.execute(
