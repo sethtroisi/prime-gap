@@ -29,7 +29,6 @@
 #include "modulo_search.h"
 
 #include <cassert>
-#include <cstdint>
 
 
 static

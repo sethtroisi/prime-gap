@@ -16,6 +16,7 @@
 #include <cassert>
 #include <cmath>
 #include <chrono>
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <iostream>

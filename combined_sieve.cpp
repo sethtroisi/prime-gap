@@ -18,6 +18,7 @@
 #include <clocale>
 #include <cmath>
 #include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <ctime>
 #include <fstream>

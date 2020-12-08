@@ -12,6 +12,7 @@ benchmark
 logs/
 data/
 backup/
+done/
 *M.txt
 *M.m1.txt
 *M.*missing.txt

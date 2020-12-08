@@ -835,13 +835,20 @@ def run_in_parallel(
                     data, misc)
                 m_probs[m] = (data.prob_merit_gap[-1], data.prob_record_gap[-1])
 
-            # Check if this prob_record high enough to run
+            exist = existing.get(m)
+            is_partial = exist and exist[1] < 0
+            if is_partial:
+                # Should always run partial results even if don't match prob_threshold.
+                if m not in m_probs or m_probs[m][1] < prob_threshold:
+                    m_probs[m] = [1.01 * prob_threshold for i in range(2)]
+
+            # Check if prob_record < threshold
             if m not in m_probs or m_probs[m][1] < prob_threshold:
                 continue
 
             prev_p, next_p = 0, 0
-            if m in existing:
-                prev_p, next_p = existing[m]
+            if exist:
+                prev_p, next_p = exist
                 # next_p < -1, related to missing_gap
                 # next_p = -1, is partial result (should be continued)
                 if next_p >= 0:
