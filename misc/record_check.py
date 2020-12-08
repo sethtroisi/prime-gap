@@ -51,8 +51,9 @@ def get_arg_parser():
         default="S.Troisi",
         help="Name in gap database to ignore for already submitted records")
 
-    parser.add_argument('--ignore-small', action='store_true',
-        help="Ignore 'records' with small merit")
+    parser.add_argument('--ignore-small', nargs='?',
+        const=0, default=8, type=int,
+        help="Ignore 'records' with small merit (default: 8 or passed arg)")
 
     return parser
 
@@ -110,11 +111,11 @@ def print_record_gaps(args, gaps):
                     'SELECT merit,primedigits,startprime,discoverer FROM gaps WHERE'
                     ' gapsize=?', (size,)).fetchone()
 
+                if new_merit < args.ignore_small and size < 1000000:
+                    small_merit += 1
+                    continue
+
                 if not existing:
-                    if new_merit < 8 and size < 1000000:
-                        small_merit += 1
-                        if args.ignore_small:
-                            continue
                     record_lines.append(raw_data)
                     print ("\tRecord {:5} | {:70s} | Gap={:<6} (New!)".format(
                         len(record_lines), raw_data, size))
@@ -161,7 +162,7 @@ def print_record_gaps(args, gaps):
                 len(record_lines),
                 f"({len(own_records)} already submitted)" if own_records else ""))
             if small_merit:
-                print(f'\tHid {small_merit} new "records" with merit < 8')
+                print(f'\tHid {small_merit} new "records" with merit < {args.ignore_small}')
             print ()
 
 
