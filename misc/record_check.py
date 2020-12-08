@@ -111,11 +111,11 @@ def print_record_gaps(args, gaps):
                     'SELECT merit,primedigits,startprime,discoverer FROM gaps WHERE'
                     ' gapsize=?', (size,)).fetchone()
 
-                if new_merit < args.ignore_small and size < 1000000:
-                    small_merit += 1
-                    continue
-
                 if not existing:
+                    if new_merit < args.ignore_small and size < 1000000:
+                        small_merit += 1
+                        continue
+
                     record_lines.append(raw_data)
                     print ("\tRecord {:5} | {:70s} | Gap={:<6} (New!)".format(
                         len(record_lines), raw_data, size))
