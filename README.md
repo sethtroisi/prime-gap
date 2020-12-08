@@ -411,6 +411,7 @@ Theory and justifaction for some calculations in present in [THEORY.md](THEORY.m
 
 ```bash
 #$ sudo apt install libgmp10 libgmp-dev
+#$ sudo apt install mercurial automake autoconf bison make libtool texinfo m4
 # Building gmp from source is required until 6.3
 $ hg clone https://gmplib.org/repo/gmp/
 $ cd gmp
@@ -424,7 +425,7 @@ $ make install
 ```
 
 ```
-# slower but acceptable code is present up to commit 093a3b2b
+# slower prime code is present up to commit 093a3b2b
 $ sudo apt install libprimesieve-dev
 
 $ sudo apt install libmpfr-dev libmpc-dev
@@ -592,7 +593,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Benchmark reindex_m_wheel @ 6, 30, 210
 * gap\_stats.cpp
 * gap\_test.py
-  * [ ] Always test next_p = -1 results (regardless of prp-top-percent)
   * [ ] Use primegapverify.sieve for better prev_prime
 * gap\_test\_simple.cpp
 * schema.sql
@@ -617,9 +617,10 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Check that records from m < mstart aren't being counted as improvable
   * [ ] Produce P(record) / day / core estimate
   * [ ] Check if higher prob is related to unique (mi % d)
-  * [ ] Option to starting at m > mstart
 * gap\_test.py
-  * [ ] MEGAGAPS
+  * [ ] Change default min-merit to None, set default from 'Min merit for record'
+  * [ ] MEGAGAPS (what's remaining here?)
+    * [ ] Always test next_p = -1 results (regardless of prp-top-percent)
   * [ ] First Ctrl+C stops new results, 2nd breaks.
   * [ ] Do PRP top X% in order (for more dynamic cutoff)
   * [ ] Plot average tests count
@@ -629,7 +630,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Load time estimate values from config file
   * [ ] Compute smaller PRP and use that to computer larger (slower) PRP estimate
 * benchmarking
-  * [ ] Validate `modulo\_search` is >80% execution time for `combined_sieve`.
+  * [ ] re-benchmark `combined_sieve`.
 
 ### TODONE
 

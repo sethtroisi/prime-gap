@@ -318,8 +318,9 @@ void prime_gap_test(const struct Config config) {
         s_tests += 1;
         bool is_last = (mi == last_mi);
         if ( is_last || (s_tests % 5000 == 0) || (
-              s_tests == 1   || s_tests == 10 || s_tests == 30  ||
-              s_tests == 100 || s_tests == 300 || s_tests == 500 || s_tests == 1000) {
+              s_tests == 1    || s_tests == 10 || s_tests == 30  ||
+              s_tests == 100  || s_tests == 300 || s_tests == 500 ||
+              s_tests == 1000 || s_tests == 3000) ) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
 

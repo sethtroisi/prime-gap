@@ -864,6 +864,7 @@ def run_in_parallel(
 
     except (KeyboardInterrupt, queue.Empty):
         print("Received first  Ctrl+C | Waiting for current work to finish")
+        time.sleep(0.1)
 
         # Flush queue and wait on current results
         try:

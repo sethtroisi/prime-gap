@@ -1053,8 +1053,8 @@ void calculate_prp_top_percent(
         double sum_prob = 0.0;
         double time = combined_time;
 
-        if (side_percent != 100)
-            printf("\tAssuming %d%% of next_prime(...) are skipped\n", 100 - side_percent);
+        if (side_percent != 100) {
+            printf("\tAssuming %ld%% of next_prime(...) are skipped\n", 100 - side_percent);
         }
 
         bool max_happened = false;
