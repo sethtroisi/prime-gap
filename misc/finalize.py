@@ -53,6 +53,9 @@ def get_arg_parser():
     parser.add_argument('--no-dump-csv', action="store_true",
         help="Don't save csv results to file in logs dir")
 
+    parser.add_argument('--csv-best-only', action="store_true",
+        help="Only dump higher merit m_stats rows")
+
     #parser.add_argument('--delete-unknown-files', action='store_true',
     #    help="Should unknow files be deleted")
 
@@ -100,14 +103,15 @@ def sql_ranges_and_files(args, sql_ranges, unknown_fns):
 
         p, d, ms, mi, sl, mp, m1 = parsed
         if args.p == p and args.d == d:
-            unknown_files.append(unknown_fn)
+            if check_contained(args, ms, mi):
+                unknown_files.append(unknown_fn)
 
     return ranges, unknown_files
 
 
 def verify_all_results(conn, ranges):
     # Check that result exists for each valid m in the range
-    # XXX: add some --force option later
+    # XXX: add a --check-all-present option later
 
     all_done = True
 
@@ -133,6 +137,7 @@ def dump_query_to_file(conn, path, query, options):
         csv_writer = csv.writer(csv_file)
         cursor = conn.cursor()
         results = cursor.execute(query, options).fetchall()
+        print (f"\tWriting {len(results)}")
 
         header = [i[0] for i in cursor.description]
         csv_writer.writerow(header)
@@ -204,16 +209,23 @@ def dump_to_file(conn, args, ranges, unknown_files):
             if size > 10 * 1024:
                 print (f"\tAlready Processed {ufn!r} ({size//1024:,} kb)")
             else:
-                # Write m_stats to .csv file
-                header, m_stats = dump_query_to_file(
-                    conn, results_csv_fn,
-                    'SELECT * FROM m_stats WHERE P=? AND D=? AND m BETWEEN ? AND ?',
-                    (p, d, ms, me))
-                # Verify results got written to m_stats
-                #next_p = header.index("next_p")
-                #prev_p = header.index("prev_p")
-                #for row in m_stats:
-                #    assert row[next_p] != 0 or row[prev_p] != 0, row
+                if args.csv_best_only:
+                    # Write partial m_stats to .csv file
+                    header, m_stats = dump_query_to_file(
+                        conn, results_csv_fn,
+                        """
+                        SELECT * FROM m_stats
+                        WHERE
+                            P=? AND D=? AND (m BETWEEN ? AND ?) AND (next_p != 0 or prev_p != 0)
+                            AND merit > 7 * ((next_p != 0 ) + (prev_p != 0))
+                        """,
+                        (p, d, ms, me))
+                else:
+                    # Write m_stats to .csv file
+                    header, m_stats = dump_query_to_file(
+                        conn, results_csv_fn,
+                        'SELECT * FROM m_stats WHERE P=? AND D=? AND m BETWEEN ? AND ?',
+                        (p, d, ms, me))
 
         size = size_or_zero(stats_fn)
         if size < 2 * 1024:
@@ -240,7 +252,7 @@ def dump_to_file(conn, args, ranges, unknown_files):
 
                 SELECT PRINTF("%.4f %d * %d#/%d -%d to +%d\t",
                               merit, m, P, D, prev_p, next_p), * FROM m_stats
-                WHERE P={p} AND D={d} AND m BETWEEN {ms} AND {me} ORDER BY merit DESC LIMIT 50;
+                WHERE P={p} AND D={d} AND m BETWEEN {ms} AND {me} ORDER BY merit DESC LIMIT 150;
                 """
                 ])
 
@@ -281,7 +293,7 @@ def delete_range_and_low_merit(conn, args, ranges, unknown_files):
 
 
 def check_processed(args):
-    unknown_fns = glob.glob("*M.txt")
+    unknown_fns = [os.path.basename(path) for path in glob.glob("unknowns/*M.txt")]
 
     with sqlite3.connect(args.search_db) as conn:
         conn.row_factory = sqlite3.Row
