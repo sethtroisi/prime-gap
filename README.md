@@ -589,6 +589,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * Project
   * [ ] Records / day in status.py or record_check.py
   * [ ] Make sure that next_p = 0, is handled correctly in places.
+  * [ ] --update flag for `misc/show_ranges.sh`
 * combined\_sieve.cpp
   * [ ] Benchmark reindex_m_wheel @ 6, 30, 210
 * gap\_stats.cpp

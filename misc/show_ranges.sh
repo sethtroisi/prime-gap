@@ -16,6 +16,7 @@
 
 set -eux
 
+# TODO add an -u update flag
 sqlite3 "prime-gap-search.db" <<EOL
 .timeout 20
 #UPDATE range AS ra SET

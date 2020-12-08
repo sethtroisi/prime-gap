@@ -146,7 +146,7 @@ def size_or_zero(path):
     return os.path.getsize(path)
 
 
-def merged_ms_mi(ranges, unknown_files):
+def merged_ms_mi(args, ranges, unknown_files):
     # elements are (ms, mi, unk)
     joined = []
 
@@ -210,10 +210,10 @@ def dump_to_file(conn, args, ranges, unknown_files):
                     'SELECT * FROM m_stats WHERE P=? AND D=? AND m BETWEEN ? AND ?',
                     (p, d, ms, me))
                 # Verify results got written to m_stats
-                next_p = header.index("next_p")
-                prev_p = header.index("prev_p")
-                for row in m_stats:
-                    assert row[next_p] != 0 or row[prev_p] != 0, row
+                #next_p = header.index("next_p")
+                #prev_p = header.index("prev_p")
+                #for row in m_stats:
+                #    assert row[next_p] != 0 or row[prev_p] != 0, row
 
         size = size_or_zero(stats_fn)
         if size < 2 * 1024:
@@ -238,7 +238,7 @@ def dump_to_file(conn, args, ranges, unknown_files):
                 SELECT cast(merit as int), count(*) FROM m_stats
                 WHERE P={p} AND D={d} AND m BETWEEN {ms} AND {me} GROUP BY 1;
 
-                SELECT PRINTF("%.4f %d * %d#/%d -%d to +%d   ",
+                SELECT PRINTF("%.4f %d * %d#/%d -%d to +%d\t",
                               merit, m, P, D, prev_p, next_p), * FROM m_stats
                 WHERE P={p} AND D={d} AND m BETWEEN {ms} AND {me} ORDER BY merit DESC LIMIT 50;
                 """
@@ -250,7 +250,7 @@ def delete_range_and_low_merit(conn, args, ranges, unknown_files):
     cursor = conn.cursor()
 
     # Need to check for missing ranges?
-    joined = merged_ms_mi(ranges, unknown_files)
+    joined = merged_ms_mi(args, ranges, unknown_files)
     for ms, mi, ufn in joined:
         me = ms + mi - 1
         print(f"\tDeleting range / low_merit results from {ufn!r}")
@@ -262,16 +262,16 @@ def delete_range_and_low_merit(conn, args, ranges, unknown_files):
             """
 
         cursor.execute(
-            "DELETE FROM m_stats " + condition
+            "DELETE FROM m_stats " + condition,
             (args.p, args.d, ms, me))
-        m_stat_deletes = cursor.rowcount
+        deletes_m_stats = cursor.rowcount
 
         cursor.execute(
-            "DELETE FROM result " + condition
+            "DELETE FROM result " + condition,
             (args.p, args.d, ms, me))
-        m_stat_deletes = cursor.rowcount
+        deletes_results = cursor.rowcount
 
-        print (f"\tDeleted {m_stat_deletes} and {m_stat_deletes} rows")
+        print (f"\tDeleted {deletes_m_stats} and {deletes_results} rows")
 
     for r in ranges:
         cursor.execute("DELETE FROM range WHERE rid = ?", (r['rid'],))
