@@ -192,7 +192,6 @@ def dump_to_file(conn, args, ranges, unknown_files):
         if ufn not in unknown_files:
             print (f"\tExtra range: {ufn!r}")
 
-    # TODO: consider dumping to seperate sqlite3 db
     p = args.p
     d = args.d
     for ms, mi, ufn in joined:
@@ -267,7 +266,6 @@ def delete_range_and_low_merit(conn, args, ranges, unknown_files):
         me = ms + mi - 1
         print(f"\tDeleting range / low_merit results from {ufn!r}")
 
-        # TODO
         condition = """
             WHERE P=? AND D=? AND (m BETWEEN ? AND ?) AND
                 ((next_p >= 0 and prev_p >= 0) AND

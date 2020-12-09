@@ -810,7 +810,7 @@ void save_unknowns_method2(
         //size_t unknown_l = std::count(real_begin, real_begin + size_side, false);
         //size_t unknown_u = std::count(real_begin + size_side, comp.end(), false);
 
-        // XXX: Could be improved
+        // XXX: Could be improved to std::count if it was know were i_reindex_m[i] == SL
         size_t unknown_l = 0;
         size_t unknown_u = 0;
         for (size_t i = 0; i < i_reindex_m.size(); i++) {
@@ -1088,9 +1088,11 @@ void prime_gap_parallel(struct Config& config) {
     // This could be first indexed by i_reindex,
     // Would reduce size from wheel * (2*SL+1) to wheel * coprime_i
 #if METHOD2_WHEEL
-    // TODO: choose wheel as cache size / (wheel * SIEVE_INTERVAL);
-    // TODO: BENCHMARK
-    uint32_t reindex_m_wheel = gcd(D, 2*3);
+    // Note: Larger wheel eliminates more numbers but takes more space.
+    // 6 seems reasonable for larger numbers  (saves 2/3 memory)
+    // 30 is maybe better for smaller numbers (savess 4/15 memory)
+    uint32_t reindex_m_wheel = gcd(D, (SIEVE_INTERVAL < 80000) ? 30 : 6);
+
     vector<uint32_t> i_reindex_wheel[reindex_m_wheel];
     vector<size_t> i_reindex_wheel_count(reindex_m_wheel, 0);
 #else
@@ -1140,8 +1142,6 @@ void prime_gap_parallel(struct Config& config) {
             uint32_t mod_center = m_wheel * mpz_fdiv_ui(K, reindex_m_wheel);
             uint32_t mod_low = (mod_center + reindex_m_wheel - (SL % reindex_m_wheel)) % reindex_m_wheel;
 
-            // XXX: slow, but fast enough for a small number of d
-            // XXX: iterating over coprime_X might be slightly faster
             size_t coprime_count = 0;
             for (size_t i = 0; i < SIEVE_INTERVAL; i++) {
                 if (coprime_composite[i] > 0) {

@@ -383,7 +383,6 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
         }
     }
 
-    // XXX: Make insufficient more prominent (this is the vital number?)
     double expected_length = 0;
     size_t expected_count = 0;
     double remaining_prob = 0;
