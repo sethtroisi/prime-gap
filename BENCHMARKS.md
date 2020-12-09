@@ -207,15 +207,7 @@ Testing m * 10007#/3090, m = 1 + [0, 100)
 
 ### `gap_stat`
 
-Slow, but still fast enough, maybe 10-20% of gap\_search based on `--sieve-range` and if searching for missing gaps or not.
-
-### `missing_gap_test.py`
-
-TODO
-
-### `missing_gap_verify.py`
-
-TODO
+Slow, but still fast enough, maybe 10-20% of gap\_search based on `--sieve-range`
 
 
 ## `Pgsurround.pl` benchmark

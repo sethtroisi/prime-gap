@@ -175,6 +175,8 @@ void load_possible_records(
         const double N_log,
         const vector<float> &records,
         vector<uint32_t> &poss_record_gaps) {
+    // XXX: Records only have 5 sig figs so this method can easily counts records
+    //      from same K but smaller m as possible.
     for (size_t g = 2; g < records.size(); g += 2) {
         // Ignore the infintesimal odds of finding >merit 35 gap.
         if (g / N_log > 35) {

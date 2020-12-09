@@ -9,7 +9,7 @@
   * [`gap_stats`](#gap_stats)
   * [Choosing `--top-x-percent`](#choosing---top-x-percent)
   * [Out of order testing](#out-of-order-testing)
-  * [`missing_gap_test.py`](#missing_gap_testpy)
+  * [`missing gaps`](#missing_gaps)
 
 # Theory
 
@@ -287,9 +287,9 @@ Some thoughts:
                 but later which are record gaps could have changed
 
 
-# `missing_gap_test.py`
+# Missing Gaps
 
-In `missing_gap_test.py` two options
+`missing_gap_test.py` had two options
 1. S1: Find `prev_prime` (or equivalently `next_prime`)
   1. For each `missing_gap` let `tenative_next_prime = missing_gap - prev_prime`.
       * >98% of the time `tenative_next_prime` is a known combosite; skip

@@ -372,7 +372,7 @@ $ ./benchmark 100000 _all
      * Probability of being a record gap, of being a missing gap, of being gap > `--min-merit`
    * Store statistics in `m_stats` table
    * Compute prob(gap) over all m and save in `range_stats` table
-1. `gap_test_simple` / `gap_test.py` / `missing_gap_test` `--unknown-filename <PARAM>.txt`
+1. `gap_test_simple` / `gap_test.py` `--unknown-filename <PARAM>.txt`
    * Runs PRP tests on most likely m's from `<PARAM>.txt`
    * Stores results (as they are calculated in `result` & `m_stats`
      * Allows for saving of progress and graceful restart
@@ -588,13 +588,12 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * THEORY.md
 * Project
   * [ ] Records / day in status.py or record_check.py
-  * [ ] Make sure that next_p = 0, is handled correctly in places.
+  * [ ] Make sure that next_p = 0, = -1, is handled correctly in places.
   * [ ] --update flag for `misc/show_ranges.sh`
 * combined\_sieve.cpp
   * [ ] Benchmark reindex_m_wheel @ 6, 30, 210
 * gap\_stats.cpp
 * gap\_test.py
-  * [ ] Use primegapverify.sieve for better prev_prime
 * gap\_test\_simple.cpp
 * schema.sql
 * benchmarking
@@ -619,14 +618,11 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Produce P(record) / day / core estimate
   * [ ] Check if higher prob is related to unique (mi % d)
 * gap\_test.py
-  * [ ] Change default min-merit to None, set default from 'Min merit for record'
   * [ ] MEGAGAPS (what's remaining here?)
     * [ ] Always test next_p = -1 results (regardless of prp-top-percent)
-  * [ ] First Ctrl+C stops new results, 2nd breaks.
+  * [ ] Clean up fallback prev_prime
   * [ ] Do PRP top X% in order (for more dynamic cutoff)
   * [ ] Plot average tests count
-* missing\_gap\_test.py && missing\_gap\_verify.py
-  * [ ] Save to result | figure out plan for gap_test.py to reuse
 * gap\_common
   * [ ] Load time estimate values from config file
   * [ ] Compute smaller PRP and use that to computer larger (slower) PRP estimate
@@ -701,6 +697,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_test.py
+  * [x] First Ctrl+C stops new results, 2nd breaks.
+  * [x] Use primegapverify.sieve for better prev_prime
   * [x] Dynamic one sided test threshold and logging.
   * [x] Extended gap for one sided tests?
   * [x] `--top-x-percent` (see THEORY.md)
@@ -714,17 +712,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Autoscale printing to every X seconds
   * [x] Describe distribution
   * [x] Generate expected length
-* missing\_gap\_verify.py & missing\_gap\_test.py
-  * [x] read and update DB directly
-  * [x] save to `m_stats`
-  * [x] load/save from DB file.
-  * [x] grouped output of BOTH PRIME (every X entries)
-  * [x] record stats about prime found (potential candidate for high merit?)
-  * [x] tee logging (for preemptible machines)
-  * [x] gap\_utils.py (config parsing, isPrime, teelogger)
-  * [x] --ignore-gaps 130898
-  * [x] store records in some .gitignore'd file
-  * [x] Multiprocessing
 * benchmarking
   * [x] Experimentally compute `prime_time_estimate`
   * [x] Redo prime-time with user time (gmp better)
