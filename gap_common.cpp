@@ -589,6 +589,29 @@ std::string Args::gen_unknown_fn(const struct Config& config, std::string suffix
 }
 
 
+bool Args::is_rle_unknowns(std::ifstream& unknown_file) {
+    // Get current position
+    int pos = unknown_file.tellg();
+    assert(pos == 0);
+
+    // 100 characters gets past <m>: -count count | <OFFSETS>
+    char t[100];
+    unknown_file.read(t, sizeof(t) - 1);
+
+    unknown_file.seekg(pos, std::ios_base::beg);
+
+    bool has_space = false;
+    bool has_high_range = false;
+    for (size_t i = 50; i < sizeof(t); i++) {
+        has_space      |= t[i] == ' ';
+        has_high_range |= t[i] > '9';
+    }
+    assert(has_space ^ has_high_range);
+
+    return has_high_range;
+}
+
+
 Config Args::argparse(int argc, char* argv[]) {
     static struct option long_options[] = {
         {"p",                required_argument, 0,  'p' },

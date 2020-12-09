@@ -1108,6 +1108,8 @@ void prime_gap_stats(struct Config config) {
         unknown_file.open(fn, std::ios::in);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
         assert( unknown_file.good() );    // Can't open save_unknowns file
+
+        config.rle = Args::is_rle_unknowns(unknown_file);
     }
 
     // ----- Merit Stuff

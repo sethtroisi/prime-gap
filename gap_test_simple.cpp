@@ -93,7 +93,6 @@ void load_and_verify_unknowns(
     int unknown_l;
     int unknown_u;
 
-    // XXX: could peek 10 characters and look for space instead of using config.rle
     {
         uint32_t mtest;
         unknown_file >> mtest;
@@ -230,6 +229,7 @@ void prime_gap_test(const struct Config config) {
     }
 
     // ----- Open unknown input file
+    bool is_rle = config.rle;
     std::ifstream unknown_file;
     {
         std::string fn = Args::gen_unknown_fn(config, ".txt");
@@ -239,6 +239,8 @@ void prime_gap_test(const struct Config config) {
         unknown_file.open(fn, std::ios::in);
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
         assert( unknown_file.good() );    // Can't open save_unknowns file
+
+        is_rle = Args::is_rle_unknowns(unknown_file);
     }
 
     uint64_t valid_ms = 0;
@@ -284,8 +286,7 @@ void prime_gap_test(const struct Config config) {
         vector<int32_t> unknowns[2];
 
         load_and_verify_unknowns(
-            config.rle,
-            mi, SIEVE_LENGTH, unknown_file, unknowns);
+            is_rle, mi, SIEVE_LENGTH, unknown_file, unknowns);
 
         size_t unknown_l = unknowns[0].size();
         size_t unknown_u = unknowns[1].size();
