@@ -436,9 +436,9 @@ def should_print_stats(
                     sc.one_side_skips, sc.one_side_skips / sc.tested,
                     avg_prob_side, avg_prob_no_skip, avg_prob_side / avg_prob_no_skip - 1))
 
-            print("\t    sum(prob_minmerit):  {:7.2g}, {:.3g}/day\tfound: {}".format(
+            print("\t    sum(prob_minmerit):  {:7.5g}, {:.3g}/day\tfound: {}".format(
                 sc.prob_minmerit, 86400 / secs * sc.prob_minmerit, sc.count_minmerit))
-            print("\t    sum(prob_record):    {:7.2g}, {:.3g}/day\tfound: {}".format(
+            print("\t    sum(prob_record):    {:7.5g}, {:.3g}/day\tfound: {}".format(
                 sc.prob_record_processed, sc.prob_record_processed / secs * 86400, sc.count_record))
 
             if sc.gap_out_of_sieve_prev or sc.gap_out_of_sieve_next:
