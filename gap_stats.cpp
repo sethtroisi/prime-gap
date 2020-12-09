@@ -271,6 +271,8 @@ void store_stats(
 
     DB db_helper(config.search_db.c_str());
     sqlite3 *db = db_helper.get_db();
+    // Wait up to 60s to try and commit these records (range is most important)
+    sqlite3_busy_timeout(db, 60'000);
 
     char *zErrMsg = 0;
     if (sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &zErrMsg) != SQLITE_OK) {
