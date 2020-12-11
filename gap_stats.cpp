@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <functional>
 #include <fstream>
 #include <iostream>
@@ -101,9 +102,13 @@ static void prob_stats(char const *name, vector<float> &probs) {
         if (count == 0)
             continue;
 
+        printf("\t%-7s: top %3d%% (%6ld)", name, percent, count);
+
         double sum_prob = std::accumulate(sorted.begin(), sorted.begin() + count, 0.0);
-        printf("\t%-7s: top %3d%% (%5ld) => sum(prob) = %.2e (avg: %.2e)\n",
-            name, percent, count, sum_prob, sum_prob / count);
+        if (strncmp(name, "EXPECTED", 8) != 0) {
+            printf(" sum(prob) = %.2e", sum_prob);
+        };
+        printf(" (avg: %.2e)\n", sum_prob / count);
 
         if (sorted[count-1] == 0)
             break;
@@ -359,7 +364,7 @@ void store_stats(
         }
     }
     if (config.verbose >= 0) {
-        printf("Saved %ld rows to 'aange_stats' table\n", prob_gap_norm.size() - skipped_gap_stats);
+        printf("Saved %ld rows to 'range_stats' table\n", prob_gap_norm.size() - skipped_gap_stats);
     }
 
     /* Create SQL statement to INSERT into m_stats. */
@@ -785,6 +790,9 @@ void run_gap_file(
 
     auto  s_start_t = high_resolution_clock::now();
 
+    const int32_t min_side_with_extended_min_merit =
+        min_gap_min_merit - config.sieve_length;
+
     prob_gap_norm.clear();
     prob_gap_low.clear();
     prob_gap_high.clear();
@@ -896,6 +904,7 @@ void run_gap_file(
         for (size_t i = 0; i < std::max(unknown_low.size(), unknown_high.size()); i++) {
             float prob_i = gap_probs.prime_nth_sieve[i];
 
+
             // unknown[i'th] is prime, on the otherside have prime be outside of sieve.
             if (i < unknown_low.size()) {
                 float conditional_prob = extended_record_high[unknown_low[i]];
@@ -903,9 +912,13 @@ void run_gap_file(
 				assert(conditional_prob < 1);
 
                 prob_record_outer += prob_i * PROB_HIGH_GREATER * conditional_prob;
-                e_prev += unknown_low[i] * prob_i;
+                int32_t gap_low = unknown_low[i];
+                e_prev += gap_low * prob_i;
 
-                prob_gap_low[unknown_low[i]] += prob_i;
+                prob_gap_low[gap_low] += prob_i;
+
+                if (gap_low >= min_side_with_extended_min_merit)
+                    prob_highmerit += prob_i * PROB_HIGH_GREATER;
             }
             if (i < unknown_high.size()) {
                 float conditional_prob = extended_record_low[unknown_high[i]];
@@ -913,9 +926,13 @@ void run_gap_file(
 				assert(conditional_prob < 1);
 
                 prob_record_outer += prob_i * PROB_LOW_GREATER * conditional_prob;
-                e_next += unknown_high[i] * prob_i;
+                int32_t gap_high = unknown_high[i];
+                e_next += gap_high * prob_i;
 
-                prob_gap_high[unknown_high[i]] += prob_i;
+                prob_gap_high[gap_high] += prob_i;
+
+                if (gap_high >= min_side_with_extended_min_merit)
+                    prob_highmerit += prob_i * PROB_LOW_GREATER;
             }
         }
 
@@ -1148,9 +1165,9 @@ void prime_gap_stats(struct Config config) {
             }
         }
 
-        if (poss_record_gaps.front() > 2 * SIEVE_LENGTH) {
+        if (poss_record_gaps.front() > 3 * SIEVE_LENGTH) {
             printf("\n\n\n");
-            printf("\tHard to determine record prob, 2 * sieve_length < min_record_gap");
+            printf("\tHard to determine record prob, 3 * sieve_length < min_record_gap");
             printf("\n\n\n");
         }
         if (config.verbose >= 1) {
