@@ -1090,7 +1090,7 @@ void calculate_prp_top_percent(
             sum_prob += add_p;
 
             double avg = sum_prob / time;
-            bool is_below_avg = (add_p / add_t) < avg;
+            bool is_below_avg = ((add_p / add_t) < avg) || i == sorted.size();
             bool first_below = !max_happened && is_below_avg;
             max_happened |= first_below;
 
