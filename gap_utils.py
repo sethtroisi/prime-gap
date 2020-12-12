@@ -18,7 +18,6 @@ import contextlib
 import logging
 import os
 import re
-import subprocess
 import sys
 
 import gmpy2
@@ -193,18 +192,3 @@ def parse_unknown_line(line):
 
     return mtest, unknown_l, unknown_u, unknowns
 
-
-def openPFGW_is_prime(strn):
-    # XXX: getstatusoutput runs in a shell, does this double the overhead?
-    # Overhead of subprocess calls seems to be ~0.03
-    s = subprocess.getstatusoutput("./pfgw64 -f0 -q" + strn)
-    assert s[1].startswith('PFGW'), s
-    return s[0] == 0
-
-
-def is_prime(num, strnum, dist):
-    # TODO print log of which library is being used.
-    if gmpy2.num_digits(num, 2) > 8000:
-        return openPFGW_is_prime(strnum + str(dist))
-
-    return gmpy2.is_prime(num)

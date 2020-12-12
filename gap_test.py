@@ -29,15 +29,9 @@ from dataclasses import dataclass
 import gmpy2
 
 import gap_utils
+import gap_utils_primes
 import gap_test_plotting
 import misc.misc_utils as misc_utils
-
-try:
-    # primegapverify is only alpha so don't require it yet
-    import primegapverify
-    has_pgv = True
-except:
-    has_pgv = False
 
 
 def get_arg_parser():
@@ -452,83 +446,6 @@ def should_print_stats(
     return False
 
 
-def determine_next_prime(m, strn, K, unknowns, SL):
-    center = m * K
-    tests = 0
-
-    for i in unknowns:
-        tests += 1;
-        if gap_utils.is_prime(center + i, strn, i):
-            return tests, i
-
-    # XXX: parse to version and verify > 6.2.99
-    assert gmpy2.mp_version() == 'GMP 6.2.99'
-    # Double checks center + SL.
-    next_p = int(gmpy2.next_prime(center + SL) - center)
-    return tests, next_p
-
-
-def determine_prev_prime(m, strn, K, unknowns, SL, primes, remainder):
-    center = m * K
-    tests = 0
-
-    for i in unknowns:
-        assert i < 0
-        tests += 1;
-        if gap_utils.is_prime(center + i, strn, i):
-            return tests, -i
-
-    if has_pgv:
-        t0 = time.time()
-        tests0 = tests
-
-        # primegapverify sieve a big interval below
-        interval = 4 * SL
-        top = center - SL
-        bottom = top - interval
-        assert bottom > 0
-        assert interval < 10 ** 7, SL
-        # Cover [center - 5 * SL, center - SL]
-        # technically last is included multiple times but safer is better.
-        composites = primegapverify.sieve(bottom, 4 * SL)
-        assert len(composites) == len(range(bottom, top+1))
-
-        for i, composite in enumerate(reversed(composites)):
-            if not composite:
-                tests += 1
-                if gap_utils.is_prime(center -(SL+i), strn, -(SL+i)):
-                    t1 = time.time()
-                    if (t1 - t0) > 60:
-                        print("\tprimegapverify prev_prime({}{}) took {:.2f} second ({} tests, {:.3f}s/test"
-                            .format(strn, -SL, t1 - t0, tests - tests0, (t1 - t0)/(tests - tests0)))
-                    return tests, SL+i
-
-        assert False, ("Huge prev_prime!", strn, ">", 5 * SL)
-
-    # Double checks center + SL.
-    # Very ugly fallback.
-    print("Falling back to slow prev_prime({}{})".format(strn, -SL))
-    t0 = time.time()
-    tests0 = tests
-    for i in range(SL, 5*SL+1):
-        composite = False
-        for prime, remain in zip(primes, remainder):
-            modulo = (remain * m) % prime
-            if i % prime == modulo:
-                composite = True
-                break
-        if not composite:
-            tests += 1;
-            if gap_utils.is_prime(center - i, strn, -i):
-                t1 = time.time()
-                if (t1 - t0) > 60:
-                    print("\tfallback prev_prime({}{}) took {:.2f} second ({} tests, {:.3f}s/test"
-                        .format(strn, -SL, t1 - t0, tests - tests0, (t1 - t0)/(tests - tests0)))
-                return tests, i
-
-    assert False
-
-
 def handle_result(
         args, record_gaps, data, sc,
         mi, m, log_n, prev_p, next_p, unknown_l, unknown_u):
@@ -587,6 +504,7 @@ def process_line(
         assert mi == mtest
 
         # Used for openPFGW
+        strk = "{}#/{}".format(P, D)
         strn = "{}*{}#/{}+".format(m, P, D)
 
         t0 = time.time()
@@ -596,9 +514,10 @@ def process_line(
             print(f"\t{action} {strn:25} on thread {thread_i}")
 
         p_tests = 0
+        # prev_p > 0 means we loaded a partial result
         if prev_p <= 0:
-            # prev_p > 0 means we loaded a partial result
-            p_tests, prev_p = determine_prev_prime(m, strn, K, unknowns[0], SL, primes, remainder)
+            p_tests, prev_p = gap_utils_primes.determine_prev_prime(
+                    m, strn, strk, K, unknowns[0], SL, primes, remainder)
 
         test_next = True
         new_prob_record = 0
@@ -648,7 +567,7 @@ def process_line(
 
         n_tests, next_p = 0, 0
         if test_next:
-            n_tests, next_p = determine_next_prime(m, strn, K, unknowns[1], SL)
+            n_tests, next_p = gap_utils_primes.determine_next_prime(m, strn, K, unknowns[1], SL)
 
         test_time = time.time() - t0
 
@@ -1071,10 +990,21 @@ def prime_gap_test(args):
         with open(args.unknown_filename, "r") as unknwn_filename:
             data.valid_m = valid_mi
 
-            for i in range(3):
+            if False:
+                # First three lines is easy.
+                unk_lines_of_interest = range(3)
+            else:
+                # Requires reading more of the file,
+                # generates more interesting result (best, worst, average)
+                pi = sorted([(prob, i) for i, prob in enumerate(data_db.prob_record_gap)], reverse=True)
+                unk_lines_of_interest = [pi[0][1], pi[-1][1], pi[len(pi)//2][1]]
+
+            for i in range(max(unk_lines_of_interest)+1):
                 line = unknown_file.readline()
-                _, _, _, unknowns = gap_utils.parse_unknown_line(line)
-                misc.test_unknowns.append(unknowns)
+                if i in unk_lines_of_interest:
+                    _, _, _, unknowns = gap_utils.parse_unknown_line(line)
+                    # TODO append valid_mi[k] and prob
+                    misc.test_unknowns.append(unknowns)
 
         gap_test_plotting.plot_stuff(
             args, conn, sc, data, misc,
