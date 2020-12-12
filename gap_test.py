@@ -150,7 +150,7 @@ def process_line(
             # Check if slower to test a new record or next prime
 
             # On average sum(new_prob_record) should approx equal sum(prob_record)
-            new_prob_record = prob_record_one_sided(
+            new_prob_record = gap_test_stats.prob_record_one_sided(
                     record_gaps, megagap, prev_p,
                     unknowns[1], prob_prime_after_sieve,
                     m, K_mod_d, D, coprime_extended, prob_prime_coprime)
@@ -333,6 +333,7 @@ def run_in_parallel(
             # Process any finished results
             while (sc.will_test - sc.tested) >= min_work_queued:
                 result = results_q.get()
+                # Process result contains save to DB call see gap_test_stats.py
                 gap_test_stats.process_result(conn, args, record_gaps, m_probs, data, sc, result)
 
     except (KeyboardInterrupt, queue.Empty):
