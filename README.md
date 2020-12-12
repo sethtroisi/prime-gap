@@ -409,6 +409,11 @@ Theory and justifaction for some calculations in present in [THEORY.md](THEORY.m
 
 ## Setup
 
+In general this is going to be easy under Ubuntu 20.04 as you need **Python 3.7**
+and **sqlite3 >= 3.24** both of which are harder to install in previous versions
+of Ubuntu.
+
+  * [ ] Updated setup from thread (python version, sqlite, ubuntu)
 ```bash
 #$ sudo apt install libgmp10 libgmp-dev
 #$ sudo apt install mercurial automake autoconf bison make libtool texinfo m4
@@ -428,10 +433,11 @@ $ make install
 # slower prime code is present up to commit 093a3b2b
 $ sudo apt install libprimesieve-dev
 
-$ sudo apt install libmpfr-dev libmpc-dev
+# Need sqlite >= 3.24 for upsert "on conflict" statement.
 $ sudo apt install sqlite3 libsqlite3-dev
-$ python -m pip install --user gmpy2==2.1.0b5 primegapverify
 
+$ sudo apt install libmpfr-dev libmpc-dev
+$ python -m pip install --user gmpy2==2.1.0b5 primegapverify
 
 # For misc/double_check.py
 $ sudo apt install gmp-ecm
