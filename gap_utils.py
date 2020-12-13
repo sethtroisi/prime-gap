@@ -54,13 +54,10 @@ def logger_context(args):
         return contextlib.suppress()
 
     assert args.unknown_filename
+    unknown_path = transform_unknown_filename(args.unknown_filename, "logs", "log")
 
-    if os.path.isdir("logs"):
-        transform_unknown_filename(unknown_fn, "logs", "log")
-
-    log_fn_base = args.unknown_filename + '.log'
     for num in range(0, 5):
-        log_fn = log_fn_base
+        log_fn = unknown_path
         if num > 0:
             log_fn += "." + str(num)
 
