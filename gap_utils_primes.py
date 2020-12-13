@@ -96,7 +96,7 @@ def determine_next_prime(m, strn, K, unknowns, SL):
 
     # next_prime(...) outside of SL
     tests1, next_p = determine_next_prime_large(m, K, SL)
-    return tests + test1, next_p
+    return tests + tests1, next_p
 
 
 def determine_prev_prime(m, strn, strk, K, unknowns, SL, primes, remainder):

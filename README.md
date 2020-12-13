@@ -416,7 +416,7 @@ of Ubuntu.
   * [ ] Updated setup from thread (python version, sqlite, ubuntu)
 ```bash
 #$ sudo apt install libgmp10 libgmp-dev
-#$ sudo apt install mercurial automake autoconf bison make libtool texinfo m4
+#$ sudo apt install mercurial build-essential automake autoconf bison make libtool texinfo m4
 # Building gmp from source is required until 6.3
 $ hg clone https://gmplib.org/repo/gmp/
 $ cd gmp
@@ -437,6 +437,8 @@ $ sudo apt install libprimesieve-dev
 $ sudo apt install sqlite3 libsqlite3-dev
 
 $ sudo apt install libmpfr-dev libmpc-dev
+
+# Make sure this is >= python3.7 and not python2
 $ python -m pip install --user gmpy2==2.1.0b5 primegapverify
 
 # For misc/double_check.py
@@ -594,7 +596,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * THEORY.md
 * Project
   * [ ] Records / day in status.py or record_check.py
-  * [ ] Make sure that next_p = 0, = -1, is handled correctly in places.
   * [ ] --update flag for `misc/show_ranges.sh`
 * combined\_sieve.cpp
   * [ ] Benchmark reindex_m_wheel @ 6, 30, 210
@@ -609,6 +610,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 
 * Project
   * [ ] Figure out how to load (in c & python) and set config occasionally
+  * [x] Make sure that next_p = 0, = -1, is handled correctly in places.
 * THEORY.md
 * New script to update DB (and maybe delete uninteresting results
   * [ ] Finalize script
