@@ -154,7 +154,7 @@ def load_stats(conn, args):
      exp_prev, exp_next,
      data.prob_merit_gap, data.prob_record_gap)= zip(*[tuple(row) for row in rv])
 
-    # Interweave these
+    # TODO: Interweave these
     data.experimental_side = [s for s in exp_prev + exp_next if s > 0]
     data.experimental_gap = [(p + n) for p, n in zip(exp_prev, exp_next) if p > 0 and n > 0]
 
@@ -486,8 +486,10 @@ def handle_result_for_plots(args, data, mi, m, prev_p, next_p):
         gap = next_p + prev_p
         data.experimental_gap.append(gap)
         data.valid_m.append(m)
-        data.experimental_side.append(next_p)
-        data.experimental_side.append(prev_p)
+        if next_p > 0:
+            data.experimental_side.append(next_p)
+        if prev_p > 0:
+            data.experimental_side.append(prev_p)
 
 
 def process_result(conn, args, record_gaps, m_probs, data, sc, result):
