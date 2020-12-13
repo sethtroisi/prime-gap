@@ -65,10 +65,6 @@ def get_arg_parser():
     parser.add_argument('--num-plots', type=int, default=0,
         help="Show plots about distributions")
 
-    # XXX: Hide this option as it's not useful
-    parser.add_argument('--stats', action='store_true',
-        help="DEPRECATED & SLOW; Calculate stats (as doublecheck of gap_stats)")
-
     parser.add_argument('--save-logs', action='store_true',
         help="Save logs and plots about distributions")
 
@@ -208,7 +204,7 @@ def process_line(
 
 def run_in_parallel(
         args, conn, unknown_file, record_gaps,
-        prob_nth, prob_longer, prob_prime, prob_prime_after_sieve,
+        prob_prime, prob_prime_after_sieve,
         existing, valid_mi,
         K, K_log,
         data, sc, misc
@@ -227,7 +223,7 @@ def run_in_parallel(
             len(m_probs), prob_threshold))
 
     # Are there any non-processed (or partial) m_probs.
-    if not args.stats and all(m in existing and existing[m][1] >= 0 for m in m_probs):
+    if all(m in existing and existing[m][1] >= 0 for m in m_probs):
         print(f"All prp-top-percent({len(m_probs)}) already processed!")
         print()
         return
@@ -291,17 +287,6 @@ def run_in_parallel(
 
             # Read a line from the file
             line = unknown_file.readline()
-
-            if args.stats and (args.save_logs or args.num_plots):
-                # NOTES: calculate_expected_gaps is really slow,
-                # only real use is to doublecheck gap_stats.cpp
-                _, _, _, unknowns = gap_utils.parse_unknown_line(line)
-                gap_test_stats.calculate_expected_gaps(
-                    args.sieve_length, min_merit_gap, prob_nth, prob_longer,
-                    log_n, unknowns,
-                    # Results saved to data / misc
-                    data, misc)
-                m_probs[m] = (data.prob_merit_gap[-1], data.prob_merit_gap[-1])
 
             exist = existing.get(m)
             is_partial = exist and exist[1] < 0
@@ -454,28 +439,6 @@ def prime_gap_test(args):
     prob_prime_after_sieve = gap_test_stats.prob_prime_sieve_length(
         M, K, D, prob_prime, K_digits, P_primes, SL, max_prime)
 
-    # Geometric distribution
-    prob_nth = []
-    prob_longer = []
-    prob_gap_longer = 1
-    while prob_gap_longer > 1e-13:
-        prob_nth.append(prob_gap_longer * prob_prime_after_sieve)
-        prob_longer.append(prob_gap_longer)
-        prob_gap_longer *= (1 - prob_prime_after_sieve)
-    assert min(prob_nth) > 0
-    assert min(prob_longer) > 0
-
-    # Disable stats if not being used
-    if args.stats:
-        if not (args.save_logs or args.num_plots):
-            print("\tNot saving logs or showing plots disabling SLOW python --stats")
-            args.stats = False
-        elif args.prp_top_percent not in (None, 100):
-            print("--prp-top-percent not compatible with --stats. Prefer gap_stats")
-            print()
-            args.print_help()
-            exit(1)
-
     # ----- Main sieve loop.
 
     sc   = gap_test_stats.StatCounters(time.time(), time.time())
@@ -494,18 +457,16 @@ def prime_gap_test(args):
         print(f"\nStarting m({len(valid_mi)}) {data.first_m} to {data.last_m}")
         print()
 
-        if not args.stats:
-            #Load stats for prob_record
-            data_db, misc_db = gap_test_stats.load_stats(conn, args)
-            assert len(data_db.prob_merit_gap)  == len(valid_mi), "run ./gap_stats first"
-            assert len(data_db.prob_record_gap) == len(valid_mi), "run ./gap_stats first"
-            data.prob_merit_gap = data_db.prob_merit_gap
-            data.prob_record_gap = data_db.prob_record_gap
-
+        #Load stats for prob_record
+        data_db, misc_db = gap_test_stats.load_stats(conn, args)
+        assert len(data_db.prob_merit_gap)  == len(valid_mi), "run ./gap_stats first"
+        assert len(data_db.prob_record_gap) == len(valid_mi), "run ./gap_stats first"
+        data.prob_merit_gap = data_db.prob_merit_gap
+        data.prob_record_gap = data_db.prob_record_gap
 
         run_in_parallel(
             args, conn, unknown_file, record_gaps,
-            prob_nth, prob_longer, prob_prime, prob_prime_after_sieve,
+            prob_prime, prob_prime_after_sieve,
             existing, valid_mi,
             K, K_log,
             data, sc, misc
@@ -518,6 +479,11 @@ def prime_gap_test(args):
             data_db, misc_db = gap_test_stats.load_stats(conn, args)
 
         data.valid_m = valid_mi
+
+        if False:
+            # VERY slowly validates gap_stats results.
+            gap_test_stats.validate_prob_record_merit(
+                    args, data_db, K_log, prob_prime_after_sieve)
 
         # XXX: move inside plot_stuff
         with open(args.unknown_filename, "rb") as unknown_file_repeat:
@@ -540,7 +506,7 @@ def prime_gap_test(args):
         gap_test_plotting.plot_stuff(
             args, conn, sc, data, misc,
             data_db, misc_db,
-            min_merit_gap, record_gaps, prob_nth)
+            min_merit_gap, record_gaps, prob_prime_after_sieve)
 
 
 

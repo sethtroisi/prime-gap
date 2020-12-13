@@ -242,15 +242,12 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_pri
 
 
 def calculate_expected_gaps(
-        SL, min_merit_gap, prob_nth, prob_longer, log_n, unknowns,
-        data, misc):
+        SL, min_merit_gap, prob_nth, prob_longer, log_n, unknowns, data):
 
     for i, side in enumerate(unknowns):
         expected_length = 0
         for v, prob in zip(side, prob_nth):
             expected_length += abs(v) * prob
-            # Normalized to 1 by matplotlib.hist later.
-            misc.prob_gap_side[abs(v)] += prob
 
         # expected to encounter a prime at distance ~= ln(n)
         prob_gap_longer = prob_nth[len(side)]
@@ -272,7 +269,6 @@ def calculate_expected_gaps(
             if gap >= min_merit_gap:
                 p_merit += prob_joint
 
-            misc.prob_gap_comb[gap] += prob_joint
             if prob_joint < 1e-9:
                 break
         else:
@@ -289,6 +285,51 @@ def calculate_expected_gaps(
 
     assert 0 <= p_merit <= 1.00, (p_merit, unknowns)
     data.prob_merit_gap.append(p_merit)
+
+
+def validate_prob_record_merit(
+        args, data_db, K_log, prob_prime_after_sieve):
+    """Validate gap_stats with slow python calculation"""
+    print("\tSLOWLY calculating prob_merit_gap for validation purpose")
+
+    import scipy.stats
+
+    # Geometric distribution
+    prob_nth = []
+    prob_longer = []
+    prob_gap_longer = 1
+    while prob_gap_longer > 1e-13:
+        prob_nth.append(prob_gap_longer * prob_prime_after_sieve)
+        prob_longer.append(prob_gap_longer)
+        prob_gap_longer *= (1 - prob_prime_after_sieve)
+    assert min(prob_nth) > 0
+    assert min(prob_longer) > 0
+
+    data = GapData()
+    with open(args.unknown_filename, "rb") as unknown_file_repeat:
+        for line in unknown_file_repeat.readlines():
+            mi, _, _, unknowns = gap_utils.parse_unknown_line(line)
+            log_n = K_log + math.log(args.mstart + mi)
+            min_merit_gap = int(args.min_merit * log_n)
+
+            calculate_expected_gaps(
+                args.sieve_length, min_merit_gap, prob_nth, prob_longer,
+                log_n, unknowns,
+                # Results saved to data / misc
+                data)
+
+    def linreg(name, a, b):
+        # p_val is "two-sided p-val for null hypothesis that the slope is zero."
+        slope, intercept, r_val, p_val, std_err = scipy.stats.linregress(a, b)
+        print("\t{:15} | scale: {:.3f}, r^2: {:.2f}".format(name, slope, r_val))
+        print("\t\t", p_val, std_err)
+
+    # Validate several distributions have high correlation & r^2
+    linreg("expected gap ", data_db.expected_gap, data.expected_gap)
+    linreg("expected prev", data_db.expected_prev, data.expected_prev)
+    linreg("expected next", data_db.expected_next, data.expected_next)
+
+    linreg("expected prev", data_db.prob_merit_gap, data.prob_merit_gap)
 
 
 def setup_extended_gap(SL, K, P, D, prob_prime):
