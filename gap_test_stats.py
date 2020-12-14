@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import itertools
 import math
 import time
 from collections import defaultdict
@@ -60,16 +61,18 @@ class GapData:
     first_m = -1
     last_m = -1
 
-    valid_m = []
+    valid_mi = []
 
-    # Values for each m in valid_m
+    # Values for each m in valid_mi
     expected_prev = []
     expected_next = []
     expected_gap  = []
-    experimental_side = []
-    experimental_gap = []
     prob_merit_gap = []
     prob_record_gap = []
+
+    # Because of --prp-top-percent may be less than |valid_mi|
+    experimental_side = []
+    experimental_gap = []
 
 
 @dataclass
@@ -144,8 +147,8 @@ def load_stats(conn, args):
      exp_prev, exp_next,
      data.prob_merit_gap, data.prob_record_gap)= zip(*[tuple(row) for row in rv])
 
-    # TODO: Interweave these
-    data.experimental_side = [s for s in exp_prev + exp_next if s > 0]
+    interleaved = itertools.chain(*itertools.zip_longest(exp_prev, exp_next))
+    data.experimental_side = [s for s in interleaved if s and s > 0]
     data.experimental_gap = [(p + n) for p, n in zip(exp_prev, exp_next) if p > 0 and n > 0]
 
     # Need dictionary
@@ -374,9 +377,9 @@ def prob_record_one_sided(
     return prob_record + prob_nth
 
 
-def determine_test_threshold(args, valid_mi, data):
+def determine_test_threshold(args, data):
     percent = args.prp_top_percent
-    valid_m = (args.mstart + mi for mi in valid_mi)
+    valid_m = (args.mstart + mi for mi in data.valid_mi)
     if not percent or percent == 100:
         return 0, {
             m: (p_merit, p_record) for m, p_merit, p_record in zip(
@@ -475,7 +478,7 @@ def handle_result_for_plots(args, data, mi, m, prev_p, next_p):
     if args.num_plots:
         gap = next_p + prev_p
         data.experimental_gap.append(gap)
-        data.valid_m.append(m)
+        data.valid_mi.append(mi)
         if next_p > 0:
             data.experimental_side.append(next_p)
         if prev_p > 0:

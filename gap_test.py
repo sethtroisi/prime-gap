@@ -205,7 +205,7 @@ def process_line(
 def run_in_parallel(
         args, conn, unknown_file, record_gaps,
         prob_prime, prob_prime_after_sieve,
-        existing, valid_mi,
+        existing,
         K, K_log,
         data, sc, misc
 ):
@@ -217,7 +217,7 @@ def run_in_parallel(
     remainder = tuple([K % prime for prime in primes])
 
     # Based on args
-    prob_threshold, m_probs = gap_test_stats.determine_test_threshold(args, valid_mi, data)
+    prob_threshold, m_probs = gap_test_stats.determine_test_threshold(args, data)
     if prob_threshold >= 0:
         print("Testing {} m where prob(record) >= {:.3g}".format(
             len(m_probs), prob_threshold))
@@ -281,7 +281,7 @@ def run_in_parallel(
     print()
 
     try:
-        for mi in valid_mi:
+        for mi in data.valid_mi:
             m = args.mstart + mi
             log_n = (K_log + math.log(m))
 
@@ -450,6 +450,7 @@ def prime_gap_test(args):
     valid_mi = [mi for mi in range(M_inc) if math.gcd(M + mi, D) == 1]
     data.first_m = M + valid_mi[0]
     data.last_m = M + valid_mi[-1]
+    data.valid_mi = valid_mi
 
     if len(existing) == len(valid_mi):
         print(f"All processed!")
@@ -467,18 +468,18 @@ def prime_gap_test(args):
         run_in_parallel(
             args, conn, unknown_file, record_gaps,
             prob_prime, prob_prime_after_sieve,
-            existing, valid_mi,
+            existing,
             K, K_log,
             data, sc, misc
         )
 
     # ----- Plots
     if args.num_plots:
-        if data_db is None:
+        if data_db is None or sc.tested > 0:
             # Load stats from gap_stats
             data_db, misc_db = gap_test_stats.load_stats(conn, args)
 
-        data.valid_m = valid_mi
+        data_db.valid_mi = valid_mi
 
         if False:
             # VERY slowly validates gap_stats results.
