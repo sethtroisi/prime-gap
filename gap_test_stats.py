@@ -14,24 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import argparse
-import itertools
 import math
-import multiprocessing
-import os
-import signal
-import sqlite3
 import time
-import queue
 from collections import defaultdict
 from dataclasses import dataclass
 
 import gmpy2
 
 import gap_utils
-import gap_utils_primes
-import gap_test_plotting
-import misc.misc_utils as misc_utils
 
 
 @dataclass

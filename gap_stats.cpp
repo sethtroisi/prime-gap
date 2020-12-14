@@ -85,6 +85,7 @@ class ProbNth {
 };
 
 
+void prob_record_vs_plimit(struct Config config);
 void prime_gap_stats(struct Config config);
 bool is_range_already_processed(const struct Config& config);
 
@@ -137,7 +138,13 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    if (config.minc == 1 && config.mstart != 1) {
+        prob_record_vs_plimit(config);
+        return 0;
+    }
+
     prime_gap_stats(config);
+    return 0;
 }
 
 
@@ -766,6 +773,194 @@ void read_unknown_line(
     }
 }
 
+/**
+ * Calculate prob record at various maxprime values
+ * Takes unknown_file contains [(prime1, X1), (prime2, X2), ...]
+ *
+ * prime1 is a factor of X1
+ * prime2 is the next smallest factor and divides X2
+ * ...
+ *
+ * unknown_file is created with primegapverify print_factors branch
+ * time primegapverify/large_sieve 73 1511 2190 -15000 30000 2000000000 > 1511_2190_73_1_s15000_l2000M.txt
+ * then handmodifying test.txt slightly
+ */
+void prob_record_vs_plimit(struct Config config) {
+    const unsigned int SL = config.sieve_length;
+    const unsigned int SIEVE_INTERVAL = 2 * SL + 1;
+    assert( SL > 1000 );
+
+    // ----- Read from unknown file
+    std::ifstream unknown_file;
+    {
+        std::string fn = Args::gen_unknown_fn(config, ".txt");
+        if (config.verbose >= 0) {
+            printf("\nReading from '%s'\n\n", fn.c_str());
+        }
+        unknown_file.open(fn, std::ios::in);
+        assert( unknown_file.is_open() ); // Can't open save_unknowns file
+        assert( unknown_file.good() );    // Can't open save_unknowns file
+    }
+
+    // ----- Merit Stuff
+    mpz_t N;
+    mpz_t test;
+    mpz_init(test);
+
+    int K_digits;
+    double K_log;
+    K_stats(config, N, &K_digits, &K_log);
+    cdouble log_n = K_log + log(config.mstart);
+
+    mpz_mul_ui(N, N, config.mstart);
+
+    // ----- Get Record Prime Gaps
+    vector<float> records = get_record_gaps(config);
+
+    // gap that would be a record with m*P#/d
+    vector<uint32_t> poss_record_gaps;
+    load_possible_records(log_n, records, poss_record_gaps);
+    assert( poss_record_gaps.size() >= 2);
+    if (config.verbose >= 1) {
+        printf("Found %ld possible record gaps (%d to %d)\n",
+            poss_record_gaps.size(), poss_record_gaps.front(), poss_record_gaps.back());
+        cout << endl;
+    }
+    const uint32_t min_record_gap = poss_record_gaps.front();
+
+    // Make boolean array and boolean array to unknown_low, unknown_high
+    assert(config.minc == 1);
+
+    vector<bool> composite(SIEVE_INTERVAL, 0);
+
+    // Supress printing in setup_probnth.
+    config.verbose = 0;
+
+    int64_t prime, offset;
+    char delim;
+    for(size_t i = 0; unknown_file.good(); i++) {
+        unknown_file >> prime;
+        assert(prime >= 2 && prime <= 10'000'000'000'000LL);
+        config.max_prime = prime;
+
+        unknown_file >> delim;
+        assert(delim == ',');
+
+        unknown_file >> offset;
+
+        assert(offset >= 0 && offset <= SIEVE_INTERVAL);
+        {
+            mpz_set(test, N);
+            mpz_sub_ui(test, test, SL);
+            mpz_add_ui(test, test, offset);
+            assert( 0 == mpz_fdiv_ui(test, prime) );
+        }
+
+        composite[offset] = 1;
+
+        if (prime < 5'000'000'000) {
+            continue;
+        }
+
+        vector<uint32_t> unknown_low, unknown_high;
+        for (size_t x = 1; x <= SL; x++) {
+            if (!composite[SL - x]) {
+                unknown_low.push_back(x);
+            }
+            if (!composite[SL + x]) {
+                unknown_high.push_back(x);
+            }
+        }
+
+        //printf("%ld  %ld divides %ld'nth unknowns: %ld, %ld\n",
+        //    i, prime, offset, unknown_low.size(), unknown_high.size());
+
+        ProbNth gap_probs;
+        setup_probnth(config, log_n, poss_record_gaps, gap_probs);
+
+        cdouble prob_prev_end = gap_probs.great_nth_sieve[unknown_low.size()];
+        cdouble prob_next_end = gap_probs.great_nth_sieve[unknown_high.size()];
+        cdouble prob_extended = gap_probs.prob_extended;
+
+        // Directly examined (1 - prob_prev_end) * (1 - prob_next_end)
+        // +
+        // Extended examined (1 - prob_prev_end) * (prob_next_end * (1 - prob_extended))
+        // =                 (1 - prob_prev_end) * (1 - prob_next_end * prob_extended)
+        cdouble prob_seen =
+            ((1 - prob_prev_end) * (1 - prob_next_end) +
+             (1 - prob_prev_end) * (prob_next_end * (1 - prob_extended)) +
+             (1 - prob_next_end) * (prob_prev_end * (1 - prob_extended)));
+
+        double prob_record = 0;
+
+        size_t max_i = std::min(unknown_low.size(), gap_probs.combined_sieve.size());
+        size_t min_j = unknown_high.size();
+        for (size_t i = 0; i < max_i; i++) {
+            uint32_t gap_low = unknown_low[i];
+            while ((min_j > 0) && (gap_low + unknown_high[min_j-1] >= min_record_gap)) {
+                min_j -= 1;
+            }
+            size_t max_j = std::min(unknown_high.size(), gap_probs.combined_sieve.size() - i);
+
+            for (size_t j = min_j; j < max_j; j++) {
+                uint32_t gap_high = unknown_high[j];
+                uint32_t gap = gap_low + gap_high;
+                assert(gap >= min_record_gap);
+
+                if (records[gap] > log_n) {
+                    assert(i + j < gap_probs.combined_sieve.size());
+                    prob_record += gap_probs.combined_sieve[i + j];
+                }
+            }
+        }
+
+        // expected_gap_low | expected_gap_high
+        // prob_gap_low     | prob_gap_high
+
+        double prob_record_outer = 0;
+
+        const float PROB_HIGH_GREATER = gap_probs.great_nth_sieve[unknown_high.size()];
+        const float PROB_LOW_GREATER  = gap_probs.great_nth_sieve[unknown_low.size()];
+
+        // See `prob_extended_gap`
+        int m_high = config.mstart % gap_probs.wheel_d;
+        const vector<float> &extended_record_high = gap_probs.extended_record_high.at(m_high);
+        // want -m % wheel_d => wheel_d - m
+        const vector<float> &extended_record_low = gap_probs.extended_record_high.at(gap_probs.wheel_d - m_high);
+
+        for (size_t i = 0; i < std::max(unknown_low.size(), unknown_high.size()); i++) {
+            float prob_i = gap_probs.prime_nth_sieve[i];
+
+            // unknown[i'th] is prime, on the otherside have prime be outside of sieve.
+            if (i < unknown_low.size()) {
+                float conditional_prob = extended_record_high[unknown_low[i]];
+                assert(conditional_prob >= 0);
+				assert(conditional_prob < 1);
+
+                prob_record_outer += prob_i * PROB_HIGH_GREATER * conditional_prob;
+            }
+            if (i < unknown_high.size()) {
+                float conditional_prob = extended_record_low[unknown_high[i]];
+                assert(conditional_prob >= 0);
+				assert(conditional_prob < 1);
+
+                prob_record_outer += prob_i * PROB_LOW_GREATER * conditional_prob;
+            }
+        }
+
+        // Combination of observed (0 < i, j <= SL) + extended (i or j > SL)
+        double prob_record_combined = prob_record + prob_record_outer;
+
+        if (1 - prob_seen > 1e-5) {
+            cout << config.max_prime << ", " << prob_record_combined << ", " << 1 - prob_seen << endl;
+        } else {
+            cout << config.max_prime << ", " << prob_record_combined << endl;
+        }
+    }
+    mpz_clear(test);
+    mpz_clear(N);
+}
+
 void run_gap_file(
         /* input */
         const struct Config& config,
@@ -844,11 +1039,12 @@ void run_gap_file(
         double prob_is_missing_gap = 0;
         double prob_highmerit = 0;
 
-        size_t min_j = unknown_high.size() - 1;
         uint32_t min_interesting_gap = std::min(min_gap_min_merit, min_record_gap);
-        for (size_t i = 0; i < unknown_low.size(); i++) {
+        size_t max_i = std::min(unknown_low.size(), gap_probs.combined_sieve.size());
+        size_t min_j = unknown_high.size();
+        for (size_t i = 0; i < max_i; i++) {
             uint32_t gap_low = unknown_low[i];
-            while ((min_j > 0) && (gap_low + unknown_high[min_j] > min_interesting_gap)) {
+            while ((min_j > 0) && (gap_low + unknown_high[min_j-1] >= min_record_gap)) {
                 min_j -= 1;
             }
 
@@ -1176,10 +1372,7 @@ void prime_gap_stats(struct Config config) {
     }
 
     ProbNth gap_probs;
-    setup_probnth(
-        config, N_log,
-        poss_record_gaps,
-        gap_probs);
+    setup_probnth(config, N_log, poss_record_gaps, gap_probs);
 
     vector<uint32_t> valid_m;
     for (uint64_t mi = 0; mi < config.minc; mi++) {

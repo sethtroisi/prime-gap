@@ -489,19 +489,24 @@ def prime_gap_test(args):
         with open(args.unknown_filename, "rb") as unknown_file_repeat:
             if False:
                 # First three lines is easy.
-                unk_lines_of_interest = range(3)
+                unk_mi_of_interest = valid_mi[:3]
             else:
                 # Requires reading more of the file,
                 # generates more interesting result (best, worst, average)
-                pi = sorted([(prob, i) for i, prob in enumerate(data_db.prob_record_gap)], reverse=True)
-                unk_lines_of_interest = [pi[0][1], pi[-1][1], pi[len(pi)//2][1]]
+                pi = sorted([(prob, mi) for mi, prob in zip(valid_mi, data_db.prob_record_gap)], reverse=True)
+                unk_mi_of_interest = [pi[0][1], pi[-1][1], pi[len(pi)//2][1]]
+                print("Best, Worst, Avg m:", [M + mi for mi in unk_mi_of_interest])
 
-            for i in range(max(unk_lines_of_interest)+1):
+            for mi in valid_mi:
                 line = unknown_file_repeat.readline()
-                if i in unk_lines_of_interest:
+                assert line, (mi)
+                if mi in unk_mi_of_interest:
                     _, _, _, unknowns = gap_utils.parse_unknown_line(line)
                     # TODO append valid_mi[k] and prob
                     misc.test_unknowns.append(unknowns)
+
+                    if mi == max(unk_mi_of_interest):
+                        break
 
         gap_test_plotting.plot_stuff(
             args, conn, sc, data, misc,
