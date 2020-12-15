@@ -63,7 +63,7 @@ def get_arg_parser():
         help="taskset each thread, helps when using more than 50%% of CPU threads")
 
     parser.add_argument('--num-plots', type=int, default=0,
-        help="Show plots about distributions")
+        help="Show up to 3 plots about distributions")
 
     parser.add_argument('--save-logs', action='store_true',
         help="Save logs and plots about distributions")
@@ -454,6 +454,8 @@ def prime_gap_test(args):
 
     if len(existing) == len(valid_mi):
         print(f"All processed!")
+    elif args.prp_top_percent == 0:
+        print("--prp-top-percent=0, skipping testing")
     else:
         print(f"\nStarting m({len(valid_mi)}) {data.first_m} to {data.last_m}")
         print()
