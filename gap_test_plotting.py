@@ -44,7 +44,7 @@ def stats_plots(
             print("NON-ZERO TREND: ", trend) # Verify that expected value doesn't vary with M.
             print("\n")
 
-    def plot_hist(axis, d, color, marker):
+    def plot_hist(axis, d, color, marker='x'):
         hist_data = np.histogram(d, bins=100, density=True)
         axis.scatter(hist_data[1][:-1], hist_data[0], color=color, marker=marker, s=8, label='Observed')
         max_y = hist_data[0].max()
@@ -77,31 +77,35 @@ def stats_plots(
                     label=dist_label)
         axis.legend(loc='upper left')
 
-    def plot_prob_hist(axis, probs, color):
-        x, w = zip(*sorted(((g, v) for g,v in probs.items() if v > 0)))
-        axis.hist(x, weights=w, bins=100, density=True,
+    def plot_prob_hist(axis, probs, max_x, color):
+        x, w = zip(*sorted(((g, v) for g,v in probs.items() if v > 0 and g <= max_x)))
+        n, _, _ = axis.hist(x, weights=w, bins=100, density=True,
                   label='Theoretical P(gap)', color=color, alpha=0.4)
         print (f"|P(gap)| = {len(x)}, Sum(P(gap)) = {sum(w):.1f}")
+        return n
 
-    def prob_histogram_all(axis, probs, experimental, label):
+    def prob_histogram_all(axis, probs, experimental, label, c1='blueviolet', c2='peru'):
+        max_x = 0.95 * max(probs.keys())
+
+        if experimental:
+            # Experimental values
+            plot_hist(axis, experimental, 'peru')
+
+            # Expected value
+            add_expected_value(axis, experimental, c2, label)
+
+            # Need to balance x which is generally longer for probs then 99.9 percentile of experimental
+            max_x = min(1.1 * np.percentile(experimental, 99.9), max_x)
+
         # Theoretical probabilities
-        plot_prob_hist(axis, probs,  'blueviolet')
+        tn = plot_prob_hist(axis, probs, max_x, c1)
 
-        # Experimental values
-        plot_hist(axis, experimental, 'peru', 'x')
-
+        axis.set_xlim(right=max_x)
         axis.set_yscale('log')
 
-        # Expected value
-        add_expected_value(axis, experimental, 'peru', label)
-
-
-        # XXX: can I query this from experimental? axis.hist?
-        min_y = 0.8 * min(v for v in probs.values() if v > 0) / sum(probs.values())
-        max_y = 1.2 * max(probs.values()) / sum(probs.values())
         axis.legend(loc='upper right')
 
-        return min_y, max_y
+        return 0.9 * np.min(tn), 1.2 * np.max(tn)
 
     def fit_normal_dist(axis, d):
         x_start = max(0, 0.95 * np.percentile(d, 1))
@@ -184,7 +188,7 @@ def stats_plots(
                 (data.expected_prev, 'lightskyblue', 'prev'),
                 (data.expected_next, 'tomato', 'next'),
         ):
-            plot_hist(axis_expected_gap,          e_data, color, 'x')
+            plot_hist(axis_expected_gap,          e_data, color)
             add_expected_value(axis_expected_gap, e_data, color, label)
             fit_normal_dist(axis_expected_gap, e_data)
             axis_expected_gap.legend(loc='upper left')
@@ -219,7 +223,7 @@ def stats_plots(
         color = 'seagreen'
         axis = axis_expected_comb
         e_gap = data.expected_gap
-        plot_hist(axis,          e_gap, color, 'x')
+        plot_hist(axis,          e_gap, color)
         add_expected_value(axis, e_gap, color, 'combined gap')
         fit_normal_dist(axis,    e_gap)
         axis.legend(loc='upper left')
@@ -274,7 +278,7 @@ def stats_plots(
 
             # Hist
             axis = fig.add_subplot(gs[row, 1])
-            plot_hist(axis, prob_data, color, 'x')
+            plot_hist(axis, prob_data, color)
 
             # CDF
             axis = fig.add_subplot(gs[row, 2])
@@ -297,56 +301,52 @@ def stats_plots(
                 (data.expected_next, 'next', 'tomato'),
                 (data.expected_gap,  'expected', 'seagreen'),
                 (data.prob_merit_gap, f'P(gap > min_merit({args.min_merit}))', 'dodgerblue'),
-                (data.experimental_side, 'next/prev gap', 'sandybrown'),
-                (data.experimental_gap, 'gap', 'peru'),
         )):
             if not d: continue
 
-            if plot_i == 0: # Not called again on plot_i == 1
+            if plot_i == 0:
                 axis = fig.add_subplot(gs[0, 0])
                 dist_axis = fig.add_subplot(gs[0, 1])
+            elif plot_i == 1:
+                # Reuse from plot_i == 0
+                pass
             elif plot_i == 2:
                 axis = fig.add_subplot(gs[1, 0])
                 dist_axis = fig.add_subplot(gs[1, 1])
             elif plot_i == 3:
                 axis = fig.add_subplot(gs[2, 0])
                 dist_axis = fig.add_subplot(gs[2, 1])
-            elif plot_i == 4:
-                axis = axis_one_gap
-                dist_axis = None
-            elif plot_i == 5:
-                axis = axis_combined_gap
-                dist_axis = None
+            else:
+                assert False
 
-            # Note: If prp-top-percent changes there may be a trend in gap data.
-            #       Also gap data isn't always correctly ordered so skip
-            if plot_i <= 3:
-                assert not label.endswith("gap"), label
-                verify_no_trend(data.valid_mi, d)
+            assert not label.endswith("gap"), label
+            verify_no_trend(data.valid_mi, d)
 
-            marker='o' if plot_i in (4,5) else 'x'
-            plot_hist(axis, d, color, marker)
+            plot_hist(axis, d, color)
 
-            if 'gap' not in label:
+            if plot_i <= 2:
                 # Fit normal distribution to data
                 fit_normal_dist(axis, d)
-
-            if plot_i != 3:
                 # Plot a line for expected value
                 add_expected_value(axis, d, color, label)
                 axis.legend()
             else:
                 axis.legend([label])
 
-            if dist_axis:
-                # Cumulative sum of probability by gap
-                plot_cdf(dist_axis, d, color, label)
+            # Cumulative sum of probability by gap
+            plot_cdf(dist_axis, d, color, label)
 
-        for axis, d, color in [
-                (axis_one_gap, misc.prob_gap_side, 'blueviolet'),
-                (axis_combined_gap, misc.prob_gap_comb, 'seagreen'),
+        # Probability of Gap=X | Theoretical + Experimental
+        for axis, label, theory, c1, experimental, c2 in [
+                (axis_one_gap, 'next/prev gap',
+                    misc.prob_gap_side, 'blueviolet',
+                    data.experimental_side, 'sandybrown'),
+                (axis_combined_gap, 'gap',
+                    misc.prob_gap_comb, 'seagreen',
+                    data.experimental_gap, 'peru'),
         ]:
-            plot_prob_hist(axis, d,  color)
+            min_y, max_y = prob_histogram_all(axis, theory, experimental, label, c1, c2)
+            axis.set_ylim(bottom=min_y / 10)
             axis.legend(loc='upper right')
 
     if args.save_logs:
