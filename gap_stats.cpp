@@ -1044,7 +1044,7 @@ void run_gap_file(
         size_t min_j = unknown_high.size();
         for (size_t i = 0; i < max_i; i++) {
             uint32_t gap_low = unknown_low[i];
-            while ((min_j > 0) && (gap_low + unknown_high[min_j-1] >= min_record_gap)) {
+            while ((min_j > 0) && (gap_low + unknown_high[min_j-1] >= min_interesting_gap)) {
                 min_j -= 1;
             }
 
