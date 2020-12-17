@@ -595,13 +595,17 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * README.md
 * THEORY.md
 * Project
+  * [ ] Improve error messages (gap_stats missing, SL size)
+  * [ ] Change min-merit to 15, 18, or 20
   * [ ] Records / day in status.py or record_check.py
   * [ ] --update flag for `misc/show_ranges.sh`
   * [ ] Consider new names for prp-top-percent, no-one-side-skip, sieve-length
 * combined\_sieve.cpp
   * [ ] Benchmark reindex_m_wheel @ 6, 30, 210
 * gap\_stats.cpp
+  * [ ] P(record) is missing double extended
 * gap\_test.py
+  * [ ] Reduce memory if not --stats / --num-plots
 * gap\_test\_simple.cpp
 * schema.sql
 * benchmarking
@@ -611,7 +615,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 
 * Project
   * [ ] Figure out how to load (in c & python) and set config occasionally
-  * [x] Make sure that next_p = 0, = -1, is handled correctly in places.
+  * [ ] Try and unify prev/next, high/low naming
 * THEORY.md
 * New script to update DB (and maybe delete uninteresting results
   * [ ] Finalize script
@@ -643,6 +647,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 <details>
 <summary>Tracker for finished TODO items</summary>
 <p>
+
 * README.md
   * [x] record\_check.py guide to use
   * [x] Clarify gap\_test.py vs gap\_test.cpp
@@ -660,6 +665,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Rename prime-gap.db to prime-gap-search.db
   * [x] Make method2 the default
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
+  * [x] Make sure that next_p = 0, = -1, is handled correctly in places.
 * combined\_sieve.cpp
   * [X] (Not going to do this) option to output m with gcd(m, d) != 1
   * [X] Calculating coprime [L, R] * K^-1 mod p for medium p
