@@ -129,14 +129,18 @@ def print_record_gaps(args, gaps):
                     print("\tREDISCOVERED | {:70s} (old: {})".format(raw_data, existing))
                     continue
 
-                old_n = primegapverify.parse(existing[2])
-                if old_n:
-                    # Strip to just the number section
-                    new_n = primegapverify.parse(startprime)
-                    assert new_n, new_n
-                    improvement = float(size/gmpy2.log(new_n) - size/gmpy2.log(old_n))
-                else:
+                # If obvious not an improvement don't call parse(...)
+                if existing[0] > new_merit + 0.04:
                     improvement = new_merit - existing[0] + 6e-3
+                else:
+                    old_n = primegapverify.parse(existing[2])
+                    if old_n:
+                        # Strip to just the number section
+                        new_n = primegapverify.parse(startprime)
+                        assert new_n, new_n
+                        improvement = float(size/gmpy2.log(new_n) - size/gmpy2.log(old_n))
+                    else:
+                        improvement = new_merit - existing[0] + 6e-3
 
                 if improvement >= 0:
 #                    if not is_same and improvement < 6e-3:
