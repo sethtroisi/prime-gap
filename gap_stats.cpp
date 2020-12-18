@@ -935,8 +935,6 @@ ProbM calculate_probm(
         vector<float> &prob_gap_norm, vector<float> &prob_gap_low, vector<float> &prob_gap_high) {
 
     int m_wheel_high = m % gap_probs.wheel_d;
-    // Smallest side to have reached --min-merit when other side is extended
-    const int32_t min_side_for_extended_min_merit = min_gap_min_merit - config.sieve_length;
 
     /**
      * Directly examined (1 - PROB_PREV_GREATER) * (1 - PROB_NEXT_GREATER)
@@ -1023,6 +1021,9 @@ ProbM calculate_probm(
         // want -m % wheel_d => wheel_d - m
         const vector<float> &extended_record_low =
             gap_probs.extended_record_high.at(gap_probs.wheel_d - m_wheel_high);
+
+        // Smallest side to have reached --min-merit when other side is extended
+        const int32_t min_side_for_extended_min_merit = min_gap_min_merit - config.sieve_length;
 
         size_t max_i = std::max(unknown_low.size(), unknown_high.size());
         // i > prime_nth_sieve.size() have tiny probability (see DOUBLE_NTH_PRIME_CUTOFF)
@@ -1205,16 +1206,16 @@ void run_gap_file(
         vector<float>& probs_missing,
         vector<float>& probs_highmerit) {
 
-    auto  s_start_t = high_resolution_clock::now();
+    auto s_start_t = high_resolution_clock::now();
 
     prob_gap_norm.clear();
     prob_gap_low.clear();
     prob_gap_high.clear();
 
     // NOTE: prob_gap_low only use values <=  SL but helps with store_stats
-    prob_gap_norm.resize(2*config.sieve_length+1, 0);
-    prob_gap_low .resize(config.sieve_length+1, 0);
-    prob_gap_high.resize(config.sieve_length+1, 0);
+    prob_gap_norm.resize(2 * config.sieve_length + 1, 0);
+    prob_gap_low.resize(config.sieve_length + 1, 0);
+    prob_gap_high.resize(config.sieve_length + 1, 0);
 
     // sum prob_record_inside sieve
     // sum prob_record_extended (extended)
@@ -1229,22 +1230,22 @@ void run_gap_file(
 
     if (config.verbose >= 1) {
         printf("\n%ld tests M_start(%ld) + mi(%d to %d)\n\n",
-            valid_m.size(), config.mstart,
-            valid_m.front(), valid_m.back());
+               valid_m.size(), config.mstart,
+               valid_m.front(), valid_m.back());
     }
 
     for (uint32_t mi : valid_m) {
         uint64_t m = config.mstart + mi;
 
-        vector<uint32_t> unknown_low, unknown_high;
+        vector <uint32_t> unknown_low, unknown_high;
         read_unknown_line(config, mi, unknown_file, unknown_low, unknown_high);
 
         // Note slightly different from N_log
         float log_M = K_log + log(m);
 
         ProbM probm = calculate_probm(m, log_M, unknown_low, unknown_high,
-                        config, records, min_record_gap, min_gap_min_merit,
-                        gap_probs, prob_gap_norm, prob_gap_low, prob_gap_high);
+                                      config, records, min_record_gap, min_gap_min_merit,
+                                      gap_probs, prob_gap_norm, prob_gap_low, prob_gap_high);
 
         sum_prob_inner += probm.prob_record_inner;
         sum_prob_extended += probm.prob_record_extended;
@@ -1263,18 +1264,18 @@ void run_gap_file(
                 max_p_record = probm.prob_record;
 
                 printf("RECORD :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
-                        "prob record: %.2e   (%.2e + %.2e + %.2e)\n",
-                        m, M_vals.size(), unknown_low.size(), unknown_high.size(),
-                        probm.prob_record, probm.prob_record_inner,
-                        probm.prob_record_extended, probm.prob_record_extended2);
+                       "prob record: %.2e   (%.2e + %.2e + %.2e)\n",
+                       m, M_vals.size(), unknown_low.size(), unknown_high.size(),
+                       probm.prob_record, probm.prob_record_inner,
+                       probm.prob_record_extended, probm.prob_record_extended2);
             }
 
             if (probm.prob_highmerit > max_mm_record) {
                 max_mm_record = probm.prob_highmerit;
                 printf("MERIT  :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
-                        "      merit: %.2g\n",
-                        m, M_vals.size(), unknown_low.size(), unknown_high.size(),
-                        probm.prob_highmerit);
+                       "      merit: %.2g\n",
+                       m, M_vals.size(), unknown_low.size(), unknown_high.size(),
+                       probm.prob_highmerit);
             }
         }
 
@@ -1282,9 +1283,9 @@ void run_gap_file(
             if (probm.prob_is_missing_gap > max_mi_record) {
                 max_mi_record = probm.prob_is_missing_gap;
                 printf("MISSING:%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
-                        "prob record: %.2e   missing: %.4e\n",
-                        m, M_vals.size(), unknown_low.size(), unknown_high.size(),
-                        probm.prob_record, probm.prob_is_missing_gap);
+                       "prob record: %.2e   missing: %.4e\n",
+                       m, M_vals.size(), unknown_low.size(), unknown_high.size(),
+                       probm.prob_record, probm.prob_is_missing_gap);
             }
         }
     }
@@ -1292,6 +1293,9 @@ void run_gap_file(
     // Normalize the probability of gap (across all m) to per m
     for (size_t i = 0; i < prob_gap_norm.size(); i++) {
         prob_gap_norm[i] /= valid_m.size();
+    }
+    assert(prob_gap_low.size() == prob_gap_high.size());
+    for (size_t i = 0; i < prob_gap_low.size(); i++) {
         prob_gap_low[i]  /= valid_m.size();
         prob_gap_high[i] /= valid_m.size();
     }

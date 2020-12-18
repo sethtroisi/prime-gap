@@ -170,9 +170,7 @@ double prp_time_estimate_composite(double K_log, int verbose) {
 
             // Create some non-trivial semi-primes.
             mpz_t n, p, q;
-            mpz_init(n);
-            mpz_init(p);
-            mpz_init(q);
+            mpz_inits(n, p, q, nullptr);
 
             size_t bits = K_log * 1.442;
             assert( bits > 50 );
@@ -215,6 +213,8 @@ double prp_time_estimate_composite(double K_log, int verbose) {
             printf("Estimating PRP/s: %ld / %.2f = %.1f/s vs polyfit estimate of %.1f/s\n",
                     count, t, count / t, 1 / t_estimate);
             t_estimate = t / count;
+
+            mpz_clears(n, p, q, nullptr);
         }
     }
 
