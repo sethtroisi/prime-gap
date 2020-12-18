@@ -131,6 +131,20 @@ def load_existing(conn, args):
     return {row['m']: [row['prev_p'], row['next_p']] for row in rv}
 
 
+def load_probs_only(conn, args):
+    data = GapData()
+
+    rv = conn.execute(
+        "SELECT prob_merit, prob_record"
+        " FROM m_stats WHERE P = ? AND D = ? AND m BETWEEN ? AND ?",
+        (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
+
+    # Will fail if non-present
+    data.prob_merit_gap, data.prob_record_gap = zip(*[tuple(row) for row in rv])
+
+    return data
+
+
 def load_stats(conn, args):
     data = GapData()
     misc = Misc()
@@ -151,7 +165,6 @@ def load_stats(conn, args):
     data.experimental_side = [s for s in interleaved if s and s > 0]
     data.experimental_gap = [(p + n) for p, n in zip(exp_prev, exp_next) if p > 0 and n > 0]
 
-    # Need dictionary
     m_values = len(data.prob_merit_gap)
 
     rv = conn.execute(
@@ -393,6 +406,8 @@ def determine_test_threshold(args, data):
     # Could be several million datapoints.
     best_probs = sorted(data.prob_record_gap, reverse=True)
     prob_threshold = best_probs[round(len(best_probs) * percent / 100)]
+    del best_probs
+
     return prob_threshold, {
         m: (p_merit, p_record) for m, p_merit, p_record in zip(
                 valid_m, data.prob_merit_gap, data.prob_record_gap)

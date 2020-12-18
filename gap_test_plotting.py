@@ -364,14 +364,10 @@ def stats_plots(
 
 
 def plot_stuff(
-        args, conn, sc, data, misc,
-        data_db, misc_db,
+        args, conn, sc, data_db, misc_db,
         min_merit_gap, record_gaps, prob_prime_after_sieve):
 
     assert data_db.expected_prev
-    assert misc_db.prob_gap_comb, len(misc.prob_gap_comb)
-
-    assert len(data_db.experimental_gap) >= len(data.experimental_gap)
 
     # Geometric distribution
     prob_nth = []
@@ -380,9 +376,6 @@ def plot_stuff(
         prob_nth.append(prob_gap_longer * prob_prime_after_sieve)
         prob_gap_longer *= (1 - prob_prime_after_sieve)
     assert min(prob_nth) > 0
-
-    # test_unknowns come from unknown-file not DB.
-    misc_db.test_unknowns = misc.test_unknowns
 
     stats_plots(args, min_merit_gap, record_gaps, prob_nth, data_db, misc_db)
 

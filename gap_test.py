@@ -444,7 +444,6 @@ def prime_gap_test(args):
     sc   = gap_test_stats.StatCounters(time.time(), time.time())
     data = gap_test_stats.GapData()
     misc = gap_test_stats.Misc()
-    data_db = None
     misc_db = None
 
     valid_mi = [mi for mi in range(M_inc) if math.gcd(M + mi, D) == 1]
@@ -460,12 +459,13 @@ def prime_gap_test(args):
         print(f"\nStarting m({len(valid_mi)}) {data.first_m} to {data.last_m}")
         print()
 
-        #Load stats for prob_record
-        data_db, misc_db = gap_test_stats.load_stats(conn, args)
-        assert len(data_db.prob_merit_gap)  == len(valid_mi), "run ./gap_stats first"
-        assert len(data_db.prob_record_gap) == len(valid_mi), "run ./gap_stats first"
-        data.prob_merit_gap = data_db.prob_merit_gap
-        data.prob_record_gap = data_db.prob_record_gap
+        # Load stats for prob_record
+        temp = gap_test_stats.load_probs_only(conn, args)
+        assert len(temp.prob_merit_gap)  == len(valid_mi), "run ./gap_stats first"
+        assert len(temp.prob_record_gap) == len(valid_mi), "run ./gap_stats first"
+        data.prob_merit_gap = temp.prob_merit_gap
+        data.prob_record_gap = temp.prob_record_gap
+        del temp
 
         run_in_parallel(
             args, conn, unknown_file, record_gaps,
@@ -477,11 +477,15 @@ def prime_gap_test(args):
 
     # ----- Plots
     if args.num_plots:
-        if data_db is None or sc.tested > 0:
-            # Load stats from gap_stats
-            data_db, misc_db = gap_test_stats.load_stats(conn, args)
-
+        # Load stats from gap_stats
+        data_db, misc_db = gap_test_stats.load_stats(conn, args)
         data_db.valid_mi = valid_mi
+
+        assert len(data_db.experimental_gap) >= len(data.experimental_gap)
+        assert misc_db.prob_gap_comb, len(misc.prob_gap_comb)
+
+        del data
+        del misc
 
         if False:
             # VERY slowly validates gap_stats results.
@@ -506,14 +510,13 @@ def prime_gap_test(args):
                 if mi in unk_mi_of_interest:
                     _, _, _, unknowns = gap_utils.parse_unknown_line(line)
                     # TODO append valid_mi[k] and prob
-                    misc.test_unknowns.append(unknowns)
+                    misc_db.test_unknowns.append(unknowns)
 
                     if mi == max(unk_mi_of_interest):
                         break
 
         gap_test_plotting.plot_stuff(
-            args, conn, sc, data, misc,
-            data_db, misc_db,
+            args, conn, sc, data_db, misc_db,
             min_merit_gap, record_gaps, prob_prime_after_sieve)
 
 
