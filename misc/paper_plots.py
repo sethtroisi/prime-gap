@@ -10,14 +10,20 @@ def plot_record_vs_plimit():
     """
     Commands run were:
 
-    for m in 293609 811207 183047; do
-        time primegapverify/large_sieve $m 1511 312270 -50000 100000 100''000''000''000 > \
-            ../prime-gap/unknowns/1511_312270_${m}_1_s50000_l100000M.txt;
+    for sl in 15000 20000 25000; do
+        for m in 293609 811207 183047; do
+            time primegapverify/large_sieve $m 1511 312270 -${sl} $((sl*2)) 1''000''000''000 > \
+                ../prime-gap/unknowns/1511_312270_${m}_1_s${sl}_l1000M.txt; done; done
+        done
     done
 
     make gap_stats
     for m in 293609 811207 183047; do
-        time ./gap_stats --unknown-filename unknowns/1511_312270_${m}_1_*.txt | tee ${m}_test.txt;
+        for sl in 15 20 25; do
+            time ./gap_stats --unknown-filename unknowns/1511_312270_${m}_1_s${sl}000_l10000M.txt \
+                    | tee data/${m}_${sl}_test.txt
+            echo -e "\n\n"
+        done
     done
 
     python -c 'import misc.paper_plots; misc.paper_plots.plot_record_vs_plimit()'
