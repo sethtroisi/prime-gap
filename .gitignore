@@ -32,6 +32,8 @@ pfgw-prime.log
 cmake-build-debug/
 
 # Random
+.idea/
+cmake-build-debug/
 __pycache__/
 .gdb_history
 prime-gap-list

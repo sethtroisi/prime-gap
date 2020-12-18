@@ -26,7 +26,7 @@
 #include <gmp.h>
 #include <primesieve.hpp>
 
-#include "modulo_search.h"
+#include "../modulo_search.h"
 
 using std::cout;
 using std::endl;
