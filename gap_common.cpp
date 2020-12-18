@@ -604,11 +604,10 @@ bool Args::is_rle_unknowns(std::ifstream& unknown_file) {
     assert(pos == 0);
 
     // 100 characters gets past <m>: -count count | <OFFSETS>
-    char t[100];
+    char t[100] = {0};
     unknown_file.read(t, sizeof(t) - 1);
 
     unknown_file.seekg(pos, std::ios_base::beg);
-
     bool has_space = false;
     bool has_high_range = false;
     for (size_t i = 50; i < sizeof(t); i++) {
