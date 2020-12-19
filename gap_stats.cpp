@@ -578,7 +578,15 @@ void prob_extended_gap(
         }
     }
 
-    const size_t EXT_SIZE = 2 * SL;
+    // Extended size should be 30 merit but not more than 200'000
+    const size_t THIRTY_MERIT = 30 * N_log;
+    const size_t EXT_SIZE = std::min(THIRTY_MERIT, (size_t) std::min(2*SL, 200'000u));
+
+    if (config.verbose >= 2) {
+        // TODO check this is reasonable place to print
+        printf("Extended size: %ld (%.1f merit)\n", EXT_SIZE, EXT_SIZE / N_log);
+    }
+
     // Sieve a lot more (it's fast)
     vector<char> is_coprime(EXT_SIZE, true);
     {
@@ -1214,8 +1222,8 @@ void run_gap_file(
 
     // NOTE: prob_gap_low only use values <=  SL but helps with store_stats
     prob_gap_norm.resize(2 * config.sieve_length + 1, 0);
-    prob_gap_low.resize(config.sieve_length + 1, 0);
-    prob_gap_high.resize(config.sieve_length + 1, 0);
+    prob_gap_low .resize(2 * config.sieve_length + 1, 0);
+    prob_gap_high.resize(2 * config.sieve_length + 1, 0);
 
     // sum prob_record_inside sieve
     // sum prob_record_extended (extended)
@@ -1293,9 +1301,6 @@ void run_gap_file(
     // Normalize the probability of gap (across all m) to per m
     for (size_t i = 0; i < prob_gap_norm.size(); i++) {
         prob_gap_norm[i] /= valid_m.size();
-    }
-    assert(prob_gap_low.size() == prob_gap_high.size());
-    for (size_t i = 0; i < prob_gap_low.size(); i++) {
         prob_gap_low[i]  /= valid_m.size();
         prob_gap_high[i] /= valid_m.size();
     }
