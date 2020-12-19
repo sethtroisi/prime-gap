@@ -134,17 +134,17 @@ def load_existing(conn, args):
 
 def _zip_to_array(cursor):
     """convert rows to columns"""
-    row = cursor.fetchone()
-    if not row:
-        exit("Empty m_stats for this range, have you run gap_stats?")
-
-    arrays = [array.array('f') for i in row]
-    for i, v in enumerate(row):
-        arrays[i].append(v)
-
+    init = True
     for row in cursor:
+        if init:
+            init = False
+            arrays = [array.array('f') for v in row]
+
         for i, v in enumerate(row):
             arrays[i].append(v)
+
+    if init:
+        exit("Empty m_stats for this range, have you run gap_stats?")
 
     return arrays
 
