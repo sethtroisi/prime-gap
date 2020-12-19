@@ -610,8 +610,8 @@ bool Args::is_rle_unknowns(std::ifstream& unknown_file) {
     unknown_file.seekg(pos, std::ios_base::beg);
     bool has_space = false;
     bool has_high_range = false;
-    for (size_t i = 50; i < sizeof(t); i++) {
-        has_space      |= t[i] == ' ';
+    for (size_t i = 50; i < strlen(t) - 1; i++) {
+        has_space      |= t[i] == ' ' && t[i+1] != '|' && t[i-1] != '|';
         has_high_range |= t[i] > '9';
     }
     assert(has_space ^ has_high_range);
@@ -840,9 +840,9 @@ Config Args::argparse(int argc, char* argv[]) {
     }
 
     {
-        // Check that SL % 1000 = 0 or (SL, K) = 1
+        // Check that SL % 500 = 0 or (SL, K) = 1
         size_t SL = config.sieve_length;
-        if (SL % 1000 != 0) {
+        if (SL % 500 != 0) {
             for (size_t p = 2; p < config.p; p += 1 + (p > 2)) {
                 if (isprime_brute(p)) {
                     if (SL % p == 0 && config.d % p != 0) {

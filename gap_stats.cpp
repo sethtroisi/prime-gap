@@ -580,7 +580,7 @@ void prob_extended_gap(
 
     // Extended size should be 30 merit but not more than 200'000
     const size_t THIRTY_MERIT = 30 * N_log;
-    const size_t EXT_SIZE = std::min(THIRTY_MERIT, (size_t) std::min(2*SL, 200'000u));
+    const size_t EXT_SIZE = std::min(THIRTY_MERIT, (size_t) std::max(2*SL, 200'000u));
 
     if (config.verbose >= 2) {
         // TODO check this is reasonable place to print
@@ -751,7 +751,7 @@ void prob_extended_gap(
             gap_probs.extended_record_high[m] = prob_extended_record;
         }
 
-        // Probability of prev, next > SL and record gap!
+        // Probability of prev, next > SL (extended^2)
         {
             double prob_e2_record = 0;
 
@@ -793,7 +793,8 @@ void prob_extended_gap(
                     break;
                 }
 
-                assert( gap_prev + extended_coprime[min_e_c_i] >= MIN_RECORD );
+                assert( min_e_c_i == extended_coprime.size() ||
+                        gap_prev + extended_coprime[min_e_c_i] >= MIN_RECORD );
                 assert( gap_prev + extended_coprime[max_e_c_i] <= MAX_RECORD );
                 assert( (min_e_c_i == 0) || (gap_prev + extended_coprime[min_e_c_i-1] < MIN_RECORD) );
                 assert( (max_e_c_i == extended_coprime.size() - 1) ||
@@ -1225,16 +1226,10 @@ void run_gap_file(
     prob_gap_low .resize(2 * config.sieve_length + 1, 0);
     prob_gap_high.resize(2 * config.sieve_length + 1, 0);
 
-    // sum prob_record_inside sieve
-    // sum prob_record_extended (extended)
-    float sum_prob_inner = 0.0;
-    float sum_prob_extended = 0.0;
-    float sum_prob_extended2 = 0.0;
-
-    // max_prob_record, max_minmerit_record, and max_prob_missing_record
-    float max_p_record = 1e-10;
-    float max_mm_record = 1e-10;
-    float max_mi_record = 1e-10;
+    // Keep sum & max of several records
+    ProbM sum;
+    ProbM max_r;
+    max_r.prob_record = max_r.prob_highmerit = max_r.prob_is_missing_gap= 1e-10;
 
     if (config.verbose >= 1) {
         printf("\n%ld tests M_start(%ld) + mi(%d to %d)\n\n",
@@ -1255,9 +1250,10 @@ void run_gap_file(
                                       config, records, min_record_gap, min_gap_min_merit,
                                       gap_probs, prob_gap_norm, prob_gap_low, prob_gap_high);
 
-        sum_prob_inner += probm.prob_record_inner;
-        sum_prob_extended += probm.prob_record_extended;
-        sum_prob_extended2 += probm.prob_record_extended2;
+        sum.prob_record += probm.prob_record;
+        sum.prob_record_inner += probm.prob_record_inner;
+        sum.prob_record_extended += probm.prob_record_extended;
+        sum.prob_record_extended2 += probm.prob_record_extended2;
 
         M_vals.push_back(m);
         expected_prev.push_back(probm.expected_gap_prev);
@@ -1268,8 +1264,8 @@ void run_gap_file(
         probs_highmerit.push_back(probm.prob_highmerit);
 
         if (config.verbose >= 1) {
-            if (probm.prob_record > max_p_record) {
-                max_p_record = probm.prob_record;
+            if (probm.prob_record > max_r.prob_record) {
+                max_r.prob_record = probm.prob_record;
 
                 printf("RECORD :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
                        "prob record: %.2e   (%.2e + %.2e + %.2e)\n",
@@ -1278,8 +1274,8 @@ void run_gap_file(
                        probm.prob_record_extended, probm.prob_record_extended2);
             }
 
-            if (probm.prob_highmerit > max_mm_record) {
-                max_mm_record = probm.prob_highmerit;
+            if (probm.prob_highmerit > max_r.prob_highmerit) {
+                max_r.prob_highmerit = probm.prob_highmerit;
                 printf("MERIT  :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
                        "      merit: %.2g\n",
                        m, M_vals.size(), unknown_low.size(), unknown_high.size(),
@@ -1288,8 +1284,8 @@ void run_gap_file(
         }
 
         if (config.verbose >= 2) {
-            if (probm.prob_is_missing_gap > max_mi_record) {
-                max_mi_record = probm.prob_is_missing_gap;
+            if (probm.prob_is_missing_gap > max_r.prob_is_missing_gap) {
+                max_r.prob_is_missing_gap= probm.prob_is_missing_gap;
                 printf("MISSING:%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
                        "prob record: %.2e   missing: %.4e\n",
                        m, M_vals.size(), unknown_low.size(), unknown_high.size(),
@@ -1315,9 +1311,12 @@ void run_gap_file(
         if (config.verbose >= 1)
             cout << endl;
     }
-    if (config.verbose >= 2) {
-        printf("prob record inside sieve: %.5f   prob extended: %.5f   prob extended^2: %.5f\n\n",
-                sum_prob_inner, sum_prob_extended, sum_prob_extended2);
+    // TODO XXX
+    //if (config.verbose >= 1) {
+    if (config.verbose >= 0) {
+        printf("prob record total: %.5f  direct: %.5f  extended: %.5f  extended^2: %.5f\n\n",
+                sum.prob_record, sum.prob_record_inner,
+                sum.prob_record_extended, sum.prob_record_extended2);
         printf("\tsum(prob(gap[X])): %.5f\n", average_v(prob_gap_norm) * prob_gap_norm.size());
         printf("\tavg seen prob    : %.7f\n", average_v(probs_seen));
     }
@@ -1464,7 +1463,7 @@ void prime_gap_stats(struct Config config) {
     load_possible_records(N_log, records, poss_record_gaps);
     assert( poss_record_gaps.size() >= 2);
     {
-        if (config.verbose >= 1) {
+        if (config.verbose >= 2) {
             printf("Found %ld possible record gaps (%d to %d)\n",
                 poss_record_gaps.size(), poss_record_gaps.front(), poss_record_gaps.back());
         }
@@ -1476,12 +1475,15 @@ void prime_gap_stats(struct Config config) {
             }
         }
 
+
+        /* TODO FIXME
         if (poss_record_gaps.front() > 3 * SIEVE_LENGTH) {
             printf("\n\n\n");
-            printf("\tHard to determine record prob, 3 * sieve_length < min_record_gap");
+            printf("\tHard to determine record prob, 3 * sieve_length < min_record_gap\n");
             printf("\n\n\n");
         }
-        if (config.verbose >= 1) {
+        */
+        if (config.verbose >= 2) {
             cout << endl;
         }
     }
@@ -1529,7 +1531,7 @@ void prime_gap_stats(struct Config config) {
     );
 
     // Compute sum_missing_prob, sum_record_prob @1,5,10,20,50,100%
-    if (config.verbose >= 1) {
+    if (config.verbose >= 2) {
         vector<float> expected_gap;
         for (size_t i = 0; i < expected_prev.size(); i++) {
             expected_gap.push_back(expected_prev[i] + expected_next[i]);
