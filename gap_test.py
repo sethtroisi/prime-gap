@@ -293,7 +293,7 @@ def run_in_parallel(
             if is_partial:
                 # Should always run partial results even if don't match prob_threshold.
                 if m not in m_probs or m_probs[m][1] < prob_threshold:
-                    m_probs[m] = [1.01 * prob_threshold for i in range(2)]
+                    m_probs[m] = (1.01 * prob_threshold for i in range(2))
 
             # Check if prob_record < threshold
             if m not in m_probs or m_probs[m][1] < prob_threshold:
@@ -418,14 +418,16 @@ def prime_gap_test(args):
         args.unknown_filename = folder_unk
     unknown_file = open(args.unknown_filename, "rb")
 
+    count_m = misc_utils.count_num_m(M, M_inc, D)
+
     # ----- Open Prime-Gap-Search DB
     # Longer timeout so that record_checking doesn't break when saving
     conn = sqlite3.connect(args.search_db, timeout=60)
-    conn.row_factory = sqlite3.Row
+    t0 = time.time()
     existing = gap_test_stats.load_existing(conn, args)
+    t1 = time.time()
     n_exist = len(existing)
-    count_m = misc_utils.count_num_m(M, M_inc, D)
-    print(f"Found {n_exist} ({n_exist/count_m:.1%}) results")
+    print(f"Found {n_exist} ({n_exist/count_m:.1%}) results ({t1-t0:.1f} sec)")
 
     # used in next_prime
     assert P <= 80000

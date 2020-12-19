@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import array
 import itertools
 import math
 import time
@@ -125,10 +126,27 @@ def load_records(conn, log_N):
 
 def load_existing(conn, args):
     rv = conn.execute(
-        "SELECT m, next_p, prev_p FROM result"
+        "SELECT m, prev_p, next_p FROM result"
         " WHERE P = ? AND D = ? AND m BETWEEN ? AND ?",
         (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
-    return {row['m']: [row['prev_p'], row['next_p']] for row in rv}
+    return {row[0]: (row[1], row[2]) for row in rv}
+
+
+def _zip_to_array(cursor):
+    """convert rows to columns"""
+    row = cursor.fetchone()
+    if not row:
+        exit("Empty m_stats for this range, have you run gap_stats?")
+
+    arrays = [array.array('f') for i in row]
+    for i, v in enumerate(row):
+        arrays[i].append(v)
+
+    for row in cursor:
+        for i, v in enumerate(row):
+            arrays[i].append(v)
+
+    return arrays
 
 
 def load_probs_only(conn, args):
@@ -139,8 +157,7 @@ def load_probs_only(conn, args):
         " FROM m_stats WHERE P = ? AND D = ? AND m BETWEEN ? AND ?",
         (args.p, args.d, args.mstart, args.mstart + args.minc - 1))
 
-    # Will fail if non-present
-    data.prob_merit_gap, data.prob_record_gap = zip(*[tuple(row) for row in rv])
+    data.prob_merit_gap, data.prob_record_gap = _zip_to_array(rv)
 
     return data
 
@@ -159,11 +176,12 @@ def load_stats(conn, args):
     # Will fail if non-present
     (data.expected_prev, data.expected_next, data.expected_gap,
      exp_prev, exp_next,
-     data.prob_merit_gap, data.prob_record_gap)= zip(*[tuple(row) for row in rv])
+     data.prob_merit_gap, data.prob_record_gap)= _zip_to_array(rv)
 
     interleaved = itertools.chain(*itertools.zip_longest(exp_prev, exp_next))
-    data.experimental_side = [s for s in interleaved if s and s > 0]
-    data.experimental_gap = [(p + n) for p, n in zip(exp_prev, exp_next) if p > 0 and n > 0]
+    data.experimental_side = array.array('f', (s for s in interleaved if s and s > 0))
+    zipped_sum_gen = ((p + n) for p, n in zip(exp_prev, exp_next) if p > 0 and n > 0)
+    data.experimental_gap = array.array('i', zipped_sum_gen)
 
     m_values = len(data.prob_merit_gap)
 
@@ -172,12 +190,12 @@ def load_stats(conn, args):
         "FROM range_stats where rid = ?",
         (config_hash(args),))
     for row in rv:
-        gap = row['gap']
+        gap = row[0]
         # TODO: test if this works with out the normalization
         # Values were normalized by / m_values in gap_stats
-        misc.prob_gap_comb[gap] += row['prob_combined'] * m_values
-        misc.prob_gap_side[gap] += row['prob_low_side'] / 2 * m_values
-        misc.prob_gap_side[gap] += row['prob_high_side'] / 2 * m_values
+        misc.prob_gap_comb[gap] += row[1] * m_values
+        misc.prob_gap_side[gap] += row[2] / 2 * m_values
+        misc.prob_gap_side[gap] += row[3] / 2 * m_values
 
     return data, misc
 
