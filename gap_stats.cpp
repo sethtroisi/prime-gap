@@ -58,15 +58,23 @@ const uint32_t MISSING_GAPS_HIGH = 132928;
 
 class ProbNth {
     public:
-        // See `prob_nth_prime`
-        // Probability that i'th unknown is prime (inside sieve)
-        vector<float> prime_nth_sieve;
-        // Probability that prime is >= i'th (inside sieve)
-        vector<float> great_nth_sieve;
+        /**
+         * Precalculate and cache two calculations
+         * See `prob_nth_prime`
+         *
+         * Change that the first prime is later than i'th unknown
+         * greater_nth[i] = (1 - prob_prime)^i
+         *
+         * Change that ith unknown number (in sieve) is the first prime
+         * prime_nth[i] = (1 - prob_prime)^(i-1) * prob_prime = greater_nth[i-1] * prob_prime
+         */
+        vector<float> prime_nth;
+        vector<float> greater_nth;
 
         /**
          * Probability that prev_prime & next_prime have X unknown composites in middle
-         * prob_combined_sieve[i+j] = prime * (1 - prime)^i * (1 - prime)^j * prime
+         * prob_combined_sieve[i+j] = prime_nth[i] * prime_nth[j]
+         *                          = prime * (1 - prime)^i * (1 - prime)^j * prime
          *                          = prime ^ 2 * (1 - prime)^(i+j)
          */
         vector<float> combined_sieve;
@@ -97,12 +105,12 @@ class ProbNth {
 
         /** Average number of 0 < X <= SL coprime to K */
         float average_coprime;
+
         /**
          * Average probability of gap > 2*SL (assuming gap > SL)
          * = pow(Prob(prime | coprime), average_coprime)
          */
-        float prob_greater_extended;
-        // TODO make this map<int, double> like all above
+        map<int, double> prob_greater_extended;
 };
 
 class ProbM {
@@ -512,15 +520,6 @@ void store_stats(
 }
 
 
-/**
- * Precalculate and cache two calculations
- *
- * Change that ith unknown number (in sieve) is the first prime
- * Prob_prime_nth[i] = (1 - prob_prime)^(i-1) * prob_prime
- *
- * Change that the first prime is later than i'th unknown
- * prod_great_nth[i] = (1 - prob_prime)^i
- */
 cdouble DOUBLE_NTH_PRIME_CUTOFF = 1e-13;
 
 float nth_prob_or_zero(const vector<float>& prob_nth, size_t nth) {
@@ -531,6 +530,7 @@ void prob_nth_prime(
         double prob_prime,
         vector<float>& prob_prime_nth,
         vector<float>& prob_great_nth) {
+    assert(prob_prime_nth.empty() && prob_great_nth.empty());
     double prob_still_prime = 1.0;
     for (; prob_still_prime > DOUBLE_NTH_PRIME_CUTOFF;) {
         prob_prime_nth.push_back(prob_still_prime * prob_prime);
@@ -564,7 +564,6 @@ void prob_extended_gap(
     // Gaps larger than this are assumed to be record
     const unsigned int MAX_RECORD = poss_record_gaps.back();
 
-    cdouble N_log = calc_log_K(config) + log(config.mstart);
 
     // ----- Generate primes for P
     vector<uint32_t> K_primes = get_sieve_primes(config.p);
@@ -580,6 +579,7 @@ void prob_extended_gap(
     }
 
     // Extended size should be 30 merit but not more than 200'000
+    cdouble N_log = calc_log_K(config) + log(config.mstart);
     const size_t THIRTY_MERIT = 30 * N_log;
     const size_t EXT_SIZE = std::min(THIRTY_MERIT, (size_t) std::max(2*SL, 200'000u));
 
@@ -591,7 +591,8 @@ void prob_extended_gap(
         // Empty extended.
         gap_probs.wheel_d = 1;
         gap_probs.average_coprime = 0;
-        gap_probs.prob_greater_extended = 1;
+        gap_probs.prob_greater_extended[0] = 1;
+        gap_probs.prob_greater_extended[1] = 1;
 
         vector<float> prob_extended_record(SL+1, 0.0);
         gap_probs.extended_record_high[0] = prob_extended_record;
@@ -600,7 +601,6 @@ void prob_extended_gap(
         gap_probs.extended_extended_record[1] = 0.0;
         return;
     }
-
 
     // Sieve a lot more (it's fast)
     vector<char> is_coprime(EXT_SIZE, true);
@@ -633,11 +633,14 @@ void prob_extended_gap(
         }
     }
     gap_probs.wheel_d = wheel;
+    // XXX: Some assumptions are based on wheel - m, insert 0 & 1 in those cases
+    assert(wheel != 1);
+    cout << prob_prime_coprime << endl;
 
-    // Same as prob_prime_nth_sieve but not considering sieving (because outside of interval).
+    // Same as prob_prime_nth but not considering sieving (because outside of interval).
     vector<float> prob_prime_nth_out;
-    vector<float> prob_great_nth_out;
-    prob_nth_prime(prob_prime_coprime, prob_prime_nth_out, prob_great_nth_out);
+    vector<float> prob_greater_nth_out;
+    prob_nth_prime(prob_prime_coprime, prob_prime_nth_out, prob_greater_nth_out);
 
     // For each wheel mark off a divisors of small primes in d.
 	map<int, vector<char>> coprime_ms;
@@ -681,19 +684,23 @@ void prob_extended_gap(
                 average_inner_coprime += inner_coprime;
                 average_extended_coprime += extended_coprime;
 
-                //printf("\tWheel: %-3d %ld/%d inner, %ld/%d extended coprime)\n",
-                //	m, inner_coprime, SL, extended_coprime, SL);
+                cdouble prob_outer = nth_prob_or_zero(prob_greater_nth_out, extended_coprime);
+                gap_probs.prob_greater_extended[m] = prob_outer;
+
+                if (config.verbose >= 3) {
+                    printf("\tWheel: %-3d %ld/%d inner, %ld/%d extended coprime, prob last: %.3g\n",
+                        m, inner_coprime, SL, extended_coprime, SL, prob_outer);
+                }
             }
         }
 
         average_inner_coprime /= coprime_ms.size();
         average_extended_coprime /= coprime_ms.size();
 
-        cdouble prob_inner = nth_prob_or_zero(prob_great_nth_out, average_inner_coprime);
-        cdouble prob_outer = nth_prob_or_zero(prob_great_nth_out, average_extended_coprime);
+        cdouble prob_inner = nth_prob_or_zero(prob_greater_nth_out, average_inner_coprime);
+        cdouble prob_outer = nth_prob_or_zero(prob_greater_nth_out, average_extended_coprime);
 
         gap_probs.average_coprime = average_extended_coprime;
-        gap_probs.prob_greater_extended = prob_outer;
 
         if (config.verbose >= 2) {
             printf("Using Wheel: %d for extended probs\n", wheel);
@@ -707,7 +714,8 @@ void prob_extended_gap(
     for (uint32_t m = 0; m < wheel; m++) {
         // Hack to make `prob_record_vs_plimit` much faster
         if (config.minc == 1) {
-            if (config.mstart % wheel != m && config.mstart % wheel != (wheel - m))
+            uint32_t temp = config.mstart % wheel;
+            if (temp != m && temp != (wheel - m))
                 continue;
         }
         if (gcd(m, wheel) > 1) continue;
@@ -715,19 +723,19 @@ void prob_extended_gap(
 		vector<char> &is_coprime_m = coprime_ms.at(m);
 		vector<char> &is_coprime_m_prev = coprime_ms.at(wheel - m);
 
+        // List of coprime X, SL < X < EXT_SIZE
+        vector<uint32_t> extended_coprime;
         // partial_sum of is_coprime_m starting at SL+1
         vector<uint32_t> count_coprime_m(EXT_SIZE, 0);
-        vector<uint32_t> extended_coprime;
         {
             for (size_t x = SL+1; x < EXT_SIZE; x++) {
-                if (is_coprime_m[x]) {
+                if (is_coprime_m[x])
                     extended_coprime.push_back(x);
-                }
                 count_coprime_m[x] = extended_coprime.size();
             }
         }
 
-        // Probability of prev < SL, next > SL (extended)
+        // Probability of prev <= SL, next > SL (extended)
         {
             vector<float> prob_extended_record(SL+1, 0.0);
             for (size_t gap_prev = 1; gap_prev <= SL; gap_prev++) {
@@ -738,6 +746,7 @@ void prob_extended_gap(
                 }
 
                 if (gap_prev + EXT_SIZE < MIN_RECORD) {
+                    prob_extended_record[gap_prev] = 0.0;
                     continue;
                 }
 
@@ -746,7 +755,7 @@ void prob_extended_gap(
                     uint32_t dist = record_gap - gap_prev;
                     if (dist <= SL) continue;
 
-                    if (dist >= is_coprime_m.size()) break;
+                    if (dist >= EXT_SIZE) break;
 
                     // dist can never be prime.
                     if (!is_coprime_m[dist]) continue;
@@ -755,12 +764,12 @@ void prob_extended_gap(
                     uint32_t num_coprime = count_coprime_m[dist];
                     if (num_coprime >= prob_prime_nth_out.size()) break;
 
-                    // chance of dist_after being first prime.
+                    // chance of dist being first prime.
                     prob_record += prob_prime_nth_out[num_coprime];
                 }
 
                 // Prob record gap, with 1 <= gap_prev <= SL, SL <= gap_next
-                assert(prob_record >= 0 && prob_record < 1);
+                assert(0 <= prob_record && prob_record < 1);
                 prob_extended_record[gap_prev] = prob_record;
             }
             gap_probs.extended_record_high[m] = prob_extended_record;
@@ -806,7 +815,7 @@ void prob_extended_gap(
                     assert(min_e_c_i == 0);
                     // Every gap_prev + extended_coprime[i] > MAX_RECORD
                     assert(extended_coprimes_prev >= 1);
-                    prob_e2_record += prob_great_nth_out[extended_coprimes_prev - 1];
+                    prob_e2_record += prob_greater_nth_out[extended_coprimes_prev - 1];
                     break;
                 }
 
@@ -819,18 +828,16 @@ void prob_extended_gap(
 
                 float prob_e_e = 0;
 
-                size_t max_i = std::min(max_e_c_i, prob_prime_nth_out.size() - extended_coprimes_prev + 1);
+                size_t max_i = std::min(max_e_c_i, prob_prime_nth_out.size() - extended_coprimes_prev);
                 for (size_t i = min_e_c_i; i < max_i; i++) {
-                    // XXX: benchmark if prob_prime_nth_out faster to calculate on the fly.
-
                     size_t gap = gap_prev + extended_coprime[i];
                     if (records[gap] > N_log) {
                         prob_e_e += prob_prime_nth_out[i];
                     }
                 }
 
-                // Everything past max_i is assumed record (or very small prob)
-                prob_e_e += nth_prob_or_zero(prob_great_nth_out, max_i);
+                // Everything >= max_i is assumed record (or very small prob)
+                prob_e_e += nth_prob_or_zero(prob_greater_nth_out, max_i);
                 prob_e2_record += prob_e_e * nth_prob_or_zero(prob_prime_nth_out, extended_coprimes_prev);
             }
             gap_probs.extended_extended_record[m] = prob_e2_record;
@@ -859,7 +866,7 @@ void setup_probnth(
 
     prob_nth_prime(
         PROB_PRIME_AFTER_SIEVE,
-        gap_probs.prime_nth_sieve, gap_probs.great_nth_sieve);
+        gap_probs.prime_nth, gap_probs.greater_nth);
 
     prob_combined_gap(
         PROB_PRIME_AFTER_SIEVE,
@@ -985,9 +992,9 @@ ProbM calculate_probm(
      * *- next | extend | >2SL--->
      */
 
-    cdouble PROB_PREV_GREATER = nth_prob_or_zero(gap_probs.great_nth_sieve, unknown_low.size());
-    cdouble PROB_NEXT_GREATER = nth_prob_or_zero(gap_probs.great_nth_sieve, unknown_high.size());
-    cdouble prob_extended = gap_probs.prob_greater_extended;
+    cdouble PROB_PREV_GREATER = nth_prob_or_zero(gap_probs.greater_nth, unknown_low.size());
+    cdouble PROB_NEXT_GREATER = nth_prob_or_zero(gap_probs.greater_nth, unknown_high.size());
+    cdouble prob_extended = gap_probs.prob_greater_extended.at(m_wheel_high);
 
     ProbM result;
     result.prob_seen = (1 - PROB_PREV_GREATER * prob_extended) * (1 - PROB_NEXT_GREATER * prob_extended);
@@ -1052,10 +1059,10 @@ ProbM calculate_probm(
         const int32_t min_side_for_extended_min_merit = min_gap_min_merit - config.sieve_length;
 
         size_t max_i = std::max(unknown_low.size(), unknown_high.size());
-        // i > prime_nth_sieve.size() have tiny probability (see DOUBLE_NTH_PRIME_CUTOFF)
-        max_i = std::min(gap_probs.prime_nth_sieve.size(), max_i);
+        // i > prime_nth.size() has tiny probability (see DOUBLE_NTH_PRIME_CUTOFF)
+        max_i = std::min(gap_probs.prime_nth.size(), max_i);
         for (size_t i = 0; i < max_i; i++) {
-            float prob_i = gap_probs.prime_nth_sieve[i];
+            float prob_i = gap_probs.prime_nth[i];
             assert(0 <= prob_i && prob_i <= 1.0);
 
             // unknown[i'th] is prime, on the otherside have prime be outside of sieve.
