@@ -1065,17 +1065,15 @@ void prime_gap_parallel(struct Config& config) {
 
     vector<int32_t> valid_mi;
     vector<int32_t> m_reindex(M_inc, -1);
-    size_t valid_ms = 0;
     {
         for (uint32_t mi = 0; mi < M_inc; mi++) {
             if (gcd(M_start + mi, D) == 1) {
-                m_reindex[mi] = valid_ms;
+                m_reindex[mi] = valid_mi.size();
                 valid_mi.push_back(mi);
-                valid_ms++;
             }
         }
     }
-    assert(valid_ms == valid_mi.size());
+    const size_t valid_ms = valid_mi.size();
 
     // if [X] is coprime to K
     vector<char> coprime_composite(SIEVE_INTERVAL, 1);
@@ -1134,7 +1132,8 @@ void prime_gap_parallel(struct Config& config) {
         }
 
 #if METHOD2_WHEEL
-        for (size_t m_wheel = 1; m_wheel < reindex_m_wheel; m_wheel++) {
+        // Start at m_wheel == 0 so that re_index_m_wheel == 1 (D=1) works.
+        for (size_t m_wheel = 0; m_wheel < reindex_m_wheel; m_wheel++) {
             if (gcd(reindex_m_wheel, m_wheel) > 1) continue;
             i_reindex_wheel[m_wheel].resize(SIEVE_INTERVAL, 0);
 
@@ -1221,8 +1220,10 @@ void prime_gap_parallel(struct Config& config) {
         }
 
 #if METHOD2_WHEEL
-        // Update guess with first wheel count for OOM prevention check
-        guess = valid_ms * (i_reindex_wheel_count[1] + 1) / 8 / 1024 / 1024;
+        if (reindex_m_wheel > 1) {
+            // Update guess with first wheel count for OOM prevention check
+            guess = valid_ms * (i_reindex_wheel_count[1] + 1) / 8 / 1024 / 1024;
+        }
 #endif
 
         // Try to prevent OOM, check composite < 7GB allocation,
@@ -1297,14 +1298,8 @@ void prime_gap_parallel(struct Config& config) {
             assert(mii >= 0);
 
             uint64_t m = M_start + mi;
-#if METHOD2_WHEEL
-            uint32_t m_wheel = m % reindex_m_wheel;
-            // TODO think about how large this could be and use vector<unsigned short>
-            // SL = 260K?
-            const vector<uint32_t> &i_reindex_m = i_reindex_wheel[m_wheel];
-#else
-            const vector<uint32_t> &i_reindex_m = i_reindex;
-#endif  // METHOD2_WHEEL
+            const vector<uint32_t> &i_reindex_m = reindex_m_wheel > 1 ?
+                i_reindex_wheel[m % reindex_m_wheel] : i_reindex;
 
             bool centerOdd = ((D & 1) == 0) && (m & 1);
             bool lowIsEven = centerOdd == (SIEVE_LENGTH & 1);
