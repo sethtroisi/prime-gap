@@ -81,7 +81,9 @@ class ProbNth {
 
         /**
          * wheel_d is gcd(D, 2*3*5*7)
-         * m % wheel_d helps us deal with small primes in d
+         * Relevant statistics are lookup with (m % wheel_d)
+         * ((m % wheel_d) * K + X) with factors of 2,3,5,7 can be elimanted
+         * where these X aren't coprime to K
          */
         int wheel_d;
         /**
@@ -103,12 +105,9 @@ class ProbNth {
          */
         map<int, double> extended_extended_record;
 
-        /** Average number of 0 < X <= SL coprime to K */
-        float average_coprime;
-
         /**
          * Average probability of gap > 2*SL (assuming gap > SL)
-         * = pow(Prob(prime | coprime), average_coprime)
+         * = pow(Prob(prime | coprime), len(extended coprimes))
          */
         map<int, double> prob_greater_extended;
 };
@@ -117,23 +116,23 @@ class ProbM {
     public:
         /**
          * Probability of this m & partial sieved interval generating a record gap
-         * Sum of prob_record_inner, prob_record_extended, prob_record_extended2
+         * Sum of record_inner, record_extended, record_extended2
          */
-        float prob_record = 0.0;
-        float prob_record_inner = 0.0;
-        float prob_record_extended = 0.0;
-        float prob_record_extended2 = 0.0;
+        float record = 0.0;
+        float record_inner = 0.0;
+        float record_extended = 0.0;
+        float record_extended2 = 0.0;
 
         /**
          *  Probability of Record that was covered by the calculation
          *  Related to sieve-length
          *  Sum of direct, direct-extended, extended-extended
          */
-        float prob_seen = 0.0;
+        float seen = 0.0;
 
         /** Other probabilities that are tracked */
-        float prob_is_missing_gap = 0.0;
-        float prob_highmerit = 0.0;
+        float is_missing_gap = 0.0;
+        float highmerit = 0.0;
 
         /** Expected gap size */
         float expected_gap_prev = 0.0;
@@ -590,7 +589,6 @@ void prob_extended_gap(
     if (config.sieve_length >= EXT_SIZE) {
         // Empty extended.
         gap_probs.wheel_d = 1;
-        gap_probs.average_coprime = 0;
         gap_probs.prob_greater_extended[0] = 1;
         gap_probs.prob_greater_extended[1] = 1;
 
@@ -699,8 +697,6 @@ void prob_extended_gap(
 
         cdouble prob_inner = nth_prob_or_zero(prob_greater_nth_out, average_inner_coprime);
         cdouble prob_outer = nth_prob_or_zero(prob_greater_nth_out, average_extended_coprime);
-
-        gap_probs.average_coprime = average_extended_coprime;
 
         if (config.verbose >= 2) {
             printf("Using Wheel: %d for extended probs\n", wheel);
@@ -997,10 +993,10 @@ ProbM calculate_probm(
     cdouble prob_extended = gap_probs.prob_greater_extended.at(m_wheel_high);
 
     ProbM result;
-    result.prob_seen = (1 - PROB_PREV_GREATER * prob_extended) * (1 - PROB_NEXT_GREATER * prob_extended);
+    result.seen = (1 - PROB_PREV_GREATER * prob_extended) * (1 - PROB_NEXT_GREATER * prob_extended);
 
-    result.prob_record_extended2 = PROB_NEXT_GREATER * PROB_PREV_GREATER *
-                                   gap_probs.extended_extended_record.at(m_wheel_high);
+    result.record_extended2 = PROB_NEXT_GREATER * PROB_PREV_GREATER *
+                              gap_probs.extended_extended_record.at(m_wheel_high);
 
     bool save_gap_probs = !prob_gap_norm.empty();
 
@@ -1032,15 +1028,15 @@ ProbM calculate_probm(
                 }
 
                 if (gap >= min_gap_min_merit) {
-                    result.prob_highmerit += prob_this_gap;
+                    result.highmerit += prob_this_gap;
                 }
 
                 if (gap >= min_record_gap && records[gap] > log_M) {
-                    result.prob_record_inner += prob_this_gap;
+                    result.record_inner += prob_this_gap;
 
                     if (MISSING_GAPS_LOW <= gap && gap <= MISSING_GAPS_HIGH &&
                             records[gap] == GAP_INF) {
-                        result.prob_is_missing_gap += prob_this_gap;
+                        result.is_missing_gap += prob_this_gap;
                     }
                 }
             }
@@ -1071,7 +1067,7 @@ ProbM calculate_probm(
                 assert(conditional_prob >= 0);
                 assert(conditional_prob < 1);
 
-                result.prob_record_extended += prob_i * PROB_NEXT_GREATER * conditional_prob;
+                result.record_extended += prob_i * PROB_NEXT_GREATER * conditional_prob;
 
                 int32_t gap_low = unknown_low[i];
                 result.expected_gap_prev += gap_low * prob_i;
@@ -1080,7 +1076,7 @@ ProbM calculate_probm(
                     prob_gap_low[gap_low] += prob_i;
 
                 if (gap_low >= min_side_for_extended_min_merit)
-                    result.prob_highmerit += prob_i * PROB_NEXT_GREATER;
+                    result.highmerit += prob_i * PROB_NEXT_GREATER;
             }
 
             if (i < unknown_high.size()) {
@@ -1088,7 +1084,7 @@ ProbM calculate_probm(
                 assert(conditional_prob >= 0);
                 assert(conditional_prob < 1);
 
-                result.prob_record_extended += prob_i * PROB_PREV_GREATER * conditional_prob;
+                result.record_extended += prob_i * PROB_PREV_GREATER * conditional_prob;
 
                 int32_t gap_high = unknown_high[i];
                 result.expected_gap_next += gap_high * prob_i;
@@ -1097,12 +1093,12 @@ ProbM calculate_probm(
                     prob_gap_high[gap_high] += prob_i;
 
                 if (gap_high >= min_side_for_extended_min_merit)
-                    result.prob_highmerit += prob_i * PROB_PREV_GREATER;
+                    result.highmerit += prob_i * PROB_PREV_GREATER;
             }
         }
     }
 
-    result.prob_record = result.prob_record_inner + result.prob_record_extended + result.prob_record_extended2;
+    result.record = result.record_inner + result.record_extended + result.record_extended2;
     return result;
 }
 
@@ -1206,11 +1202,11 @@ void prob_record_vs_plimit(struct Config config) {
         if (config.verbose >= 2) {
             // Breakdown of prob inner, extended, extended^2
             printf("%7ld, %.7f = %0.3g + %0.3g + %0.3g (unaccounted: %.7f)\n",
-                   config.max_prime, probm.prob_record,
-                   probm.prob_record_inner, probm.prob_record_extended, probm.prob_record_extended2,
-                   1 - probm.prob_seen);
+                   config.max_prime, probm.record,
+                   probm.record_inner, probm.record_extended, probm.record_extended2,
+                   1 - probm.seen);
         }
-        cout << config.max_prime << ", " << probm.prob_record << endl;
+        cout << config.max_prime << ", " << probm.record << endl;
     }
     mpz_clear(test);
     mpz_clear(N);
@@ -1253,7 +1249,7 @@ void run_gap_file(
     // Keep sum & max of several records
     ProbM sum;
     ProbM max_r;
-    max_r.prob_record = max_r.prob_highmerit = max_r.prob_is_missing_gap= 1e-10;
+    max_r.record = max_r.highmerit = max_r.is_missing_gap= 1e-10;
 
     if (config.verbose >= 1) {
         printf("\n%ld tests M_start(%ld) + mi(%d to %d)\n\n",
@@ -1274,46 +1270,46 @@ void run_gap_file(
                                       config, records, min_record_gap, min_gap_min_merit,
                                       gap_probs, prob_gap_norm, prob_gap_low, prob_gap_high);
 
-        sum.prob_record += probm.prob_record;
-        sum.prob_record_inner += probm.prob_record_inner;
-        sum.prob_record_extended += probm.prob_record_extended;
-        sum.prob_record_extended2 += probm.prob_record_extended2;
+        sum.record += probm.record;
+        sum.record_inner += probm.record_inner;
+        sum.record_extended += probm.record_extended;
+        sum.record_extended2 += probm.record_extended2;
 
         M_vals.push_back(m);
         expected_prev.push_back(probm.expected_gap_prev);
         expected_next.push_back(probm.expected_gap_next);
-        probs_seen.push_back(probm.prob_seen);
-        probs_record.push_back(probm.prob_record);
-        probs_missing.push_back(probm.prob_is_missing_gap);
-        probs_highmerit.push_back(probm.prob_highmerit);
+        probs_seen.push_back(probm.seen);
+        probs_record.push_back(probm.record);
+        probs_missing.push_back(probm.is_missing_gap);
+        probs_highmerit.push_back(probm.highmerit);
 
         if (config.verbose >= 1) {
-            if (probm.prob_record > max_r.prob_record) {
-                max_r.prob_record = probm.prob_record;
+            if (probm.record > max_r.record) {
+                max_r.record = probm.record;
 
                 printf("RECORD :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
                        "prob record: %.2e   (%.2e + %.2e + %.2e)\n",
                        m, M_vals.size(), unknown_low.size(), unknown_high.size(),
-                       probm.prob_record, probm.prob_record_inner,
-                       probm.prob_record_extended, probm.prob_record_extended2);
+                       probm.record, probm.record_inner,
+                       probm.record_extended, probm.record_extended2);
             }
 
-            if (probm.prob_highmerit > max_r.prob_highmerit) {
-                max_r.prob_highmerit = probm.prob_highmerit;
+            if (probm.highmerit > max_r.highmerit) {
+                max_r.highmerit = probm.highmerit;
                 printf("MERIT  :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
                        "      merit: %.2g\n",
                        m, M_vals.size(), unknown_low.size(), unknown_high.size(),
-                       probm.prob_highmerit);
+                       probm.highmerit);
             }
         }
 
         if (config.verbose >= 2) {
-            if (probm.prob_is_missing_gap > max_r.prob_is_missing_gap) {
-                max_r.prob_is_missing_gap= probm.prob_is_missing_gap;
+            if (probm.is_missing_gap > max_r.is_missing_gap) {
+                max_r.is_missing_gap= probm.is_missing_gap;
                 printf("MISSING:%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
                        "prob record: %.2e   missing: %.4e\n",
                        m, M_vals.size(), unknown_low.size(), unknown_high.size(),
-                       probm.prob_record, probm.prob_is_missing_gap);
+                       probm.record, probm.is_missing_gap);
             }
         }
     }
@@ -1332,15 +1328,13 @@ void run_gap_file(
         printf("%ld m's processed in %.2f seconds (%.2f/sec)\n",
                 s_tests, secs, s_tests / secs);
 
-        if (config.verbose >= 1)
-            cout << endl;
+        cout << endl;
+        printf("prob record total: %.5f  direct: %.5f  extended: %.5f  extended^2: %.5f\n",
+                sum.record, sum.record_inner,
+                sum.record_extended, sum.record_extended2);
     }
-    // TODO XXX
-    //if (config.verbose >= 1) {
-    if (config.verbose >= 0) {
-        printf("prob record total: %.5f  direct: %.5f  extended: %.5f  extended^2: %.5f\n\n",
-                sum.prob_record, sum.prob_record_inner,
-                sum.prob_record_extended, sum.prob_record_extended2);
+    if (config.verbose >= 1) {
+        cout << endl;
         printf("\tsum(prob(gap[X])): %.5f\n", average_v(prob_gap_norm) * prob_gap_norm.size());
         printf("\tavg seen prob    : %.7f\n", average_v(probs_seen));
     }
