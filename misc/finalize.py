@@ -260,31 +260,31 @@ def delete_range_and_low_merit(conn, args, ranges, unknown_files):
     print()
     cursor = conn.cursor()
 
-    # Need to check for missing ranges?
-    joined = merged_ms_mi(args, ranges, unknown_files)
-    for ms, mi, ufn in joined:
-        me = ms + mi - 1
-        print(f"\tDeleting range / low_merit results from {ufn!r}")
+    ms = args.mstart
+    me = args.mend
+    print(f"\tDeleting low_merit results BETWEEN {ms} and {me}")
 
-        condition = """
-            WHERE P=? AND D=? AND (m BETWEEN ? AND ?) AND
-                ((next_p >= 0 and prev_p >= 0) AND
-                 ((next_p + prev_p < 30000 AND merit < 20) OR
-                  (next_p + prev_p < 50000 AND merit < 15) OR
-                  (next_p + prev_p < 100000 AND merit < 8)))
-            """
+    # next_p = 0, prev_p = 0 handles a bug with null merit
+    condition = """
+        WHERE P=? AND D=? AND (m BETWEEN ? AND ?) AND
+            ((next_p >= 0 and prev_p >= 0) AND
+             ((next_p = 0 and prev_p = 0) OR
+              (next_p + prev_p < 30000 AND merit < 20) OR
+              (next_p + prev_p < 50000 AND merit < 15) OR
+              (next_p + prev_p < 100000 AND merit < 8)))
+        """
 
-        cursor.execute(
-            "DELETE FROM m_stats " + condition,
-            (args.p, args.d, ms, me))
-        deletes_m_stats = cursor.rowcount
+    cursor.execute(
+        "DELETE FROM m_stats " + condition,
+        (args.p, args.d, ms, me))
+    deletes_m_stats = cursor.rowcount
 
-        cursor.execute(
-            "DELETE FROM result " + condition,
-            (args.p, args.d, ms, me))
-        deletes_results = cursor.rowcount
+    cursor.execute(
+        "DELETE FROM result " + condition,
+        (args.p, args.d, ms, me))
+    deletes_results = cursor.rowcount
 
-        print (f"\tDeleted {deletes_m_stats} and {deletes_results} rows")
+    print (f"\tDeleted {deletes_m_stats} and {deletes_results} rows")
 
     for r in ranges:
         cursor.execute("DELETE FROM range WHERE rid = ?", (r['rid'],))
@@ -293,8 +293,9 @@ def delete_range_and_low_merit(conn, args, ranges, unknown_files):
     print("rm", " ".join(unknown_files))
 
 
-def check_processed(args):
+def attemp_finalize(args):
     unknown_fns = [os.path.basename(path) for path in glob.glob("unknowns/*M.txt")]
+    unknown_fns.sort()
 
     with sqlite3.connect(args.search_db) as conn:
         conn.row_factory = sqlite3.Row
@@ -335,4 +336,4 @@ if __name__ == "__main__":
     assert os.path.exists(args.search_db), (
         f"Search database ({args.search_db!r}) doesn't exist")
 
-    check_processed(args)
+    attemp_finalize(args)

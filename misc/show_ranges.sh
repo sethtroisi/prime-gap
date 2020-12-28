@@ -90,4 +90,5 @@ sqlite3 -readonly "prime-gap-search.db" <<EOL
 SELECT "Table 'result': " || COUNT(*) FROM result;
 SELECT "Table 'm_stats': " || COUNT(*) FROM m_stats;
 SELECT "Table 'range_stats': " || COUNT(*) FROM range_stats;
+#SELECT P,count(*) FROM m_stats group by P;
 EOL
