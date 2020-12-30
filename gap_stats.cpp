@@ -243,9 +243,11 @@ void load_possible_records(
         vector<uint32_t> &poss_record_gaps) {
     // XXX: Records only have 5 sig figs so this method can easily counts records
     //      from same K but smaller m as possible.
+
+    cdouble max_merit_region = N_log < 1400 ? 32 : 28;
     for (size_t g = 2; g < records.size(); g += 2) {
-        // Ignore the infinitesimal odds of finding >merit 35 gap.
-        if (g / N_log > 35) {
+        // All records > X merit are high likely records, See MAX_RECORD and max_e_c_i
+        if (g / N_log > max_merit_region) {
             break;
         }
 
@@ -519,7 +521,9 @@ void store_stats(
 }
 
 
-cdouble DOUBLE_NTH_PRIME_CUTOFF = 1e-13;
+cdouble NTH_PRIME_CUTOFF = 1e-12;
+// Choosen randomly (not sure how to improve)
+cdouble COMBINED_CUTOFF = 1e-14;
 
 float nth_prob_or_zero(const vector<float>& prob_nth, size_t nth) {
     return nth < prob_nth.size() ? prob_nth[nth] : 0.0;
@@ -531,7 +535,7 @@ void prob_nth_prime(
         vector<float>& prob_great_nth) {
     assert(prob_prime_nth.empty() && prob_great_nth.empty());
     double prob_still_prime = 1.0;
-    for (; prob_still_prime > DOUBLE_NTH_PRIME_CUTOFF;) {
+    while (prob_still_prime > NTH_PRIME_CUTOFF) {
         prob_prime_nth.push_back(prob_still_prime * prob_prime);
         prob_great_nth.push_back(prob_still_prime);
         prob_still_prime *= 1 - prob_prime;
@@ -543,8 +547,7 @@ void prob_combined_gap(
         double prob_prime,
         vector<float>& prob_combined) {
     double prob = prob_prime * prob_prime;
-    // Want error < 1e-9 | unknown_i * unknown_j * 1e-15 ~= 2000 * 2000 * 2.5e-6 = 1e-9
-    for (; prob > 2.5e-16;) {
+    while (prob > COMBINED_CUTOFF) {
         prob_combined.push_back(prob);
         prob *= 1 - prob_prime;
     }
@@ -558,16 +561,16 @@ void prob_extended_gap(
         const vector<uint32_t>& poss_record_gaps,
         ProbNth &gap_probs) {
 
+    cdouble N_log = calc_log_K(config) + log(config.mstart);
+
     const unsigned int SL = config.sieve_length;
     const unsigned int MIN_RECORD = poss_record_gaps.front();
     // Gaps larger than this are assumed to be record
     const unsigned int MAX_RECORD = poss_record_gaps.back();
 
-
     // ----- Generate primes for P
     vector<uint32_t> K_primes = get_sieve_primes(config.p);
     assert( K_primes.back() == config.p);
-
 
     // Need to correct for gcd_ui(K, i) below
     double prob_prime_coprime = PROB_PRIME;
@@ -577,13 +580,11 @@ void prob_extended_gap(
         }
     }
 
-    // Extended size should be 30 merit but not more than 200'000
-    cdouble N_log = calc_log_K(config) + log(config.mstart);
-    const size_t THIRTY_MERIT = 30 * N_log;
-    const size_t EXT_SIZE = std::min(THIRTY_MERIT, (size_t) std::max(2*SL, 200'000u));
+    // Extended size should be up to MAX_RECORD (~30 merit)
+    // but not more than 100'000 or 2*SL
+    const size_t EXT_SIZE = std::min(MAX_RECORD, std::max(2*SL, 100'000u));
 
     if (config.verbose >= 2) {
-        // TODO check this is reasonable place to print
         printf("Extended size: %ld (%.1f merit)\n", EXT_SIZE, EXT_SIZE / N_log);
     }
     if (config.sieve_length >= EXT_SIZE) {
@@ -613,7 +614,7 @@ void prob_extended_gap(
     }
 
     const vector<uint32_t> wheel_primes = {2, 3, 5, 7};
-	map<uint32_t, uint32_t> k_mod_p;
+    map<uint32_t, uint32_t> k_mod_p;
 
     uint32_t wheel = 1;
     for (auto p : wheel_primes) {
@@ -621,19 +622,16 @@ void prob_extended_gap(
             wheel *= p;
             prob_prime_coprime /= (1 - 1.0 / p);
 
-			uint32_t k_mod = 1;
-			for (auto k : K_primes) {
-            	if (config.d % k != 0)
-					k_mod = (k_mod * k) % p;
-			}
-			k_mod_p[p] = k_mod;
-			//printf("\tK %% %d = %d\n", p, k_mod);
+            uint32_t k_mod = 1;
+            for (auto k : K_primes) {
+                if (config.d % k != 0)
+                    k_mod = (k_mod * k) % p;
+            }
+            k_mod_p[p] = k_mod;
+            //printf("\tK %% %d = %d\n", p, k_mod);
         }
     }
     gap_probs.wheel_d = wheel;
-    // XXX: Some assumptions are based on wheel - m, insert 0 & 1 in those cases
-    assert(wheel != 1);
-    cout << prob_prime_coprime << endl;
 
     // Same as prob_prime_nth but not considering sieving (because outside of interval).
     vector<float> prob_prime_nth_out;
@@ -641,7 +639,7 @@ void prob_extended_gap(
     prob_nth_prime(prob_prime_coprime, prob_prime_nth_out, prob_greater_nth_out);
 
     // For each wheel mark off a divisors of small primes in d.
-	map<int, vector<char>> coprime_ms;
+    map<int, vector<char>> coprime_ms;
 
     { // Calculate <m, boolean array of coprime[0 < X < 2*SL]>
         float average_inner_coprime = 0;
@@ -716,33 +714,33 @@ void prob_extended_gap(
         }
         if (gcd(m, wheel) > 1) continue;
 
-		vector<char> &is_coprime_m = coprime_ms.at(m);
-		vector<char> &is_coprime_m_prev = coprime_ms.at(wheel - m);
+        vector<char> &is_coprime_m = coprime_ms.at(m);
+        // -m % wheel => wheel - m => (wheel - m) % wheel to handle wheel = 1
+        vector<char> &is_coprime_m_prev = coprime_ms.at((wheel - m) % wheel);
 
         // List of coprime X, SL < X < EXT_SIZE
         vector<uint32_t> extended_coprime;
-        // partial_sum of is_coprime_m starting at SL+1
-        vector<uint32_t> count_coprime_m(EXT_SIZE, 0);
-        {
-            for (size_t x = SL+1; x < EXT_SIZE; x++) {
-                if (is_coprime_m[x])
-                    extended_coprime.push_back(x);
-                count_coprime_m[x] = extended_coprime.size();
-            }
-        }
 
         // Probability of prev <= SL, next > SL (extended)
         {
+            // partial_sum of is_coprime_m starting at SL+1
+            vector<uint32_t> count_coprime_m(EXT_SIZE, 0);
+            {
+                for (size_t x = SL+1; x < EXT_SIZE; x++) {
+                    if (is_coprime_m[x])
+                        extended_coprime.push_back(x);
+                    count_coprime_m[x] = extended_coprime.size();
+                }
+            }
+
             vector<float> prob_extended_record(SL+1, 0.0);
+
+            // Essentially a double loop over gap_prev, gap_next but the inner
+            // gap_next loop is replaced with a smaller loop over record_gap.
             for (size_t gap_prev = 1; gap_prev <= SL; gap_prev++) {
                 // only needed for values that can be coprime with K
                 if (!is_coprime_m_prev[gap_prev]) {
                     prob_extended_record[gap_prev] = std::nan("");
-                    continue;
-                }
-
-                if (gap_prev + EXT_SIZE < MIN_RECORD) {
-                    prob_extended_record[gap_prev] = 0.0;
                     continue;
                 }
 
@@ -764,6 +762,15 @@ void prob_extended_gap(
                     prob_record += prob_prime_nth_out[num_coprime];
                 }
 
+                // if prev + next > MAX_RECORD add the remainder of prob_next_larger
+                uint32_t gap_max_record = MAX_RECORD - gap_prev;
+                if (SL < gap_max_record && gap_max_record < EXT_SIZE) {
+                    size_t coprimes_max_record = count_coprime_m[gap_max_record];
+                    // it's fine that prob_prime_nth_out[] might have been added
+                    // sum(prob_prime_nth[0..i]) + prob_greater_nth_out[i] <= 1.0
+                    prob_record += prob_greater_nth_out[coprimes_max_record];
+                }
+
                 // Prob record gap, with 1 <= gap_prev <= SL, SL <= gap_next
                 assert(0 <= prob_record && prob_record < 1);
                 prob_extended_record[gap_prev] = prob_record;
@@ -773,8 +780,10 @@ void prob_extended_gap(
 
         // Probability of prev, next > SL (extended^2)
         {
-            // XXX: this seems to overestimate by 5-20% why?
-            // XXX: extended seems to do the same
+            // XXX: this seems to overestimate by 5-20%,
+            // The best explination I have is that this relates to
+            // how factors aren't uniformly distributed. One piece of evidence
+            // is that reducing wheel causes even more over estimation
             double prob_e2_record = 0;
 
             // gap_prev + extended_coprime[i] <= MIN_RECORD
@@ -839,6 +848,13 @@ void prob_extended_gap(
             gap_probs.extended_extended_record[m] = prob_e2_record;
         }
     }
+
+    if (wheel == 1) {
+        // Some places assume that (wheel - (m % wheel_d)) exist
+        gap_probs.extended_record_high[1] = gap_probs.extended_record_high.at(0);
+        gap_probs.extended_extended_record[1] = gap_probs.extended_extended_record.at(0);
+        gap_probs.prob_greater_extended[1] = gap_probs.prob_greater_extended.at(0);
+    }
 }
 
 
@@ -883,7 +899,7 @@ void setup_probnth(
         if (config.verbose >= 1) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
-            printf("Extended prob records considered (%.2f seconds)\n\n", secs);
+            printf("Extended prob records setup (%.2f seconds)\n\n", secs);
         }
     }
 }
@@ -963,7 +979,9 @@ ProbM calculate_probm(
         const ProbNth &gap_probs,
         vector<float> &prob_gap_norm, vector<float> &prob_gap_low, vector<float> &prob_gap_high) {
 
-    int m_wheel_high = m % gap_probs.wheel_d;
+    int m_wheel_next = m % gap_probs.wheel_d;
+    // want -m % wheel_d => wheel_d - m
+    int m_wheel_prev = gap_probs.wheel_d - m_wheel_next;
 
     /**
      * Directly examined (1 - PROB_PREV_GREATER) * (1 - PROB_NEXT_GREATER)
@@ -974,29 +992,32 @@ ProbM calculate_probm(
      * =
      *
      * ^
-     * | ???????????????????
-     * |                   ?
-     * |-----------------  ?
-     * e extend| extend |  ?
-     * x record| extend |  ?
-     * t prev  | record |  ?
-     * |-------.--------.  ?
-     * p DIRECT| extend |  ?
-     * r COMPUT| record |  ?
-     * e ATION | high   |  ?
-     * v HERE  |        |  ?
-     * *- next | extend | >2SL--->
+     * | ??????????????????????
+     * |                      ?
+     * |-------------------   ?
+     * e extended | extend |  ?
+     * x record   | extend |  ?
+     * t prev     | record |  ?
+     * | here     |        |  ?
+     * |----------.--------.  ?
+     * p DIRECT   | extend |  ?
+     * r COMPUT   | record |  ?
+     * e ATION    | high   |  ?
+     * v HERE     |        |  ?
+     * *- next(SL)|EXT_SIZE| >EXT_SIZE--->
      */
 
     cdouble PROB_PREV_GREATER = nth_prob_or_zero(gap_probs.greater_nth, unknown_low.size());
     cdouble PROB_NEXT_GREATER = nth_prob_or_zero(gap_probs.greater_nth, unknown_high.size());
-    cdouble prob_extended = gap_probs.prob_greater_extended.at(m_wheel_high);
+    cdouble prob_prev_extended = gap_probs.prob_greater_extended.at(m_wheel_prev);
+    cdouble prob_next_extended = gap_probs.prob_greater_extended.at(m_wheel_next);
 
     ProbM result;
-    result.seen = (1 - PROB_PREV_GREATER * prob_extended) * (1 - PROB_NEXT_GREATER * prob_extended);
+    result.seen = (1 - PROB_PREV_GREATER * prob_prev_extended) *
+                  (1 - PROB_NEXT_GREATER * prob_next_extended);
 
     result.record_extended2 = PROB_NEXT_GREATER * PROB_PREV_GREATER *
-                              gap_probs.extended_extended_record.at(m_wheel_high);
+                              gap_probs.extended_extended_record.at(m_wheel_next);
 
     bool save_gap_probs = !prob_gap_norm.empty();
 
@@ -1024,6 +1045,7 @@ ProbM calculate_probm(
 
                 if (save_gap_probs) {
                     // XXX: Costs some performance to calculate all of these
+                    // Used in gap_test_plotting.py
                     prob_gap_norm[gap] += prob_this_gap;
                 }
 
@@ -1046,18 +1068,16 @@ ProbM calculate_probm(
     { // Extended gap (one prime <= SL, one prime > SL)
         // See `prob_extended_gap`
         const vector<float> &extended_record_high =
-            gap_probs.extended_record_high.at(m_wheel_high);
-        // want -m % wheel_d => wheel_d - m
+            gap_probs.extended_record_high.at(m_wheel_next);
         const vector<float> &extended_record_low =
-            gap_probs.extended_record_high.at(gap_probs.wheel_d - m_wheel_high);
+            gap_probs.extended_record_high.at(m_wheel_prev);
 
         // Smallest side to have reached --min-merit when other side is extended
         const int32_t min_side_for_extended_min_merit = min_gap_min_merit - config.sieve_length;
 
         size_t max_i = std::max(unknown_low.size(), unknown_high.size());
-        // i > prime_nth.size() has tiny probability (see DOUBLE_NTH_PRIME_CUTOFF)
-        max_i = std::min(gap_probs.prime_nth.size(), max_i);
-        for (size_t i = 0; i < max_i; i++) {
+        // i >= prime_nth.size() has tiny probability (see DOUBLE_NTH_PRIME_CUTOFF)
+        for (size_t i = 0; i < std::min(max_i, gap_probs.prime_nth.size()); i++) {
             float prob_i = gap_probs.prime_nth[i];
             assert(0 <= prob_i && prob_i <= 1.0);
 
@@ -1137,6 +1157,8 @@ void prob_record_vs_plimit(struct Config config) {
     mpz_t test;
     mpz_init(test);
 
+    int64_t START_PRIME = std::max(100'000u, 4 * SL);
+
     double K_log;
     K_stats(config, N, nullptr, &K_log);
     cdouble N_log = K_log + log(config.mstart);
@@ -1179,7 +1201,7 @@ void prob_record_vs_plimit(struct Config config) {
 
         composite[offset] = 1;
 
-        if (prime < 10'000) {
+        if (prime < START_PRIME) {
             continue;
         }
 
@@ -1336,7 +1358,7 @@ void run_gap_file(
     if (config.verbose >= 1) {
         cout << endl;
         printf("\tsum(prob(gap[X])): %.5f\n", average_v(prob_gap_norm) * prob_gap_norm.size());
-        printf("\tavg seen prob    : %.7f\n", average_v(probs_seen));
+        printf("\tavg missing prob : %.7f\n", 1 - average_v(probs_seen));
     }
 }
 
@@ -1484,8 +1506,7 @@ void prime_gap_stats(struct Config config) {
         if (config.verbose >= 2) {
             printf("Found %ld possible record gaps (%d to %d)\n",
                 poss_record_gaps.size(), poss_record_gaps.front(), poss_record_gaps.back());
-        }
-        if (config.verbose >= 2) {
+
             for (int gi = 0; gi <= 2; gi++) {
                 size_t g = poss_record_gaps[gi];
                 printf("\tIf found Gap: %ld (current: %.2f) would improve to %.3f\n",
@@ -1493,14 +1514,13 @@ void prime_gap_stats(struct Config config) {
             }
         }
 
-
-        /* TODO FIXME
         if (poss_record_gaps.front() > 3 * SIEVE_LENGTH) {
             printf("\n\n\n");
             printf("\tHard to determine record prob, 3 * sieve_length < min_record_gap\n");
+            printf("\tPlease set a larger sieve_length in the future\n");
             printf("\n\n\n");
         }
-        */
+
         if (config.verbose >= 2) {
             cout << endl;
         }
