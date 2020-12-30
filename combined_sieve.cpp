@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
     setlocale(LC_NUMERIC, "");
     if (config.verbose >= 0) {
         printf("\n");
-        printf("Testing m * %u#/%u, m = %ld + [0, %'ld)\n",
+        printf("Testing m * %u#/%u, m = %'ld + [0, %'ld)\n",
             config.p, config.d, config.mstart, config.minc);
     }
     setlocale(LC_NUMERIC, "C");

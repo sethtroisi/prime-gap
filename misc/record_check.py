@@ -188,6 +188,7 @@ def search_logs(args):
 
         file_match = 0
         for li, line in enumerate(lines):
+            if ' ' not in line: continue
             match = record_format.search(line)
             if match:
                 file_match += 1
@@ -213,7 +214,7 @@ def search_logs(args):
         describe_found_gaps(gaps)
         print_record_gaps(args, gaps)
     else:
-        print ("Didn't find any gaps in logs diroctory({})".format(
+        print ("Didn't find any gaps in logs directory({})".format(
             args.logs_directory))
 
 

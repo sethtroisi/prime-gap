@@ -772,7 +772,7 @@ void prob_extended_gap(
                 }
 
                 // Prob record gap, with 1 <= gap_prev <= SL, SL <= gap_next
-                assert(0 <= prob_record && prob_record < 1);
+                assert(0 <= prob_record && prob_record <= 1);
                 prob_extended_record[gap_prev] = prob_record;
             }
             gap_probs.extended_record_high[m] = prob_extended_record;
@@ -1084,8 +1084,7 @@ ProbM calculate_probm(
             // unknown[i'th] is prime, on the otherside have prime be outside of sieve.
             if (i < unknown_low.size()) {
                 float conditional_prob = extended_record_high[unknown_low[i]];
-                assert(conditional_prob >= 0);
-                assert(conditional_prob < 1);
+                assert(0 <= conditional_prob && conditional_prob <= 1);
 
                 result.record_extended += prob_i * PROB_NEXT_GREATER * conditional_prob;
 
@@ -1101,8 +1100,7 @@ ProbM calculate_probm(
 
             if (i < unknown_high.size()) {
                 float conditional_prob = extended_record_low[unknown_high[i]];
-                assert(conditional_prob >= 0);
-                assert(conditional_prob < 1);
+                assert(0 <= conditional_prob && conditional_prob <= 1);
 
                 result.record_extended += prob_i * PROB_PREV_GREATER * conditional_prob;
 

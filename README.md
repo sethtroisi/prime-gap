@@ -487,6 +487,8 @@ This saves ~60% space, but makes it harder to visually debug data, can be built 
 
 ### Quick test of all functions
 
+This is somewhat automated with `./misc/tests.sh` which should print a green `Success!`
+
 <details>
 <summary>quick test commands and output</summary>
 <p>
@@ -496,18 +498,18 @@ $ PARAMS="-p 907 -d 2190 --mstart 1 --minc 200 --max-prime 100 --sieve-length 11
 $ make combined_sieve gap_stats gap_test_simple
 $ time ./combined_sieve --method1 -qqq --save-unknowns $PARAMS
 $ time ./combined_sieve           -qqq --save-unknowns $PARAMS
-$ md5sum 907_2190_1_200_s11000_l100M.{txt,m1.txt}
-080309453b4310e0310a4fb4d1779ffe  907_2190_1_200_s11000_l100M.txt
-080309453b4310e0310a4fb4d1779ffe  907_2190_1_200_s11000_l100M.m1.txt
+$ md5sum unknowns/907_2190_1_200_s11000_l100M.{txt,m1.txt}
+080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.txt
+080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.m1.txt
 
 $ ./gap_stats --unknown-filename 907_2190_1_200_s11000_l100M.txt
 # Verify RECORD @ 1,7,13,101,137
-# Verify "avg seen prob:   0.9993981
-# Verify "RECORD : top  50% (   26) => sum(prob) = 7.61e-07 (avg: 2.93e-08)"
-# Verify "RECORD : top 100% (   53) => sum(prob) = 1.05e-06 (avg: 1.98e-08)"
+# Verify "avg missing prob : 0.0000000"
+# Verify "RECORD : top  50% (    26) sum(prob) = 1.50e-05 (avg: 5.77e-07)"
+# Verify "RECORD : top 100% (    53) sum(prob) = 2.15e-05 (avg: 4.06e-07)"
 
 # Optionaly validate combined_sieve results with ecm
-$ python misc/double_check.py --seed=123 --unknown-filename 907_2190_1_200_s11000_l100M.txt -c 5 --B1 1000
+$ python misc/double_check.py --seed=123 --unknown-filename unknowns/907_2190_1_200_s11000_l100M.txt -c 5 --B1 1000
 1 * 907# / 2190 	unknowns 218 + 212 = 430
 			+1423  had trivial factor of 2 skipping
 	+6570 	should have small factor
@@ -526,7 +528,7 @@ $ python misc/double_check.py --seed=123 --unknown-filename 907_2190_1_200_s1100
 		ecm: 17*907#/2190+2722
 ...
 4150 trivially composite, 86 unknowns, 179 known composites
-ecm found 172 composites: known 168 composite, 4 were unknown
+ecm found 178 composites: known 171 composite, 7 were unknown
 
 
 $ ./gap_test_simple --unknown-filename 907_2190_1_200_s11000_l100M.txt -q --min-merit 8
