@@ -613,11 +613,11 @@ void prob_extended_gap(
         }
     }
 
-    const vector<uint32_t> wheel_primes = {2, 3, 5, 7};
+    vector<uint32_t> wheel_primes;
     map<uint32_t, uint32_t> k_mod_p;
 
     uint32_t wheel = 1;
-    for (auto p : wheel_primes) {
+    for (auto p : {2, 3, 5, 7}) {
         if (config.d % p == 0) {
             wheel *= p;
             prob_prime_coprime /= (1 - 1.0 / p);
@@ -627,8 +627,9 @@ void prob_extended_gap(
                 if (config.d % k != 0)
                     k_mod = (k_mod * k) % p;
             }
+
+            wheel_primes.push_back(p);
             k_mod_p[p] = k_mod;
-            //printf("\tK %% %d = %d\n", p, k_mod);
         }
     }
     gap_probs.wheel_d = wheel;
@@ -660,13 +661,13 @@ void prob_extended_gap(
             vector<char> is_coprime_m(is_coprime);
 
             // Mark off multiples of d primes
-            for (auto p : wheel_primes) {
-                if (config.d % p != 0) continue;
+            for (const auto p : wheel_primes) {
+                assert(config.d % p == 0);
 
                 // (m * K) % p;
                 uint32_t first = (m * k_mod_p[p]) % p;
 
-                // first multiple on the positive side: -m % p
+                // first multiple on the positive side: -(m*K) % p
                 for (size_t i = p - first; i < EXT_SIZE; i += p) {
                     is_coprime_m[i] = false;
                 }
@@ -781,16 +782,18 @@ void prob_extended_gap(
         // Probability of prev, next > SL (extended^2)
         {
             // XXX: this seems to overestimate by 5-20%,
-            // The best explination I have is that this relates to
-            // how factors aren't uniformly distributed. One piece of evidence
-            // is that reducing wheel causes even more over estimation
-            double prob_e2_record = 0;
+            // The best explination I have is that this relates to how factors
+            // aren't uniformly distributed. One piece of evidence is that
+            // reducing wheel_primes causes worse estimation. I suspect that
+            // This relates to the SL_factors_of_d and how primes are
+            // over-reperesented then under-represented after
 
-            // gap_prev + extended_coprime[i] <= MIN_RECORD
+            // gap_prev + extended_coprime[min_i] <= MIN_RECORD
             size_t min_e_c_i = extended_coprime.size();
-            // gap_prev + extended_coprime[i] <= MAX_RECORD
+            // gap_prev + extended_coprime[max_i] <= MAX_RECORD
             size_t max_e_c_i = extended_coprime.size() - 1;
 
+            double prob_e2_record = 0;
             size_t extended_coprimes_prev = 0;
             for (size_t gap_prev = SL + 1; gap_prev < EXT_SIZE; gap_prev++) {
                 if (!is_coprime_m_prev[gap_prev]) {
@@ -804,9 +807,8 @@ void prob_extended_gap(
                     break;
                 }
 
-                // NOTE: This is probably faster to loop over coprimes (vs records)
-                // This loops handles [2*SL, 4*SL] which is generally 20-40 merit
-                // When we get to an arbitrary large merit assume all things larger are record
+                // NOTE: It would probably be faster to loop over coprimes (vs records)
+                // This loops handles [2*SL, 4*SL+] which is generally >20-40 merit
 
                 while (max_e_c_i && (gap_prev + extended_coprime[max_e_c_i] > MAX_RECORD)) {
                     max_e_c_i -= 1;
@@ -833,6 +835,7 @@ void prob_extended_gap(
 
                 float prob_e_e = 0;
 
+                // When we get to an arbitrary large merit assume all things larger are record
                 size_t max_i = std::min(max_e_c_i, prob_prime_nth_out.size() - extended_coprimes_prev);
                 for (size_t i = min_e_c_i; i < max_i; i++) {
                     size_t gap = gap_prev + extended_coprime[i];
@@ -847,13 +850,6 @@ void prob_extended_gap(
             }
             gap_probs.extended_extended_record[m] = prob_e2_record;
         }
-    }
-
-    if (wheel == 1) {
-        // Some places assume that (wheel - (m % wheel_d)) exist
-        gap_probs.extended_record_high[1] = gap_probs.extended_record_high.at(0);
-        gap_probs.extended_extended_record[1] = gap_probs.extended_extended_record.at(0);
-        gap_probs.prob_greater_extended[1] = gap_probs.prob_greater_extended.at(0);
     }
 }
 
@@ -981,7 +977,7 @@ ProbM calculate_probm(
 
     int m_wheel_next = m % gap_probs.wheel_d;
     // want -m % wheel_d => wheel_d - m
-    int m_wheel_prev = gap_probs.wheel_d - m_wheel_next;
+    int m_wheel_prev = (gap_probs.wheel_d - m_wheel_next) % gap_probs.wheel_d;
 
     /**
      * Directly examined (1 - PROB_PREV_GREATER) * (1 - PROB_NEXT_GREATER)
@@ -1067,10 +1063,8 @@ ProbM calculate_probm(
 
     { // Extended gap (one prime <= SL, one prime > SL)
         // See `prob_extended_gap`
-        const vector<float> &extended_record_high =
-            gap_probs.extended_record_high.at(m_wheel_next);
-        const vector<float> &extended_record_low =
-            gap_probs.extended_record_high.at(m_wheel_prev);
+        const vector<float> &extended_record_high = gap_probs.extended_record_high.at(m_wheel_next);
+        const vector<float> &extended_record_low  = gap_probs.extended_record_high.at(m_wheel_prev);
 
         // Smallest side to have reached --min-merit when other side is extended
         const int32_t min_side_for_extended_min_merit = min_gap_min_merit - config.sieve_length;
@@ -1357,6 +1351,7 @@ void run_gap_file(
         cout << endl;
         printf("\tsum(prob(gap[X])): %.5f\n", average_v(prob_gap_norm) * prob_gap_norm.size());
         printf("\tavg missing prob : %.7f\n", 1 - average_v(probs_seen));
+        cout << endl;
     }
 }
 
@@ -1391,12 +1386,14 @@ void calculate_prp_top_percent(
         mpz_clear(K);
     }
 
-    printf("\n");
-    printf("%sieve time: %.0f seconds (%.2f hours)\n",
-        exact ? "S" : "Estimated s", combined_time, combined_time / 3600);
-    printf("Estimated time/m: 2 * (%.1f PRP/m / %.1f PRP/s) = %.2f seconds\n",
-        estimated_prp_per_m, 1 / prp_time_est, 2 * time_per_side);
-    printf("\n");
+    if (config.verbose >= 2) {
+        printf("\n");
+        printf("%sieve time: %.0f seconds (%.2f hours)\n",
+            exact ? "S" : "Estimated s", combined_time, combined_time / 3600);
+        printf("Estimated time/m: 2 * (%.1f PRP/m / %.1f PRP/s) = %.2f seconds\n",
+            estimated_prp_per_m, 1 / prp_time_est, 2 * time_per_side);
+        printf("\n");
+    }
 
     // Sort probs, greater first
     vector<float> sorted = probs_record;
