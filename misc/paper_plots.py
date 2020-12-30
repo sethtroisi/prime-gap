@@ -83,27 +83,69 @@ def plot_record_vs_sl():
     for sl in 15000 30000 50000; do
     for sl in {1500..15000..1500}; do
         FN=1511_312270_1_1000000_s${sl}_l10000M.txt
-        time ./combined_sieve --save-unknowns --unknown-filename $FN
         DB=data/test_1511_${sl}.db;
-        rm -i "$DB";
+        time ./combined_sieve --save-unknowns --unknown-filename $FN
+        rm -f "$DB";
         sqlite3 "$DB" < schema.sql;
         time ./gap_stats --save-unknowns --search-db "$DB" --unknown-filename $FN
+        #time ./gap_stats --unknown-filename $FN -q -q
+
+        sqlite3 "$DB" <<EOL
+        SELECT sieve_length,COUNT(*),SUM(prob_record),mean,
+               AVG((prob_record-mean)*(prob_record-mean)) as variance
+        FROM m_stats,
+                (SELECT AVG(prob_record) as mean FROM m_stats),
+                (SELECT sieve_length FROM range)
+EOL
     done
 
     python -c 'import misc.paper_plots; misc.paper_plots.plot_record_vs_sl()'
     """
-    from collections import defaultdict
 
-    m = None
+    import sqlite3
+
+    PERCENT = 20
+    P = 1511
+    #P = 1667
+
+    m_values = None
     data = []
 
-    for sl in (15000, 30000, 50000):
-        with sqlite3.connect(f"DB=data/test_1511_{sl}.db") as conn:
+    for fn in glob.glob(f"data/test_{P}_[0-9]*.db"):
+        sl = int(re.match(f"data/test_{P}_([0-9]*).db", fn).group(1))
+        if sl % 1500 != 0:
+            continue
+        print ("\tSL:", sl)
+        with sqlite3.connect(fn) as conn:
             rv = conn.execute("SELECT m,prob_record FROM m_stats")
-            ms, probs = zip(*[row for row in rv])
-            if m is None:
-                m = ms
+            ms, probs = zip(*[row for row in rv if len(row) == 2])
+            if m_values is None:
+                m_values = ms
             else:
-                assert m == ms, "m mismatch between {sl} and other"
-            data.pushback(probs)
+                assert m_values == ms, "m mismatch between {sl} and other"
+            data.append((sl, probs))
 
+    # Could consider counting inversions but O(n^2) and this metric also works
+
+    def top_n_percent(probs, percent):
+        best_probs = sorted(probs, reverse=True)
+        prob_threshold = best_probs[round(len(best_probs) * percent / 100)]
+        del best_probs
+        return [m for m, prob in zip(m_values, probs) if prob >= prob_threshold]
+
+    index = [i for i in range(len(data)) if data[i][0] == 45000][0]
+    assert data[index][0] == 45000
+    best_guess_probs = {m: prob for m, prob in zip(m_values, data[index][1])}
+
+    sum_top_percent = []
+    for sl, probs in data:
+        # Determine what m would be used and what
+        top = top_n_percent(probs, PERCENT)
+        sum_prob = sum(best_guess_probs[m] for m in top) / len(top)
+        sum_top_percent.append((sl, sum_prob))
+    sum_top_percent.sort()
+
+    print (sum_top_percent)
+
+    for row in sum_top_percent:
+        print (row[0], ",",  row[1])
