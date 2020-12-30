@@ -113,7 +113,7 @@ uint32_t gcd(uint32_t a, uint32_t b);
 
 
 /* K stuff */
-double log(const mpz_t &K);
+double calc_log_K(const struct Config& config);
 
 void init_K(const struct Config& config, mpz_t &K);
 

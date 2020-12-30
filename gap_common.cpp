@@ -102,11 +102,21 @@ uint32_t gcd(uint32_t a, uint32_t b) {
 }
 
 
-double log(const mpz_t &K) {
+double _log(const mpz_t &K) {
     long exp;
     double mantis = mpz_get_d_2exp(&exp, K);
     return log(mantis) + log(2) * exp;
 }
+
+
+double calc_log_K(const struct Config& config) {
+    mpz_t K;
+    init_K(config, K);
+    double log = _log(K);
+    mpz_clear(K);
+    return log;
+}
+
 
 void init_K(const struct Config& config, mpz_t &K) {
     mpz_init(K);
@@ -115,12 +125,12 @@ void init_K(const struct Config& config, mpz_t &K) {
     assert(mpz_cmp_ui(K, 1) > 0);  // K <= 1 ?!?
 }
 
+
 void K_stats(
         const struct Config& config,
         mpz_t &K, int *K_digits, double *K_log) {
     init_K(config, K);
-
-    *K_log = log(K);
+    *K_log = _log(K);
 
     if (K_digits != nullptr) {
         int base10 = mpz_sizeinbase(K, 10);
@@ -266,7 +276,7 @@ double combined_sieve_method2_time_estimate(
 
     threshold = std::min(threshold, config.max_prime);
 
-    const double K_log = log(K);
+    const double K_log = _log(K);
     const size_t expected_primes = primepi_estimate(config.max_prime);
     const size_t threshold_primes = primepi_estimate(threshold);
     const double mod_time_est = benchmark_primorial_modulo(
@@ -322,8 +332,6 @@ double combined_sieve_method2_time_estimate(
 
     return total_estimate;
 }
-
-
 
 
 /**
@@ -443,6 +451,7 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
             prob_prime_adj
     };
 }
+
 
 double prob_prime_and_stats(const struct Config& config, mpz_t &K) {
     int K_digits;
