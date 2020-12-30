@@ -102,6 +102,7 @@ class ProbNth {
          * = pow(Prob(prime | coprime), average_coprime)
          */
         float prob_greater_extended;
+        // TODO make this map<int, double> like all above
 };
 
 class ProbM {
@@ -586,6 +587,20 @@ void prob_extended_gap(
         // TODO check this is reasonable place to print
         printf("Extended size: %ld (%.1f merit)\n", EXT_SIZE, EXT_SIZE / N_log);
     }
+    if (config.sieve_length >= EXT_SIZE) {
+        // Empty extended.
+        gap_probs.wheel_d = 1;
+        gap_probs.average_coprime = 0;
+        gap_probs.prob_greater_extended = 1;
+
+        vector<float> prob_extended_record(SL+1, 0.0);
+        gap_probs.extended_record_high[0] = prob_extended_record;
+        gap_probs.extended_record_high[1] = prob_extended_record;
+        gap_probs.extended_extended_record[0] = 0.0;
+        gap_probs.extended_extended_record[1] = 0.0;
+        return;
+    }
+
 
     // Sieve a lot more (it's fast)
     vector<char> is_coprime(EXT_SIZE, true);
@@ -753,6 +768,8 @@ void prob_extended_gap(
 
         // Probability of prev, next > SL (extended^2)
         {
+            // XXX: this seems to overestimate by 5-20% why?
+            // XXX: extended seems to do the same
             double prob_e2_record = 0;
 
             // gap_prev + extended_coprime[i] <= MIN_RECORD
