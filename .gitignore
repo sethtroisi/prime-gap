@@ -27,6 +27,10 @@ pfgw.ini
 pfgw.log
 pfgw-prime.log
 
+# CLion
+.idea/
+cmake-build-debug/
+
 # Random
 __pycache__/
 .gdb_history
