@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import itertools
+import os.path
 
 import gap_utils
 
@@ -412,8 +413,8 @@ def plot_record_over_time():
         constrained_layout=True,
         figsize=(8, 5))
 
-    def plot_record_probs(plimit, prob, color, label):
-        plt.scatter(plimit, prob, marker='.', s=14, color=color, label=label)
+    def plot_record_probs(plimit, prob, color, label, marker):
+        plt.scatter(plimit, prob, marker=marker, s=18, color=color, label=label)
         plt.plot(plimit, prob, color=color)
 
     # prob_prev, prev_next for individual m
@@ -430,14 +431,18 @@ def plot_record_over_time():
     plt.ylabel("P(record gap|{partial sieve, $P_{limit}$})")
 
     for i, m in enumerate([293609, 811207, 183047]):
-        with open(f"data/{m}_test.txt") as data_file:
-            lines = [line for line in data_file.readlines() if line and line[0].isdigit()]
-            if not lines:
-                print(data_file.name, "is empty")
+        for j, sl in enumerate([15, 20, 25]):
+            fn = f"data/{m}_{sl}_test.txt"
+            if not os.path.exists(fn):
                 continue
+            with open(fn) as data_file:
+                lines = [line for line in data_file.readlines() if line and line[0].isdigit()]
+                if not lines:
+                    print(fn, "is empty")
+                    continue
 
-            p_limit, probs = zip(*[list(map(float, line.split(", "))) for line in lines])
-            plot_record_probs(p_limit, probs, colors(i), f"m={m}")
+                p_limit, probs = zip(*[list(map(float, line.split(", "))) for line in lines])
+                plot_record_probs(p_limit, probs, colors(i), f"{m=} ({sl=}", "Dhp"[j])
 
     plt.legend(loc='upper left')
 
