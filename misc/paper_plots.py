@@ -1,5 +1,25 @@
+#!/usr/bin/env python3
+#
+# Copyright 2020 Seth Troisi
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import glob
+import re
+from collections import defaultdict
+
 import matplotlib.pyplot as plt
-import os
+
 
 def plot_record_vs_plimit():
     """
@@ -54,19 +74,22 @@ def plot_record_vs_plimit():
     plt.xlabel("$P_{limit}$")
     plt.ylabel("P(record gap|{partial sieve, $P_{limit}$})")
 
-    for i, m in enumerate([293609, 811207, 183047]):
-        for j, sl in enumerate([15, 20, 25]):
-            fn = f"data/{m}_{sl}_test.txt"
-            if not os.path.exists(fn):
-                continue
-            with open(fn) as data_file:
-                lines = [line for line in data_file.readlines() if line and line[0].isdigit()]
-                if not lines:
-                    print(fn, "is empty")
-                    continue
+    m_index = defaultdict(lambda: len(m_index))
+    sl_index = defaultdict(lambda: len(sl_index))
 
-                p_limit, probs = zip(*[list(map(float, line.split(", "))) for line in lines])
-                plot_record_probs(p_limit, probs, colors(i), f"{m=} ({sl=}", "Dhp"[j])
+    for fn in glob.glob("data/[0-9]*_[0-9]*_test2.txt"):
+        m, sl = re.match("data/([0-9]*)_([0-9]*)_test", fn).groups()
+        with open(fn) as data_file:
+            lines = [line for line in data_file.readlines() if line and line[0].isdigit()]
+            if not lines:
+                print(fn, "is empty")
+                continue
+
+            p_limit, probs = zip(*[list(map(float, line.split(", "))) for line in lines])
+
+            color = colors(m_index[m])
+            marker = "DHp,x"[sl_index[sl]]
+            plot_record_probs(p_limit, probs, color, f"{m=} ({sl=})", marker)
 
     plt.legend(loc='upper left')
 
