@@ -74,7 +74,7 @@ diff <(echo "1215") <(sqlite3 local_tests.db 'SELECT SUM(prp_next+prp_prev) FROM
 #### FINALIZE ####
 
 set +x;
-rm $TEST_DB
+rm $TEST_DB temp_tests.log
 
 green=`tput setaf 2`
 reset=`tput sgr0`

@@ -78,6 +78,14 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
+    if (config.sieve_length < 5 * config.p) {
+        int sl_low = ((config.p * 8 - 1) / 500 + 1) * 500;
+        int sl_high = ((config.p * 20 - 1) / 500 + 1) * 500;
+        printf("--sieve_length(%d) should be between [%d, %d]\n",
+            config.sieve_length, sl_low, sl_high);
+        exit(1);
+    }
+
     if (config.valid == 0) {
         Args::show_usage(argv[0]);
         exit(1);

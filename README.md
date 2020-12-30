@@ -597,7 +597,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * README.md
 * THEORY.md
 * Project
-  * [ ] Improve error messages (gap_stats missing, SL size)
   * [ ] Change min-merit to 15, 18, or 20
   * [ ] Records / day in status.py or record_check.py
   * [ ] --update flag for `misc/show_ranges.sh`
@@ -605,11 +604,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
     * [ ] Faster finalize.py
   * [ ] Consider new names for prp-top-percent, no-one-side-skip, sieve-length
 * combined\_sieve.cpp
-  * [ ] Benchmark reindex_m_wheel @ 6, 30, 210
 * gap\_stats.cpp
-  * [ ] P(record) is missing double extended
 * gap\_test.py
-  * [ ] Reduce memory if not --stats / --num-plots
 * gap\_test\_simple.cpp
 * schema.sql
 * benchmarking
@@ -671,7 +667,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
   * [x] Make sure that next_p = 0, = -1, is handled correctly in places.
 * combined\_sieve.cpp
-  * [X] (Not going to do this) option to output m with gcd(m, d) != 1
+  * [x] Improve error messages (gap_stats missing, SL size)
   * [X] Calculating coprime [L, R] * K^-1 mod p for medium p
   * [x] Wheel for coprime i (saves 50-80% of space)
   * [x] Add some theory for only doing one side test.
@@ -703,6 +699,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Dynamic `sieve_length`
   * [x] Dynamic `max_prime`
 * gap\_stats.cpp
+  * [x] P(record) is missing double extended
+  * [x] Benchmark reindex_m_wheel @ 6, 30, 210
   * [x] Print (1 - seen) / prob as "unknown"
   * [x] Wheel for extended range
   * [x] Write all data that `gap_test.py` consumes to DB
@@ -716,6 +714,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_test.py
+  * [x] Reduce memory if not --stats / --num-plots
   * [x] First Ctrl+C stops new results, 2nd breaks.
   * [x] Use primegapverify.sieve for better prev_prime
   * [x] Dynamic one sided test threshold and logging.
