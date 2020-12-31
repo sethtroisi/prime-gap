@@ -22,6 +22,12 @@ FN1="907_2190_1_200_s11000_l100M.txt"
 FN2="953_1_1_1000_s12000_l200M.txt"
 TEST_DB="local_tests.db"
 
+#### MISC ####
+
+# make gap_stats && rm -f test.db && sqlite3 test.db < schema.sql
+# TMP=unknowns/1511_211890_1_1000000_s18000_l100000M.txt
+# ./gap_stats --save-unknowns --search-db test.db --unknown-filename TMP
+# ./gap_test.py --search-db test.db --unknown-filename TMP --no-one-side-skip --num-plots 3
 
 #### SETUP ####
 

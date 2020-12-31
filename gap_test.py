@@ -307,7 +307,6 @@ def run_in_parallel(
                 if next_p >= 0:
                     # next_p = 0, is side skip
                     # next_p > 0, result
-                    gap_test_stats.handle_result_for_plots(args, data, mi, m, prev_p, next_p)
                     continue
 
             sc.will_test += 1

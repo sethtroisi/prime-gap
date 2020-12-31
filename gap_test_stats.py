@@ -175,12 +175,12 @@ def load_stats(conn, args):
 
     # Will fail if non-present
     (data.expected_prev, data.expected_next, data.expected_gap,
-     exp_prev, exp_next,
+     gap_prev, gap_next,
      data.prob_merit_gap, data.prob_record_gap)= _zip_to_array(rv)
 
-    interleaved = itertools.chain(*itertools.zip_longest(exp_prev, exp_next))
-    data.experimental_side = array.array('f', (s for s in interleaved if s and s > 0))
-    zipped_sum_gen = ((p + n) for p, n in zip(exp_prev, exp_next) if p > 0 and n > 0)
+    interleaved = itertools.chain(*itertools.zip_longest(gap_prev, gap_next))
+    data.experimental_side = array.array('i', (int(s) for s in interleaved if s and s > 0))
+    zipped_sum_gen = (int(p + n) for p, n in zip(gap_prev, gap_next) if p > 0 and n > 0)
     data.experimental_gap = array.array('i', zipped_sum_gen)
 
     m_values = len(data.prob_merit_gap)
@@ -504,20 +504,6 @@ def should_print_stats(
     return False
 
 
-def handle_result_for_plots(args, data, mi, m, prev_p, next_p):
-    '''Called for existing and new records'''
-    assert prev_p > 0, (mi, m, next_p, prev_p)
-
-    if args.num_plots:
-        gap = next_p + prev_p
-        data.experimental_gap.append(gap)
-        data.valid_mi.append(mi)
-        if next_p > 0:
-            data.experimental_side.append(next_p)
-        if prev_p > 0:
-            data.experimental_side.append(prev_p)
-
-
 def process_result(conn, args, record_gaps, m_probs, data, sc, result):
     ''' Handles new results '''
     (m, mi, r_log_n, unknown_l, unknown_u,
@@ -569,8 +555,6 @@ def process_result(conn, args, record_gaps, m_probs, data, sc, result):
 
     sc.total_prp_tests += n_tests
     sc.gap_out_of_sieve_next += next_p > args.sieve_length
-
-    handle_result_for_plots(args, data, mi, m, prev_p, next_p)
 
     is_record = gap in record_gaps
     if is_record or merit > args.min_merit:
