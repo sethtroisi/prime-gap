@@ -333,19 +333,19 @@ void insert_range_db(
     const uint64_t rid = db_helper.config_hash(config);
     char sSQL[300];
     sprintf(sSQL,
-        "INSERT INTO range(rid, P, D, m_start, m_inc,"
+        "INSERT INTO range(rid, P,D, m_start,m_inc,"
                           "sieve_length, max_prime,"
                           "min_merit,"
-                          "num_m, num_remaining,"
+                          "num_m,"
                           "time_sieve)"
          "VALUES(%ld,  %d,%d, %ld,%ld,"
-                " %d,%ld, %.3f,"
-                "%ld,%ld,  %.2f)"
+                "%d,%ld, %.3f,"
+                "%ld,  %.2f)"
          "ON CONFLICT(rid) DO UPDATE SET time_sieve=%.2f",
             rid,  config.p, config.d, config.mstart, config.minc,
             config.sieve_length, config.max_prime,
             config.min_merit,
-            num_rows, num_rows,
+            num_rows,
             time_sieve, time_sieve);
 
     char *zErrMsg = 0;

@@ -352,19 +352,19 @@ void store_stats(
     const size_t num_rows = M_vals.size();
     char sSQL[500];
     sprintf(sSQL,
-        "INSERT INTO range(rid, P, D, m_start, m_inc,"
-                          "sieve_length, max_prime,"
+        "INSERT INTO range(rid, P,D, m_start,m_inc,"
+                          "sieve_length,max_prime,"
                           "min_merit,"
-                          "num_m, num_remaining,"
+                          "num_m,"
                           "time_stats)"
-         "VALUES(%ld,  %d,%d, %ld,%ld,"
+        "VALUES(%ld,  %d,%d, %ld,%ld,"
                 "%d,%ld,  %.3f,"
-                "%ld,%ld,  %.2f)"
+                "%ld, %.2f)"
         "ON CONFLICT(rid) DO UPDATE SET time_stats=%.2f",
             rid,  config.p, config.d, config.mstart, config.minc,
             config.sieve_length, config.max_prime,
             config.min_merit,
-            num_rows, num_rows,
+            num_rows,
             time_stats, time_stats);
 
     int rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);

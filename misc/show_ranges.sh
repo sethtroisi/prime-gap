@@ -14,58 +14,62 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -eux
+set -eu
 
-# TODO add an -u update flag
-sqlite3 "prime-gap-search.db" <<EOL
-.timeout 20
-#UPDATE range AS ra SET
-#    num_processed =
-#        (SELECT count(*) FROM result r
-#         WHERE r.p = ra.p AND r.d = ra.d AND
-#               r.m BETWEEN ra.m_start AND ra.m_start + ra.m_inc - 1 ),
-#    time_tests =
-#        (SELECT COALESCE(SUM(test_time), 0.0) FROM m_stats m
-#         WHERE m.p = ra.p AND m.d = ra.d AND
-#               m.m BETWEEN ra.m_start AND ra.m_start + ra.m_inc - 1 );
-SELECT changes() || " Range Updates";
+DB="prime-gap-search.db"
 
-UPDATE range SET num_remaining = num_m - num_processed;
-SELECT changes() || " Count Updates";
-SELECT "";
+if [[ "$#" -eq 1 && "$1" == "update" ]]; then
+    echo "Updating (may take a while based on number of ranges & results)";
+    # Indented with tab
+	sqlite3 "${DB}" <<-EOL
+	.timeout 20
+	UPDATE range AS ra SET
+	num_processed =
+	    (SELECT count(*) FROM result r
+	     WHERE r.p = ra.p AND r.d = ra.d AND
+	           r.m BETWEEN ra.m_start AND ra.m_start + ra.m_inc - 1 ),
+	time_tests =
+	    (SELECT COALESCE(SUM(test_time), 0.0) FROM m_stats m
+	     WHERE m.p = ra.p AND m.d = ra.d AND
+	           m.m BETWEEN ra.m_start AND ra.m_start + ra.m_inc - 1 )
+	WHERE finalized == 0;
 
-#UPDATE m_stats AS m
-#SET rid = NULL
-#WHERE m.rid not in (SELECT rid from range);
-#SELECT changes() || " m_stats.rid Updates";
-#SELECT "";
+	SELECT changes() || " Range Updates";
 
-# Happens from missing_gap, not sure quite what to do.
-#INSERT INTO result (P,D,m, next_p_i,prev_p_i, merit)
-#  SELECT P,D,m, next_p,prev_p, merit
-#  FROM m_stats WHERE
-#        m NOT IN (SELECT r.m FROM result r WHERE r.p = m_stats.p AND r.d = m_stats.d)
-#        AND (next_p != 0 OR prev_p != 0);
-#SELECT changes() || " m_stats results added to result";
-#SELECT "";
+	#UPDATE m_stats AS m
+	#SET rid = NULL
+	#WHERE m.rid not in (SELECT rid from range);
+	#SELECT changes() || " m_stats.rid Updates";
+	#SELECT "";
 
-# Happens when gap_stats is rerun
-#UPDATE m_stats SET (next_p, prev_p) =
-#       (SELECT next_p_i, prev_p_i FROM result r WHERE m_stats.p = r.p AND m_stats.d = r.d AND m_stats.m = r.m)
-#WHERE (next_p = 0 OR prev_p = 0) AND p = 3001 AND d = 2190;
-EOL
+	# Happens from missing_gap, not sure quite what to do.
+	#INSERT INTO result (P,D,m, next_p_i,prev_p_i, merit)
+	#  SELECT P,D,m, next_p,prev_p, merit
+	#  FROM m_stats WHERE
+	#        m NOT IN (SELECT r.m FROM result r WHERE r.p = m_stats.p AND r.d = m_stats.d)
+	#        AND (next_p != 0 OR prev_p != 0);
+	#SELECT changes() || " m_stats results added to result";
+	#SELECT "";
 
-sqlite3 -readonly "prime-gap-search.db" <<EOL
+	# Happens when gap_stats is rerun
+	#UPDATE m_stats SET (next_p, prev_p) =
+	#       (SELECT next_p_i, prev_p_i FROM result r WHERE m_stats.p = r.p AND m_stats.d = r.d AND m_stats.m = r.m)
+	#WHERE (next_p = 0 OR prev_p = 0) AND p = 3001 AND d = 2190;
+	EOL
+fi
+
+sqlite3 -readonly "${DB}" <<EOL
 .timeout 20
 SELECT "Table 'range'";
 SELECT PRINTF("  P=%-5d D=%-9d M(%-7d) = %9d + [0, %9d] ",
               p, d, num_m, m_start, m_inc),
-       PRINTF(" time(sieve(%4dB),stats,tests)= %7.1f %5.1f %9.1f (%5.1f%%) | %.4f %7.3f | %5.4f / %d",
+       CASE WHEN num_processed = 0 THEN ""
+       ELSE PRINTF(" time(sieve(%4dB),stats,tests)= %7.1f %5.1f %9.1f (%5.1f%%) | %5.4f / %d",
               max_prime / 1000000000,
               time_sieve, time_stats, time_tests, 100 * time_tests / (time_sieve + time_stats + time_tests),
-              time_sieve / num_m, time_tests / num_processed,
               (time_sieve + time_stats + time_tests) / num_processed,
               num_processed)
+       END timing
 FROM range ORDER BY p, d, m_start, m_inc;
 SELECT "";
 
@@ -85,7 +89,7 @@ GROUP BY p, d ORDER BY p, d;
 SELECT"";
 EOL
 
-sqlite3 -readonly "prime-gap-search.db" <<EOL
+sqlite3 -readonly "${DB}" <<EOL
 .timeout 20
 SELECT "Table 'result': " || COUNT(*) FROM result;
 SELECT "Table 'm_stats': " || COUNT(*) FROM m_stats;

@@ -40,6 +40,13 @@ PRAGMA foreign_keys = ON;
                 CHECK  'm_stats'
                 UPDATE 'm_stats'
                 INSERT into 'result'
+
+        [EVENTUALLY]
+                ./misc/finalize.py
+                        REMOVES entries from 'm_stats'
+                        REMOVES entries from 'result'
+                        UPDATES finalised in 'range'
+
 */
 
 CREATE TABLE IF NOT EXISTS range(
@@ -63,11 +70,8 @@ CREATE TABLE IF NOT EXISTS range(
         /* number of entries in m_stats processed by gap_tests */
         num_processed INTEGER DEFAULT 0,
 
-        /* number left to process in m_stats
-         * because of --top-x-percent
-         * num_m != num_processed + num_remaining
-         */
-        num_remaining INTEGER,
+        /* finalized (don't update as m_stats, results may have been deleted) */
+        finalized INTEGER DEFAULT 0,
 
         /* Time for various tasks */
         time_sieve REAL DEFAULT 0,
@@ -149,11 +153,10 @@ CREATE TABLE IF NOT EXISTS result (
         PRIMARY KEY(P, D, m)
 );
 
-CREATE INDEX IF NOT EXISTS    r_p_d_m ON             result(P,D,m);
-CREATE INDEX IF NOT EXISTS   ms_p_d_m ON            m_stats(P,D,m);
+CREATE INDEX IF NOT EXISTS    r_p_d_m ON   result(P,D,m);
+CREATE INDEX IF NOT EXISTS    r_p_d ON     result(P,D);
+CREATE INDEX IF NOT EXISTS    r_p ON       result(P);
 
-CREATE INDEX IF NOT EXISTS    r_p_d ON             result(P,D);
-CREATE INDEX IF NOT EXISTS   ms_p_d ON            m_stats(P,D);
-
-CREATE INDEX IF NOT EXISTS    r_p ON             result(P);
-CREATE INDEX IF NOT EXISTS   ms_p ON            m_stats(P);
+CREATE INDEX IF NOT EXISTS   ms_p_d_m ON   m_stats(P,D,m);
+CREATE INDEX IF NOT EXISTS   ms_p_d ON     m_stats(P,D);
+CREATE INDEX IF NOT EXISTS   ms_p ON       m_stats(P);

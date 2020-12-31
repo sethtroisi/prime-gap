@@ -22,9 +22,9 @@ import argparse
 import csv
 import glob
 import os.path
-import math
 import sqlite3
 import subprocess
+import time
 
 import gap_utils
 import misc_utils
@@ -202,7 +202,10 @@ def dump_to_file(conn, args, ranges, unknown_files):
         results_csv_fn = base_fn + ".csv"
         stats_fn = base_fn + ".stats.txt"
 
-        if not args.no_dump_csv:
+        if args.no_dump_csv:
+            print(f"\tNOT dumping csv (--no-dump-csv)")
+            time.sleep(1)
+        else:
             print(f"\tDumping m_stats to\t{results_csv_fn!r}")
             size = size_or_zero(results_csv_fn)
             if size > 10 * 1024:
@@ -256,9 +259,17 @@ def dump_to_file(conn, args, ranges, unknown_files):
                 ])
 
 
-def delete_range_and_low_merit(conn, args, ranges, unknown_files):
+def finalize_range_and_delete_low_merit(conn, args, ranges, unknown_files):
     print()
     cursor = conn.cursor()
+
+    # TODO update ranges (see show_ranges.sh)
+
+    for r in ranges:
+        cursor.execute("UPDATE range SET finalized=1 WHERE rid = ?", (r['rid'],))
+        assert cursor.rowcount == 1, r
+
+    print(f"\tFinalized {len(ranges)} ranges")
 
     ms = args.mstart
     me = args.mend
@@ -285,11 +296,6 @@ def delete_range_and_low_merit(conn, args, ranges, unknown_files):
     deletes_results = cursor.rowcount
 
     print (f"\tDeleted {deletes_m_stats} and {deletes_results} rows")
-
-    for r in ranges:
-        cursor.execute("DELETE FROM range WHERE rid = ?", (r['rid'],))
-        assert cursor.rowcount == 1, r
-
     print("rm", " ".join(unknown_files))
 
 
@@ -322,7 +328,7 @@ def attemp_finalize(args):
         print(f"\ttar cvzf logs/archive_{name}.tar.gz logs/{name}_*")
 
         # Delete low merit result & m_stat
-        delete_range_and_low_merit(conn, args, ranges, unknown_files)
+        finalize_range_and_delete_low_merit(conn, args, ranges, unknown_files)
 
 
 
