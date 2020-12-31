@@ -344,7 +344,7 @@ def stats_plots(
                     data.experimental_gap, 'peru'),
         ]:
             min_y, max_y = prob_histogram_all(axis, theory, experimental, label, c1, c2)
-            axis.set_ylim(bottom=min_y / 10)
+            axis.set_ylim(bottom=max(10 ** -8, min_y / 10))
             axis.legend(loc='upper right')
 
     if args.save_logs:

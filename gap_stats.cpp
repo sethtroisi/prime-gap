@@ -73,13 +73,12 @@ class ProbNth {
         vector<float> greater_nth;
 
         /**
-         * TODO: Fix name (combined_nth?)
          * Probability that prev_prime & next_prime have X unknown composites in middle
          * prob_combined_sieve[i+j] = prime_nth[i] * prime_nth[j]
          *                          = prime * (1 - prime)^i * (1 - prime)^j * prime
          *                          = prime ^ 2 * (1 - prime)^(i+j)
          */
-        vector<float> combined_sieve;
+        vector<float> combined_nth;
 
         /**
          * wheel_d is gcd(D, 2*3*5*7)
@@ -886,7 +885,7 @@ void setup_probnth(
 
     prob_combined_gap(
         PROB_PRIME_AFTER_SIEVE,
-        gap_probs.combined_sieve);
+        gap_probs.combined_nth);
 
     // Prob record with gap[i] and other gap > SL
     {
@@ -1027,7 +1026,7 @@ ProbM calculate_probm(
 
     { // Direct probability (both primes <= SL)
         uint32_t min_interesting_gap = std::min(min_gap_min_merit, min_record_gap);
-        size_t max_i = std::min(unknown_low.size(), gap_probs.combined_sieve.size());
+        size_t max_i = std::min(unknown_low.size(), gap_probs.combined_nth.size());
         size_t min_j = unknown_high.size();
         for (size_t i = 0; i < max_i; i++) {
             uint32_t gap_low = unknown_low[i];
@@ -1035,7 +1034,7 @@ ProbM calculate_probm(
                 min_j -= 1;
             }
 
-            size_t max_j = std::min(unknown_high.size(), gap_probs.combined_sieve.size() - i);
+            size_t max_j = std::min(unknown_high.size(), gap_probs.combined_nth.size() - i);
 
             // Starting at min_j causes some `prob_this_gap` to be skipped,
             // but is a sizeable speedup for large gaps.
@@ -1051,7 +1050,7 @@ ProbM calculate_probm(
                 uint32_t gap = gap_low + gap_high;
 
                 // Same as prob_prime_nth[i] * prob_prime_nth[j];
-                float prob_this_gap = gap_probs.combined_sieve[i + j];
+                float prob_this_gap = gap_probs.combined_nth[i + j];
 
                 if (save_gap_probs) {
                     // Used in gap_test_plotting.py, has performance impact to save.

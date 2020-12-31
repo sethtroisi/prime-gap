@@ -4,6 +4,7 @@ A fast prime gap searching suite.
 
 # Table of Contents
 
+- [Overview](#overview)
 - [Combined Sieve - a new program to find prime gaps.](#combined-sieve---a-new-program-to-find-prime-gaps)
   * [Tools](#tools)
     + [Combined Sieve (Sieve many `m * p#/d`)](#combined-sieve-sieve-many-m--pd)
@@ -23,6 +24,28 @@ A fast prime gap searching suite.
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
+## Overview
+
+This is a suite of tools (`combined_sieve`, `gap_stats`, and `gap_test.py`) which are useful for searching for prime gaps
+centered around `m * P#/d`.
+
+The flow is to sieve many intervals with `combined_sieve --save -u <P>_<D>_<MSTART>_<MINC>_s<SIEVE_LENGTH>_l<MAX_PRIME>.txt`
+Then calculate statistics about these intervals with `gap_stats --save -u <SAME_FILENAME>.txt`
+Then test some portion of these intervals with `gap_test.py -u <SAME_FILENAME>.txt --prp-top-percent 25`
+
+A known 30 merit prime gap can be easily found with (After [Setup](#setup) has been complete)
+
+```bash
+$ make
+$ sqlite3 test.db < schema.sql
+$ FN=809_1841070_11244000_1000_s27000_l200M.txt
+$ ./combined_sieve --save --search-db test.db -u $FN
+$ ./gap_stats --save --search-db test.db -u $FN --min-merit 20
+$ ./gap_test.py --search-db test.db -u $FN
+...
+23142  30.1485  11244911 * 809#/1841070 -5788 to +17354	RECORD!
+...
+```
 
 ## Tools
 

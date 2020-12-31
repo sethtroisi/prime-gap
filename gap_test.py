@@ -46,7 +46,7 @@ def get_arg_parser():
         default="gaps.db",
         help="Prime gap database (default: %(default)s) see github.com/primegap-list-project/prime-gap-list")
 
-    parser.add_argument('--unknown-filename', type=str,
+    parser.add_argument('-u', '--unknown-filename', type=str,
         help="determine p, d, mstart, minc, sieve-length, and max-prime"
              " from unknown-results filename")
 

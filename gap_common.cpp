@@ -547,7 +547,7 @@ void Args::show_usage(char* name) {
     cout << "  --mstart <start>" << endl;
     cout << "  --minc   <int>" << endl;
     cout << "OR" << endl;
-    cout << "  --unknown-filename <filename>" << endl;
+    cout << "  -u, --unknown-filename <filename>" << endl;
     cout << "    parse p, d, mstart, minc, sieve-length, max-prime from filename" << endl;
     cout  << endl;
     cout << "[OPTIONALLY]" << endl;
@@ -635,6 +635,8 @@ Config Args::argparse(int argc, char* argv[]) {
 
         {"min-merit",        required_argument, 0,   3  },
         {"run-prp",          no_argument,       0,   6  },
+
+        {"save",             no_argument,       0,   7  },
         {"save-unknowns",    no_argument,       0,   7  },
 
         {"search-db",        required_argument, 0,   9  },
@@ -652,7 +654,7 @@ Config Args::argparse(int argc, char* argv[]) {
 
     int option_index = 0;
     char c;
-    while ((c = getopt_long(argc, argv, "qhp:d:", long_options, &option_index)) >= 0) {
+    while ((c = getopt_long(argc, argv, "qhp:d:u:", long_options, &option_index)) >= 0) {
         switch (c) {
             case 'h':
                 show_usage(argv[0]);
