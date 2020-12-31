@@ -62,16 +62,18 @@ class ProbNth {
          * Precalculate and cache two calculations
          * See `prob_nth_prime`
          *
-         * Change that the first prime is later than i'th unknown
+         * Change that the first prime is later than i'th unknown (1 indexed)
          * greater_nth[i] = (1 - prob_prime)^i
          *
-         * Change that ith unknown number (in sieve) is the first prime
+         * Change that ith unknown number (in sieve) is the first prime (0 indexed)
+         * prime_nth[0] = prob_prime
          * prime_nth[i] = (1 - prob_prime)^(i-1) * prob_prime = greater_nth[i-1] * prob_prime
          */
         vector<float> prime_nth;
         vector<float> greater_nth;
 
         /**
+         * TODO: Fix name (combined_nth?)
          * Probability that prev_prime & next_prime have X unknown composites in middle
          * prob_combined_sieve[i+j] = prime_nth[i] * prime_nth[j]
          *                          = prime * (1 - prime)^i * (1 - prime)^j * prime
@@ -396,11 +398,15 @@ void store_stats(
     assert( prob_gap_norm.size() == prob_gap_low.size() );
     assert( prob_gap_norm.size() == prob_gap_high.size() );
     size_t skipped_gap_stats = 0;
-    for (size_t g = 1; g < prob_gap_norm.size(); g ++) {
+    for (int g = prob_gap_norm.size() - 1; g >= 0; g--) {
         if (prob_gap_norm[g] < 1e-10 &&
             prob_gap_low[g]  < 1e-10 &&
             prob_gap_high[g] < 1e-10) {
-            // XXX: Consider summing the missing prob at g=0.
+
+            // All skipped gaps are summed at prob[0]
+            prob_gap_norm[0] += prob_gap_norm[g];
+            prob_gap_low[0]  += prob_gap_low[g];
+            prob_gap_high[0] += prob_gap_high[g];
             skipped_gap_stats += 1;
             continue;
         }
@@ -414,7 +420,7 @@ void store_stats(
 
         int rc = sqlite3_step(insert_range_stmt);
         if (rc != SQLITE_DONE) {
-            printf("\nrange_stats insert failed (%ld): %d: %s\n", g, rc, sqlite3_errmsg(db));
+            printf("\nrange_stats insert failed (%d): %d: %s\n", g, rc, sqlite3_errmsg(db));
             break;
         }
 
@@ -426,6 +432,7 @@ void store_stats(
             printf("Failed to clear bindings\n");
         }
     }
+
     if (config.verbose >= 0) {
         printf("Saved %ld rows to 'range_stats' table\n", prob_gap_norm.size() - skipped_gap_stats);
     }
@@ -534,12 +541,14 @@ void prob_nth_prime(
         vector<float>& prob_prime_nth,
         vector<float>& prob_great_nth) {
     assert(prob_prime_nth.empty() && prob_great_nth.empty());
+
     double prob_still_prime = 1.0;
     while (prob_still_prime > NTH_PRIME_CUTOFF) {
         prob_prime_nth.push_back(prob_still_prime * prob_prime);
         prob_great_nth.push_back(prob_still_prime);
         prob_still_prime *= 1 - prob_prime;
     }
+
 }
 
 
@@ -767,9 +776,8 @@ void prob_extended_gap(
                 uint32_t gap_max_record = MAX_RECORD - gap_prev;
                 if (SL < gap_max_record && gap_max_record < EXT_SIZE) {
                     size_t coprimes_max_record = count_coprime_m[gap_max_record];
-                    // it's fine that prob_prime_nth_out[] might have been added
-                    // sum(prob_prime_nth[0..i]) + prob_greater_nth_out[i] <= 1.0
-                    prob_record += prob_greater_nth_out[coprimes_max_record];
+                    // sum(prob_prime_nth[0..i]) + prob_greater_nth_out[i+1] == 1.0
+                    prob_record += prob_greater_nth_out[coprimes_max_record+1];
                 }
 
                 // Prob record gap, with 1 <= gap_prev <= SL, SL <= gap_next
@@ -1032,6 +1040,12 @@ ProbM calculate_probm(
             // Starting at min_j causes some `prob_this_gap` to be skipped,
             // but is a sizeable speedup for large gaps.
             size_t j = (save_gap_probs || config.sieve_length < 100'000) ? 0 : min_j;
+            if (j > 0) {
+                // sum of gap_probs.prime_nth[0..j-1]
+                float sum_prob_jth = 1.0 - gap_probs.greater_nth[j];
+                prob_gap_norm[0] += gap_probs.prime_nth[i] * sum_prob_jth;
+            }
+
             for (; j < max_j; j++) {
                 uint32_t gap_high = unknown_high[j];
                 uint32_t gap = gap_low + gap_high;
@@ -1040,8 +1054,7 @@ ProbM calculate_probm(
                 float prob_this_gap = gap_probs.combined_sieve[i + j];
 
                 if (save_gap_probs) {
-                    // XXX: Costs some performance to calculate all of these
-                    // Used in gap_test_plotting.py
+                    // Used in gap_test_plotting.py, has performance impact to save.
                     prob_gap_norm[gap] += prob_this_gap;
                 }
 
@@ -1072,7 +1085,7 @@ ProbM calculate_probm(
         size_t max_i = std::max(unknown_low.size(), unknown_high.size());
         // i >= prime_nth.size() has tiny probability (see DOUBLE_NTH_PRIME_CUTOFF)
         for (size_t i = 0; i < std::min(max_i, gap_probs.prime_nth.size()); i++) {
-            float prob_i = gap_probs.prime_nth[i];
+            float prob_i = gap_probs.prime_nth[i]; // 0-indexed
             assert(0 <= prob_i && prob_i <= 1.0);
 
             // unknown[i'th] is prime, on the otherside have prime be outside of sieve.
