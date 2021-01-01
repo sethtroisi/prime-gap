@@ -737,47 +737,6 @@ void prime_gap_search(const struct Config& config) {
 
 // Method 2
 
-pair<uint32_t, uint32_t> calculate_thresholds_method2(
-        const struct Config config,
-        size_t count_coprime_sieve,
-        size_t valid_ms) {
-    uint32_t sieve_interval = 2 * config.sieve_length + 1;
-
-    // (small vs modulo_search)  MULT  vs  log2(MULT) * (M_inc/valid_ms)
-    float SMALL_MULT = std::max(8.0, log(8) * config.minc / valid_ms);
-
-    // (small vs medium)         valid_m  vs  count_coprime_sieve * (M_inc / prime)
-    uint64_t MEDIUM_CROSSOVER_SMALL = 1.0 * count_coprime_sieve * config.minc / valid_ms;
-
-    // (medium vs modulo_search)  count_coprime_sieve vs M*S/P * (log2(P) - log2(SL))
-    float M_PER_P_CROSSOVER = 1.0 * config.minc * sieve_interval / count_coprime_sieve;
-    // correct for how much work it takes to skip to next m
-    float MEDIUM_MULT = std::max(1.9, 0.5 * log2(M_PER_P_CROSSOVER / count_coprime_sieve));
-    uint64_t MEDIUM_CROSSOVER_SEARCH = MEDIUM_MULT * M_PER_P_CROSSOVER;
-
-    // XXX: What would it look like to do this more dynamically?
-    // XXX: Everytime prime >= next_mult run a couple through both MEDIUM & LARGE prime and choose faster.
-
-    uint64_t SMALL_THRESHOLD = std::min((uint64_t) SMALL_MULT * sieve_interval, MEDIUM_CROSSOVER_SMALL);
-    if (SMALL_THRESHOLD < sieve_interval) {
-        SMALL_THRESHOLD = sieve_interval + 1;
-    }
-
-    uint64_t MEDIUM_THRESHOLD = std::max(SMALL_THRESHOLD, MEDIUM_CROSSOVER_SEARCH);
-    if (MEDIUM_THRESHOLD > config.max_prime) {
-        MEDIUM_THRESHOLD = config.max_prime;
-    }
-
-    if (config.verbose >= 1) {
-        setlocale(LC_NUMERIC, "");
-        printf("small_threshold:  %'ld  \tmin(%.1f x SL, %ld)\n",
-            SMALL_THRESHOLD, 2 * SMALL_MULT, MEDIUM_CROSSOVER_SMALL);
-        printf("middle_threshold: %'ld\n", MEDIUM_THRESHOLD);
-        setlocale(LC_NUMERIC, "C");
-    }
-    return {SMALL_THRESHOLD, MEDIUM_THRESHOLD};
-}
-
 void save_unknowns_method2(
         const struct Config config,
         const vector<int32_t> &valid_mi,
@@ -1166,18 +1125,18 @@ void prime_gap_parallel(struct Config& config) {
     const size_t count_coprime_sieve = coprime_X.size();
     assert( count_coprime_sieve % 2 == 0 );
 
-    if (config.verbose >= 1) {
-        setlocale(LC_NUMERIC, "");
-        printf("sieve_length:  2x %'d\n", config.sieve_length);
-        printf("max_prime:        %'ld\n", config.max_prime);
-        setlocale(LC_NUMERIC, "C");
-    }
-
-    // Prints relavant settings
     const auto THRESHOLDS =
         calculate_thresholds_method2(config, count_coprime_sieve, valid_ms);
     const uint64_t SMALL_THRESHOLD = THRESHOLDS.first;
     const uint64_t MEDIUM_THRESHOLD = THRESHOLDS.second;
+    if (config.verbose >= 1) {
+        setlocale(LC_NUMERIC, "");
+        printf("sieve_length:  2x %'d\n", config.sieve_length);
+        printf("max_prime:        %'ld\n", config.max_prime);
+        printf("small_threshold:  %'ld\n", SMALL_THRESHOLD);
+        printf("middle_threshold: %'ld\n", MEDIUM_THRESHOLD);
+        setlocale(LC_NUMERIC, "C");
+    }
 
     // SMALL_THRESHOLD must handle all primes that can mark off two items in SIEVE_INTERVAL.
     assert( SMALL_THRESHOLD >= SIEVE_INTERVAL );
@@ -1204,7 +1163,7 @@ void prime_gap_parallel(struct Config& config) {
     const double prp_time_est = prp_time_estimate_composite(N_log, config.verbose);
 
     // Detailed timing info about different stages
-    combined_sieve_method2_time_estimate(config, K, valid_ms, MEDIUM_THRESHOLD, prp_time_est);
+    combined_sieve_method2_time_estimate(config, K, valid_ms, prp_time_est);
 
 
     /**
@@ -1633,7 +1592,7 @@ void prime_gap_parallel(struct Config& config) {
 
     {
         float error_percent = (100.0 * fabs(expected_m_stops - stats.m_stops)) / expected_m_stops;
-        if (config.verbose >= 2 || error_percent > 0.5 ) {
+        if (config.verbose >= 3 || error_percent > 0.1 ) {
             printf("Estimated modulo searches (m/prime) error %.2f%%,\t%ld vs expected %.0f\n",
                 error_percent, stats.m_stops, expected_m_stops);
         }

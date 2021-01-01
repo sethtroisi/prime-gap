@@ -123,13 +123,18 @@ void K_stats(
 
 
 /* Utils */
+std::pair<uint32_t, uint32_t> calculate_thresholds_method2(
+        const struct Config config,
+        size_t count_coprime_sieve,
+        size_t valid_ms);
+
+
 double prp_time_estimate_composite(double K_log, int verbose);
 
 double combined_sieve_method2_time_estimate(
         const struct Config& config,
         const mpz_t &K,
         uint64_t valid_ms,
-        uint64_t threshold,
         double prp_time_est);
 
 

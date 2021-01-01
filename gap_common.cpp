@@ -38,6 +38,7 @@
 
 using std::cout;
 using std::endl;
+using std::pair;
 using std::string;
 using std::vector;
 using namespace std::chrono;
@@ -261,42 +262,84 @@ size_t count_coprime_sieve(const struct Config& config) {
 }
 
 
+pair<uint32_t, uint32_t> calculate_thresholds_method2(
+        const struct Config config,
+        size_t count_coprime_sieve,
+        size_t valid_ms) {
+    uint32_t sieve_interval = 2 * config.sieve_length + 1;
+
+    // (small vs modulo_search)  MULT  vs  log2(MULT) * (M_inc/valid_ms)
+    float SMALL_MULT = std::max(8.0, log(8) * config.minc / valid_ms);
+
+    // (small vs medium)         valid_m  vs  count_coprime_sieve * (M_inc / prime)
+    uint64_t MEDIUM_CROSSOVER_SMALL = 1.0 * count_coprime_sieve * config.minc / valid_ms;
+
+    // (medium vs modulo_search)  count_coprime_sieve vs M*S/P * (log2(P) - log2(SL))
+    float M_PER_P_CROSSOVER = 1.0 * config.minc * sieve_interval / count_coprime_sieve;
+    // correct for how much work it takes to skip to next m
+    float MEDIUM_MULT = std::max(1.9, 0.5 * log2(M_PER_P_CROSSOVER / count_coprime_sieve));
+    uint64_t MEDIUM_CROSSOVER_SEARCH = MEDIUM_MULT * M_PER_P_CROSSOVER;
+
+    // XXX: What would it look like to do this more dynamically?
+    // XXX: Everytime prime >= next_mult run a couple through both MEDIUM & LARGE prime and choose faster.
+
+    uint64_t SMALL_THRESHOLD = std::min((uint64_t) SMALL_MULT * sieve_interval, MEDIUM_CROSSOVER_SMALL);
+    if (SMALL_THRESHOLD < sieve_interval) {
+        SMALL_THRESHOLD = sieve_interval + 1;
+    }
+
+    uint64_t MEDIUM_THRESHOLD = std::max(SMALL_THRESHOLD, MEDIUM_CROSSOVER_SEARCH);
+    if (MEDIUM_THRESHOLD > config.max_prime) {
+        MEDIUM_THRESHOLD = config.max_prime;
+    }
+    return {SMALL_THRESHOLD, MEDIUM_THRESHOLD};
+}
+
+
 double combined_sieve_method2_time_estimate(
         const struct Config& config,
         const mpz_t &K,
         uint64_t valid_ms,
-        uint64_t threshold,
         double prp_time_est) {
     // XXX: pull these from config file or somewhere
-    const double MODULE_SEARCH_SECS = 130e-9;
+    const double INVERSES_SECS = 18e-9;
+    const double MODULE_SEARCH_SECS = 125e-9;
     // much less important to correctly set.
     const double COUNT_VECTOR_BOOL_PER_SEC = 6871000500;
     // ~ `primesieve -t1 1e9`
     const double PRIME_RANGE_SEC = 0.3 / 1e9;
 
-    threshold = std::min(threshold, config.max_prime);
-
-    const double K_log = _log(K);
+	const size_t coprimes = 2 * count_coprime_sieve(config);
+	const auto THRESHOLDS = calculate_thresholds_method2(config, coprimes, valid_ms);
+	const size_t s_threshold_primes = primepi_estimate(THRESHOLDS.first);
+    const size_t m_threshold_primes = primepi_estimate(THRESHOLDS.second);
     const size_t expected_primes = primepi_estimate(config.max_prime);
-    const size_t threshold_primes = primepi_estimate(threshold);
-    const double mod_time_est = benchmark_primorial_modulo(
-        K, 1'00'000 * (K_log < 2000 ? 20 : 1));
 
+	// Time to compute all (primes % K)
+    const double K_log = _log(K);
+    const double mod_time_est = benchmark_primorial_modulo(K, 100'000 * (K_log < 2000 ? 20 : 1));
+    const double k_mod_time = expected_primes * mod_time_est;
+
+	// Time for SMALL_THRESHOLD to MEDIUM_THRESHOLD
+	const size_t inverses = (m_threshold_primes - s_threshold_primes) * coprimes;
+	const double inverse_time = inverses * INVERSES_SECS;
+
+	// Time for solving module_search
     const size_t interval = 2 * config.sieve_length + 1;
     const size_t expected_m_stops =
-        (log(log(config.max_prime)) - log(log(threshold))) * interval * config.minc;
+        (log(log(config.max_prime)) - log(log(THRESHOLDS.second))) * interval * config.minc;
+	const size_t solves = (expected_m_stops + (expected_primes - m_threshold_primes));
+    const double m_search_time = solves * MODULE_SEARCH_SECS;
 
-    const double k_mod_time = expected_primes * mod_time_est;
-    const double m_search_time =
-        (expected_m_stops + (expected_primes - threshold_primes)) * MODULE_SEARCH_SECS;
+	cout << inverse_time << " " << m_search_time << endl;
 
     const size_t count_prints = 5 * (log10(config.max_prime) - 4);
     const double extra_time =
         // PrimePi takes ~0.3s / billion
         config.max_prime * PRIME_RANGE_SEC +
         // 5 prints per log10 * std::count(all_unknowns)
-        count_prints * 1.0 * valid_ms * count_coprime_sieve(config) / COUNT_VECTOR_BOOL_PER_SEC;
-    const double total_estimate = k_mod_time + m_search_time + extra_time;
+        count_prints * 1.0 * valid_ms * coprimes / COUNT_VECTOR_BOOL_PER_SEC;
+    const double total_estimate = k_mod_time + m_search_time + inverse_time + extra_time;
 
     // Estimate still needs to account for:
     //      small primes
