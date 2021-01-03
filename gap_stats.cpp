@@ -1425,8 +1425,8 @@ void calculate_prp_top_percent(
     printf("\tEstimate of optimal printed with *\n");
     printf("\n");
 
-    // Both sides & One sided at 10% (assume 90% of prob also)
-    for (size_t side_percent : {100, 10}) {
+    // Both sides & One sided at 1% (assume 80% of prob also)
+    for (size_t side_percent : {100, 1}) {
 
         double sum_prob = 0.0;
         double time = combined_time;
