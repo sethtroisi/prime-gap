@@ -191,11 +191,9 @@ def load_stats(conn, args):
         (config_hash(args),))
     for row in rv:
         gap = row[0]
-        # TODO: test if this works with out the normalization
-        # Values were normalized by / m_values in gap_stats
-        misc.prob_gap_comb[gap] += row[1] * m_values
-        misc.prob_gap_side[gap] += row[2] / 2 * m_values
-        misc.prob_gap_side[gap] += row[3] / 2 * m_values
+        misc.prob_gap_comb[gap] += row[1]
+        misc.prob_gap_side[gap] += row[2] / 2
+        misc.prob_gap_side[gap] += row[3] / 2
 
     return data, misc
 

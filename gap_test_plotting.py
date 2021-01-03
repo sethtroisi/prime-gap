@@ -42,9 +42,9 @@ def stats_plots(
             print("NON-ZERO TREND: ", trend) # Verify that expected value doesn't vary with M.
             print("\n")
 
-    def plot_hist(axis, d, color, marker='x'):
+    def plot_hist(axis, d, color, marker='x', label='Observed', mult=1):
         hist_data = np.histogram(d, bins=100, density=True)
-        axis.scatter(hist_data[1][:-1], hist_data[0], color=color, marker=marker, s=8, label='Observed')
+        axis.scatter(hist_data[1][:-1], hist_data[0]*mult, color=color, marker=marker, s=8, label=label)
         max_y = hist_data[0].max()
 
         axis.set_xlim(np.percentile(d, 0.01), np.percentile(d, 99.9))
@@ -75,19 +75,29 @@ def stats_plots(
                     label=dist_label)
         axis.legend(loc='upper left')
 
-    def plot_prob_hist(axis, probs, max_x, color):
+    def plot_prob_hist(axis, label, probs, max_x, color):
         x, w = zip(*sorted(((g, v) for g,v in probs.items() if v > 0 and g <= max_x)))
         n, _, _ = axis.hist(x, weights=w, bins=100, density=True,
                   label='Theoretical P(gap)', color=color, alpha=0.4)
-        print (f"|P(gap)| = {len(x)}, Sum(P(gap)) = {sum(w):.1f}")
+        print (f"|P({label})| = {len(x)}, Sum(P({label})) = {sum(w):.1f}")
         return n
 
     def prob_histogram_all(axis, probs, experimental, label, c1='blueviolet', c2='peru'):
         max_x = 0.95 * max(probs.keys())
 
         if experimental:
+            # If this is P(combined gap) and used --one-side-skipped
+            # It's possible this should normalize by len(experimental) but I'm not sure
+            no_skips = 2 * len(experimental) >= len(data.experimental_side)
+            m_tested = len(data.experimental_side) - len(experimental)
+            mult = 1 if no_skips else len(experimental) / m_tested
+            label_hist = 'Observed' if no_skips else 'Observed (--one-side-skipped used)'
+
             # Experimental values
-            plot_hist(axis, experimental, 'peru')
+            plot_hist(axis, experimental, 'peru', label=label_hist, mult=mult)
+            if not no_skips:
+                print("\nNormalizing {} gaps by {} m's tested (--one-side-skipped)\n".format(
+                    len(experimental), m_tested))
 
             # Expected value
             add_expected_value(axis, experimental, c2, label)
@@ -96,9 +106,9 @@ def stats_plots(
             max_x = min(1.1 * np.percentile(experimental, 99.9), max_x)
 
         # Theoretical probabilities
-        tn = plot_prob_hist(axis, probs, max_x, c1)
+        tn = plot_prob_hist(axis, label, probs, max_x, c1)
 
-        axis.set_xlim(right=max_x)
+        axis.set_xlim(left=0, right=max_x)
         axis.set_yscale('log')
 
         axis.legend(loc='upper right')
@@ -179,7 +189,7 @@ def stats_plots(
         min_y, max_y = prob_histogram_all(
                 axis_prob_gap, misc.prob_gap_side, data.experimental_side, 'next')
         axis_prob_gap.set_xlim(0, args.sieve_length)
-        axis_prob_gap.set_ylim(bottom=min_y / 10)
+        axis_prob_gap.set_ylim(bottom=max(10 ** -8, min_y / 10))
         #print(f"Min Prob(gap side): {min_y:.2e}")
 
         for e_data, color, label in (
@@ -215,7 +225,7 @@ def stats_plots(
         min_y, max_y = prob_histogram_all(
                 axis_prob_comb, misc.prob_gap_comb, data.experimental_gap, 'gap')
         #print(f"Min Prob(gap comb): {min_y:.2e}")
-        min_y = max(1e-7, min_y)
+        min_y = max(10 ** -8, min_y)
         axis_prob_comb.set_ylim(bottom=min_y, top=max_y)
 
         color = 'seagreen'
