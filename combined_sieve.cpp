@@ -1346,6 +1346,7 @@ void prime_gap_parallel(struct Config& config) {
 
     assert(SIEVE_INTERVAL < prime);
 
+    const bool K_odd  = mpz_odd_p(K);
     const int K_mod3 = mpz_fdiv_ui(K, 3); // K % 3
     const int K_mod5 = mpz_fdiv_ui(K, 5); // K % 5
     const int K_mod7 = mpz_fdiv_ui(K, 7); // K % 7
@@ -1369,55 +1370,66 @@ void prime_gap_parallel(struct Config& config) {
         // -M_start % p
         const int32_t m_start_shift = (prime - (M_start % prime)) % prime;
 
+        const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
+
+        /* Unoptimized expressive code
+
+        - // (X & 1) == X_odd_test <-> ((X + SIEVE_LENGTH) % 2 == 1)
+        - const bool X_odd_test = (SIEVE_LENGTH & 1) == 0;
+        + const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
+
+        - // (m + M_start) * K = (X - SIEVE_LENGTH)
+        - // m = (-X*K^-1 - M_start) % p = (X * -(K^-1) - M_start) % p
+          int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
+        - assert( (base_r * (mi_0 + M_start) + dist) % prime == 0 );
+
+        - / **
+        -  * When K is odd
+        -  * m parity (even/odd) must not match X parity
+        -  * odd m * odd K + odd X   -> even
+        -  * even m * odd K + even X -> even
+        -  * /
+        - size_t m_odd = (M_start + mi_0) & 1;
+        - if (((X & 1) == X_odd_test) == m_odd) {
+        + if (((X^mi_0) & M_start_X_odd_not_same_parity)) {
+
+            stats.small_prime_factors_interval += 1;
+        -    / *
+        -    // Doesn't seem to help, slightly tested.
+        -    if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
+        -        continue;
+        -    if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
+        -        continue;
+        -    if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
+        -        continue;
+        -    // * /
+        */
+
+        // XXX: Might be faster if broken into two loops with odd and even X?
+
         // Find m*K = [L, R]
         for (int64_t X : coprime_X) {
             int32_t dist = X - SIEVE_LENGTH;
-
-            // (m + M_start) * K = (X - SIEVE_LENGTH)
-            // m = ((SL-X)*K^-1 - M_start) % p
             int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
 
-            // (base_r * (mi_0 + M_start)) % prime == -X
-            assert( (base_r * (mi_0 + M_start) + dist) % prime == 0 );
+            assert( K_odd || (dist&1) );
 
-            // (X & 1) == X_odd_test <-> ((X + SIEVE_LENGTH) % 2 == 1)
-            const bool X_odd_test = (SIEVE_LENGTH & 1) == 0;
-
-            // K and X never both even
-            const bool K_even = (D & 1) != 0;
-            assert( !(K_even && ((dist & 1) == 0)) );
-
-            size_t m_test = M_start + mi_0;
-            uint32_t shift = prime;
-            /* If K is odd can count by 2*prime */
-            if ((D & 1) == 0) {
-                shift += prime;
-                /**
-                 * When K is odd
-                 * m parity (even/odd) must not match X parity
-                 * odd m * odd K + odd X   -> even
-                 * even m * odd K + even X -> even
-                 */
-                if (((X & 1) == X_odd_test) == (m_test & 1)) {
+            uint32_t shift = (1 + K_odd) * prime;
+            if (K_odd) {
+                // Check if X parity == m parity
+                if (((dist ^ mi_0) & 1) == M_X_parity) {
                     mi_0 += prime;
                 }
             }
 
+            // XXX: loop is only needed when prime < sieve_length,
+            // How to have two versions of this code, one with loop, one with test (mi_0 < M_inc)
             for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
                 size_t m = M_start + mi;
                 int32_t mii = m_reindex[mi];
 
                 if (mii >= 0) {
                     stats.small_prime_factors_interval += 1;
-                    /*
-                    // Doesn't seem to help, slightly tested.
-                    if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
-                        continue;
-                    if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
-                        continue;
-                    if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
-                        continue;
-                    // */
 #if METHOD2_WHEEL
                     composite[mii][i_reindex_wheel[m % reindex_m_wheel][X]] = true;
 #else
