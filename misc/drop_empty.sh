@@ -22,7 +22,7 @@ SELECT PRINTF("P=%-5d D=%-5d M(%-5d) = %6d +[0,%6d) time(sieve,stats)=%5.1f %5.1
               p, d, num_m, m_start, m_inc, time_sieve, time_stats)
 FROM range
 WHERE
-    (num_processed = 0 AND time_tests <= 1 AND
+    (num_processed = 0 AND time_tests <= 1 AND finalized = 0 AND
      0 = (SELECT COUNT(*) FROM m_stats m
           WHERE m.rid = range.rid AND (test_time > 0 OR next_p != 0 OR prev_p != 0 OR prp_next + prp_prev > 0)))
 EOL
@@ -42,7 +42,7 @@ sqlite3 prime-gap-search.db <<EOL
 PRAGMA foreign_keys=1;
 DELETE FROM range
 WHERE
-    (num_processed = 0 AND time_tests <= 1 AND
+    (num_processed = 0 AND time_tests <= 1 AND finalized = 0 AND
      0 = (SELECT COUNT(*) FROM m_stats m
           WHERE m.rid = range.rid AND (test_time > 0 OR next_p != 0 OR prev_p != 0 OR prp_next + prp_prev > 0)));
 SELECT "DELETED " || total_changes() || " range/range_stats/m_stats";

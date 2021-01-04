@@ -166,6 +166,7 @@ def print_record_gaps(args, gaps):
             print ("Records({}) {}".format(
                 len(record_lines),
                 f"({len(own_records)} already submitted)" if own_records else ""))
+            print("Smallst:", min(record_lines))
             print("Largest:", max(record_lines))
             if small_merit:
                 print(f'\tHid {small_merit} new "records" with merit < {args.ignore_small}')

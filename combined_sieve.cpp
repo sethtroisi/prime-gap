@@ -78,7 +78,7 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    if (config.sieve_length < 5 * config.p) {
+    if (config.sieve_length < 6 * config.p || config.sieve_length > 22 * config.p) {
         int sl_low = ((config.p * 8 - 1) / 500 + 1) * 500;
         int sl_high = ((config.p * 20 - 1) / 500 + 1) * 500;
         printf("--sieve_length(%d) should be between [%d, %d]\n",
