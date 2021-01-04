@@ -776,7 +776,7 @@ void prob_extended_gap(
                 if (SL < gap_max_record && gap_max_record < EXT_SIZE) {
                     size_t coprimes_max_record = count_coprime_m[gap_max_record];
                     // sum(prob_prime_nth[0..i]) + prob_greater_nth_out[i+1] == 1.0
-                    prob_record += prob_greater_nth_out[coprimes_max_record+1];
+                    prob_record += nth_prob_or_zero(prob_greater_nth_out, coprimes_max_record+1);
                 }
 
                 // Prob record gap, with 1 <= gap_prev <= SL, SL <= gap_next
@@ -829,6 +829,7 @@ void prob_extended_gap(
                     assert(min_e_c_i == 0);
                     // Every gap_prev + extended_coprime[i] > MAX_RECORD
                     assert(extended_coprimes_prev >= 1);
+                    assert(extended_coprimes_prev <= prob_greater_nth_out.size());
                     prob_e2_record += prob_greater_nth_out[extended_coprimes_prev - 1];
                     break;
                 }

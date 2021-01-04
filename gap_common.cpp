@@ -331,7 +331,8 @@ double combined_sieve_method2_time_estimate(
 	const size_t solves = (expected_m_stops + (expected_primes - m_threshold_primes));
     const double m_search_time = solves * MODULE_SEARCH_SECS;
 
-	cout << inverse_time << " " << m_search_time << endl;
+    // TODO: Tune inverse_time and INVERSES_SECS
+	// cout << inverse_time << " " << m_search_time << endl;
 
     const size_t count_prints = 5 * (log10(config.max_prime) - 4);
     const double extra_time =
