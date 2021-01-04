@@ -19,7 +19,7 @@ set -eux
 
 PARAMS="-p 907 -d 2190 --mstart 1 --minc 200 --max-prime 100 --sieve-length 11000"
 FN1="907_2190_1_200_s11000_l100M.txt"
-FN2="953_1_1_1000_s12000_l200M.txt"
+FN2="953_1_1_10000_s8000_l20M.txt"
 TEST_DB="local_tests.db"
 
 #### MISC ####
@@ -42,12 +42,14 @@ sqlite3 $TEST_DB < schema.sql
 
 ./combined_sieve --method1 -qqq --save-unknowns $PARAMS                 --search-db $TEST_DB
 ./combined_sieve           -qqq --save-unknowns --unknown-filename $FN1 --search-db $TEST_DB
-# Test with
-./combined_sieve           -qqq --save-unknowns --unknown-filename $FN2 --search-db $TEST_DB
 
 # Verify md5sum unknowns/907_2190_1_200_s11000_l100M.{txt,m1.txt}
 md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.txt")
 md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.m1.txt")
+
+# Tests MIDDLE_THRESHOLD
+./combined_sieve           -qqq --save-unknowns --unknown-filename $FN2 --search-db $TEST_DB
+md5sum -c <(echo "a0df27e7c40eef11f0d48953676b5a2f  unknowns/$FN2")
 
 
 #### GAP STATS ####

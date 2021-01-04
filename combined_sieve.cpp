@@ -1385,7 +1385,7 @@ void prime_gap_parallel(struct Config& config) {
 
             // K and X never both even
             const bool K_even = (D & 1) != 0;
-            assert( !(K_even && ((X & 1) == X_odd_test)) );
+            assert( !(K_even && ((dist & 1) == 0)) );
 
             size_t m_test = M_start + mi_0;
             uint32_t shift = prime;
