@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CMakeWorkspace" PROJECT_DIR="$PROJECT_DIR$" />
+  <component name="CidrRootsConfiguration">
+    <sourceRoots>
+      <file path="$PROJECT_DIR$" />
+    </sourceRoots>
+    <excludeRoots>
+      <file path="$PROJECT_DIR$/data" />
+      <file path="$PROJECT_DIR$/done" />
+      <file path="$PROJECT_DIR$/logs" />
+      <file path="$PROJECT_DIR$/unknowns" />
+    </excludeRoots>
+  </component>
+  <component name="PyPackaging">
+    <option name="earlyReleasesAsUpgrades" value="true" />
+  </component>
+</project>

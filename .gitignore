@@ -28,12 +28,9 @@ pfgw.log
 pfgw-prime.log
 
 # CLion
-.idea/
 cmake-build-debug/
 
 # Random
-.idea/
-cmake-build-debug/
 __pycache__/
 .gdb_history
 prime-gap-list
