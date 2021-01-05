@@ -14,15 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
-# Hack to allow import of gap_utils
-sys.path.append(".")
-
 import argparse
 import glob
 import os.path
 import sqlite3
 from collections import defaultdict
+
+import sys
+
+# Hack to allow import of gap_utils
+sys.path.append(".")
 
 import gap_utils
 import misc_utils
@@ -90,12 +91,12 @@ def build_and_count_pd_results(results, ranges, lookup):
         P, D = pd
 
         pd_ranges = {range(mstart, mstart + minc): 0
-                for p, d, mstart, minc in ranges if P==p and D==d}
+                     for p, d, mstart, minc in ranges if P == p and D == d}
 
         ms.sort()
-#        print (f"\tP: {P:5} D: {D:7}")
-#        print (f"\t\tResults: {len(ms)} min: {min(ms)} max: {max(ms)}")
-#        print ("\t\tKnown ranges:", ", ".join(map(str,pd_ranges.keys())))
+        #        print (f"\tP: {P:5} D: {D:7}")
+        #        print (f"\t\tResults: {len(ms)} min: {min(ms)} max: {max(ms)}")
+        #        print ("\t\tKnown ranges:", ", ".join(map(str,pd_ranges.keys())))
 
         # In order find if uncovered
         new_range = [0, 0, 0]
@@ -166,7 +167,7 @@ def check_processed(args):
         # At some later point maybe don't load all (group by thousands or something)
         conn.row_factory = None
         results = conn.execute('SELECT P, D, m FROM result').fetchall()
-        print (f"\tLoaded {len(results):,} results")
+        print(f"\tLoaded {len(results):,} results")
 
         # ---- Add file only ranges
         ranges, lookup = sql_and_file_ranges(sql_ranges, unknown_fns)
@@ -175,6 +176,7 @@ def check_processed(args):
         build_and_count_pd_results(results, ranges, lookup)
 
         print_results(conn, ranges, lookup)
+
 
 def check_mstatus(conn, p, d, ms, me):
     count = conn.execute(
@@ -208,7 +210,8 @@ def print_results(conn, ranges, lookup):
     for key, value in display_order:
         p, d, ms, mi = key
         status, count_m, finished = value
-        if status in (40, 41): continue
+        if status in (40, 41):
+            continue
 
         fn = lookup[key][0]
         unk_fn_param = "--unknown-filename " + fn
@@ -217,34 +220,34 @@ def print_results(conn, ranges, lookup):
             print("P: {:5} D: {:9} M({:8}) {:9} to {:9} |".format(
                 p, d, count_m, ms, ms + mi - 1), end=" ")
             print("Finished: {:8}/{:<8} {:6.1%}".format(
-                finished, count_m, finished/count_m))
+                finished, count_m, finished / count_m))
 
-            print ("Partially finished resume:")
-            print (f"\t./gap_test.py {unk_fn_param}\n")
+            print("Partially finished resume:")
+            print(f"\t./gap_test.py {unk_fn_param}\n")
         elif status in (20, 30):
             # Hard to tell this apart from finalized
             # Simple logic, if range exists it's not finalized
             r = lookup[key][1]
             if r:
-                print ("File missing {}(could be recreated with):".format(
+                print("File missing {}(could be recreated with):".format(
                     "(with partial results) " * (status == 30)))
-                print (f"\t./combined_sieve --save-unknowns {unk_fn_param}\n")
-                print ("\tor deleted with")
-                print (f"\tsqlite3 {args.search_db} 'PRAGMA foreign_keys=1; "
-                       f"DELETE FROM range WHERE rid={r['rid']}; SELECT TOTAL_CHANGES()'\n")
+                print(f"\t./combined_sieve --save-unknowns {unk_fn_param}\n")
+                print("\tor deleted with")
+                print(f"\tsqlite3 {args.search_db} 'PRAGMA foreign_keys=1; "
+                      f"DELETE FROM range WHERE rid={r['rid']}; SELECT TOTAL_CHANGES()'\n")
         elif status == 21:
             mstatus = check_mstatus(conn, p, d, ms, ms + mi - 1)
             if mstatus:
-                print (f"Ready to start testing ({mstatus} m_stats):")
-                print (f"\t./gap_test.py {unk_fn_param}\n")
+                print(f"Ready to start testing ({mstatus} m_stats):")
+                print(f"\t./gap_test.py {unk_fn_param}\n")
             else:
-                print ("Ready for gap_stats")
-                print (f"\t./gap_stats --save-unknowns {unk_fn_param}\n")
+                print("Ready for gap_stats")
+                print(f"\t./gap_stats --save-unknowns {unk_fn_param}\n")
         elif status == 10:
-            print ("range missing:")
-            print (f"\t./gap_stats --save-unknowns {unk_fn_param}\n")
+            print("range missing:")
+            print(f"\t./gap_stats --save-unknowns {unk_fn_param}\n")
         else:
-            print (f"unknown status: {status}")
+            print(f"unknown status: {status}")
 
 
 if __name__ == "__main__":

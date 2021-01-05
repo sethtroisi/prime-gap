@@ -20,12 +20,11 @@ import random
 import re
 import subprocess
 
-import sys
+import gmpy2
 
+import sys
 # Hack to allow import of gap_utils
 sys.path.append(".")
-
-import gmpy2
 
 import gap_utils
 

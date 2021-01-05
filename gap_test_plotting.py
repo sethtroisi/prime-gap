@@ -17,8 +17,6 @@
 import gap_utils
 
 
-
-#---- Stats to plot ----#
 def stats_plots(
         args,
         min_merit_gap, record_gaps, prob_nth,
@@ -39,12 +37,13 @@ def stats_plots(
         trend, _ = np.polyfit(x, y, 1)
         if trend > 2e-3:
             print("\n")
-            print("NON-ZERO TREND: ", trend) # Verify that expected value doesn't vary with M.
+            print("NON-ZERO TREND: ", trend)  # Verify that expected value doesn't vary with M.
             print("\n")
 
     def plot_hist(axis, d, color, marker='x', label='Observed', mult=1):
         hist_data = np.histogram(d, bins=100, density=True)
-        axis.scatter(hist_data[1][:-1], hist_data[0]*mult, color=color, marker=marker, s=8, label=label)
+        axis.scatter(hist_data[1][:-1], hist_data[0]*mult,
+                     color=color, marker=marker, s=8, label=label)
         max_y = max(hist_data[0])
 
         axis.set_xlim(np.percentile(d, 0.01), np.percentile(d, 99.9))
@@ -63,11 +62,11 @@ def stats_plots(
         for percent in (50, 90, 95):
             percentile = np.percentile(d_sorted, percent)
             if percentile > 100:
-                dist_label=f"{percent}th percentile = {percentile:.0f}"
+                dist_label = f"{percent}th percentile = {percentile:.0f}"
             elif percentile > .01:
-                dist_label=f"{percent}th percentile = {percentile:.4f}"
+                dist_label = f"{percent}th percentile = {percentile:.4f}"
             else:
-                dist_label=f"{percent}th percentile = {percentile:.2e}"
+                dist_label = f"{percent}th percentile = {percentile:.2e}"
             axis.plot(
                     [0, percentile, percentile],
                     [percent/100, percent/100, 0],
@@ -76,10 +75,10 @@ def stats_plots(
         axis.legend(loc='upper left')
 
     def plot_prob_hist(axis, label, probs, max_x, color):
-        x, w = zip(*sorted(((g, v) for g,v in probs.items() if v > 0 and g <= max_x)))
+        x, w = zip(*sorted(((g, v) for g, v in probs.items() if v > 0 and g <= max_x)))
         n, _, _ = axis.hist(x, weights=w, bins=100, density=True,
-                  label='Theoretical P(gap)', color=color, alpha=0.4)
-        print (f"|P({label})| = {len(x)}, Sum(P({label})) = {sum(w):.1f}")
+                            label='Theoretical P(gap)', color=color, alpha=0.4)
+        print(f"|P({label})| = {len(x)}, Sum(P({label})) = {sum(w):.1f}")
         return n
 
     def prob_histogram_all(axis, probs, experimental, label, c1='blueviolet', c2='peru'):
@@ -102,7 +101,7 @@ def stats_plots(
             # Expected value
             add_expected_value(axis, experimental, c2, label)
 
-            # Need to balance x which is generally longer for probs then 99.9 percentile of experimental
+            # Need to balance long tail of theoretical vs 99.9th percentile of experimental
             max_x = min(1.1 * np.percentile(experimental, 99.9), max_x)
 
         # Theoretical probabilities
@@ -117,7 +116,7 @@ def stats_plots(
 
     def fit_normal_dist(axis, d):
         x_start = max(0, 0.95 * np.percentile(d, 1))
-        x_end   = 1.05 * np.percentile(d, 99)
+        x_end = 1.05 * np.percentile(d, 99)
         gap_span = np.linspace(x_start, x_end, 400)
 
         mu, std = stats.norm.fit(d)
@@ -164,9 +163,9 @@ def stats_plots(
             figsize=(8, 12))
         gs = fig.add_gridspec(3, 2)
 
-        axis_prob_gap     = fig.add_subplot(gs[1, 1])
+        axis_prob_gap = fig.add_subplot(gs[1, 1])
         axis_expected_gap = fig.add_subplot(gs[2, 0])
-        axis_cdf_gap      = fig.add_subplot(gs[2, 1])
+        axis_cdf_gap = fig.add_subplot(gs[2, 1])
 
         if misc.test_unknowns:
             axis_prev = fig.add_subplot(gs[0, 0])
@@ -199,7 +198,7 @@ def stats_plots(
                 axis_prob_gap, misc.prob_gap_side, data.experimental_side, 'next')
         axis_prob_gap.set_xlim(0, args.sieve_length)
         axis_prob_gap.set_ylim(bottom=max(10 ** -8, min_y / 10))
-        #print(f"Min Prob(gap side): {min_y:.2e}")
+        # print(f"Min Prob(gap side): {min_y:.2e}")
 
         for e_data, color, label in (
                 (data.expected_prev, 'lightskyblue', 'prev'),
@@ -226,14 +225,14 @@ def stats_plots(
             figsize=(12, 8), dpi=150)
         gs = fig.add_gridspec(3, 3)
 
-        axis_prob_comb     = fig.add_subplot(gs[0, 0])
+        axis_prob_comb = fig.add_subplot(gs[0, 0])
         axis_expected_comb = fig.add_subplot(gs[0, 1])
-        axis_cdf_comb      = fig.add_subplot(gs[0, 2])
+        axis_cdf_comb = fig.add_subplot(gs[0, 2])
 
         # Combining all probs for a pseudo distribution of P(gap combined)
         min_y, max_y = prob_histogram_all(
                 axis_prob_comb, misc.prob_gap_comb, data.experimental_gap, 'gap')
-        #print(f"Min Prob(gap comb): {min_y:.2e}")
+        # print(f"Min Prob(gap comb): {min_y:.2e}")
         min_y = max(10 ** -8, min_y)
         axis_prob_comb.set_ylim(bottom=min_y, top=max_y)
 
@@ -267,19 +266,20 @@ def stats_plots(
             if len(prob_data) == len(data.experimental_gap):
                 zipped = list(zip(prob_data, data.experimental_gap))
             else:
-                print("Not all gaps are present (--prp-top-percent < 100) Not able to show 'Sum(P(...))'")
+                print("Not all gaps are present (--prp-top-percent < 100) can't show 'Sum(P(...))'")
                 zipped = list(zip(prob_data, [0 for _ in range(len(prob_data))]))
 
             p_gap_merit_sorted, _ = zip(*sorted(zipped, reverse=True))
             p_gap_merit_ord, gap_real_ord = zip(*zipped)
 
-            #Experimental
+            # Experimental
             if row == 1:
                 cum_count = np.cumsum(np.array(gap_real_ord) > min_merit_gap)
             else:
                 cum_count = np.cumsum(np.array([g in record_gaps for g in gap_real_ord]))
 
-            print(f"{label:20} | sum(P) = {sum(prob_data):.4f}, count(experimental) = {cum_count[-1]}")
+            print(f"{label:20} | sum(P) = {sum(prob_data):.4f}, "
+                  f"count(experimental) = {cum_count[-1]}")
 
             tests = list(range(1, len(p_gap_merit_ord)+1))
             if cum_count[-1] > 0:
@@ -301,7 +301,6 @@ def stats_plots(
             axis = fig.add_subplot(gs[row, 2])
             plot_cdf(axis,  prob_data, color, label)
 
-
     if args.num_plots > 2:
         # Older 1-page 3x3 layout
 
@@ -310,7 +309,7 @@ def stats_plots(
             constrained_layout=True,
             figsize=(12, 12))
         gs = fig.add_gridspec(3, 3)
-        axis_one_gap      = fig.add_subplot(gs[0, 2])
+        axis_one_gap = fig.add_subplot(gs[0, 2])
         axis_combined_gap = fig.add_subplot(gs[1, 2])
 
         for plot_i, (d, label, color) in enumerate((
@@ -319,7 +318,8 @@ def stats_plots(
                 (data.expected_gap,  'expected', 'seagreen'),
                 (data.prob_merit_gap, f'P(gap > min_merit({args.min_merit}))', 'dodgerblue'),
         )):
-            if not d: continue
+            if not d:
+                continue
 
             if plot_i == 0:
                 axis = fig.add_subplot(gs[0, 0])
@@ -370,7 +370,7 @@ def stats_plots(
         png_path = gap_utils.transform_unknown_filename(
             args.unknown_filename, "logs/", ".png")
         if not png_path.startswith("logs/"):
-            print ("No 'logs/' directory to save figure into")
+            print("No 'logs/' directory to save figure into")
 
         plt.savefig(png_path, dpi=1080//8)
 

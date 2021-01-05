@@ -24,8 +24,7 @@ import gmpy2
 
 
 UNKNOWN_FILENAME_RE = re.compile(
-    "^(\d+)_(\d+)_(\d+)_(\d+)_s(\d+)_l(\d+)M(.m1)?(?:.missing)?.txt")
-
+    r"^(\d+)_(\d+)_(\d+)_(\d+)_s(\d+)_l(\d+)M(.m1)?(?:.missing)?.txt")
 
 
 class TeeLogger:
@@ -86,33 +85,29 @@ def parse_unknown_filename(fn):
     return tuple(map(lambda s: int(s) if s and s.isdigit() else s, match.groups())) if match else match
 
 
-def generate_unknown_filename(p, d, ms, mi, sl, mp, method1 = False, ext = ".txt"):
+def generate_unknown_filename(p, d, ms, mi, sl, mp, method1=False, ext=".txt"):
     base = f"{p}_{d}_{ms}_{mi}_s{sl}_l{mp}M"
-    return base + (".m1" * (method1 == True)) + ext
+    return base + (".m1" * (method1 is True)) + ext
 
 
 def verify_args(args):
     if args.unknown_filename:
         fn = args.unknown_filename
         if not (os.path.exists(fn) or os.path.exists("unknowns/" + fn)):
-            print ("\"{}\" doesn't exist".format(fn))
+            print("\"{}\" doesn't exist".format(fn))
             exit(1)
 
         match = parse_unknown_filename(fn)
         if not match:
-            print (f"{fn!r} doesn't match unknown file format")
+            print(f"{fn!r} doesn't match unknown file format")
             exit(1)
 
         p, d, ms, mi, sl, mp, m1 = match
-        args.p              = p
-        args.d              = d
-        args.mstart         = ms
-        args.minc           = mi
-        args.sieve_length   = sl
-        args.max_prime      = mp
-        args.method1        = (m1 == ".m1")
+        (args.p, args.d, args.mstart, args.minc,
+         args.sieve_length, args.max_prime, _) = match
+        args.method1 = (m1 == ".m1")
 
-    args.max_prime   *= 10 ** 6
+    args.max_prime *= 10 ** 6
 
     if 'search_db' in args and args.search_db:
         assert os.path.exists(args.search_db), (
@@ -120,7 +115,7 @@ def verify_args(args):
 
     for arg in ('p', 'd', 'mstart', 'minc', 'sieve_length', 'max_prime'):
         if arg not in args or args.__dict__[arg] in (None, 0):
-            print ("Missing required argument", arg)
+            print("Missing required argument", arg)
             exit(1)
 
     fn = generate_unknown_filename(
@@ -146,8 +141,8 @@ def K_and_stats(args):
     assert r == 0
 
     K_digits = gmpy2.num_digits(K, 10)
-    K_bits   = gmpy2.num_digits(K, 2)
-    K_log    = float(gmpy2.log(K))
+    K_bits = gmpy2.num_digits(K, 2)
+    K_log = float(gmpy2.log(K))
 
     return K, K_digits, K_bits, K_log
 
@@ -157,7 +152,7 @@ def parse_unknown_line(line):
 
     start, c_l, c_h = line.split(b" | ")
 
-    match = re.match(b"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
+    match = re.match(rb"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
     assert match, start
     m_test, unknown_l, unknown_u = map(int, match.groups())
 
@@ -177,8 +172,9 @@ def parse_unknown_line(line):
         unknowns[0] = accum_rle(-1, c_l)
         unknowns[1] = accum_rle(+1, c_h[:-1])
     else:
-        unknowns[0] = list(map(int,c_l.split(b" ")))
-        unknowns[1] = list(map(int,c_h.split(b" ")))
+        # TODO investigate using array.array
+        unknowns[0] = list(map(int, c_l.split(b" ")))
+        unknowns[1] = list(map(int, c_h.split(b" ")))
 
     unknown_l_test = len(unknowns[0])
     unknown_u_test = len(unknowns[1])

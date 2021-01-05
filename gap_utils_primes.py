@@ -24,6 +24,7 @@ import gmpy2
 try:
     # primegapverify is only alpha so don't require it yet
     import primegapverify
+
     has_pgv = True
 except ModuleNotFoundError:
     has_pgv = False
@@ -73,15 +74,15 @@ def openPFGW_ABC(m, K, offsets):
         assert s[1].startswith('PFGW'), s
 
         # TODO how to validate doesn't skip because previous processed?
-        #if "failed" in s[1] or "previous" in s[1]:
-        #    print (s[1])
+        # if "failed" in s[1] or "previous" in s[1]:
+        #    print(s[1])
         #    assert False
 
         # Look for "1*1009#/3018+512 is 3-PRP! (0.0021s+0.0000s)"
         if 'is 3-PRP' in s[1]:
             offset = int(re.search(r'\+(-?[0-9]+) is 3-PRP', s[1]).group(1))
             index = offsets.index(offset)
-            return offset, index+1
+            return offset, index + 1
 
     return None, len(offsets)
 
@@ -144,17 +145,18 @@ def determine_prev_prime_large(m, str_n, K, SL, primes, remainder):
         # Cover [center - 5 * SL, center - SL]
         # technically last is included multiple times but safer is better.
         composites = primegapverify.sieve(bottom, 4 * SL)
-        assert len(composites) == len(range(bottom, top+1))
+        assert len(composites) == len(range(bottom, top + 1))
 
         for i, composite in enumerate(reversed(composites)):
             if not composite:
                 tests += 1
-                if is_prime(center -(SL+i), str_n, -(SL+i)):
+                if is_prime(center - (SL + i), str_n, -(SL + i)):
                     t1 = time.time()
                     if (t1 - t0) > 60:
-                        print("\tprimegapverify prev_prime({}{}) took {:.2f} second ({} tests, {:.3f}s/test"
-                            .format(str_n, -SL, t1 - t0, tests, (t1 - t0)/tests))
-                    return tests, SL+i
+                        print("\tprimegapverify prev_prime({}{}) took {:.2f} second "
+                              "({} tests, {:.3f}s/test".format(
+                            str_n, -SL, t1 - t0, tests, (t1 - t0) / tests))
+                    return tests, SL + i
 
         assert False, ("Huge prev_prime!", str_n, ">", 5 * SL)
 
@@ -163,7 +165,7 @@ def determine_prev_prime_large(m, str_n, K, SL, primes, remainder):
     print("Falling back to slow prev_prime({}{})".format(str_n, -SL))
     t0 = time.time()
     tests0 = tests
-    for i in range(SL, 5*SL+1):
+    for i in range(SL, 5 * SL + 1):
         composite = False
         for prime, remain in zip(primes, remainder):
             modulo = (remain * m) % prime
@@ -174,9 +176,11 @@ def determine_prev_prime_large(m, str_n, K, SL, primes, remainder):
             tests += 1
             if is_prime(center - i, str_n, -i):
                 t1 = time.time()
-                if (t1 - t0) > 60:
+                t = t1 - t0
+                if t > 60:
+                    num_tests = tests - tests0
                     print("\tfallback prev_prime({}{}) took {:.2f} second ({} tests, {:.3f}s/test"
-                        .format(str_n, -SL, t1 - t0, tests - tests0, (t1 - t0)/(tests - tests0)))
+                          .format(str_n, -SL, t, num_tests, t / num_tests))
                 return tests, i
 
     assert False

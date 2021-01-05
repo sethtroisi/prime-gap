@@ -49,7 +49,7 @@ def plot_record_vs_plimit():
     python -c 'import misc.paper_plots; misc.paper_plots.plot_record_vs_plimit()'
     """
 
-    plt.rcParams.update({'mathtext.default':  'regular' })
+    plt.rcParams.update({'mathtext.default':  'regular'})
 
     # Set up subplots.
     plt.figure(
@@ -61,10 +61,12 @@ def plot_record_vs_plimit():
         plt.scatter(plimit, prob, marker=marker, s=18, color=color, label=label)
         plt.plot(plimit, prob, color=color)
 
+    colors = plt.cm.tab10
+
+    # TODO add prob_prev, prob_next plots for these m
     # prob_prev, prev_next for individual m
     # See Prob_nth in gap_stats
-    colors = plt.cm.tab10
-    #for i, (u_p, u_n) in enumerate(misc.test_unknowns):
+    # for i, (u_p, u_n) in enumerate(misc.test_unknowns):
     #    label = f"m={valid_mi[i]}"
     #    plot_prob_nth(axis_prev, u_p, colors(i), label)
     #    plot_prob_nth(axis_next, u_n, colors(i), label)
@@ -128,7 +130,7 @@ EOL
 
     PERCENT = 20
     P = 1511
-    #P = 1667
+    # P = 1667
 
     m_values = None
     data = []
@@ -137,7 +139,7 @@ EOL
         sl = int(re.match(f"data/test_{P}_([0-9]*).db", fn).group(1))
         if sl % 1500 != 0:
             continue
-        print ("\tSL:", sl)
+        print("\tSL:", sl)
         with sqlite3.connect(fn) as conn:
             rv = conn.execute("SELECT m,prob_record FROM m_stats")
             ms, probs = zip(*[row for row in rv if len(row) == 2])
@@ -167,7 +169,7 @@ EOL
         sum_top_percent.append((sl, sum_prob))
     sum_top_percent.sort()
 
-    print (sum_top_percent)
+    print(sum_top_percent)
 
     for row in sum_top_percent:
-        print (row[0], ",",  row[1])
+        print(row[0], ",",  row[1])

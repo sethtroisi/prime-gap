@@ -35,47 +35,58 @@ import misc.misc_utils as misc_utils
 def get_arg_parser():
     parser = argparse.ArgumentParser('Test prime gaps')
 
-    parser.add_argument('--search-db', type=str,
+    parser.add_argument(
+        '--search-db', type=str,
         default="prime-gap-search.db",
         help="Database for this project (default: %(default)s)")
 
-    parser.add_argument('--prime-gaps-db', type=str,
+    parser.add_argument(
+        '--prime-gaps-db', type=str,
         default="gaps.db",
-        help="Prime gap database (default: %(default)s) see github.com/primegap-list-project/prime-gap-list")
+        help="Prime gap database (default: %(default)s) "
+             "See github.com/primegap-list-project/prime-gap-list")
 
-    parser.add_argument('-u', '--unknown-filename', type=str,
+    parser.add_argument(
+        '-u', '--unknown-filename', type=str,
         help="determine p, d, mstart, minc, sieve-length, and max-prime"
              " from unknown-results filename")
 
-    parser.add_argument('--min-merit', type=int, default=12,
+    parser.add_argument(
+        '--min-merit', type=int, default=12,
         help="only display prime gaps with merit >= min merit")
 
-    parser.add_argument('--megagap', type=int, default=0,
+    parser.add_argument(
+        '--megagap', type=int, default=0,
         help="Search for megagaps (of this size or greater)")
 
-    parser.add_argument('--threads', type=int, default=1,
+    parser.add_argument(
+        '--threads', type=int, default=1,
         help="Number of threads to use for searching (default: %(default)s)")
 
-    parser.add_argument('--taskset', action='store_true',
+    parser.add_argument(
+        '--taskset', action='store_true',
         help="taskset each thread, helps when using more than 50%% of CPU threads")
 
-    parser.add_argument('--num-plots', type=int, default=0,
+    parser.add_argument(
+        '--num-plots', type=int, default=0,
         help="Show up to 3 plots about distributions")
 
-    parser.add_argument('--save-logs', action='store_true',
+    parser.add_argument(
+        '--save-logs', action='store_true',
         help="Save logs and plots about distributions")
 
-    parser.add_argument('--prp-top-percent', type=int, default=None,
+    parser.add_argument(
+        '--prp-top-percent', type=int, default=None,
         help="Only test top X%% (sorted by prob(record))")
 
-    parser.add_argument('--no-one-side-skip', action='store_true',
+    parser.add_argument(
+        '--no-one-side-skip', action='store_true',
         help="Don't skip when one prev_prime is very small")
 
     return parser
 
 
-#---- gap_testing ----#
-
+# ---- gap_testing ---- #
 
 # NOTE: Manager is prime_gap_test maintains workers who run process_line.
 def process_line(
@@ -84,7 +95,6 @@ def process_line(
         thread_i, SL, K, P, D, megagap,
         primes, remainder):
     def cleanup(*_):
-        #print(f"\tThread {thread_i} stopping")
         work_q.close()
         work_q.join_thread()
         results_q.close()
@@ -93,8 +103,7 @@ def process_line(
         exit(0)
 
     # Calculate extended gap (see gap_stats)
-    prob_prime_coprime, coprime_extended = \
-            gap_test_stats.setup_extended_gap(SL, P, D, prob_prime)
+    prob_prime_coprime, coprime_extended = gap_test_stats.setup_extended_gap(SL, P, D, prob_prime)
     K_mod_d = K % D
 
     # Ignore KeyboardInterrupt (Manager catches first and sets early_stop_flag)
@@ -173,7 +182,7 @@ def process_line(
                 results_q.put((
                     m, mi, log_n,
                     unknown_l, unknown_u,
-                    0, -1, # next_p = -1, indicates partial result
+                    0, -1,  # next_p = -1, indicates partial result
                     p_tests, prev_p,
                     0, 0, prev_time))
 
@@ -226,7 +235,7 @@ def run_in_parallel(
     assert args.threads in range(1, 65), args.threads
 
     early_stop_flag = multiprocessing.Event()
-    work_q    = multiprocessing.JoinableQueue()
+    work_q = multiprocessing.JoinableQueue()
     results_q = multiprocessing.Queue()
 
     # Try to keep at least this many in the queue
@@ -375,7 +384,7 @@ def prime_gap_test(args):
     max_prime = args.max_prime
 
     K, K_digits, K_bits, K_log = gap_utils.K_and_stats(args)
-    M_log    = K_log + math.log(M)
+    M_log = K_log + math.log(M)
     min_merit_gap = int(args.min_merit * M_log)
     print("K = {} bits, {} digits, log(K) = {:.2f}".format(
         K_bits, K_digits, K_log))
@@ -393,7 +402,7 @@ def prime_gap_test(args):
         min_record = record_gaps[0] / M_log
         # Look 250 records later and check if contains more than half of numbers
         avg_record = next(record_gaps[r] for r in range(len(record_gaps) - 250)
-                if record_gaps[r + 250] - record_gaps[r] < 1000)
+            if record_gaps[r + 250] - record_gaps[r] < 1000)
         print("\tMin merit for record {:.2f}, gapsize for likely record {:.2f} {}".format(
             min_record, avg_record / M_log, avg_record))
         if args.megagap:
@@ -436,7 +445,7 @@ def prime_gap_test(args):
 
     # ----- Main sieve loop.
 
-    sc   = gap_test_stats.StatCounters(time.time(), time.time())
+    sc = gap_test_stats.StatCounters(time.time(), time.time())
     data = gap_test_stats.GapData()
 
     valid_mi = [mi for mi in range(M_inc) if math.gcd(M + mi, D) == 1]
@@ -454,7 +463,7 @@ def prime_gap_test(args):
 
         # Load stats for prob_record
         temp = gap_test_stats.load_probs_only(conn, args)
-        assert len(temp.prob_merit_gap)  == len(valid_mi), "run ./gap_stats first"
+        assert len(temp.prob_merit_gap) == len(valid_mi), "run ./gap_stats first"
         assert len(temp.prob_record_gap) == len(valid_mi), "run ./gap_stats first"
         data.prob_merit_gap = temp.prob_merit_gap
         data.prob_record_gap = temp.prob_record_gap
@@ -492,7 +501,7 @@ def prime_gap_test(args):
             else:
                 # Requires reading more of the file,
                 # generates more interesting result (best, worst, average)
-                pi = sorted([(prob, mi) for mi, prob in zip(valid_mi, data_db.prob_record_gap)], reverse=True)
+                pi = sorted(zip(data_db.prob_record_gap, valid_mi), reverse=True)
                 unk_mi_of_interest = [pi[0][1], pi[-1][1], pi[len(pi)//2][1]]
                 print("Best, Worst, Avg m:", [M + mi for mi in unk_mi_of_interest])
 
@@ -510,7 +519,6 @@ def prime_gap_test(args):
         gap_test_plotting.plot_stuff(
             args, data_db, misc_db,
             min_merit_gap, record_gaps, prob_prime_after_sieve)
-
 
 
 if __name__ == "__main__":

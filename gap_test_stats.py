@@ -67,7 +67,7 @@ class GapData:
     # Values for each m in valid_mi
     expected_prev = []
     expected_next = []
-    expected_gap  = []
+    expected_gap = []
     prob_merit_gap = []
     prob_record_gap = []
 
@@ -78,15 +78,15 @@ class GapData:
 
 @dataclass
 class Misc:
-    prob_gap_side  = defaultdict(float)
-    prob_gap_comb  = defaultdict(float)
+    prob_gap_side = defaultdict(float)
+    prob_gap_comb = defaultdict(float)
 
     test_unknowns = {}
 
 
 def config_hash(config):
     """Shared with gap_stats to load/save range rid"""
-    h =          config.mstart
+    h = config.mstart
     h = h * 31 + config.minc
     h = h * 31 + config.p
     h = h * 31 + config.d
@@ -117,7 +117,7 @@ def load_records(conn, log_N):
             "WHERE gapsize BETWEEN ? AND ?",
             (SMALLEST_MISSING, largest_likely))
         # Any number not present in this list is 'missing'
-        all_gaps = range(SMALLEST_MISSING, largest_likely+1, 2)
+        all_gaps = range(SMALLEST_MISSING, largest_likely + 1, 2)
         missing = list(set(all_gaps) - set(g[0] for g in rv))
         records.extend(missing)
 
@@ -176,7 +176,7 @@ def load_stats(conn, args):
     # Will fail if non-present
     (data.expected_prev, data.expected_next, data.expected_gap,
      gap_prev, gap_next,
-     data.prob_merit_gap, data.prob_record_gap)= _zip_to_array(rv)
+     data.prob_merit_gap, data.prob_record_gap) = _zip_to_array(rv)
 
     interleaved = itertools.chain(*itertools.zip_longest(gap_prev, gap_next))
     data.experimental_side = array.array('i', (int(s) for s in interleaved if s and s > 0))
@@ -202,7 +202,7 @@ def save(conn, p, d, m, next_p, prev_p, merit,
     conn.execute(
         "REPLACE INTO result(P,D,m,next_p,prev_p,merit)"
         "VALUES(?,?,?,  ?,?,  ?)",
-        (p, d, m, next_p, prev_p,  round(merit,4)))
+        (p, d, m, next_p, prev_p, round(merit, 4)))
 
     conn.execute(
         """UPDATE m_stats
@@ -210,7 +210,7 @@ def save(conn, p, d, m, next_p, prev_p, merit,
             prp_next=prp_next+?, prp_prev=prp_prev+?,
             test_time=test_time+?
         WHERE p=? AND d=? AND m=?""",
-        (next_p, prev_p, round(merit,4),
+        (next_p, prev_p, round(merit, 4),
          n_tests, p_tests, test_time, p, d, m))
     conn.commit()
 
@@ -226,16 +226,16 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_pri
 
     prob_prime_coprime_p = 1
     for prime in P_primes:
-        prob_prime_coprime_p *= (1 - 1/prime)
+        prob_prime_coprime_p *= (1 - 1 / prime)
 
-    K_coprime = [math.gcd(K, i) == 1 for i in range(SL+1)]
+    K_coprime = [math.gcd(K, i) == 1 for i in range(SL + 1)]
 
     # See "Optimizing Choice Of D" in THEORY.md for why this is required
     count_coprime_p = 0
-    m_tests = [M+i for i in range(100) if math.gcd(M+i, D) == 1][:6]
+    m_tests = [M + i for i in range(100) if math.gcd(M + i, D) == 1][:6]
     for m in m_tests:
         N_mod_D = m * K % D
-        for i in range(1, SL+1):
+        for i in range(1, SL + 1):
             if K_coprime[i] and math.gcd(N_mod_D + i, D) == 1:
                 # assert gmpy2.gcd(N, K*D) == 1,
                 count_coprime_p += 1
@@ -247,7 +247,7 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_pri
 
     expected = count_coprime_p * (unknowns_after_sieve / prob_prime_coprime_p)
     print("\texpect {:.0f} left, {:.3%} of SL={} after {}M".format(
-        expected, expected / (SL + 1), SL, max_prime//10 ** 6))
+        expected, expected / (SL + 1), SL, max_prime // 10 ** 6))
     print("\t{:.3%} of {} digit numbers are prime".format(
         prob_prime, K_digits))
     print("\t{:.3%} of tests should be prime ({:.1f}x speedup)".format(
@@ -263,7 +263,6 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_pri
 
 def calculate_expected_gaps(
         SL, min_merit_gap, prob_nth, prob_longer, log_n, unknowns, data):
-
     for i, side in enumerate(unknowns):
         expected_length = 0
         for v, prob in zip(side, prob_nth):
@@ -293,14 +292,14 @@ def calculate_expected_gaps(
                 break
         else:
             # gap = (K + SL+1) - (K - lower) = SL+1 - lower
-            if -lower + SL+1 > min_merit_gap:
+            if -lower + SL + 1 > min_merit_gap:
                 p_merit += prob_i * prob_longer[len(unknowns[1])]
 
     for prob_j, upper in zip(prob_nth, unknowns[1]):
-        if SL+1 + upper > min_merit_gap:
+        if SL + 1 + upper > min_merit_gap:
             p_merit += prob_j * prob_longer[len(unknowns[0])]
 
-    if 2*SL+1 > min_merit_gap:
+    if 2 * SL + 1 > min_merit_gap:
         p_merit += prob_longer[len(unknowns[0])] * prob_longer[len(unknowns[1])]
 
     assert 0 <= p_merit <= 1.00, (p_merit, unknowns)
@@ -358,7 +357,7 @@ def setup_extended_gap(SL, P, D, prob_prime):
 
     Used in prob_record_one_sided
     """
-    K_primes = [p for p in range(2, P+1) if gmpy2.is_prime(p)]
+    K_primes = [p for p in range(2, P + 1) if gmpy2.is_prime(p)]
     prob_prime_coprime = prob_prime
     for p in K_primes:
         # multiples of d are handled in prob_record_one_side
@@ -424,7 +423,7 @@ def determine_test_threshold(args, data):
 
     return prob_threshold, {
         m: (p_merit, p_record) for m, p_merit, p_record in zip(
-                valid_m, data.prob_merit_gap, data.prob_record_gap)
+            valid_m, data.prob_merit_gap, data.prob_record_gap)
         if p_record >= prob_threshold
     }
 
@@ -433,14 +432,13 @@ def should_print_stats(
         args, sc, data, mi, m,
         unknown_l, unknown_u,
         prev_p, next_p):
-
     stop_t = time.time()
     print_secs = stop_t - sc.last_print_t
 
     # Print a little bit if we resume but mostly as we test.
-    if (args.megagap and sc.tested % 10 == 0) or sc.tested in (1,10,30,100,300,1000,3000) \
-            or (sc.tested and sc.tested % 5000 == 0) \
-            or m == data.last_m or print_secs > 1200:
+    if ((args.megagap and sc.tested % 10 == 0) or sc.tested in (1, 10, 30, 100, 300, 1000, 3000)
+            or (sc.tested and sc.tested % 5000 == 0)
+            or m == data.last_m or print_secs > 1200):
         secs = stop_t - sc.start_t
 
         print("\t{:3d} {:4d} <- unknowns -> {:-4d}\t{:4d} <- gap -> {:-4d}".format(
@@ -468,11 +466,12 @@ def should_print_stats(
 
         total_unknown = sc.t_unk_low + sc.t_unk_hgh
         if total_unknown:
-            print("\t    unknowns   {:<9d} (avg: {:.2f}), {:.2f}% composite  {:.2f}% <- % -> {:.2f}%".format(
+            print("\t    unknowns   {:<9d} (avg: {:.2f}), {:.2%} composite  "
+                  "{:.2%} <- % -> {:.2%}".format(
                 total_unknown, total_unknown / sc.tested,
-                100 * (1 - total_unknown / ((2 * args.sieve_length + 1) * sc.tested)),
-                100 * sc.t_unk_low / total_unknown,
-                100 * sc.t_unk_hgh / total_unknown))
+                (1 - total_unknown / ((2 * args.sieve_length + 1) * sc.tested)),
+                sc.t_unk_low / total_unknown,
+                sc.t_unk_hgh / total_unknown))
         prp_tests = sc.total_prp_tests
         if sc.tested and prp_tests:
             print("\t    prp tests  {:<9d} (avg: {:.2f}/side, {:.2f}/m) ({:.3f} tests/sec)".format(
@@ -480,7 +479,8 @@ def should_print_stats(
             if sc.one_side_skips:
                 avg_prob_side = sc.prob_record_processed / sc.sides_processed
                 avg_prob_no_skip = sc.prob_record_all / (2 * sc.tested)
-                print("\t    side skips {:<9d} ({:.1%}) (avg prob_record {:.3g}/side, {:.3g}/m/2, {:+.1%})".format(
+                print("\t    side skips {:<9d} ({:.1%}) "
+                      "(avg prob_record {:.3g}/side, {:.3g}/m/2, {:+.1%})".format(
                     sc.one_side_skips, sc.one_side_skips / sc.tested,
                     avg_prob_side, avg_prob_no_skip, avg_prob_side / avg_prob_no_skip - 1))
 
@@ -511,9 +511,7 @@ def process_result(conn, args, record_gaps, m_probs, data, sc, result):
     gap = next_p + prev_p
     merit = gap / r_log_n
 
-    save(conn,
-        args.p, args.d, m, next_p, prev_p, merit,
-        n_tests, p_tests, test_time)
+    save(conn, args.p, args.d, m, next_p, prev_p, merit, n_tests, p_tests, test_time)
 
     if next_p < 0 or prev_p < 0:
         # partial result don't print anything
@@ -567,7 +565,7 @@ def process_result(conn, args, record_gaps, m_probs, data, sc, result):
             mi, m,
             unknown_l, unknown_u,
             prev_p, next_p,
-            ):
+    ):
         sc.best_merit_interval = 0
         sc.best_merit_interval_m = -1
         sc.last_print_t = time.time()

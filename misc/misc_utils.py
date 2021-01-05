@@ -33,7 +33,8 @@ def factor_simple(d):
     # Most d are a primorial so this is quite quick
     factors = []
     for p in range(2, int(math.sqrt(d)+2)):
-        if p*p > d: break
+        if p*p > d:
+            break
         while d % p == 0:
             factors.append(p)
             d //= p

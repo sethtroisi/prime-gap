@@ -34,23 +34,28 @@ import primegapverify
 def get_arg_parser():
     parser = argparse.ArgumentParser('Search prime gaps logs')
 
-    parser.add_argument('--logs-directory', type=str,
+    parser.add_argument(
+        '--logs-directory', type=str,
         default="logs",
         help="directory of logs")
 
-    parser.add_argument('--search-db', type=str,
+    parser.add_argument(
+        '--search-db', type=str,
         default="prime-gap-search.db",
         help="Prime database from gap_test")
 
-    parser.add_argument('--prime-gaps-db', type=str,
+    parser.add_argument(
+        '--prime-gaps-db', type=str,
         default="gaps.db",
         help="Prime gap database see github.com/primegap-list-project/prime-gap-list")
 
-    parser.add_argument('--whoami', type=str,
+    parser.add_argument(
+        '--whoami', type=str,
         default="S.Troisi",
         help="Name in gap database to ignore for already submitted records")
 
-    parser.add_argument('--ignore-small', nargs='?',
+    parser.add_argument(
+        '--ignore-small', nargs='?',
         const=0, default=8, type=int,
         help="Ignore 'records' with small merit (default: 8 or passed arg)")
 
@@ -58,24 +63,24 @@ def get_arg_parser():
 
 
 def describe_found_gaps(gaps):
-    gaps_by_size  = sorted(g[0] for g in gaps)
+    gaps_by_size = sorted(g[0] for g in gaps)
     gaps_by_merit = defaultdict(list)
     for gap in gaps:
         gaps_by_merit[int(gap[1])].append(gap)
 
-    print ("Found {} gaps  ({:<6} to {:>6})".format(
+    print("Found {} gaps  ({:<6} to {:>6})".format(
         len(gaps_by_size), gaps_by_size[0], gaps_by_size[-1]))
-    print ("      {} merit ({:.3f} to {:.3f})".format(
-        " "*len(str(len(gaps_by_size))),
+    print("      {} merit ({:.3f} to {:.3f})".format(
+        " " * len(str(len(gaps_by_size))),
         min(g[1] for g in gaps), max(g[1] for g in gaps)))
     for int_merit, items in sorted(gaps_by_merit.items()):
-        print ("    Merit {:<2} x{:<4} | {}".format(
+        print("    Merit {:<2} x{:<4} | {}".format(
             int_merit,
             len(items),
             ", ".join([str(rec[0]) for rec in sorted(items)[:2]] +
                       ["..."] * (len(items) > 2))
         ))
-    print ()
+    print()
 
 
 def print_record_gaps(args, gaps):
@@ -84,92 +89,93 @@ def print_record_gaps(args, gaps):
         assert num_gaps > 50000, num_gaps
         min_merit, max_merit = conn.execute(
             'SELECT min(merit), max(merit) FROM gaps').fetchone()
-        print ("Records, {} gaps merit {:.2f} to {:.2f}".format(
+        print("Records, {} gaps merit {:.2f} to {:.2f}".format(
             num_gaps, min_merit, max_merit))
 
-        print ("Checking", len(gaps), "gaps against records")
+        print("Checking", len(gaps), "gaps against records")
         small_merit = 0
         own_records = []
         record_lines = []
         for gap in gaps:
-                # gapsize, merit, raw_data, startprime, "line"
-                size = gap[0]
-                new_merit = gap[1]
-                raw_data = gap[2]
-                startprime = gap[3]
-                # These filters generated with
-                # sqlite3 gaps.db  "select min(merit) from gaps where gapsize BETWEEN 1500 AND 50000;"
-                if size <= 30000 and new_merit < 21.9:
-                    continue
-                if size <= 50000 and new_merit < 18:
-                    continue
-                if size <= 100000 and new_merit < 10.4:
-                    continue
+            # gapsize, merit, raw_data, startprime, "line"
+            size = gap[0]
+            new_merit = gap[1]
+            raw_data = gap[2]
+            startprime = gap[3]
+            # These filters generated with
+            # sqlite3 gaps.db  "select min(merit) from gaps where gapsize BETWEEN 1500 AND 50000;"
+            if size <= 30000 and new_merit < 21.9:
+                continue
+            if size <= 50000 and new_merit < 18:
+                continue
+            if size <= 100000 and new_merit < 10.4:
+                continue
 
-                existing = conn.execute(
-                    'SELECT merit,primedigits,startprime,discoverer FROM gaps WHERE'
-                    ' gapsize=?', (size,)).fetchone()
+            existing = conn.execute(
+                'SELECT merit,primedigits,startprime,discoverer FROM gaps WHERE'
+                ' gapsize=?', (size,)).fetchone()
 
-                if not existing:
-                    if new_merit < args.ignore_small and size < 1000000:
-                        small_merit += 1
-                        continue
-
-                    record_lines.append(raw_data)
-                    print ("\tRecord {:5} | {:70s} | Gap={:<6} (New!)".format(
-                        len(record_lines), raw_data, size))
+            if not existing:
+                if new_merit < args.ignore_small and size < 1000000:
+                    small_merit += 1
                     continue
 
-                # Works most of the time, could have false positives
-                is_same = existing[2].replace(" ","") in startprime.replace(" ", "")
-                is_own_record = existing[3] == args.whoami
+                record_lines.append(raw_data)
+                print("\tRecord {:5} | {:70s} | Gap={:<6} (New!)".format(
+                    len(record_lines), raw_data, size))
+                continue
 
-                if is_same and not is_own_record:
-                    print("\tREDISCOVERED | {:70s} (old: {})".format(raw_data, existing))
-                    continue
+            # Works most of the time, could have false positives
+            is_same = existing[2].replace(" ", "") in startprime.replace(" ", "")
+            is_own_record = existing[3] == args.whoami
 
-                # If obvious not an improvement don't call parse(...)
-                if existing[0] > new_merit + 0.04:
-                    improvement = new_merit - existing[0] + 6e-3
+            if is_same and not is_own_record:
+                print("\tREDISCOVERED | {:70s} (old: {})".format(raw_data, existing))
+                continue
+
+            # If obvious not an improvement don't call parse(...)
+            if existing[0] > new_merit + 0.04:
+                improvement = new_merit - existing[0] + 6e-3
+            else:
+                old_n = primegapverify.parse(existing[2])
+                if old_n:
+                    # Strip to just the number section
+                    new_n = primegapverify.parse(startprime)
+                    assert new_n, new_n
+                    improvement = float(size / gmpy2.log(new_n) - size / gmpy2.log(old_n))
                 else:
-                    old_n = primegapverify.parse(existing[2])
-                    if old_n:
-                        # Strip to just the number section
-                        new_n = primegapverify.parse(startprime)
-                        assert new_n, new_n
-                        improvement = float(size/gmpy2.log(new_n) - size/gmpy2.log(old_n))
-                    else:
-                        improvement = new_merit - existing[0] + 6e-3
+                    improvement = new_merit - existing[0] + 6e-3
 
-                if improvement >= 0:
-#                    if not is_same and improvement < 6e-3:
-#                        print ("Close:", existing[2], "vs newer", startprime)
+            if improvement >= 0:
+                # if not is_same and improvement < 6e-3:
+                #    print("Close:", existing[2], "vs newer", startprime)
 
-                    if is_same and is_own_record:
-                        own_records.append(raw_data)
-                        ith = len(own_records)
-                        special = ith in (1,2,5,10,20,50) or ith % 100 == 0
-                        if not special: continue
-                    else:
-                        record_lines.append(raw_data)
+                if is_same and is_own_record:
+                    own_records.append(raw_data)
+                    ith = len(own_records)
+                    special = ith in (1, 2, 5, 10, 20, 50) or ith % 100 == 0
+                    if not special:
+                        continue
+                else:
+                    record_lines.append(raw_data)
 
-                    print ("\tRecord {:5} | {:70s} | Gap={:<6} (old: {:.2f}{} +{:.2f})".format(
-                        str(len(own_records)) + "*" if is_same else len(record_lines), gap[4], size,
-                        existing[0], " by you" * is_own_record, new_merit - existing[0]))
+                print("\tRecord {:5} | {:70s} | Gap={:<6} (old: {:.2f}{} +{:.2f})".format(
+                    str(len(own_records)) + "*" if is_same else len(record_lines), gap[4], size,
+                    existing[0], " by you" * is_own_record, new_merit - existing[0]))
 
         if record_lines:
-            print ()
+            print()
             for line in record_lines:
-                print (line)
-            print ()
-            print ("Records({}) {}".format(
+                print(line)
+            print()
+            print("Records({}) {}".format(
                 len(record_lines),
                 f"({len(own_records)} already submitted)" if own_records else ""))
             print("Smallst:", min(record_lines))
             print("Largest:", max(record_lines))
             if small_merit:
                 print(f'\tHid {small_merit} new "records" with merit < {args.ignore_small}')
-            print ()
+            print()
 
 
 def search_logs(args):
@@ -187,18 +193,19 @@ def search_logs(args):
         with open(log_fn, "r") as f:
             lines = f.readlines()
 
-        print ("Processing {:5d} lines from log: {}".format(
+        print("Processing {:5d} lines from log: {}".format(
             len(lines), log_fn))
 
         file_match = 0
         for li, line in enumerate(lines):
-            if ' ' not in line: continue
+            if ' ' not in line:
+                continue
             match = record_format.search(line)
             if match:
                 file_match += 1
                 if file_match < 6:
                     partial_line = line.split(':')[-1].strip()
-                    print ("    Match {} at line {}: {}".format(
+                    print("    Match {} at line {}: {}".format(
                         file_match, li, partial_line))
 
                 gaps.append([
@@ -218,7 +225,7 @@ def search_logs(args):
         describe_found_gaps(gaps)
         print_record_gaps(args, gaps)
     else:
-        print ("Didn't find any gaps in logs directory({})".format(
+        print("Didn't find any gaps in logs directory({})".format(
             args.logs_directory))
 
 
@@ -231,7 +238,7 @@ def search_db(args):
 
         num_gaps = conn.execute('SELECT COUNT(*) FROM result').fetchone()[0]
         assert num_gaps > 100, num_gaps
-        print (f"{num_gaps} results in {args.search_db!r}")
+        print(f"{num_gaps} results in {args.search_db!r}")
 
         # Min gap for current record (filters 80% of results)
         existing = conn.execute(
@@ -242,7 +249,6 @@ def search_db(args):
                     (gapsize > 50000 AND merit > 15.3) OR
                     (gapsize > 70000 AND merit > 10.4) OR
                     (gapsize > 100000))"""
-#            'ORDER BY p, d, m'
         ).fetchall()
         for gap in existing:
             gapsize = gap['gapsize']
@@ -263,7 +269,6 @@ def search_db(args):
     print_record_gaps(args, gaps)
 
 
-
 if __name__ == "__main__":
     parser = get_arg_parser()
     args = parser.parse_args()
@@ -281,6 +286,5 @@ if __name__ == "__main__":
         search_db(args)
 
     if neither:
-        print ("Must pass --logs-directory or --search-db 'gaps.db'")
+        print("Must pass --logs-directory or --search-db 'gaps.db'")
         sys.exit(1)
-
