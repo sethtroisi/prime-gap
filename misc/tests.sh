@@ -32,7 +32,7 @@ TEST_DB="local_tests.db"
 #### SETUP ####
 
 make --quiet clean
-make --quiet combined_sieve gap_stats gap_test_simple -j3
+make --quiet combined_sieve gap_stats gap_test_simple -j3 VALIDATE_FACTORS=1
 
 rm -f "$TEST_DB" "unknowns/907_2190_1_200_s11000_l100M."{txt,m1.txt} "unknowns/$FN2"
 sqlite3 $TEST_DB < schema.sql

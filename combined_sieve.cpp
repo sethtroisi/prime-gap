@@ -991,6 +991,20 @@ void method2_increment_print(
         setlocale(LC_NUMERIC, "C");
 }
 
+void validate_factor_m_k_x(
+        method2_stats& stats,
+        mpz_t &test, mpz_t &K, int64_t m, uint32_t X,
+        uint64_t prime, uint32_t SL) {
+#ifdef GMP_VALIDATE_FACTORS
+    stats.validated_factors += 1;
+    mpz_mul_ui(test, K, m);
+    mpz_sub_ui(test, test, SL);
+    mpz_add_ui(test, test, X);
+    uint64_t mod = mpz_fdiv_ui(test, prime);
+    assert(mod == 0);
+#endif  // GMP_VALIDATE_FACTORS
+}
+
 // Would be nice to pass const but CTRL+C handler changes max_prime
 void prime_gap_parallel(struct Config& config) {
     // Method2
@@ -1292,16 +1306,8 @@ void prime_gap_parallel(struct Config& config) {
                         bool firstIsEven = lowIsEven == evenFromLow;
 
                         #ifdef GMP_VALIDATE_FACTORS
-                            stats.validated_factors += 1;
-
-                            mpz_mul_ui(test, K, M_start + mi);
-                            mpz_sub_ui(test, test, SIEVE_LENGTH);
-                            assert( (mpz_even_p(test) > 0) == lowIsEven );
-
-                            mpz_add_ui(test, test, first);
+                            validate_factor_m_k_x(stats, test, K, M_start + mi, first, prime, SL);
                             assert( (mpz_even_p(test) > 0) == firstIsEven );
-
-                            assert( 0 == mpz_fdiv_ui(test, prime) );
                             assert( mpz_odd_p(test) != firstIsEven );
                         #endif  // GMP_VALIDATE_FACTORS
 
@@ -1438,15 +1444,8 @@ void prime_gap_parallel(struct Config& config) {
                 }
 
 #ifdef GMP_VALIDATE_FACTORS
-                {
-                    stats.validated_factors += 1;
-                    mpz_mul_ui(test, K, m);
-                    mpz_sub_ui(test, test, SIEVE_LENGTH);
-                    mpz_add_ui(test, test, X);
-                    uint64_t mod = mpz_fdiv_ui(test, prime);
-                    assert( mod == 0 );
-                    assert( mpz_odd_p(test) );
-                }
+                validate_factor_m_k_x(stats, test, K, M_start + mi, X, prime, SL);
+                assert( mpz_odd_p(test) );
 #endif  // GMP_VALIDATE_FACTORS
             }
         }
@@ -1484,10 +1483,11 @@ void prime_gap_parallel(struct Config& config) {
 
             stats.m_stops_interval += 1;
 
-            // With D even, (ms + mi) must be odd (or share a factor of 2)
+            // With D even (K odd), (ms + mi) must be odd (or D and m will share a factor of 2)
             // Helps avoid wide memory read
             uint32_t m = M_start + mi;
-            if (((D & 1) == 0) && ((m & 1) == 0)) {
+            if (K_odd && ((m & 1) == 0)) {
+                // assert(m_reindex[mi] < 0);
                 return;
             }
 
@@ -1515,12 +1515,8 @@ void prime_gap_parallel(struct Config& config) {
             if (0) {
 #endif
                 stats.validated_factors += 1;
-                mpz_mul_ui(test, K, M_start + mi);
-                mpz_sub_ui(test, test, SIEVE_LENGTH);
-                mpz_add_ui(test, test, first);
-                uint64_t mod = mpz_fdiv_ui(test, prime);
-                assert( mod == 0 );
-                assert( mpz_odd_p(test) );
+                validate_factor_m_k_x(stats, test, K, m, first, prime, SIEVE_LENGTH);
+//                assert( mpz_odd_p(test) );
             }
 
             int64_t dist = first - SIEVE_LENGTH;
