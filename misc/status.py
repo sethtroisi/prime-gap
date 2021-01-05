@@ -21,7 +21,6 @@ sys.path.append(".")
 import argparse
 import glob
 import os.path
-import math
 import sqlite3
 from collections import defaultdict
 
@@ -32,7 +31,8 @@ import misc_utils
 def get_arg_parser():
     parser = argparse.ArgumentParser('Search prime gaps logs')
 
-    parser.add_argument('--search-db', type=str,
+    parser.add_argument(
+        '--search-db', type=str,
         default="prime-gap-search.db",
         help="Prime database from gap_test")
 
@@ -99,6 +99,7 @@ def build_and_count_pd_results(results, ranges, lookup):
 
         # In order find if uncovered
         new_range = [0, 0, 0]
+        found = False
         last_found = True
         for m in ms:
             found = False
@@ -131,6 +132,7 @@ def build_and_count_pd_results(results, ranges, lookup):
                 ranges[key][0] = 41
             elif count > 0:
                 ranges[key][0] = 30 + (status % 10)
+
 
 def check_processed(args):
     """
@@ -186,7 +188,7 @@ def print_results(conn, ranges, lookup):
     def sort_by_status(range_kv):
         # Sort by status high to low
         # P, D, ms, mi
-        return (-range_kv[1][0], range_kv[0])
+        return -range_kv[1][0], range_kv[0]
 
     print()
     display_order = sorted(ranges.items(), key=sort_by_status)
@@ -228,7 +230,7 @@ def print_results(conn, ranges, lookup):
                     "(with partial results) " * (status == 30)))
                 print (f"\t./combined_sieve --save-unknowns {unk_fn_param}\n")
                 print ("\tor deleted with")
-                print (f"\tsqlite3 {args.search_db} 'PRAGMA foreign_keys=1; "\
+                print (f"\tsqlite3 {args.search_db} 'PRAGMA foreign_keys=1; "
                        f"DELETE FROM range WHERE rid={r['rid']}; SELECT TOTAL_CHANGES()'\n")
         elif status == 21:
             mstatus = check_mstatus(conn, p, d, ms, ms + mi - 1)

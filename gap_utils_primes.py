@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import subprocess
 import time
 import tempfile
@@ -24,7 +25,7 @@ try:
     # primegapverify is only alpha so don't require it yet
     import primegapverify
     has_pgv = True
-except:
+except ModuleNotFoundError:
     has_pgv = False
 
 
@@ -45,7 +46,7 @@ def openPFGW_is_prime(str_n):
 
 
 def openPFGW_ABC(m, K, offsets):
-    '''
+    """
     See pfgw's abcfileformats.txt for details
 
     Produces a temp file with this content
@@ -57,7 +58,7 @@ def openPFGW_ABC(m, K, offsets):
       ...
 
     pfgw then tests till the first prime
-    '''
+    """
 
     assert len(offsets) < 50000, len(offsets)
 
@@ -106,7 +107,7 @@ def determine_prev_prime(m, str_n, K, unknowns, SL, primes, remainder):
 
     for i in unknowns:
         assert i < 0
-        tests += 1;
+        tests += 1
         if is_prime(center + i, str_n, i):
             return tests, -i
 

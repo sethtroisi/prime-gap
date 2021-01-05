@@ -18,14 +18,10 @@
 #include <clocale>
 #include <cmath>
 #include <csignal>
-#include <cstdint>
 #include <cstdio>
-#include <ctime>
-#include <fstream>
 #include <functional>
 #include <iostream>
 #include <map>
-#include <utility>
 #include <vector>
 
 #include <gmp.h>
@@ -210,7 +206,8 @@ void set_defaults(struct Config& config) {
             // Remove any factors of D
             K_primes.erase(
                 std::remove_if(K_primes.begin(), K_primes.end(),
-                   [&](uint32_t p){ return config.d % p == 0; }));
+                   [&](uint32_t p){ return config.d % p == 0; }),
+                K_primes.end());
         }
 
         // K = #P/D
@@ -322,8 +319,8 @@ void set_defaults(struct Config& config) {
 }
 
 
-void insert_range_db(
-        const struct Config config,
+static void insert_range_db(
+        const struct Config& config,
         long num_rows,
         float time_sieve) {
 
@@ -348,8 +345,8 @@ void insert_range_db(
             num_rows,
             time_sieve, time_sieve);
 
-    char *zErrMsg = 0;
-    int rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
+    char *zErrMsg = nullptr;
+    int rc = sqlite3_exec(db, sSQL, nullptr, nullptr, &zErrMsg);
     if (rc != SQLITE_OK) {
         printf("\nrange INSERT failed %d: %s\n",
             rc, sqlite3_errmsg(db));
@@ -447,7 +444,7 @@ void prime_gap_search(const struct Config& config) {
 
     // To save space, only save remainder for primes that divide ANY m in range.
     // This helps with memory usage when MAX_PRIME >> SL * MINC;
-    std::vector<p_and_r> *large_prime_queue = new vector<p_and_r>[M_inc];
+    auto *large_prime_queue = new vector<p_and_r>[M_inc];
     {
         size_t pr_pi = 0;
         if (config.verbose >= 0) {
@@ -533,8 +530,8 @@ void prime_gap_search(const struct Config& config) {
                 (pi - SMALL_PRIME_PI) - pr_pi,
                 100 - (100.0 * pr_pi / (pi - SMALL_PRIME_PI)));
 
-            float mertens3 = log(log(MAX_PRIME)) - log(log(SMALL_PRIME_LIMIT_METHOD1));
-            float theory_count = (2 * SL + 1) * mertens3;
+            double mertens3 = log(log(MAX_PRIME)) - log(log(SMALL_PRIME_LIMIT_METHOD1));
+            double theory_count = (2 * SL + 1) * mertens3;
             printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
                 expected_primes_per, theory_count);
             setlocale(LC_NUMERIC, "C");
@@ -604,6 +601,7 @@ void prime_gap_search(const struct Config& config) {
 
             // Not technically correct but fine to skip modulo == 0
             int first_negative = pr.first - modulo;
+            assert(first_negative >= 0);
             for (size_t x = first_negative; x <= SIEVE_LENGTH; x += pr.first) {
                 composite[1][x] = true;
             }
@@ -706,8 +704,8 @@ void prime_gap_search(const struct Config& config) {
     }
 
     {
-        float primes_per_m = s_large_primes_tested / s_tests;
-        float error_percent = 100.0 * fabs(expected_primes_per - primes_per_m) /
+        double primes_per_m = s_large_primes_tested / s_tests;
+        double error_percent = 100.0 * fabs(expected_primes_per - primes_per_m) /
             expected_primes_per;
         if (config.verbose >= 2 || error_percent > 0.5 ) {
             printf("\n");
@@ -724,7 +722,7 @@ void prime_gap_search(const struct Config& config) {
 
     // Should be cleaning up after self.
     for(uint32_t mi = 0; mi < M_inc; mi++)  {
-        assert( large_prime_queue[mi].size() == 0 );
+        assert( large_prime_queue[mi].empty() );
     }
 
     // ----- cleanup
@@ -738,7 +736,7 @@ void prime_gap_search(const struct Config& config) {
 // Method 2
 
 void save_unknowns_method2(
-        const struct Config config,
+        const struct Config& config,
         const vector<int32_t> &valid_mi,
         const vector<int32_t> &m_reindex,
         const vector<uint32_t> &i_reindex,
@@ -896,7 +894,7 @@ void method2_increment_print(
         double skipped_prp, double prp_time_est,
         vector<bool> *composite,
         method2_stats &stats,
-        const struct Config config
+        const struct Config& config
 ) {
         if (prime >= stats.next_print) {
             const size_t max_mult = 100'000'000'000;
@@ -931,7 +929,7 @@ void method2_increment_print(
                 secs / valid_ms);
             if (int_secs > 240) {
                 // Add " @ HH:MM:SS" so that it is easier to predict when the next print will happen
-                time_t rawtime = std::time(NULL);
+                time_t rawtime = std::time(nullptr);
                 struct tm *tm = localtime( &rawtime );
                 printf(" @ %d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec);
             }

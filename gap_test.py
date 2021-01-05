@@ -15,7 +15,6 @@
 # limitations under the License.
 
 import argparse
-import itertools
 import math
 import multiprocessing
 import os
@@ -23,8 +22,6 @@ import signal
 import sqlite3
 import time
 import queue
-from collections import defaultdict
-from dataclasses import dataclass
 
 import gmpy2
 
@@ -206,10 +203,8 @@ def run_in_parallel(
         prob_prime, prob_prime_after_sieve,
         existing,
         K, K_log,
-        data, sc, misc
+        data, sc
 ):
-    min_merit_gap = int(args.min_merit * (K_log + math.log(args.mstart)))
-
     # XXX: Cleanup after gmpy2.prev_prime.
     # Remainders of (p#/d) mod prime
     primes = tuple([p for p in range(3, 80000+1) if gmpy2.is_prime(p)])
@@ -292,7 +287,7 @@ def run_in_parallel(
             if is_partial:
                 # Should always run partial results even if don't match prob_threshold.
                 if m not in m_probs or m_probs[m][1] < prob_threshold:
-                    m_probs[m] = (1.01 * prob_threshold for i in range(2))
+                    m_probs[m] = (1.01 * prob_threshold for _ in range(2))
 
             # Check if prob_record < threshold
             if m not in m_probs or m_probs[m][1] < prob_threshold:
@@ -336,7 +331,7 @@ def run_in_parallel(
         early_stop_flag.set()
 
     print("No more work pushing NONE")
-    for p in processes:
+    for _ in processes:
         work_q.put(None)
 
     while sc.tested < sc.will_test:
@@ -360,7 +355,7 @@ def run_in_parallel(
 
     print("Joining work_q (should be instant)")
     work_q.join()
-    work_q.close();
+    work_q.close()
     work_q.join_thread()
 
     print(f"Joining {len(processes)} processes")
@@ -443,8 +438,6 @@ def prime_gap_test(args):
 
     sc   = gap_test_stats.StatCounters(time.time(), time.time())
     data = gap_test_stats.GapData()
-    misc = gap_test_stats.Misc()
-    misc_db = None
 
     valid_mi = [mi for mi in range(M_inc) if math.gcd(M + mi, D) == 1]
     data.first_m = M + valid_mi[0]
@@ -472,7 +465,7 @@ def prime_gap_test(args):
             prob_prime, prob_prime_after_sieve,
             existing,
             K, K_log,
-            data, sc, misc
+            data, sc
         )
 
     # ----- Plots
@@ -482,10 +475,9 @@ def prime_gap_test(args):
         data_db.valid_mi = valid_mi
 
         assert len(data_db.experimental_gap) >= len(data.experimental_gap)
-        assert misc_db.prob_gap_comb, len(misc.prob_gap_comb)
+        assert misc_db.prob_gap_comb, len(misc_db.prob_gap_comb)
 
         del data
-        del misc
 
         if False:
             # VERY slowly validates gap_stats results.
@@ -506,7 +498,7 @@ def prime_gap_test(args):
 
             for mi in valid_mi:
                 line = unknown_file_repeat.readline()
-                assert line, (mi)
+                assert line, mi
                 if mi in unk_mi_of_interest:
                     _, _, _, unknowns = gap_utils.parse_unknown_line(line)
                     # TODO append valid_mi[k] and prob
@@ -516,7 +508,7 @@ def prime_gap_test(args):
                         break
 
         gap_test_plotting.plot_stuff(
-            args, conn, sc, data_db, misc_db,
+            args, data_db, misc_db,
             min_merit_gap, record_gaps, prob_prime_after_sieve)
 
 

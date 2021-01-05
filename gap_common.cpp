@@ -15,19 +15,13 @@
 #include "gap_common.h"
 
 #include <algorithm>
-#include <cassert>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <fstream>
 #include <getopt.h>
 #include <iostream>
 #include <limits>
-#include <map>
-#include <string>
-#include <tuple>
-#include <vector>
 
 /* for dirname(3) */
 #include <libgen.h>
@@ -676,7 +670,6 @@ Config Args::argparse(int argc, char* argv[]) {
         {"max-prime",        required_argument, 0,   5  },
 
         {"min-merit",        required_argument, 0,   3  },
-        {"run-prp",          no_argument,       0,   6  },
 
         {"save",             no_argument,       0,   7  },
         {"save-unknowns",    no_argument,       0,   7  },
@@ -779,9 +772,6 @@ Config Args::argparse(int argc, char* argv[]) {
                 config.max_prime = atol(optarg) * 1'000'000;
                 break;
 
-            case 6:
-                config.run_prp = true;
-                break;
             case 7:
                 config.save_unknowns = true;
                 break;

@@ -14,10 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import sys
-# Hack to allow import of gap_utils
-sys.path.append(".")
-
 import argparse
 import csv
 import glob
@@ -26,37 +22,49 @@ import sqlite3
 import subprocess
 import time
 
+import sys
+# Hack to allow import of gap_utils
+sys.path.append(".")
+
 import gap_utils
 import misc_utils
 
 
 LOGS_DIR = "logs"
 
+
 def get_arg_parser():
     parser = argparse.ArgumentParser('Search prime gaps logs')
 
-    parser.add_argument('--search-db', type=str,
+    parser.add_argument(
+        '--search-db', type=str,
         default="prime-gap-search.db",
         help="Prime database from gap_test")
 
-    parser.add_argument('-p', type=int, required=True,
+    parser.add_argument(
+        '-p', type=int, required=True,
         help="Prime to finalize")
-    parser.add_argument('-d', type=int, required=True,
+    parser.add_argument(
+        '-d', type=int, required=True,
         help="Divisor to finalize")
 
-    parser.add_argument('--mstart', type=int, default=1,
+    parser.add_argument(
+        '--mstart', type=int, default=1,
         help="finalize m between mstart and mend")
 
-    parser.add_argument('--mend', type=int, default=10 ** 20,
+    parser.add_argument(
+        '--mend', type=int, default=10 ** 20,
         help="finalize m between mstart and mend")
 
-    parser.add_argument('--no-dump-csv', action="store_true",
+    parser.add_argument(
+        '--no-dump-csv', action="store_true",
         help="Don't save csv results to file in logs dir")
 
-    parser.add_argument('--csv-best-only', action="store_true",
+    parser.add_argument(
+        '--csv-best-only', action="store_true",
         help="Only dump higher merit m_stats rows")
 
-    #parser.add_argument('--delete-unknown-files', action='store_true',
+    # parser.add_argument('--delete-unknown-files', action='store_true',
     #    help="Should unknown files be deleted")
 
     return parser
@@ -71,16 +79,17 @@ def count_results(conn, p, d, ms, me):
         (p, d, ms, me)).fetchone()
     return count_r[0], count_m_stats[0]
 
+
 def check_contained(args, ms, minc):
     # Don't allow range to partially intersect [mstart, mend]
 
-    if ms < args.mstart < me:
-        print(f"[{ms},{me+1} = {ms} + {minc}) overlaps mstart({mstart})")
+    me = ms + minc - 1
+    if ms < args.mstart <= me:
+        print(f"[{ms},{me+1} = {ms} + {minc}) overlaps mstart({args.mstart})")
         exit(1)
 
-    me = ms + minc - 1
     if ms <= args.mend < me:
-        print(f"[{ms},{me+1} = {ms} + {minc}) overlaps mend({mend})")
+        print(f"[{ms},{me+1} = {ms} + {minc}) overlaps mend({args.mend})")
         exit(1)
 
     return args.mstart <= ms <= args.mend
@@ -137,7 +146,7 @@ def dump_query_to_file(conn, path, query, options):
         csv_writer = csv.writer(csv_file)
         cursor = conn.cursor()
         results = cursor.execute(query, options).fetchall()
-        print (f"\tWriting {len(results)}")
+        print(f"\tWriting {len(results)}")
 
         header = [i[0] for i in cursor.description]
         csv_writer.writerow(header)
@@ -190,7 +199,7 @@ def dump_to_file(conn, args, ranges, unknown_files):
     joined = merged_ms_mi(args, ranges, unknown_files)
     for _, _, ufn in joined:
         if ufn not in unknown_files:
-            print (f"\tExtra range: {ufn!r}")
+            print(f"\tExtra range: {ufn!r}")
 
     p = args.p
     d = args.d
@@ -209,11 +218,11 @@ def dump_to_file(conn, args, ranges, unknown_files):
             print(f"\tDumping m_stats to\t{results_csv_fn!r}")
             size = size_or_zero(results_csv_fn)
             if size > 10 * 1024:
-                print (f"\tAlready Processed {ufn!r} ({size//1024:,} kb)")
+                print(f"\tAlready Processed {ufn!r} ({size//1024:,} kb)")
             else:
                 if args.csv_best_only:
                     # Write partial m_stats to .csv file
-                    header, m_stats = dump_query_to_file(
+                    dump_query_to_file(
                         conn, results_csv_fn,
                         """
                         SELECT * FROM m_stats
@@ -224,7 +233,7 @@ def dump_to_file(conn, args, ranges, unknown_files):
                         (p, d, ms, me))
                 else:
                     # Write m_stats to .csv file
-                    header, m_stats = dump_query_to_file(
+                    dump_query_to_file(
                         conn, results_csv_fn,
                         'SELECT * FROM m_stats WHERE P=? AND D=? AND m BETWEEN ? AND ?',
                         (p, d, ms, me))
@@ -236,7 +245,7 @@ def dump_to_file(conn, args, ranges, unknown_files):
             subprocess.check_call([
                 "sqlite3", args.search_db,
                 "-readonly", "-header", "-csv", "-echo",
-                "-cmd", ".output "+ repr(stats_fn),
+                "-cmd", ".output " + repr(stats_fn),
                 f"""
                 SELECT * FROM range
                 WHERE P={p} AND D={d} AND m_start = {ms} AND m_inc = {mi};
@@ -295,7 +304,7 @@ def finalize_range_and_delete_low_merit(conn, args, ranges, unknown_files):
         (args.p, args.d, ms, me))
     deletes_results = cursor.rowcount
 
-    print (f"\tDeleted {deletes_m_stats} and {deletes_results} rows")
+    print(f"\tDeleted {deletes_m_stats} and {deletes_results} rows")
     print("rm", " ".join(unknown_files))
 
 
@@ -307,16 +316,16 @@ def attempt_finalize(args):
         conn.row_factory = sqlite3.Row
         sql_ranges = conn.execute('SELECT * FROM range ORDER BY m_start ASC').fetchall()
 
-        print ("{} ranges, {} unknown files".format(
+        print("{} ranges, {} unknown files".format(
             len(sql_ranges), len(unknown_fns)))
 
         # ---- Find ranges & unknown_files involved
         ranges, unknown_files = sql_ranges_and_files(args, sql_ranges, unknown_fns)
 
-        print ("{} matching ranges, {} matching files".format(
+        print("{} matching ranges, {} matching files".format(
             len(ranges), len(unknown_files)))
 
-        #assert verify_all_results(conn, ranges), "Not all results present"
+        # assert verify_all_results(conn, ranges), "Not all results present"
 
         conn.row_factory = None
         # Always dump stats, sometimes dump files
@@ -329,7 +338,6 @@ def attempt_finalize(args):
 
         # Delete low merit result & m_stat
         finalize_range_and_delete_low_merit(conn, args, ranges, unknown_files)
-
 
 
 if __name__ == "__main__":

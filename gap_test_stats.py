@@ -87,11 +87,11 @@ class Misc:
 def config_hash(config):
     """Shared with gap_stats to load/save range rid"""
     h =          config.mstart
-    h = h * 31 + config.minc;
-    h = h * 31 + config.p;
-    h = h * 31 + config.d;
-    h = h * 31 + config.sieve_length;
-    h = h * 31 + config.max_prime;
+    h = h * 31 + config.minc
+    h = h * 31 + config.p
+    h = h * 31 + config.d
+    h = h * 31 + config.sieve_length
+    h = h * 31 + config.max_prime
     return h % (2 ** 64)
 
 
@@ -138,7 +138,7 @@ def _zip_to_array(cursor):
     for row in cursor:
         if init:
             init = False
-            arrays = [array.array('f') for v in row]
+            arrays = [array.array('f') for _ in row]
 
         for i, v in enumerate(row):
             arrays[i].append(v)
@@ -182,8 +182,6 @@ def load_stats(conn, args):
     data.experimental_side = array.array('i', (int(s) for s in interleaved if s and s > 0))
     zipped_sum_gen = (int(p + n) for p, n in zip(gap_prev, gap_next) if p > 0 and n > 0)
     data.experimental_gap = array.array('i', zipped_sum_gen)
-
-    m_values = len(data.prob_merit_gap)
 
     rv = conn.execute(
         "SELECT gap, prob_combined, prob_low_side, prob_high_side "
@@ -366,7 +364,7 @@ def setup_extended_gap(SL, P, D, prob_prime):
         # multiples of d are handled in prob_record_one_side
         prob_prime_coprime /= (1 - 1 / p)
 
-    is_coprime = [True for i in range(2 * SL)]
+    is_coprime = [True for _ in range(2 * SL)]
     for p in K_primes:
         if D % p == 0:
             continue
@@ -382,7 +380,7 @@ def prob_record_one_sided(
         record_gaps, megagap, other_side,
         unknowns_high, prob_prime_after_sieve,
         m, K_mod_d, d, coprime_extended, prob_prime_coprime):
-    "Probability of record given one side"
+    """Probability of record given one side"""
     assert other_side > 0
     prob_record = 0
 
@@ -503,7 +501,7 @@ def should_print_stats(
 
 
 def process_result(conn, args, record_gaps, m_probs, data, sc, result):
-    ''' Handles new results '''
+    """Handles new results"""
     (m, mi, r_log_n, unknown_l, unknown_u,
      n_tests, next_p,
      p_tests, prev_p,

@@ -120,11 +120,11 @@ How many expected tests to find the next prime? one over the probability of prim
 As `P_limit` increases calculate how many fewer expected tests will be performed.
 
 ```python
-def ExpectedTests(test, m, K, old_limit, new_limit):
-        GAMMA = 0.57721566
-prob_p = 1 / log(m * K) - 1 / log(m * K) ** 2
-        # 1 / (prob_p * log(old_limit) * exp(GAMMA)) - 1 / (prob_p * log(new_limit) * exp(GAMMA)
-return 1 / (prob_p * math.exp(GAMMA)) * (1/math.log(old_limit) - 1/math.log(new_limit))
+def ExpectedTests(m, K, old_limit, new_limit):
+    GAMMA = 0.57721566
+    prob_p = 1 / log(m * K) - 1 / log(m * K) ** 2
+    # 1 / (prob_p * log(old_limit) * exp(GAMMA)) - 1 / (prob_p * log(new_limit) * exp(GAMMA)
+    return 1 / (prob_p * math.exp(GAMMA)) * (1/math.log(old_limit) - 1/math.log(new_limit))
 ```
 
 

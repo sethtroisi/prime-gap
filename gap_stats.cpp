@@ -19,14 +19,11 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <functional>
-#include <fstream>
 #include <iostream>
 #include <limits>
 #include <map>
 #include <numeric>
 #include <tuple>
-#include <utility>
 #include <vector>
 
 #include <gmp.h>
@@ -630,7 +627,7 @@ void prob_extended_gap(
     map<uint32_t, uint32_t> k_mod_p;
 
     uint32_t wheel = 1;
-    for (auto p : {2, 3, 5, 7}) {
+    for (uint32_t p : {2, 3, 5, 7}) {
         if (config.d % p == 0) {
             wheel *= p;
             prob_prime_coprime /= (1 - 1.0 / p);
@@ -1189,14 +1186,15 @@ void prob_record_vs_plimit(struct Config config) {
 
     vector<bool> composite(SIEVE_INTERVAL, 0);
 
-    int64_t prime, offset;
-    char delim;
+    int64_t prime = 0, offset = -1;
+    char delim = -1;
     while (unknown_file.good()) {
         unknown_file >> prime;
         assert(prime >= 2 && prime <= 10'000'000'000'000LL);
         config.max_prime = prime;
 
         unknown_file >> delim;
+        assert(delim > 0);
         assert(delim == ',');
 
         unknown_file >> offset;

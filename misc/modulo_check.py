@@ -24,7 +24,7 @@ def modulo_search(p, a, l, r):
 #        if test <= r:
 #            return mult
 
-        mult = (l - 1) // a;
+        mult = (l - 1) // a
         test = mult * a
         assert mult < l
         if a <= r - test:

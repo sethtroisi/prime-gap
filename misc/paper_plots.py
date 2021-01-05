@@ -52,7 +52,7 @@ def plot_record_vs_plimit():
     plt.rcParams.update({'mathtext.default':  'regular' })
 
     # Set up subplots.
-    fig = plt.figure(
+    plt.figure(
         "Probability of record gap vs P_limit",
         constrained_layout=True,
         figsize=(8, 5))

@@ -18,10 +18,8 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
-#include <limits>
 #include <random>
 #include <set>
-#include <vector>
 
 #include <gmp.h>
 #include <primesieve.hpp>
@@ -46,13 +44,13 @@ const uint32_t M_START = 1000;
 #include <x86intrin.h>
 
 // global frequency
-float freq;
+double freq;
 
 double approx_Hz(unsigned sleeptime) {
     auto t_start = high_resolution_clock::now();
-    uint64_t cycles_start = __rdtsc();
+    uint64_t elapsed_cycles = __rdtsc();
     std::this_thread::sleep_for(std::chrono::milliseconds(sleeptime));
-    uint64_t elapsed_cycles = __rdtsc() - cycles_start;
+    elapsed_cycles = __rdtsc() - elapsed_cycles;
     auto time = DELTA_SINCE(t_start);
     auto time2 = DELTA_SINCE(t_start);
 
@@ -146,7 +144,7 @@ void generate_PALR(
 
 void benchmark_primorial_modulo(
         const char* benchmark_row, const char* filter,
-        int P, int bits, size_t count,
+        unsigned int P, int bits, size_t count,
         const vector<uint64_t> &primes) {
 
     mpz_t K;
@@ -360,8 +358,6 @@ void benchmark_method_large(
 
 
 void benchmark(int bits, size_t count, const char* filter) {
-    auto t_setup = high_resolution_clock::now();
-
     /**
      * These control how many quickly solutions are found
      * And how likely large primes are to find solutions
@@ -375,15 +371,6 @@ void benchmark(int bits, size_t count, const char* filter) {
     assert( (primes.size() == count) || (bits <= 25));
 
     size_t N = primes.size();
-
-    if (0) {
-        double secs = DELTA_SINCE(t_setup);
-        printf("\tBenchmark %ld x %d bits, setup %.3f seconds (%ld to %ld)\n",
-            primes.size(), bits,
-            secs,
-            primes.front(), primes.back());
-        printf("\t\t%ld to %ld\n", primes.front(), primes.back());
-    }
 
     // Header
     cout << endl;
@@ -469,7 +456,7 @@ int main(int argc, char **argv) {
     // Input validation
     assert(argc == 2 || argc == 3);
 
-    uint64_t count_primes = atol(argv[1]);
+    long count_primes = atol(argv[1]);
     //assert( (count_primes > 0) && (count_primes <= 10'000'000) );
 
     char empty_filter[] = "";

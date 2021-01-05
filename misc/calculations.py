@@ -52,15 +52,15 @@ def Runtime():
 
     K = gmpy2.primorial(8887) // gmpy2.primorial(13)
     log2K = int(gmpy2.log2(K))
-    M  = 10000
+    M = 10000
     sl = 10 ** 10
     M_c = 1917
     c = 50
     S = 2 * 10 * (1000 * round(float(gmpy2.log(K)) / 1000)) + 1
-    C_mod = 4/64
+    C_mod = 4 / 64
 
     C_eq3 = 30
-    print (f"log2(K) = {log2K}, S = {S}")
+    print(f"log2(K) = {log2K}, S = {S}")
 
     P = 455052511
     Psmall = int(sympy.primepi(S * c))
@@ -92,21 +92,20 @@ def Runtime():
 
     total = A + B + C + Da * Db
 
-    print (f"{A:.2e} + {B:.2e} + {C:.2e} + {Da*Db:.2e}".replace("e+", " \\times 10^"))
-    print ()
-    print (f"{total=:.2e}".replace("e+", " \\times 10^"))
+    print(f"{A:.2e} + {B:.2e} + {C:.2e} + {Da * Db:.2e}".replace("e+", " \\times 10^"))
+    print()
+    print(f"{total=:.2e}".replace("e+", " \\times 10^"))
 
-    print ()
-    print (f"{traditional/total:.0f}x speedup")
+    print()
+    print(f"{traditional / total:.0f}x speedup")
 
 
 def MertensThird():
     for max_prime, primes in (
-        (10**4, 1229), (10**5, 9592), (10**6, 78498),
-        (10**8, 5761455), (4*10**9, 189961812), (10**10, 4118054813),
-        (10**11, 4118054813), (10**12, 37607912018), (10**13, 346965536839),
+            (10 ** 4, 1229), (10 ** 5, 9592), (10 ** 6, 78498),
+            (10 ** 8, 5761455), (4 * 10 ** 9, 189961812), (10 ** 10, 4118054813),
+            (10 ** 11, 4118054813), (10 ** 12, 37607912018), (10 ** 13, 346965536839),
     ):
-
         power = math.log10(max_prime)
         primes = ("{}" if primes < 1e9 else "{:.1e}").format(primes)
         percent = sieve_percent(max_prime)
@@ -122,7 +121,7 @@ def Speedup():
 
     M_single = 224.6
     M_cost = {
-        (1,1): M_single,
+        (1, 1): M_single,
         (100, 26): 931,
         (300, 79): 945,
         (1000, 262): 934,
@@ -140,24 +139,25 @@ def Speedup():
 
     first = line.format("M", "coprime", 0.0, 1.1, 2.2)
     first = (first.replace("0.0", "time(s)")
-                  .replace("1.1", "time(s)/coprime")
-                  .replace("2.2", "speedup (vs sequential sieve)")
-                  .replace("\\", "\rule{0pt}{1em}\\"))
+             .replace("1.1", "time(s)/coprime")
+             .replace("2.2", "speedup (vs sequential sieve)")
+             .replace("\\", "\rule{0pt}{1em}\\"))
 
+    print(first)
     for (m, coprime), time in M_cost.items():
-      print(line.format(m, coprime, time, time / coprime, M_single / (time / coprime)))
+        print(line.format(m, coprime, time, time / coprime, M_single / (time / coprime)))
 
-    fig = plt.figure(figsize=(32/3,9/3), dpi=200)
+    fig = plt.figure(figsize=(32 / 3, 9 / 3), dpi=200)
 
     # M = coprime count.
-    M, time = zip(*[(coprime,time) for (_, coprime), time in M_cost.items()])
+    M, time = zip(*[(coprime, time) for (_, coprime), time in M_cost.items()])
     M = np.array(M)
 
     ax1 = fig.gca()
     ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
 
-    p1 = ax1.plot(M, time,                   marker="o", label="combined sieve time(s)")
-    p2 = ax2.plot(M, M_single * M / time,    marker="o", label="speedup", color="C1")
+    p1 = ax1.plot(M, time, marker="o", label="combined sieve time(s)")
+    p2 = ax2.plot(M, M_single * M / time, marker="o", label="speedup", color="C1")
     plt.grid(which="major", axis="y")
     plt.xscale("log")
     ax1.set_yscale("log")
@@ -176,11 +176,11 @@ def Speedup():
 def Appendix1():
     # 503, 1009, 1511, 5003, 10007
     for P, mp in [
-            (1511, 250e9),
-            (2111, 1800e9),
-            (4441, 2000e9),
-            (5333, 2000e9),
-            (8887, 1000e9),
+        (1511, 250e9),
+        (2111, 1800e9),
+        (4441, 2000e9),
+        (5333, 2000e9),
+        (8887, 1000e9),
     ]:
         ln, PRPs = expected_PRP(mp, P)
         pg_mp = pgsurround_sieve_limit(ln)
@@ -188,14 +188,15 @@ def Appendix1():
 
         pg_mp_str = f"{pg_mp:.1e}".replace("e+0", " \\times 10^")
 
-        print(f"{P:5} & {ln:.0f}\t& {mp/1e9:4.0f} \\times 10^9\t& {PRPs:.1f}\t& {pg_mp_str}\t& {speedup:.1%}\t\\\\")
+        print(f"{P:5} & {ln:.0f}\t& {mp / 1e9:4.0f} \\times 10^9\t& "
+              f"{PRPs:.1f}\t& {pg_mp_str}\t& {speedup:.1%}\t\\\\")
 
 
 def Trick2():
     # SLOW (~250s in python3, ~70s in pypy3)
     import sympy
 
-    N = sympy.prod(sympy.primerange(2, 503+1)) // 210
+    N = sympy.prod(sympy.primerange(2, 503 + 1)) // 210
     # N = gmpy2.primorial(503) // 210
 
     X = 100000
@@ -209,10 +210,11 @@ def Trick2():
         for p in sympy.sieve.primerange(low, high):
             primes += 1
             count += ((first % p) + 2 * X) >= p
-        print (f"{count}/{primes} = {count / primes:.2%}\t", time.time() - t)
+        print(f"{count}/{primes} = {count / primes:.2%}\t", time.time() - t)
+
 
 Runtime()
-#MertensThird()
-#Speedup()
-#Appendix1()
-#Trick2()
+# MertensThird()
+# Speedup()
+# Appendix1()
+# Trick2()

@@ -167,6 +167,7 @@ void test_interval(
 
     for (auto low : unknowns[0]) {
         s_total_prp_tests += 1;
+        assert(low > 0);
 
         mpz_sub_ui(prime_test, center, low);
         if (mpz_probab_prime_p(prime_test, 25)) {
@@ -176,6 +177,7 @@ void test_interval(
     }
     for (auto high : unknowns[1]) {
         s_total_prp_tests += 1;
+        assert(high > 0);
 
         mpz_add_ui(prime_test, center, high);
         if (mpz_probab_prime_p(prime_test, 25)) {

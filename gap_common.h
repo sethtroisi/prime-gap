@@ -20,6 +20,7 @@
 #include <functional>
 #include <map>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -48,7 +49,6 @@ struct Config {
     uint32_t sieve_length = 0;
     uint64_t max_prime    = 0;
 
-    bool run_prp = false;
     bool save_unknowns = false;
 
     bool method1 = false;
@@ -84,24 +84,21 @@ class Args
 
     private:
         // Disallow creating instance
-        Args() {}
+        Args() = default;
 };
 
 
 class DB
 {
     public:
-        DB(const char* path);
-        ~DB() { if (db != NULL) sqlite3_close(db); };
-
-        static const char *search_db;
-        static const char *records_db;
+        explicit DB(const char* path);
+        ~DB() { if (db != nullptr) sqlite3_close(db); };
 
         uint64_t    config_hash(const struct Config& config);
-        sqlite3*    get_db() { assert(db != NULL); return db; };
+        sqlite3*    get_db() { assert(db != nullptr); return db; };
 
     private:
-        sqlite3 *db = NULL;
+        sqlite3 *db = nullptr;
 };
 
 
@@ -124,7 +121,7 @@ void K_stats(
 
 /* Utils */
 std::pair<uint32_t, uint32_t> calculate_thresholds_method2(
-        const struct Config config,
+        struct Config config,
         size_t count_coprime_sieve,
         size_t valid_ms);
 

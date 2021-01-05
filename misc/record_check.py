@@ -21,12 +21,11 @@ Replaces some awk hackery.
 
 import argparse
 import glob
-import itertools
 import os.path
 import re
 import sqlite3
 import sys
-from collections import Counter, defaultdict
+from collections import defaultdict
 
 import gmpy2
 import primegapverify
@@ -177,7 +176,7 @@ def search_logs(args):
     # 32280  10.9749  5641 * 3001#/2310 -18514 to +13766
     record_format = re.compile(
         r"(\d+)\s+(\d+\.\d+)\s+"
-        r"(\d+)\s*(\*)\s*(\d+\#)(/\d+\#?)\s+"
+        r"(\d+)\s*(\*)\s*(\d+#)(/\d+#?)\s+"
         r"(-\d+)")
 
     assert os.path.exists(args.logs_directory), (

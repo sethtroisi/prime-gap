@@ -65,12 +65,11 @@ def logger_context(args):
             return contextlib.redirect_stdout(TeeLogger(log_fn, sys.stdout))
 
     assert False, "log file '{}' already exists x5".format(unknown_path)
-    return context
 
 
 def transform_unknown_filename(unknown_fn, directory, extension):
-    '''Return a new path similar to unknown_fn with corrected extension
-    and in directory (if exists) otherwise without directory'''
+    """Return a new path similar to unknown_fn with corrected extension
+    and in directory (if exists) otherwise without directory"""
     fn = os.path.splitext(os.path.basename(unknown_fn))[0]
     if not extension.startswith("."):
         extension = "." + extension
@@ -82,7 +81,7 @@ def transform_unknown_filename(unknown_fn, directory, extension):
 
 
 def parse_unknown_filename(fn):
-    '''None or (p,d,ms,mi,sl,mp,m1)'''
+    """None or (p,d,ms,mi,sl,mp,m1)"""
     match = UNKNOWN_FILENAME_RE.match(os.path.basename(fn))
     return tuple(map(lambda s: int(s) if s and s.isdigit() else s, match.groups())) if match else match
 

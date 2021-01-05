@@ -43,10 +43,10 @@ def factor_simple(d):
 
 
 def r_count_num_m(n, factors_d, i):
-    '''Count of numbers coprime to d less than end; sum( gcd(m, d) == 1 for m in range(end) )
+    """Count of numbers coprime to d less than end; sum( gcd(m, d) == 1 for m in range(end) )
 
     Uses inclusion exclusion on prime factorization of d
-    '''
+    """
 
     if n == 0:
         return 0

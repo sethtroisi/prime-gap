@@ -34,7 +34,7 @@ def stats_plots(
         """There should be no trend based on m value"""
         # Have to adjust for Expected gap which has two data points for each m
         if len(y) == 2 * len(x):
-            x = [xi for xi in x for side in ['l', 'r']]
+            x = [xi for xi in x for _ in ['l', 'r']]
 
         trend, _ = np.polyfit(x, y, 1)
         if trend > 2e-3:
@@ -45,7 +45,7 @@ def stats_plots(
     def plot_hist(axis, d, color, marker='x', label='Observed', mult=1):
         hist_data = np.histogram(d, bins=100, density=True)
         axis.scatter(hist_data[1][:-1], hist_data[0]*mult, color=color, marker=marker, s=8, label=label)
-        max_y = hist_data[0].max()
+        max_y = max(hist_data[0])
 
         axis.set_xlim(np.percentile(d, 0.01), np.percentile(d, 99.9))
         axis.set_ylim(top=1.2 * max_y)
@@ -146,20 +146,6 @@ def stats_plots(
         #   [ BLANK,   prob all m]
         #   [ expected,   cdf    ]
 
-        # Set up subplots.
-        fig = plt.figure(
-            "Per Side Statistics",
-            constrained_layout=True,
-            figsize=(8, 12))
-        gs = fig.add_gridspec(3, 2)
-
-        if misc.test_unknowns:
-            axis_prev = fig.add_subplot(gs[0, 0])
-            axis_next = fig.add_subplot(gs[0, 1])
-        axis_prob_gap     = fig.add_subplot(gs[1, 1])
-        axis_expected_gap = fig.add_subplot(gs[2, 0])
-        axis_cdf_gap      = fig.add_subplot(gs[2, 1])
-
         def plot_prob_nth(axis, unknowns, color, label):
             n = min(len(prob_nth), len(unknowns))
             axis.scatter(
@@ -170,6 +156,17 @@ def stats_plots(
             axis.axvline(
                 x=E, ymax=1.0/1.2,
                 color=color, label=f"E({label}) = {E:.0f}")
+
+        # Set up subplots.
+        fig = plt.figure(
+            "Per Side Statistics",
+            constrained_layout=True,
+            figsize=(8, 12))
+        gs = fig.add_gridspec(3, 2)
+
+        axis_prob_gap     = fig.add_subplot(gs[1, 1])
+        axis_expected_gap = fig.add_subplot(gs[2, 0])
+        axis_cdf_gap      = fig.add_subplot(gs[2, 1])
 
         if misc.test_unknowns:
             axis_prev = fig.add_subplot(gs[0, 0])
@@ -271,7 +268,7 @@ def stats_plots(
                 zipped = list(zip(prob_data, data.experimental_gap))
             else:
                 print("Not all gaps are present (--prp-top-percent < 100) Not able to show 'Sum(P(...))'")
-                zipped = list(zip(prob_data, [0 for i in range(len(prob_data))]))
+                zipped = list(zip(prob_data, [0 for _ in range(len(prob_data))]))
 
             p_gap_merit_sorted, _ = zip(*sorted(zipped, reverse=True))
             p_gap_merit_ord, gap_real_ord = zip(*zipped)
@@ -384,7 +381,7 @@ def stats_plots(
 
 
 def plot_stuff(
-        args, conn, sc, data_db, misc_db,
+        args, data_db, misc_db,
         min_merit_gap, record_gaps, prob_prime_after_sieve):
 
     assert data_db.expected_prev

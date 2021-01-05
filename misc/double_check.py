@@ -21,6 +21,7 @@ import re
 import subprocess
 
 import sys
+
 # Hack to allow import of gap_utils
 sys.path.append(".")
 
@@ -29,34 +30,39 @@ import gmpy2
 import gap_utils
 
 
-
 def get_arg_parser():
     parser = argparse.ArgumentParser('Double check the results of combined_sieve')
 
-    parser.add_argument('--seed', type=int, default=None,
+    parser.add_argument(
+        '--seed', type=int, default=None,
         help="random seed (default: %(default)s)")
 
-    parser.add_argument('--ecm', type=str, default="ecm",
+    parser.add_argument(
+        '--ecm', type=str, default="ecm",
         metavar="ecm_program", help="Path to gmp-ecm (default: %(default)s)")
 
-    parser.add_argument('--B1', type=int, default=10000,
+    parser.add_argument(
+        '--B1', type=int, default=10000,
         help="stage 1 bound for ecm (see ecm --help) (default: %(default)s)")
 
-    parser.add_argument('--unknown-filename', type=str, required=True,
+    parser.add_argument(
+        '--unknown-filename', type=str, required=True,
         help="determine p, d, mstart, minc, sieve-length, and max-prime"
              " from unknown-results filename")
 
-    parser.add_argument('-c', '--count', type=int, default=10,
+    parser.add_argument(
+        '-c', '--count', type=int, default=10,
         help="count of non-trivial numbers to verify per m (default: %(default)s)")
 
     return parser
 
 
-def product(l):
+def product(a):
     r = 1
-    for x in l:
+    for x in a:
         r *= x
     return r
+
 
 def double_check(args):
     # initial random with seed or default: None
@@ -89,7 +95,8 @@ def double_check(args):
     ecm_found = [0, 0]
     for mi in range(M_inc):
         m = M_start + mi
-        if math.gcd(m, D) != 1: continue
+        if math.gcd(m, D) != 1:
+            continue
 
         # Read a line from the file
         line = unknown_file.readline()
@@ -100,8 +107,8 @@ def double_check(args):
         m_test, unknown_l, unknown_u = map(int, match.groups())
         assert m_test == mi
 
-        low = list(map(int,u_l.strip().split(" ")))
-        high = list(map(int,u_h.strip().split(" ")))
+        low = list(map(int, u_l.strip().split(" ")))
+        high = list(map(int, u_h.strip().split(" ")))
 
         unknowns = {i for i in low + high}
 
@@ -115,7 +122,7 @@ def double_check(args):
         # Choose some random numbers
         count = args.count
         while count > 0:
-            t = random.choice(range(-SL, SL+1))
+            t = random.choice(range(-SL, SL + 1))
             if t in boring_composites:
                 tested[0] += 1
                 continue
@@ -136,18 +143,19 @@ def double_check(args):
 
             tested[1 + sieve_had_factor] += 1
             word = "" if sieve_had_factor else "n't"
-            print (f"\t{t:<+6}\tshould{word} have small factor")
+            print(f"\t{t:<+6}\tshould{word} have small factor")
 
             # Interesting factor
             count -= 1
 
             # Change to subprocess.run(X, capture_output=True) with Python 3.7
-            ret, output = subprocess.getstatusoutput("echo '{} + {}' | {} -one -primetest -q {}".format(
-                str_start, t, args.ecm, args.B1))
+            ret, output = subprocess.getstatusoutput(
+                "echo '{} + {}' | {} -one -primetest -q {}".format(
+                    str_start, t, args.ecm, args.B1))
 
             found_factor = (ret & 2) > 0
 
-            print ("\t\tecm:", output)
+            print("\t\tecm:", output)
             if found_factor:
                 ecm_factor = int(output.split(" ")[0])
 
@@ -170,9 +178,10 @@ def double_check(args):
                 # generally expected ecm to find the
                 ecm_found[sieve_had_factor] += 1
 
-    print ("{} trivially composite, {} unknowns, {} known composites".format(*tested))
-    print ("ecm found {} composites: known {} composite, {} were unknown".format(
+    print("{} trivially composite, {} unknowns, {} known composites".format(*tested))
+    print("ecm found {} composites: known {} composite, {} were unknown".format(
         sum(ecm_found), ecm_found[True], ecm_found[False]))
+
 
 if __name__ == "__main__":
     parser = get_arg_parser()
@@ -180,4 +189,3 @@ if __name__ == "__main__":
     gap_utils.verify_args(args)
 
     double_check(args)
-
