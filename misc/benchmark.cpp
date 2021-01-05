@@ -95,8 +95,7 @@ void generate_primes(int bits, size_t count, vector<uint64_t> &save) {
     */
 
     primesieve::iterator it(start);
-    uint64_t prime = it.next_prime();
-    for(prime = it.next_prime(); prime <= max_prime; prime = it.next_prime()) {
+    for(uint64_t prime = it.next_prime(); prime <= max_prime; prime = it.next_prime()) {
         save.push_back(prime);
         if (save.size() == count) break;
     }
@@ -315,7 +314,7 @@ void benchmark_method_large(
             uint64_t previous = found2;
             modulo_search_euclid_all_small(
                 M_START, max_m, SL, p, base_r,
-                [&](const uint32_t mi, const uint64_t first) {
+                [&](uint32_t mi, uint64_t first) {
                     found2++;
                     uint64_t t = (((base_r * M_START) % p) + ((base_r * mi) % p) + SL) % p;
                     assert( first == t );
@@ -332,7 +331,7 @@ void benchmark_method_large(
 
             modulo_search_euclid_all_large(
                 M_START, max_m, SL, p, base_r,
-                [&](const uint32_t mi, const uint64_t first) {
+                [&](uint32_t mi, uint64_t first) {
                     found2++;
                     __int128 t = base_r;
                     t *= (M_START + mi);

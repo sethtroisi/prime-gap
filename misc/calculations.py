@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # Copyright 2020 Seth Troisi
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -36,10 +37,10 @@ def expected_PRP_gap(max_prime, gap):
 
 
 def pgsurround_sieve_limit(ln):
-    logn = ln
-    log2n = ln / math.log(2)
-    assert 900 <= log2n <= 203601, log2n
-    return (0.05 + (log2n/8000.0)) * logn * logn * math.log(logn)
+    log_n = ln
+    log2_n = ln / math.log(2)
+    assert 900 <= log2_n <= 203601, log2_n
+    return (0.05 + (log2_n / 8000.0)) * log_n * log_n * math.log(log_n)
 
 
 def Runtime():
@@ -65,27 +66,29 @@ def Runtime():
     Psmall = int(sympy.primepi(S * c))
     Plarge = P - Psmall
 
-    llsl = log(log(sl))
+    ll_sl = log(log(sl))
 
     A1 = P * log2K * C_mod
-    B1 = S * (llsl + M_m)
+    B1 = S * (ll_sl + M_m)
     traditional = M_c * (A1 + B1)
-    print (f"{M_c} \\times ({A1:.2e} + {B1:.2e})")
-    print (f"{traditional=:.2e}")
-    print ()
+    print(f"{M_c} \\times ({A1:.2e} + {B1:.2e})")
+    print(f"{traditional=:.2e}")
+    print()
 
-    print ("{:,}*{:,}/{} + {:,}*{:,}({:.2f}+{:.2f}) + {:,}*{:,} + ({:,}*{:,}*({:.2f}-{:.2f}) + {:,})*{}log2({}/{:,})".format(
-        P, log2K, int(1/C_mod),
-        M_c, S, llsl, M_m,
-        M_c, Psmall,
-        M, S, llsl, log(log(c * S)), Plarge,
-        C_eq3, sl, S))
+    print(
+        "{:,}*{:,}/{} + {:,}*{:,}({:.2f}+{:.2f}) + {:,}*{:,} + "
+        "({:,}*{:,}*({:.2f}-{:.2f}) + {:,})*{}log2({}/{:,})".format(
+            P, log2K, int(1 / C_mod),
+            M_c, S, ll_sl, M_m,
+            M_c, Psmall,
+            M, S, ll_sl, log(log(c * S)), Plarge,
+            C_eq3, sl, S))
 
     A = P * log2K * C_mod
     B = M_c * B1
     C = M_c * Psmall
-    Da = M * S * (llsl - log(log(c * S))) + Plarge
-    Db = 30 * log2(sl/S)
+    Da = M * S * (ll_sl - log(log(c * S))) + Plarge
+    Db = 30 * log2(sl / S)
 
     total = A + B + C + Da * Db
 
@@ -179,13 +182,13 @@ def Appendix1():
             (5333, 2000e9),
             (8887, 1000e9),
     ]:
-        ln, prps = expected_PRP(mp, P)
+        ln, PRPs = expected_PRP(mp, P)
         pg_mp = pgsurround_sieve_limit(ln)
         speedup = sieve_percent(pg_mp) / sieve_percent(mp) - 1
 
         pg_mp_str = f"{pg_mp:.1e}".replace("e+0", " \\times 10^")
 
-        print (f"{P:5} & {ln:.0f}\t& {mp/1e9:4.0f} \\times 10^9\t& {prps:.1f}\t& {pg_mp_str}\t& {speedup:.1%}\t\\\\")
+        print(f"{P:5} & {ln:.0f}\t& {mp/1e9:4.0f} \\times 10^9\t& {PRPs:.1f}\t& {pg_mp_str}\t& {speedup:.1%}\t\\\\")
 
 
 def Trick2():

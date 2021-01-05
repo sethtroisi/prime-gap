@@ -83,7 +83,7 @@ class ProbNth {
         /**
          * wheel_d is gcd(D, 2*3*5*7)
          * Relevant statistics are lookup with (m % wheel_d)
-         * ((m % wheel_d) * K + X) with factors of 2,3,5,7 can be elimanted
+         * ((m % wheel_d) * K + X) with factors of 2,3,5,7 can be eliminated
          * where these X aren't coprime to K
          */
         int wheel_d;
@@ -221,10 +221,10 @@ vector<float> get_record_gaps(const struct Config& config) {
     /* Execute SQL statement */
     int rc = sqlite3_exec(db.get_db(), sql, [](void* recs, int argc, char **argv, char **azColName)->int {
         uint64_t gap = atol(argv[0]);
-        vector<float> *records = static_cast<vector<float>*>(recs);
-        if (gap < records->size()) {
+        vector<float> *recs_vec = static_cast<vector<float>*>(recs);
+        if (gap < recs_vec->size()) {
             // Recover log(startprime)
-            (*records)[gap] = gap / atof(argv[1]);
+            (*recs_vec)[gap] = gap / atof(argv[1]);
         }
         return 0;
     }, (void*)&records, &zErrMsg);
@@ -314,7 +314,6 @@ double get_range_time(const struct Config& config) {
 
 void store_stats(
         const struct Config& config,
-        float K_log,
         double time_stats,
         /* Over all M values */
         vector<float>& prob_gap_norm,
@@ -368,11 +367,13 @@ void store_stats(
             num_rows,
             time_stats, time_stats);
 
-    int rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
-    if (rc != SQLITE_OK) {
-        printf("\nrange INSERT/UPDATE failed %d: %s\n",
-            rc, sqlite3_errmsg(db));
-        exit(1);
+    {
+        int rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
+        if (rc != SQLITE_OK) {
+            printf("\nrange INSERT/UPDATE failed %d: %s\n",
+                   rc, sqlite3_errmsg(db));
+            exit(1);
+        }
     }
 
 #define BIND_OR_ERROR(func, stmt, index, value)                             \
@@ -387,11 +388,13 @@ void store_stats(
         " VALUES(?,?, ?,?,?)"
     );
     sqlite3_stmt *insert_range_stmt;
-    /* Prepare SQL statement */
-    rc = sqlite3_prepare_v2(db, insert_range_stats, -1, &insert_range_stmt, 0);
-    if (rc != SQLITE_OK) {
-        printf("Could not prepare statement: '%s'\n", insert_range_stats);
-        exit(1);
+    {
+        /* Prepare SQL statement */
+        int rc = sqlite3_prepare_v2(db, insert_range_stats, -1, &insert_range_stmt, 0);
+        if (rc != SQLITE_OK) {
+            printf("Could not prepare statement: '%s'\n", insert_range_stats);
+            exit(1);
+        }
     }
 
     assert( prob_gap_norm.size() == prob_gap_low.size() );
@@ -450,11 +453,13 @@ void store_stats(
             );
 
     sqlite3_stmt *stmt;
-    /* Prepare SQL statement */
-    rc = sqlite3_prepare_v2(db, insert_m_stats, -1, &stmt, 0);
-    if (rc != SQLITE_OK) {
-        printf("Could not prepare statement: '%s'\n", insert_m_stats);
-        exit(1);
+    {
+        /* Prepare SQL statement */
+        int rc = sqlite3_prepare_v2(db, insert_m_stats, -1, &stmt, 0);
+        if (rc != SQLITE_OK) {
+            printf("Could not prepare statement: '%s'\n", insert_m_stats);
+            exit(1);
+        }
     }
 
     if (config.verbose >= 2) {
@@ -528,7 +533,7 @@ void store_stats(
 
 
 cdouble NTH_PRIME_CUTOFF = 1e-12;
-// Choosen randomly (not sure how to improve)
+// Chosen randomly (not sure how to improve)
 cdouble COMBINED_CUTOFF = 1e-14;
 
 float nth_prob_or_zero(const vector<float>& prob_nth, size_t nth) {
@@ -789,11 +794,11 @@ void prob_extended_gap(
         // Probability of prev, next > SL (extended^2)
         {
             // XXX: this seems to overestimate by 5-20%,
-            // The best explination I have is that this relates to how factors
+            // The best explanation I have is that this relates to how factors
             // aren't uniformly distributed. One piece of evidence is that
             // reducing wheel_primes causes worse estimation. I suspect that
             // This relates to the SL_factors_of_d and how primes are
-            // over-reperesented then under-represented after
+            // over-represented then under-represented after
 
             // gap_prev + extended_coprime[min_i] <= MIN_RECORD
             size_t min_e_c_i = extended_coprime.size();
@@ -862,7 +867,7 @@ void prob_extended_gap(
 }
 
 
-void setup_probnth(
+void setup_prob_nth(
         const struct Config &config,
         const vector<float> &records,
         const vector<uint32_t> &poss_record_gaps,
@@ -921,10 +926,10 @@ void read_unknown_line(
 
     // Read a line from the file
     {
-        int mtest;
-        unknown_file >> mtest;
-        assert( mtest >= 0 );
-        assert( (size_t) mtest == mi );
+        int m_test = -1;
+        unknown_file >> m_test;
+        assert( m_test >= 0 );
+        assert( (size_t) m_test == mi );
 
         std::string delim;
         char delim_char;
@@ -1088,7 +1093,7 @@ ProbM calculate_probm(
             float prob_i = gap_probs.prime_nth[i]; // 0-indexed
             assert(0 <= prob_i && prob_i <= 1.0);
 
-            // unknown[i'th] is prime, on the otherside have prime be outside of sieve.
+            // unknown[i'th] is prime, on the other side have prime be outside of sieve.
             if (i < unknown_low.size()) {
                 float conditional_prob = extended_record_high[unknown_low[i]];
                 assert(0 <= conditional_prob && conditional_prob <= 1);
@@ -1129,7 +1134,7 @@ ProbM calculate_probm(
 
 
 /**
- * Calculate prob record at various maxprime values
+ * Calculate prob record at various max prime values
  * Takes unknown_file contains [(prime1, X1), (prime2, X2), ...]
  *
  * prime1 is a factor of X1
@@ -1216,10 +1221,10 @@ void prob_record_vs_plimit(struct Config config) {
             if (!composite[SL + x]) { unknown_high.push_back(x); }
         }
 
-        // Suppress printing in setup_probnth.
+        // Suppress printing in setup_prob_nth.
         config.verbose = 0;
         ProbNth gap_probs;
-        setup_probnth(config, records, poss_record_gaps, gap_probs);
+        setup_prob_nth(config, records, poss_record_gaps, gap_probs);
 
         ProbM probm = calculate_probm(
             config.mstart, N_log, unknown_low, unknown_high,
@@ -1274,8 +1279,8 @@ void run_gap_file(
     prob_gap_high.resize(2 * config.sieve_length + 1, 0);
 
     // Keep sum & max of several records
-    ProbM sum;
-    ProbM max_r;
+    ProbM sum = {};
+    ProbM max_r = {};
     max_r.record = max_r.highmerit = max_r.is_missing_gap= 1e-10;
 
     if (config.verbose >= 1) {
@@ -1534,7 +1539,7 @@ void prime_gap_stats(struct Config config) {
     }
 
     ProbNth gap_probs;
-    setup_probnth(config, records, poss_record_gaps, gap_probs);
+    setup_prob_nth(config, records, poss_record_gaps, gap_probs);
 
     vector<uint32_t> valid_m;
     for (uint64_t mi = 0; mi < config.minc; mi++) {
@@ -1616,7 +1621,7 @@ void prime_gap_stats(struct Config config) {
         double   secs = duration<double>(s_stop_t - s_start_t).count();
 
         store_stats(
-            config, K_log,
+            config,
             secs,
             prob_gap_norm, prob_gap_low, prob_gap_high,
             M_vals,

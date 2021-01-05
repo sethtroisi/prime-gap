@@ -97,8 +97,8 @@ def double_check(args):
 
         match = re.match(r"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
         assert match, (len(start), len(u_l), len(u_h))
-        mtest, unknown_l, unknown_u = map(int, match.groups())
-        assert mtest == mi
+        m_test, unknown_l, unknown_u = map(int, match.groups())
+        assert m_test == mi
 
         low = list(map(int,u_l.strip().split(" ")))
         high = list(map(int,u_h.strip().split(" ")))
@@ -165,7 +165,7 @@ def double_check(args):
                     assert all(f > args.max_prime for f in factors), (ecm_factor, factors)
 
                 # Tempting to check if sieve_had_factor then any(f < args.max_prime)
-                # but ecm not guarenteed to find that factor.
+                # but ecm not guaranteed to find that factor.
 
                 # generally expected ecm to find the
                 ecm_found[sieve_had_factor] += 1

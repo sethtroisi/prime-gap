@@ -45,7 +45,7 @@ class StatCounters:
     best_merit_interval_m = -1
 
     prob_record_all = 0.0
-    prob_minmerit = 0.0
+    prob_min_merit = 0.0
 
     # handles one sided testes
     prob_record_processed = 0.0
@@ -54,7 +54,7 @@ class StatCounters:
     prob_one_side_delta = 0.0
 
     count_record = 0
-    count_minmerit = 0
+    count_min_merit = 0
 
 
 @dataclass
@@ -100,7 +100,7 @@ def load_records(conn, log_N):
     # Stop at merit = 35
 
     # NOTE: to make sure 'count(records)' still counts after a
-    # found record is submitted subtract a small amound from merit
+    # found record is submitted subtract a small amount from merit
     rv = conn.execute(
         "SELECT gapsize FROM gaps "
         "WHERE gapsize > merit * ? - 0.001"
@@ -340,21 +340,21 @@ def validate_prob_record_merit(
                 # Results saved to data / misc
                 data)
 
-    def linreg(name, a, b):
+    def lin_reg(name, a, b):
         # p_val is "two-sided p-val for null hypothesis that the slope is zero."
         slope, intercept, r_val, p_val, std_err = scipy.stats.linregress(a, b)
         print("\t{:15} | scale: {:.3f}, r^2: {:.2f}".format(name, slope, r_val))
         print("\t\t", p_val, std_err)
 
     # Validate several distributions have high correlation & r^2
-    linreg("expected gap ", data_db.expected_gap, data.expected_gap)
-    linreg("expected prev", data_db.expected_prev, data.expected_prev)
-    linreg("expected next", data_db.expected_next, data.expected_next)
+    lin_reg("expected gap ", data_db.expected_gap, data.expected_gap)
+    lin_reg("expected prev", data_db.expected_prev, data.expected_prev)
+    lin_reg("expected next", data_db.expected_next, data.expected_next)
 
-    linreg("expected prev", data_db.prob_merit_gap, data.prob_merit_gap)
+    lin_reg("expected prev", data_db.prob_merit_gap, data.prob_merit_gap)
 
 
-def setup_extended_gap(SL, K, P, D, prob_prime):
+def setup_extended_gap(SL, P, D, prob_prime):
     """
     Extends from SL to 2*SL based on coprime K
 
@@ -419,7 +419,7 @@ def determine_test_threshold(args, data):
         data.prob_record_gap = data.prob_merit_gap
 
     assert 1 <= percent <= 99
-    # Could be several million datapoints.
+    # Could be several million data points.
     best_probs = sorted(data.prob_record_gap, reverse=True)
     prob_threshold = best_probs[round(len(best_probs) * percent / 100)]
     del best_probs
@@ -486,8 +486,8 @@ def should_print_stats(
                     sc.one_side_skips, sc.one_side_skips / sc.tested,
                     avg_prob_side, avg_prob_no_skip, avg_prob_side / avg_prob_no_skip - 1))
 
-            print("\t    sum(prob_minmerit):  {:7.5g}, {:.3g}/day\tfound: {}".format(
-                sc.prob_minmerit, 86400 / secs * sc.prob_minmerit, sc.count_minmerit))
+            print("\t    sum(prob_min_merit):  {:7.5g}, {:.3g}/day\tfound: {}".format(
+                sc.prob_min_merit, 86400 / secs * sc.prob_min_merit, sc.count_min_merit))
             print("\t    sum(prob_record):    {:7.5g}, {:.3g}/day\tfound: {}".format(
                 sc.prob_record_processed, sc.prob_record_processed / secs * 86400, sc.count_record))
 
@@ -527,9 +527,9 @@ def process_result(conn, args, record_gaps, m_probs, data, sc, result):
     sc.t_unk_low += unknown_l
     sc.t_unk_hgh += unknown_u
 
-    sc.prob_minmerit += m_probs[m][0]
+    sc.prob_min_merit += m_probs[m][0]
     if merit > args.min_merit:
-        sc.count_minmerit += 1
+        sc.count_min_merit += 1
 
     if gap in record_gaps:
         sc.count_record += 1

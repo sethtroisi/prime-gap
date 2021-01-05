@@ -93,13 +93,6 @@ def plot_record_vs_plimit():
 
     plt.legend(loc='upper left')
 
-    #if args.save_logs:
-    #    png_path = gap_utils.transform_unknown_filename(
-    #        args.unknown_filename, "logs/", ".png")
-    #    if not png_path.startswith("logs/"):
-    #        print ("No 'logs/' directory to save figure into")
-    #    plt.savefig(png_path, dpi=1080//8)
-
     plt.show()
     plt.close()
 

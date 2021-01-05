@@ -405,7 +405,7 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
         prob_prime_adj /= (1 - 1.0/prime);
     }
 
-    if (false) {
+    if (config.verbose >= 3) {
         printf("prob_prime: %.6f => %.6f\n",
             1 / K_log - 1 / (K_log * K_log),
             prob_prime_adj);
@@ -445,11 +445,11 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
 
     // Periodic in d, but d might be X00'000'000 so limit to 5'000
     const uint64_t intervals = std::min(d, 5'000UL);
-    size_t mcount = 0;
-    for (; mcount < intervals; m++) {
+    size_t m_count = 0;
+    for (; m_count < intervals; m++) {
         if (m >= config.mstart + config.minc) break; // Tested all values.
         if (d > 1 && gcd(m, d) > 1) continue;
-        mcount++;
+        m_count++;
 
         // Reset to composites from coprime K
         std::copy(compositeK, compositeK + length, composite);
@@ -459,12 +459,12 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
             // -((m * K) - SL) % p => (m * K_mod_d + p - (sl % p)) % p
             assert(K_mod_d % p != 0);
             uint64_t first = (p - (((m % p) * (K_mod_d % p) + p - (sl % p)) % p)) % p;
-            for (size_t m = first; m < length; m += p) {
-                composite[m] = true;
+            for (size_t mi = first; mi < length; mi += p) {
+                composite[mi] = true;
             }
         }
 
-        if (false && m <= 6) {
+        if (config.verbose >= 3 && m <= 6) {
             size_t count_unknown = std::count(composite + sl, composite + 2*sl, false);
             printf("%ld * %d#/%ld | %ld | ", m, config.p, d, count_unknown);
 
@@ -489,9 +489,9 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
             remaining_prob += prob;
         }
     }
-    return {expected_length / mcount,
-            expected_count / (mcount * 2),
-            remaining_prob / (mcount * 2),
+    return {expected_length / m_count,
+            expected_count / (m_count * 2),
+            remaining_prob / (m_count * 2),
             prob_prime_adj
     };
 }
@@ -560,7 +560,7 @@ vector<uint32_t> get_sieve_primes(uint32_t n) {
 }
 
 
-bool isprime_brute(uint32_t n) {
+bool is_prime_brute(uint32_t n) {
     if ((n & 1) == 0)
         return false;
     for (uint32_t p = 3; p * p <= n; p += 2)
@@ -595,15 +595,13 @@ void Args::show_usage(char* name) {
     cout << "    parse p, d, mstart, minc, sieve-length, max-prime from filename" << endl;
     cout  << endl;
     cout << "[OPTIONALLY]" << endl;
-    cout << "  --min-merit <minmerit>" << endl;
-    cout << "    only display prime gaps with merit >= minmerit" << endl;
+    cout << "  --min-merit <min_merit>" << endl;
+    cout << "    only display prime gaps with merit >= min_merit" << endl;
     cout << "  --sieve-length" << endl;
     cout << "    how large the positive/negative sieve arrays should be" << endl;
     cout << "  --max-prime" << endl;
     cout << "    use primes <= max-prime (in millions) for checking composite" << endl;
     cout  << endl;
-    //cout << "  --run-prp" << endl;
-    //cout << "    run PRP tests" << endl;
     cout << "  --save-unknowns" << endl;
     cout << "    save unknowns to a temp file where they are processed in a 2nd pass." << endl;
     cout << endl;
@@ -815,7 +813,7 @@ Config Args::argparse(int argc, char* argv[]) {
 
     if (optind < argc) {
         config.valid = 0;
-        printf("unknown positional arguements: ");
+        printf("unknown positional argument: ");
         while (optind < argc) {
             printf("%s ", argv[optind++]);
         }
@@ -890,7 +888,7 @@ Config Args::argparse(int argc, char* argv[]) {
         size_t SL = config.sieve_length;
         if (SL % 500 != 0) {
             for (size_t p = 2; p < config.p; p += 1 + (p > 2)) {
-                if (isprime_brute(p)) {
+                if (is_prime_brute(p)) {
                     if (SL % p == 0 && config.d % p != 0) {
                         config.valid = 0;
                         cout << "SL=" << SL << " not coprime (p=" << p << ")" << endl;

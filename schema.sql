@@ -25,8 +25,6 @@ PRAGMA foreign_keys = ON;
                 UPDATE 'range' time_stats
                 INSERT range stats into 'range_stats'
                 INSERT stats per m into 'm_stats'
-                (if using -DSEARCH_MISSING_GAPS=1)
-                       stats per m into 'm_missing_stats'
 
         [OPTIONAL]
                 ./missing_gap_test.py
@@ -112,7 +110,7 @@ CREATE TABLE IF NOT EXISTS m_stats (
         /**
          * positive => distance to next/prev is X
          * 0        => skipped (probably from one side skip)
-         * -1       => partial result (other side should be checked but was interupted)
+         * -1       => partial result (other side should be checked but was interrupted)
          * negative => X is prime but haven't checked all values less
          */
         next_p INTEGER DEFAULT 0,

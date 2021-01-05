@@ -43,7 +43,7 @@ using namespace std::chrono;
 
 
 /**
- * Two MACROS DEFINEs used to validate results
+ * Two MACROS used to validate results
  * GMP_VALIDATE_FACTORS (validates all factors)
  * GMP_VALIDATE_LARGE_FACTORS (validate large factors)
  *
@@ -51,7 +51,7 @@ using namespace std::chrono;
  */
 
 // Tweaking this doesn't seem to method1 much.
-// method2 is more sensative and set it's own.
+// method2 is more sensitive and set it's own.
 #define SMALL_PRIME_LIMIT_METHOD1       400'000
 
 // Compresses composite by 50-80%,
@@ -141,12 +141,12 @@ void set_defaults(struct Config& config) {
         // Start from 1
         config.mstart = 1;
 
-        // Large prime near P to uniquify (choose semirandomly)
+        // Large prime near P to make D unique (chosen semi-randomly)
         config.d /= 4;
         vector<uint32_t> P_primes = get_sieve_primes(config.p);
         uint32_t rand_prime = P_primes[P_primes.size() - 2 - (rand() % 10)];
         uint32_t large_p = config.d > 1 ? config.d : rand_prime;
-        assert(isprime_brute(large_p));
+        assert(is_prime_brute(large_p));
 
         printf("d optimizer for P = %d# | large prime=%d | SL=%d (%.1f merit)\n",
                 config.p, large_p, config.sieve_length, config.min_merit);
@@ -457,7 +457,7 @@ void prime_gap_search(const struct Config& config) {
         // large_prime_queue size can be approximated by
         // https://en.wikipedia.org/wiki/Meissel–Mertens_constant
 
-        // Print "."s during, equal in length to 'Calculat...'
+        // Print "."s during, equal in length to 'Calculating ...'
         size_t print_dots = 38;
 
         const size_t expected_primes = primepi_estimate(MAX_PRIME);
@@ -837,7 +837,7 @@ void save_unknowns_method2(
 
 
 bool g_control_c = false;
-void signal_callback_handler(int signum) {
+void signal_callback_handler(int) {
     if (g_control_c) {
         cout << "Caught 2nd CTRL+C stopping now." << endl;
         exit(2);
@@ -1069,7 +1069,7 @@ void prime_gap_parallel(struct Config& config) {
 #if METHOD2_WHEEL
     // Note: Larger wheel eliminates more numbers but takes more space.
     // 6 seems reasonable for larger numbers  (saves 2/3 memory)
-    // 30 is maybe better for smaller numbers (savess 4/15 memory)
+    // 30 is maybe better for smaller numbers (saves 4/15 memory)
     uint32_t reindex_m_wheel = gcd(D, (SIEVE_INTERVAL < 80000) ? 30 : 6);
 
     vector<uint32_t> i_reindex_wheel[reindex_m_wheel];
@@ -1182,7 +1182,7 @@ void prime_gap_parallel(struct Config& config) {
 
     /**
      * Much space is saved via a reindexing scheme
-     * composite[mi][x] (0 <= mi < M_inc, -SL <= x <= SL) is reindexed to
+     * composite[mi][x] (0 <= mi < M_inc, -SL <= x <= SL) is re-indexed to
      *      composite[m_reindex[mi]][i_reindex[SL + x]]
      * m_reindex[mi] with (D, M + mi) > 0 are mapped to -1 (and must be handled by code)
      * i_reindex[x]  with (K, x) > 0 are mapped to 0 (and that bit is ignored)
@@ -1245,15 +1245,14 @@ void prime_gap_parallel(struct Config& config) {
     method2_stats stats(config, valid_ms, SMALL_THRESHOLD, prob_prime);
 
     // For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
-    // This makes it harder to print (see akward inner loop)
+    // This makes it harder to print (see awkward inner loop)
     primesieve::iterator it;
     uint64_t prime = 0;
     while (true) {
         // Handle primes (+1) <= stats.next_mult
 
         vector<pair<uint32_t, uint32_t>> p_and_r;
-        prime = it.next_prime();
-        for ( ; prime <= SMALL_THRESHOLD; prime = it.next_prime()) {
+        for (prime = it.next_prime(); prime <= SMALL_THRESHOLD; prime = it.next_prime()) {
             stats.pi_interval += 1;
 
             // Handled by coprime_composite above
@@ -1286,27 +1285,27 @@ void prime_gap_parallel(struct Config& config) {
             bool lowIsEven = centerOdd == (SIEVE_LENGTH & 1);
 
             for (auto pr : p_and_r) {
-                uint64_t prime = pr.first;
+                uint64_t a_prime = pr.first;
                 uint64_t base_r = pr.second;
                 // For each interval that prints
 
-                uint64_t modulo = (base_r * m) % prime;
+                uint64_t modulo = (base_r * m) % a_prime;
 
-                // flip = (m * K - SL) % prime
-                uint32_t flip = modulo + prime - ((SIEVE_LENGTH+1) % prime);
-                if (flip >= prime) flip -= prime;
+                // flip = (m * K - SL) % a_prime
+                uint32_t flip = modulo + a_prime - ((SIEVE_LENGTH + 1) % a_prime);
+                if (flip >= a_prime) flip -= a_prime;
 
-                uint32_t first = prime - flip - 1;
-                assert( first < prime );
+                uint32_t first = a_prime - flip - 1;
+                assert(first < a_prime );
 
                 if (first < SIEVE_INTERVAL) {
-                    uint32_t shift = prime;
-                    if (prime > 2) {
+                    uint32_t shift = a_prime;
+                    if (a_prime > 2) {
                         bool evenFromLow = (first & 1) == 0;
                         bool firstIsEven = lowIsEven == evenFromLow;
 
                         #ifdef GMP_VALIDATE_FACTORS
-                            validate_factor_m_k_x(stats, test, K, M_start + mi, first, prime, SL);
+                            validate_factor_m_k_x(stats, test, K, M_start + mi, first, a_prime, SL);
                             assert( (mpz_even_p(test) > 0) == firstIsEven );
                             assert( mpz_odd_p(test) != firstIsEven );
                         #endif  // GMP_VALIDATE_FACTORS
@@ -1315,7 +1314,7 @@ void prime_gap_parallel(struct Config& config) {
                             assert( (first >= SIEVE_INTERVAL) || composite[mii][i_reindex_m[first]] );
 
                             // divisible by 2 move to next multiple (an odd multiple)
-                            first += prime;
+                            first += a_prime;
                         }
 
                         // Don't need to count cross off even multiples.
@@ -1478,7 +1477,7 @@ void prime_gap_parallel(struct Config& config) {
         const uint64_t base_r = mpz_fdiv_ui(K, prime);
 
         modulo_search_euclid_all_large(M_start, M_inc, SL, prime, base_r, [&](
-                    const uint32_t mi, uint64_t first) {
+                    uint32_t mi, uint64_t first) {
             assert (mi < M_inc);
 
             stats.m_stops_interval += 1;
@@ -1576,7 +1575,7 @@ void prime_gap_parallel(struct Config& config) {
             }
 
             #ifdef SAVE_INCREMENTS
-            if (config.save_unknowns && prime > 1e9 && prime != LAST_PRIME) {
+            if (config.save_unknowns && prime > 1e10 && prime != LAST_PRIME) {
                 // reset unknown_filename if cached;
                 config.unknown_filename = "";
                 uint64_t old = config.max_prime;
@@ -1592,7 +1591,7 @@ void prime_gap_parallel(struct Config& config) {
         }
     }
 
-    // Likely zerod in the last interval, but needed no printing
+    // Likely zeroed in the last interval, but needed no printing
     stats.pi += stats.pi_interval;
     stats.prime_factors += stats.small_prime_factors_interval;
     stats.prime_factors += stats.large_prime_factors_interval;

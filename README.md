@@ -246,7 +246,7 @@ real	0m0.122s
 
 ### Gap Test
 
-Quick note, `python gap_test.py ...` and `./gap_test_simple` should be roughly equivilant.
+Quick note, `python gap_test.py ...` and `./gap_test_simple` should be roughly equivalent.
 `python gap_test.py` supports `--stats` to SLOWLY double check `./gap_stats` and `--plots` to print fun plots.
 
 
@@ -428,7 +428,7 @@ See [BENCHMARKS.md](BENCHMARKS.md)
 
 ## Theory
 
-Theory and justifaction for some calculations in present in [THEORY.md](THEORY.md)
+Theory and justification for some calculations in present in [THEORY.md](THEORY.md)
 
 ## Setup
 
@@ -531,7 +531,7 @@ $ ./gap_stats --unknown-filename 907_2190_1_200_s11000_l100M.txt
 # Verify "RECORD : top  50% (    26) sum(prob) = 1.50e-05 (avg: 5.77e-07)"
 # Verify "RECORD : top 100% (    53) sum(prob) = 2.15e-05 (avg: 4.06e-07)"
 
-# Optionaly validate combined_sieve results with ecm
+# Optionally validate combined_sieve results with ecm
 $ python misc/double_check.py --seed=123 --unknown-filename unknowns/907_2190_1_200_s11000_l100M.txt -c 5 --B1 1000
 1 * 907# / 2190 	unknowns 218 + 212 = 430
 			+1423  had trivial factor of 2 skipping
@@ -700,7 +700,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Optimize D helper
   * [x] Integrate faster prime iterator (libprimesieve)
   * [x] ETA for `combined_sieve` timing.
-  * [x] Test number to be marked combosite see if already marked by 2 / 3 and skip (e.g. try to avoid memory lookup)
+  * [x] Test number to be marked composite see if already marked by 2 / 3 and skip (e.g. try to avoid memory lookup)
   * [x] "expect %ld left" doesn't match
   * [x] Write time_sieve into DB
   * Method2 (all composites in memory)
@@ -711,7 +711,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
     * [x] Look at Method1 vs Method2 writeup and understand why outputs seem different
     * [x] Use reindex\_m trick to reduce number size of composites
     * [x] Do all primes for small ms (to get better memory access patterns)
-    * [x] check GCD with P# to avoid writting to main memory. (didn't work)
+    * [x] check GCD with P# to avoid writing to main memory. (didn't work)
     * [x] Printing at each 1B primes tells you PRP tests saved / time taken.
     * [x] Write up of Method1 vs Method2 (from memory M2 is faster but uses more memory)
   * Method1
@@ -749,7 +749,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] `--top-x-percent` (see THEORY.md)
   * [x] Correlation between Expected Gap & Gap
   * [x] Show P(record) / day
-  * [x] Multithreaded
+  * [x] Multi-threaded
   * [x] Update `m_stats` (with `test_time`),
   * [x] Plot P(gap > min\_merit) and P(record) sorted and unsorted.
   * [x] Option to toggle between OpenPFGW and gmp (see note in benchmarking below)
@@ -760,7 +760,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * benchmarking
   * [x] Experimentally compute `prime_time_estimate`
   * [x] Redo prime-time with user time (gmp better)
-    * There's serious overhead using subproccess, and I see 150% CPU usage.
+    * There's serious overhead using subprocess, and I see 150% CPU usage.
     * I Tried passing via stdin (pfgw supports -- but quits after one) but couldn't make it work.
     * MF suggest you can use gwnum library and hack some api but seems like a like of work for ~20-200% gain on reasonable primes.
   * [x] Add int64 `modulo_search_euclid_all`

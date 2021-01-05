@@ -28,7 +28,7 @@ pfgw.log
 pfgw-prime.log
 
 # CLion
-cmake-build-debug/
+cmake-build-*/
 
 # Random
 __pycache__/

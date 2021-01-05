@@ -28,18 +28,18 @@ except:
     has_pgv = False
 
 
-def is_prime(num, strnum, dist):
+def is_prime(num, str_n, dist):
     # TODO print log of which library is being used.
     if gmpy2.num_digits(num, 2) > 8000:
-        return openPFGW_is_prime(strnum + str(dist))
+        return openPFGW_is_prime(str_n + str(dist))
 
     return gmpy2.is_prime(num)
 
 
-def openPFGW_is_prime(strn):
+def openPFGW_is_prime(str_n):
     # XXX: getstatusoutput runs in a shell, does this double the overhead?
     # Overhead of subprocess calls seems to be ~0.03
-    s = subprocess.getstatusoutput("./pfgw64 -f0 -q" + strn)
+    s = subprocess.getstatusoutput("./pfgw64 -f0 -q" + str_n)
     assert s[1].startswith('PFGW'), s
     return s[0] == 0
 
@@ -85,13 +85,14 @@ def openPFGW_ABC(m, K, offsets):
     return None, len(offsets)
 
 
-def determine_next_prime(m, strn, K, unknowns, SL):
+def determine_next_prime(m, str_n, K, unknowns, SL):
     center = m * K
     tests = 0
 
     for i in unknowns:
-        tests += 1;
-        if is_prime(center + i, strn, i):
+        assert i > 0
+        tests += 1
+        if is_prime(center + i, str_n, i):
             return tests, i
 
     # next_prime(...) outside of SL
@@ -99,27 +100,26 @@ def determine_next_prime(m, strn, K, unknowns, SL):
     return tests + tests1, next_p
 
 
-def determine_prev_prime(m, strn, strk, K, unknowns, SL, primes, remainder):
+def determine_prev_prime(m, str_n, K, unknowns, SL, primes, remainder):
     center = m * K
     tests = 0
 
     for i in unknowns:
         assert i < 0
         tests += 1;
-        if is_prime(center + i, strn, i):
+        if is_prime(center + i, str_n, i):
             return tests, -i
 
     # prev_prime(...) outside of SL need more code.
-    tests1, prev_p = determine_prev_prime_large(m, strn, K, SL, primes, remainder)
+    tests1, prev_p = determine_prev_prime_large(m, str_n, K, SL, primes, remainder)
     return tests + tests1, prev_p
 
 
 def determine_next_prime_large(m, K, SL):
     # XXX: PFGW fallback
 
-
     # XXX: parse to version and verify > 6.2.99
-    assert gmpy2.mp_version() == 'GMP 6.2.99', (m, strn)
+    assert gmpy2.mp_version() == 'GMP 6.2.99', gmpy2.mp_version()
 
     center = m * K
     # Double checks center + SL.
@@ -127,7 +127,7 @@ def determine_next_prime_large(m, K, SL):
     return 0, next_p
 
 
-def determine_prev_prime_large(m, strn, K, SL, primes, remainder):
+def determine_prev_prime_large(m, str_n, K, SL, primes, remainder):
     global has_pgv
 
     tests = 0
@@ -148,18 +148,18 @@ def determine_prev_prime_large(m, strn, K, SL, primes, remainder):
         for i, composite in enumerate(reversed(composites)):
             if not composite:
                 tests += 1
-                if is_prime(center -(SL+i), strn, -(SL+i)):
+                if is_prime(center -(SL+i), str_n, -(SL+i)):
                     t1 = time.time()
                     if (t1 - t0) > 60:
                         print("\tprimegapverify prev_prime({}{}) took {:.2f} second ({} tests, {:.3f}s/test"
-                            .format(strn, -SL, t1 - t0, tests, (t1 - t0)/tests))
+                            .format(str_n, -SL, t1 - t0, tests, (t1 - t0)/tests))
                     return tests, SL+i
 
-        assert False, ("Huge prev_prime!", strn, ">", 5 * SL)
+        assert False, ("Huge prev_prime!", str_n, ">", 5 * SL)
 
     # Double checks center + SL.
     # Very ugly fallback.
-    print("Falling back to slow prev_prime({}{})".format(strn, -SL))
+    print("Falling back to slow prev_prime({}{})".format(str_n, -SL))
     t0 = time.time()
     tests0 = tests
     for i in range(SL, 5*SL+1):
@@ -170,12 +170,12 @@ def determine_prev_prime_large(m, strn, K, SL, primes, remainder):
                 composite = True
                 break
         if not composite:
-            tests += 1;
-            if is_prime(center - i, strn, -i):
+            tests += 1
+            if is_prime(center - i, str_n, -i):
                 t1 = time.time()
                 if (t1 - t0) > 60:
                     print("\tfallback prev_prime({}{}) took {:.2f} second ({} tests, {:.3f}s/test"
-                        .format(strn, -SL, t1 - t0, tests - tests0, (t1 - t0)/(tests - tests0)))
+                        .format(str_n, -SL, t1 - t0, tests - tests0, (t1 - t0)/(tests - tests0)))
                 return tests, i
 
     assert False

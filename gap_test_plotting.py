@@ -129,15 +129,16 @@ def stats_plots(
         label_e = f"E({label}) = {E:.0f}"
         axis.axvline(x=E, ymax=1.0/1.2, color=color, label=label_e)
 
-    egap_n = len(data.experimental_gap)
-    if len(data.expected_gap) != egap_n:
-        print("experimental_gap size mismatch", len(data.expected_gap), egap_n)
-    if egap_n:
-        slope, intercept, R, _, _ = stats.linregress(data.expected_gap[:egap_n], data.experimental_gap)
-        print ()
-        print ("R^2 for expected gap: {:.3f}, gap = {:.1f} + {:.3f} * expected".format(
+    e_gap_n = len(data.experimental_gap)
+    if len(data.expected_gap) != e_gap_n:
+        print("experimental_gap size mismatch", len(data.expected_gap), e_gap_n)
+    if e_gap_n:
+        slope, intercept, R, _, _ = stats.linregress(
+            data.expected_gap[:e_gap_n], data.experimental_gap)
+        print()
+        print("R^2 for expected gap: {:.3f}, gap = {:.1f} + {:.3f} * expected".format(
             R**2, intercept, slope))
-        print ()
+        print()
 
     if args.num_plots > 0:
         # Plot 1: Gap(side):
@@ -218,7 +219,7 @@ def stats_plots(
     if args.num_plots > 1:
         # Plot 2: Gap(combined):
         #   [ prob all m,               expected,   cdf ]
-        #   [ sum(prob) & count,  dist,       cdf ] (for >minmerit)
+        #   [ sum(prob) & count,  dist,       cdf ] (for >min merit)
         #   [ sum(prob) & count,  dist,       cdf ] (for record)
 
         # Set up subplots.
@@ -264,7 +265,7 @@ def stats_plots(
             axis.set_xlabel(" # of m's tested")
             axis.set_ylabel(f'Sum(P(gap {label})')
 
-            # This assumes that experimental_gap is indexeded the same as prob_data
+            # This assumes that experimental_gap is indexed the same as prob_data
             # This is not true unless --prp-top-percent is 100
             if len(prob_data) == len(data.experimental_gap):
                 zipped = list(zip(prob_data, data.experimental_gap))
@@ -277,22 +278,22 @@ def stats_plots(
 
             #Experimental
             if row == 1:
-                cumcount = np.cumsum(np.array(gap_real_ord) > min_merit_gap)
+                cum_count = np.cumsum(np.array(gap_real_ord) > min_merit_gap)
             else:
-                cumcount = np.cumsum(np.array([g in record_gaps for g in gap_real_ord]))
+                cum_count = np.cumsum(np.array([g in record_gaps for g in gap_real_ord]))
 
-            print(f"{label:20} | sum(P) = {sum(prob_data):.4f}, count(Experimental) = {cumcount[-1]}")
+            print(f"{label:20} | sum(P) = {sum(prob_data):.4f}, count(experimental) = {cum_count[-1]}")
 
             tests = list(range(1, len(p_gap_merit_ord)+1))
-            if cumcount[-1] > 0:
-                axis.plot(tests, cumcount, label='Count ' + label)
+            if cum_count[-1] > 0:
+                axis.plot(tests, cum_count, label='Count ' + label)
 
             # Theoretical
-            cumsum_p = np.cumsum(p_gap_merit_ord)
-            cumsum_p_sorted = np.cumsum(p_gap_merit_sorted)
+            cum_sum_p = np.cumsum(p_gap_merit_ord)
+            cum_sum_p_sorted = np.cumsum(p_gap_merit_sorted)
 
-            axis.plot(tests, cumsum_p, label=f'Sum(P({label}))')
-            z  = axis.plot(tests, cumsum_p_sorted, label=f'Sum(P({label})) (best first)')
+            axis.plot(tests, cum_sum_p, label=f'Sum(P({label}))')
+            axis.plot(tests, cum_sum_p_sorted, label=f'Sum(P({label})) (best first)')
             axis.legend(loc='upper left')
 
             # Hist

@@ -57,7 +57,7 @@ def get_arg_parser():
         help="Only dump higher merit m_stats rows")
 
     #parser.add_argument('--delete-unknown-files', action='store_true',
-    #    help="Should unknow files be deleted")
+    #    help="Should unknown files be deleted")
 
     return parser
 
@@ -74,12 +74,12 @@ def count_results(conn, p, d, ms, me):
 def check_contained(args, ms, minc):
     # Don't allow range to partially intersect [mstart, mend]
 
-    if ms < args.mstart and me >= args.mstart:
+    if ms < args.mstart < me:
         print(f"[{ms},{me+1} = {ms} + {minc}) overlaps mstart({mstart})")
         exit(1)
 
     me = ms + minc - 1
-    if ms <= args.mend and me > args.mend:
+    if ms <= args.mend < me:
         print(f"[{ms},{me+1} = {ms} + {minc}) overlaps mend({mend})")
         exit(1)
 
@@ -299,7 +299,7 @@ def finalize_range_and_delete_low_merit(conn, args, ranges, unknown_files):
     print("rm", " ".join(unknown_files))
 
 
-def attemp_finalize(args):
+def attempt_finalize(args):
     unknown_fns = [os.path.basename(path) for path in glob.glob("unknowns/*M.txt")]
     unknown_fns.sort()
 
@@ -342,4 +342,4 @@ if __name__ == "__main__":
     assert os.path.exists(args.search_db), (
         f"Search database ({args.search_db!r}) doesn't exist")
 
-    attemp_finalize(args)
+    attempt_finalize(args)

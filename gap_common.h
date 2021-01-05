@@ -148,7 +148,7 @@ double prob_prime_and_stats(const struct Config& config, mpz_t &K);
 
 /* Prime Stuff */
 
-bool isprime_brute(uint32_t n);
+bool is_prime_brute(uint32_t n);
 vector<uint32_t> get_sieve_primes(uint32_t n);
 
 size_t primepi_estimate(uint64_t max_prime);

@@ -90,7 +90,7 @@ $ /usr/bin/time -v ./combined_sieve $PARAMS -p <P> --sieve-range <SL/1M> --minc 
 This hides a number of complexity.
 
 * `--minc` scaling
-  * linearly for small primes and sublinearly for large primes (>50x sieve-length).
+  * linearly for small primes and sublinear for large primes (>50x sieve-length).
   * larger values suffer from worse cache performance (or fail to allocate)
   * optimal value seem to be 50,000 - 400,000 based on P#.
 * `--sieve-range`

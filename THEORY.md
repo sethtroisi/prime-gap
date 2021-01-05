@@ -9,7 +9,7 @@
   * [`gap_stats`](#gap_stats)
   * [Choosing `--top-x-percent`](#choosing---top-x-percent)
   * [Out of order testing](#out-of-order-testing)
-  * [`missing gaps`](#missing_gaps)
+  * [`missing gaps`](#missing-gaps)
 
 # Theory
 
@@ -28,9 +28,10 @@ This section abbreviates gcd(a, b) = c as (a, b) = c
 1. `prob_prime` is improved be adjusted for sharing no factor with K
   1. `prob_prime ≈ (1 / log(m * K)) / Prod(1 - 1/p, p <= P)`
 1. Over all `0 <= mi < M_inc` find
+
   ```python
-      min(len(i for i in range(-SL, SL) if math.gcd(m * K + i, K) == 1)
-          for m in range(M_start, M_start+M_inc) if math.gcd(m, D) == 1)
+min(sum(math.gcd(m * K + i, K) == 1 for i in range(-SL, SL + 1))
+    for m in range(M_start, M_start + M_inc) if math.gcd(m, D) == 1)
   ```
   1. Because D often includes many small factors can improve accuracy by also handling factor of D
     1. **Approximated** by replacing `m` with `m % D`
@@ -88,7 +89,7 @@ We can estimate what percent of numbers will be removed by using
 
 ---
 
-Notice from the graph that each of the individual factors `dp` might have a deficientcy of divisibilty
+Notice from the graph that each of the individual factors `dp` might have a deficiency of divisibility
 but the product `d` will still have excess of divisibility (see `d=30` near `8*10^4`)
 
 In the end the best advice is to try to minimize avg factors / m OR maximize expected gap (from `gap_stats`).
@@ -99,7 +100,7 @@ In the end the best advice is to try to minimize avg factors / m OR maximize exp
 Given `m * K` and a prime limit how many PRP tests to find the next/previous prime?
 
 * `prob_prime(X) ≈ 1 / log(X)`
-  * This result is due to the [Prime Number Theorum](https://en.wikipedia.org/wiki/Prime_number_theorem)
+  * This result is due to the [Prime Number Theorem](https://en.wikipedia.org/wiki/Prime_number_theorem)
   * This approximates `prob_prime(random.randint(2, X))`, not `prob_prime(X)`
 * A Better estimate is given by `prob_prime(X) ≈ (log(X) - 1) / log(X)^2`
   * `prob_prime(X) ≈ 1/log(X) - 1/log(X)^2`
@@ -119,11 +120,11 @@ How many expected tests to find the next prime? one over the probability of prim
 As `P_limit` increases calculate how many fewer expected tests will be performed.
 
 ```python
-def ExpectedTests(test, m * K, old_limit, new_limit):
+def ExpectedTests(test, m, K, old_limit, new_limit):
         GAMMA = 0.57721566
-        prob_p = 1 / log(m * K) - 1 / log(m * K) ** 2
+prob_p = 1 / log(m * K) - 1 / log(m * K) ** 2
         # 1 / (prob_p * log(old_limit) * exp(GAMMA)) - 1 / (prob_p * log(new_limit) * exp(GAMMA)
-        return 1 / (prob_p * math.exp(GAMMA)) * (1/math.log(old_limit) - 1/math.log(new_limit))
+return 1 / (prob_p * math.exp(GAMMA)) * (1/math.log(old_limit) - 1/math.log(new_limit))
 ```
 
 
@@ -177,7 +178,7 @@ $ time ./combined_sieve --unknown-filename 1_1009_210_2000_s7000_l4000M.txt --sa
 	~ 2x 24.35 PRP/m		(~ 294.0 skipped PRP => 15.3 PRP/seconds)
 ```
 
-Then testing each interval seperatly
+Then testing each interval separately
 
 ```bash
 for fn in `ls -tr 1_1009*`; do
@@ -292,7 +293,7 @@ Some thoughts:
 `missing_gap_test.py` had two options
 1. S1: Find `prev_prime` (or equivalently `next_prime`)
   1. For each `missing_gap` let `tenative_next_prime = missing_gap - prev_prime`.
-      * >98% of the time `tenative_next_prime` is a known combosite; skip
+      * >98% of the time `tenative_next_prime` is a known composite; skip
       * ~1% (`prob_prime` * X unknowns) is a prime! Check if `next_prime(center) = tenative_next_prime`
 1. S2: Only check `unknown_l` that have `unknown_h = missing_gap - unknown_l`
     * Only checks ~1/3 of `unknown_l` BUT need to validate both sides now.

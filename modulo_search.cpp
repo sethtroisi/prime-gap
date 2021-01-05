@@ -93,7 +93,7 @@ uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t
         //     return mult;
     }
 
-    // XXX: reduce to simplier problem
+    // XXX: reduce to simpler problem
     uint32_t new_a = a - (p % a);
 
 //    assert( 0 <= new_a && new_a < a );
@@ -149,7 +149,7 @@ uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
         }
     }
 
-    // reduce to simplier problem
+    // reduce to simpler problem
     uint64_t new_a = a - (p % a);
 //    assert( 0 <= new_a && new_a < a );
     uint64_t k = modulo_search_euclid(a, new_a, l % a, r % a);
@@ -225,7 +225,6 @@ uint64_t modulo_search_euclid_gcd2(
 
 //        assert( (modulo <= SL) || (modulo + SL) >= prime );
     }
-    return max_m;
 }
 
 uint64_t modulo_search_euclid_gcd(
@@ -304,7 +303,7 @@ void modulo_search_euclid_all_small(
         if (mi >= max_m) return;
 
         /**
-         * Guarenteed not to overflow.
+         * Guaranteed not to overflow.
          * base_r < P, mi < max_m
          * P * max_m < uint64_t
          */

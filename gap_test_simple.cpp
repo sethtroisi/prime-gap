@@ -90,14 +90,14 @@ void load_and_verify_unknowns(
         const int SIEVE_LENGTH,
         std::ifstream &unknown_file,
         vector<int32_t> (&unknowns)[2]) {
-    int unknown_l;
-    int unknown_u;
+    int unknown_l = 0;
+    int unknown_u = 0;
 
     {
-        uint32_t mtest;
-        unknown_file >> mtest;
-        if (mtest != mi ) {
-            cout << "Mismatched mi " << mtest << " vs " << mi << endl;
+        uint32_t m_test = 0;
+        unknown_file >> m_test;
+        if (m_test != mi ) {
+            cout << "Mismatched mi " << m_test << " vs " << mi << endl;
         }
         std::string delim;
         unknown_file >> delim;
@@ -112,7 +112,7 @@ void load_and_verify_unknowns(
 
         if (rle) {
             for (int group = 0; group <= 1; group++) {
-                unsigned char c1, c2;
+                unsigned char c1 = 0, c2 = 0;
                 int accum = 0;
                 int unknown_count = group == 0 ? unknown_l : unknown_u;
                 for (int k = 0; k < unknown_count; k++) {
@@ -129,7 +129,7 @@ void load_and_verify_unknowns(
                 }
             }
         } else {
-            int c;
+            int c = 0;
             for (int k = 0; k < unknown_l; k++) {
                 unknown_file >> c;
                 assert( 1 <= -c && -c <= SIEVE_LENGTH );
@@ -161,15 +161,15 @@ void test_interval(
         vector<int32_t> (&unknowns)[2],
         int &prev_p, int &next_p) {
 
-    mpz_t center, ptest;
-    mpz_init(center); mpz_init(ptest);
+    mpz_t center, prime_test;
+    mpz_init(center); mpz_init(prime_test);
     mpz_mul_ui(center, K, m);
 
     for (auto low : unknowns[0]) {
         s_total_prp_tests += 1;
 
-        mpz_sub_ui(ptest, center, low);
-        if (mpz_probab_prime_p(ptest, 25)) {
+        mpz_sub_ui(prime_test, center, low);
+        if (mpz_probab_prime_p(prime_test, 25)) {
             prev_p = low;
             break;
         }
@@ -177,8 +177,8 @@ void test_interval(
     for (auto high : unknowns[1]) {
         s_total_prp_tests += 1;
 
-        mpz_add_ui(ptest, center, high);
-        if (mpz_probab_prime_p(ptest, 25)) {
+        mpz_add_ui(prime_test, center, high);
+        if (mpz_probab_prime_p(prime_test, 25)) {
             next_p = high;
             break;
         }
@@ -188,23 +188,23 @@ void test_interval(
         s_gap_out_of_sieve_prev += 1;
 
         // Double checks SL which is fine.
-        mpz_sub_ui(ptest, center, SIEVE_LENGTH);
-        mpz_prevprime(ptest, ptest);
-        mpz_sub(ptest, center, ptest);
-        prev_p = mpz_get_ui(ptest);
+        mpz_sub_ui(prime_test, center, SIEVE_LENGTH);
+        mpz_prevprime(prime_test, prime_test);
+        mpz_sub(prime_test, center, prime_test);
+        prev_p = mpz_get_ui(prime_test);
     }
 
     if (next_p == 0) {
         s_gap_out_of_sieve_next += 1;
 
         // Double checks SL which is fine.
-        mpz_add_ui(ptest, center, SIEVE_LENGTH);
-        mpz_nextprime(ptest, ptest);
-        mpz_sub(ptest, ptest, center);
-        next_p = mpz_get_ui(ptest);
+        mpz_add_ui(prime_test, center, SIEVE_LENGTH);
+        mpz_nextprime(prime_test, prime_test);
+        mpz_sub(prime_test, prime_test, center);
+        next_p = mpz_get_ui(prime_test);
     }
 
-    mpz_clear(center); mpz_clear(ptest);
+    mpz_clear(center); mpz_clear(prime_test);
 }
 
 
@@ -229,7 +229,7 @@ void prime_gap_test(const struct Config config) {
     }
 
     // ----- Open unknown input file
-    bool is_rle = config.rle;
+    bool is_rle;
     std::ifstream unknown_file;
     {
         std::string fn = Args::gen_unknown_fn(config, ".txt");

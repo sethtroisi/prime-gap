@@ -29,12 +29,12 @@ UNKNOWN_FILENAME_RE = re.compile(
 
 
 class TeeLogger:
-    def __init__(self, fn, sysout):
+    def __init__(self, fn, out):
         logging.basicConfig(
             level=logging.INFO,
             format="%(asctime)-15s %(levelname)s: %(message)s",
             handlers=[
-                logging.StreamHandler(sys.stdout),
+                logging.StreamHandler(out),
                 logging.FileHandler(fn, mode="w"),
             ]
         )
@@ -49,9 +49,8 @@ class TeeLogger:
 
 
 def logger_context(args):
-    # contextlib.nullcontext() requires python 3.7
     if not args.save_logs:
-        return contextlib.suppress()
+        return contextlib.nullcontext()
 
     assert args.unknown_filename
     unknown_path = transform_unknown_filename(args.unknown_filename, "logs", "log")
@@ -65,13 +64,13 @@ def logger_context(args):
             print("Saving logs to '{}'".format(log_fn))
             return contextlib.redirect_stdout(TeeLogger(log_fn, sys.stdout))
 
-    assert False, "log file '{}' already exists x5".format(log_fn_base)
+    assert False, "log file '{}' already exists x5".format(unknown_path)
     return context
 
 
 def transform_unknown_filename(unknown_fn, directory, extension):
-    '''Return a new path similiar to unknown_fn with corrected extension
-    and in direcotry (if exists) otherwise without directory'''
+    '''Return a new path similar to unknown_fn with corrected extension
+    and in directory (if exists) otherwise without directory'''
     fn = os.path.splitext(os.path.basename(unknown_fn))[0]
     if not extension.startswith("."):
         extension = "." + extension
@@ -161,12 +160,12 @@ def parse_unknown_line(line):
 
     match = re.match(b"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
     assert match, start
-    mtest, unknown_l, unknown_u = map(int, match.groups())
+    m_test, unknown_l, unknown_u = map(int, match.groups())
 
     # Check if rle or raw
     rle = b" " not in c_l[:20]
     if rle:
-        def unrle(sign, digits):
+        def accum_rle(sign, digits):
             # Read digits(bytes) in pairs (see save_unknowns_method2)
             values = []
             accum = 0
@@ -176,8 +175,8 @@ def parse_unknown_line(line):
                 values.append(sign * accum)
             return values
 
-        unknowns[0] = unrle(-1, c_l)
-        unknowns[1] = unrle(+1, c_h[:-1])
+        unknowns[0] = accum_rle(-1, c_l)
+        unknowns[1] = accum_rle(+1, c_h[:-1])
     else:
         unknowns[0] = list(map(int,c_l.split(b" ")))
         unknowns[1] = list(map(int,c_h.split(b" ")))
@@ -187,5 +186,5 @@ def parse_unknown_line(line):
     assert unknown_l == unknown_l_test, (unknown_l, unknown_l_test, "\t", start)
     assert unknown_u == unknown_u_test, (unknown_u, unknown_u_test, "\t", start)
 
-    return mtest, unknown_l, unknown_u, unknowns
+    return m_test, unknown_l, unknown_u, unknowns
 

@@ -51,7 +51,7 @@ def get_arg_parser():
              " from unknown-results filename")
 
     parser.add_argument('--min-merit', type=int, default=12,
-        help="only display prime gaps with merit >= minmerit")
+        help="only display prime gaps with merit >= min merit")
 
     parser.add_argument('--megagap', type=int, default=0,
         help="Search for megagaps (of this size or greater)")
@@ -97,11 +97,11 @@ def process_line(
 
     # Calculate extended gap (see gap_stats)
     prob_prime_coprime, coprime_extended = \
-            gap_test_stats.setup_extended_gap(SL, K, P, D, prob_prime)
+            gap_test_stats.setup_extended_gap(SL, P, D, prob_prime)
     K_mod_d = K % D
 
     # Ignore KeyboardInterrupt (Manager catches first and sets early_stop_flag)
-    # Normal flow is recieve sentinel (None) stop
+    # Normal flow is receive sentinel (None) stop
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, cleanup)
 
@@ -116,29 +116,28 @@ def process_line(
         if early_stop_flag.is_set():
             assert work is None
 
-        if work == None:
+        if work is None:
             cleanup()
 
         m, mi, prev_p, next_p, prob_record, log_n, line = work
 
-        mtest, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
-        assert mi == mtest
+        m_test, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
+        assert mi == m_test
 
         # Used for openPFGW
-        strk = "{}#/{}".format(P, D)
-        strn = "{}*{}#/{}+".format(m, P, D)
+        str_n = "{}*{}#/{}+".format(m, P, D)
 
         t0 = time.time()
 
         if megagap:
             action = "Starting" if prev_p == next_p == 0 else "Resuming"
-            print(f"\t{action} {strn:25} on thread {thread_i}")
+            print(f"\t{action} {str_n:25} on thread {thread_i}")
 
         p_tests = 0
         # prev_p > 0 means we loaded a partial result
         if prev_p <= 0:
             p_tests, prev_p = gap_utils_primes.determine_prev_prime(
-                    m, strn, strk, K, unknowns[0], SL, primes, remainder)
+                    m, str_n, K, unknowns[0], SL, primes, remainder)
 
         test_next = True
         new_prob_record = 0
@@ -188,7 +187,7 @@ def process_line(
 
         n_tests, next_p = 0, 0
         if test_next:
-            n_tests, next_p = gap_utils_primes.determine_next_prime(m, strn, K, unknowns[1], SL)
+            n_tests, next_p = gap_utils_primes.determine_next_prime(m, str_n, K, unknowns[1], SL)
 
         test_time = time.time() - t0
 
