@@ -277,7 +277,7 @@ pair<uint32_t, uint32_t> calculate_thresholds_method2(
     // (medium vs modulo_search)  count_coprime_sieve vs M*S/P * (log2(P) - log2(SL))
     float M_PER_P_CROSSOVER = 1.0 * config.minc * sieve_interval / count_coprime_sieve;
     // correct for how much work it takes to skip to next m
-    float MEDIUM_MULT = std::max(1.9, 0.5 * log2(M_PER_P_CROSSOVER / count_coprime_sieve));
+    float MEDIUM_MULT = std::max(1.9, 0.65 * log2(M_PER_P_CROSSOVER / count_coprime_sieve));
     uint64_t MEDIUM_CROSSOVER_SEARCH = MEDIUM_MULT * M_PER_P_CROSSOVER;
 
     // XXX: What would it look like to do this more dynamically?
