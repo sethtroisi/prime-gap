@@ -18,7 +18,7 @@ OUT	= combined_sieve gap_stats gap_test_simple benchmark
 CC	= g++
 CFLAGS	= -Wall -Werror -O3
 # Need for local gmp / primesieve
-LDFLAGS	= -L /usr/local/lib -lgmp -lsqlite3
+LDFLAGS	= -L /usr/local/lib -lgmp -lsqlite3 -fopenmp
 #LDFLAGS	=
 DEFINES =
 

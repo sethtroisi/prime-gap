@@ -1044,10 +1044,12 @@ void prime_gap_parallel(struct Config& config) {
 
     vector<int32_t> valid_mi;
     vector<int32_t> m_reindex(M_inc, -1);
+    vector<bool> m_not_coprime(M_inc, 1);
     {
         for (uint32_t mi = 0; mi < M_inc; mi++) {
             if (gcd(M_start + mi, D) == 1) {
                 m_reindex[mi] = valid_mi.size();
+                m_not_coprime[mi] = 0;
                 valid_mi.push_back(mi);
             }
         }
@@ -1074,7 +1076,7 @@ void prime_gap_parallel(struct Config& config) {
     vector<size_t> i_reindex_wheel_count(reindex_m_wheel, 0);
 #else
     uint32_t reindex_m_wheel = 1;
-    vector<uint32_t> *i_reindex_wheel = nullptr;
+    vector<uint32_t> *i_reindex_wheel = &i_reindex;
 #endif  // METHOD2_WHEEL
 
     {
@@ -1276,8 +1278,8 @@ void prime_gap_parallel(struct Config& config) {
             assert(mii >= 0);
 
             uint64_t m = M_start + mi;
-            const vector<uint32_t> &i_reindex_m = reindex_m_wheel > 1 ?
-                i_reindex_wheel[m % reindex_m_wheel] : i_reindex;
+            const vector<uint32_t> &i_reindex_m = i_reindex_wheel[m % reindex_m_wheel];
+            vector<bool> &composite_mii = composite[mii];
 
             bool centerOdd = ((D & 1) == 0) && (m & 1);
             bool lowIsEven = centerOdd == (SIEVE_LENGTH & 1);
@@ -1309,7 +1311,7 @@ void prime_gap_parallel(struct Config& config) {
                         #endif  // GMP_VALIDATE_FACTORS
 
                         if (firstIsEven) {
-                            assert( (first >= SIEVE_INTERVAL) || composite[mii][i_reindex_m[first]] );
+                            assert( (first >= SIEVE_INTERVAL) || composite_mii[i_reindex_m[first]] );
 
                             // divisible by 2 move to next multiple (an odd multiple)
                             first += a_prime;
@@ -1320,15 +1322,15 @@ void prime_gap_parallel(struct Config& config) {
                     }
 
                     for (size_t x = first; x < SIEVE_INTERVAL; x += shift) {
-                        composite[mii][i_reindex_m[x]] = true;
+                        composite_mii[i_reindex_m[x]] = true;
                         stats.small_prime_factors_interval += 1;
                     }
                 }
             }
         }
 
-        // Don't print partial interval.
-        if (prime >= SMALL_THRESHOLD)
+        // Don't print final partial interval
+        if (prime < stats.next_print)
             break;
 
         // Calculated here with locals
@@ -1408,9 +1410,7 @@ void prime_gap_parallel(struct Config& config) {
         -    // * /
         */
 
-        // XXX: Might be faster if broken into two loops with odd and even X?
-
-        // Find m*K = [L, R]
+        // Find m*K = X, X in [L, R]
         for (int64_t X : coprime_X) {
             int32_t dist = X - SIEVE_LENGTH;
             int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
@@ -1425,20 +1425,21 @@ void prime_gap_parallel(struct Config& config) {
                 }
             }
 
-            // XXX: loop is only needed when prime < sieve_length,
-            // How to have two versions of this code, one with loop, one with test (mi_0 < M_inc)
+            // Seperate loop when shift > M_inc not significantly faster
             for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
+                if (m_not_coprime[mi])
+                    continue;
+
                 size_t m = M_start + mi;
                 int32_t mii = m_reindex[mi];
+                assert(mii >= 0);
 
-                if (mii >= 0) {
-                    stats.small_prime_factors_interval += 1;
+                stats.small_prime_factors_interval += 1;
 #if METHOD2_WHEEL
-                    composite[mii][i_reindex_wheel[m % reindex_m_wheel][X]] = true;
+                composite[mii][i_reindex_wheel[m % reindex_m_wheel][X]] = true;
 #else
-                    composite[mii][i_reindex[X]] = true;
+                composite[mii][i_reindex[X]] = true;
 #endif  // METHOD2_WHEEL
-                }
 
 #ifdef GMP_VALIDATE_FACTORS
                 validate_factor_m_k_x(stats, test, K, M_start + mi, X, prime, SL);
@@ -1488,8 +1489,7 @@ void prime_gap_parallel(struct Config& config) {
                 return;
             }
 
-            int32_t mii = m_reindex[mi];
-            if (mii < 0)
+            if (m_not_coprime[mi])
                 return;
 
             // Returning first from modulo_search_euclid_all_small is
@@ -1529,6 +1529,9 @@ void prime_gap_parallel(struct Config& config) {
             if (!coprime_composite[first]) {
                 return;
             }
+
+            int32_t mii = m_reindex[mi];
+            assert( mii >= 0 );
 
             // if coprime with K, try to toggle off factor.
 #if METHOD2_WHEEL

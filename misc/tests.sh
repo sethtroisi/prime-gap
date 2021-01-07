@@ -79,6 +79,12 @@ diff <(echo "2") <(sqlite3 local_tests.db 'SELECT COUNT(*) FROM result WHERE mer
 diff <(echo "1215") <(sqlite3 local_tests.db 'SELECT SUM(prp_next+prp_prev) FROM m_stats')
 
 
+# TODO
+#  - num-plots
+#  - save-logs
+#  - verify one sided skips
+
+
 #### FINALIZE ####
 
 set +x;
