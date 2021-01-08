@@ -81,7 +81,7 @@ class Misc:
     prob_gap_side  = defaultdict(float)
     prob_gap_comb  = defaultdict(float)
 
-    test_unknowns = []
+    test_unknowns = {}
 
 
 def config_hash(config):

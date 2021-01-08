@@ -171,14 +171,25 @@ def stats_plots(
                 color=color, label=f"E({label}) = {E:.0f}")
 
         if misc.test_unknowns:
+            axis_prev = fig.add_subplot(gs[0, 0])
+            axis_next = fig.add_subplot(gs[0, 1])
+            axis_xnth = fig.add_subplot(gs[1, 0])
+
             # prob_prev, prev_next for individual m
             # See Prob_nth in gap_stats
             colors = plt.cm.tab10
-            for i, (u_p, u_n) in enumerate(misc.test_unknowns):
-                label = f"m={args.mstart + data.valid_mi[i]}"
-                plot_prob_nth(axis_prev, u_p, colors(i), label)
-                plot_prob_nth(axis_next, u_n, colors(i), label)
+            for i, (mi, (u_p, u_n)) in enumerate(misc.test_unknowns.items()):
+                label = f"m={args.mstart + mi}"
+                color = colors(i)
+                plot_prob_nth(axis_prev, u_p, color, label)
+                plot_prob_nth(axis_next, u_n, color, label)
 
+                x_p = range(1, len(u_p) + 1)
+                x_n = range(1, len(u_n) + 1)
+                axis_xnth.plot(x_p, u_p, marker='.', color=color, label=label)
+                axis_xnth.plot(x_n, u_n, marker='.', color=color, label=label)
+
+            axis_xnth.legend()
             axis_prev.legend(loc='upper left')
             axis_next.legend(loc='upper right')
             axis_prev.set_yscale('log')

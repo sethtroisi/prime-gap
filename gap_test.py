@@ -511,7 +511,7 @@ def prime_gap_test(args):
                 if mi in unk_mi_of_interest:
                     _, _, _, unknowns = gap_utils.parse_unknown_line(line)
                     # TODO append valid_mi[k] and prob
-                    misc_db.test_unknowns.append(unknowns)
+                    misc_db.test_unknowns[mi] = unknowns
 
                     if mi == max(unk_mi_of_interest):
                         break
