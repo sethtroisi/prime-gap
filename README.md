@@ -657,6 +657,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Produce P(record) / day / core estimate
   * [ ] Check if higher prob is related to unique (mi % d)
 * gap\_test.py
+  * [ ] Test least dense side (or portion) first (See MF Prime Gap Theory #125)
   * [ ] MEGAGAPS (what's remaining here?)
     * [ ] Always test next_p = -1 results (regardless of prp-top-percent)
   * [ ] Clean up fallback prev_prime
