@@ -852,7 +852,7 @@ class method2_stats {
                 const struct Config& config,
                 size_t valid_ms,
                 uint64_t threshold,
-                double prob_prime
+                double initial_prob_prime
         ) {
             start_t = high_resolution_clock::now();
             interval_t = high_resolution_clock::now();
@@ -861,6 +861,7 @@ class method2_stats {
             if (threshold <= 100000)
                next_mult = 10000;
 
+            prob_prime = initial_prob_prime;
             current_prob_prime = prob_prime;
         }
 
@@ -883,6 +884,7 @@ class method2_stats {
 
         uint64_t  validated_factors = 0;
 
+        double prob_prime = 0;
         double current_prob_prime = 0;
 
 };
@@ -1003,6 +1005,124 @@ void validate_factor_m_k_x(
 #endif  // GMP_VALIDATE_FACTORS
 }
 
+void method2_small_primes(const Config &config, const __mpz_struct *K,
+                          method2_stats &stats,
+                          const vector<int32_t> &valid_mi,
+                          const vector<int32_t> &m_reindex, uint32_t reindex_m_wheel,
+                          const vector<uint32_t> *i_reindex_wheel, const uint64_t SMALL_THRESHOLD,
+                          const double prp_time_est, vector<bool> *composite) {
+
+    const uint32_t P = config.p;
+    const uint32_t D = config.d;
+
+    const uint32_t SIEVE_LENGTH = config.sieve_length;
+    uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
+
+    primesieve::iterator iter;
+    uint64_t prime = 0;
+
+    while (prime <= SMALL_THRESHOLD) {
+        // Handle primes (+1) <= stats.next_mult
+
+        std::vector<std::pair<uint32_t, uint32_t>> p_and_r;
+        for (prime = iter.next_prime(); prime <= SMALL_THRESHOLD; prime = iter.next_prime()) {
+            stats.pi_interval += 1;
+
+            // Handled by coprime_composite above
+            if (D % prime != 0 && prime <= P)
+                continue;
+
+            if (reindex_m_wheel % prime == 0) {
+                if (config.verbose >= 2) {
+                    printf("\t%ld handled by coprime wheel(%d)\n", prime, reindex_m_wheel);
+                }
+                continue;
+            }
+
+            const uint32_t base_r = mpz_fdiv_ui(K, prime);
+            p_and_r.push_back({(uint32_t) prime, base_r});
+
+            if (prime >= stats.next_print) {
+                break;
+            }
+        }
+
+        for (uint32_t mi : valid_mi) {
+            int32_t mii = m_reindex[mi];
+            assert(mii >= 0);
+
+            uint64_t m = config.mstart + mi;
+            const std::vector<uint32_t> &i_reindex_m = i_reindex_wheel[m % reindex_m_wheel];
+            vector<bool> &composite_mii = composite[mii];
+
+            bool centerOdd = ((D & 1) == 0) && (m & 1);
+            bool lowIsEven = centerOdd == (SIEVE_LENGTH & 1);
+
+            for (auto pr : p_and_r) {
+                uint64_t a_prime = pr.first;
+                uint64_t base_r = pr.second;
+                // For each interval that prints
+
+                uint64_t modulo = (base_r * m) % a_prime;
+
+                // flip = (m * K - SL) % a_prime
+                uint32_t flip = modulo + a_prime - ((SIEVE_LENGTH + 1) % a_prime);
+                if (flip >= a_prime) flip -= a_prime;
+
+                uint32_t first = a_prime - flip - 1;
+                assert(first < a_prime );
+
+                if (first < SIEVE_INTERVAL) {
+                    uint32_t shift = a_prime;
+                    if (a_prime > 2) {
+                        bool evenFromLow = (first & 1) == 0;
+                        bool firstIsEven = lowIsEven == evenFromLow;
+
+#ifdef GMP_VALIDATE_FACTORS
+                        validate_factor_m_k_x(stats, test, K, M_start + mi, first, a_prime, SL);
+                            assert( (mpz_even_p(test) > 0) == firstIsEven );
+                            assert( mpz_odd_p(test) != firstIsEven );
+#endif  // GMP_VALIDATE_FACTORS
+
+                        if (firstIsEven) {
+                            assert( (first >= SIEVE_INTERVAL) || composite_mii[i_reindex_m[first]] );
+
+                            // divisible by 2 move to next multiple (an odd multiple)
+                            first += a_prime;
+                        }
+
+                        // Don't need to count cross off even multiples.
+                        shift *= 2;
+                    }
+
+                    for (size_t x = first; x < SIEVE_INTERVAL; x += shift) {
+                        composite_mii[i_reindex_m[x]] = true;
+                        stats.small_prime_factors_interval += 1;
+                    }
+                }
+            }
+        }
+
+        // Don't print final partial interval
+        if (prime >= stats.next_print) {
+            // Calculated here with locals
+            double prob_prime_after_sieve = stats.prob_prime * log(prime) * exp(GAMMA);
+            // See THEORY.md
+            double skipped_prp = 2 * valid_mi.size() * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
+            stats.current_prob_prime = prob_prime_after_sieve;
+
+            // Print counters & stats.
+            method2_increment_print(
+                    prime, config.max_prime,
+                    valid_mi.size(),
+                    skipped_prp, prp_time_est,
+                    composite,
+                    stats, config);
+        }
+    }
+}
+
+
 // Would be nice to pass const but CTRL+C handler changes max_prime
 void prime_gap_parallel(struct Config& config) {
     // Method2
@@ -1014,6 +1134,8 @@ void prime_gap_parallel(struct Config& config) {
 
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     const uint32_t SL = SIEVE_LENGTH;
+    // SIEVE_INTERVAL includes endpoints [-SL ... K ... SL]
+    uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
 
     const uint64_t MAX_PRIME = config.max_prime;
 
@@ -1039,8 +1161,6 @@ void prime_gap_parallel(struct Config& config) {
 
 
     // ----- Allocate memory
-    // SIEVE_INTERVAL includes endpoints [-SL ... K ... SL]
-    uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
 
     vector<int32_t> valid_mi;
     vector<int32_t> m_reindex(M_inc, -1);
@@ -1077,6 +1197,7 @@ void prime_gap_parallel(struct Config& config) {
 #else
     uint32_t reindex_m_wheel = 1;
     vector<uint32_t> *i_reindex_wheel = &i_reindex;
+    vector<size_t> i_reindex_wheel_count = {0, 0};
 #endif  // METHOD2_WHEEL
 
     {
@@ -1133,6 +1254,8 @@ void prime_gap_parallel(struct Config& config) {
             }
             i_reindex_wheel_count[m_wheel] = coprime_count;
         }
+#else
+        i_reindex_wheel_count[0] = i_reindex_wheel_count[1] = coprime_count;
 #endif  // METHOD2_WHEEL
     }
 
@@ -1166,9 +1289,6 @@ void prime_gap_parallel(struct Config& config) {
     }
 #endif
 
-    // See Merten's Third Theorem
-    float expected_m_stops = (log(log(LAST_PRIME)) - log(log(MEDIUM_THRESHOLD))) * 2*SL * M_inc;
-
     // ----- Timing
     if (config.verbose >= 2) {
         printf("\n");
@@ -1200,12 +1320,10 @@ void prime_gap_parallel(struct Config& config) {
                 count_coprime_sieve / 2, SIEVE_LENGTH, guess);
         }
 
-#if METHOD2_WHEEL
         if (reindex_m_wheel > 1) {
             // Update guess with first wheel count for OOM prevention check
             guess = valid_ms * (i_reindex_wheel_count[1] + 1) / 8 / 1024 / 1024;
         }
-#endif
 
         // Try to prevent OOM, check composite < 7GB allocation,
         // combined_sieve seems to use ~5-20% extra space for i_reindex_wheel + extra
@@ -1217,23 +1335,16 @@ void prime_gap_parallel(struct Config& config) {
             assert(gcd(m_wheel, reindex_m_wheel) == 1);
 
             // +1 reserves extra 0th entry for i_reindex[x] = 0
-#if METHOD2_WHEEL
-            composite[i].resize(i_reindex_wheel_count[m_wheel] + 1, 0);
-#else
-            composite[i].resize(count_coprime_sieve + 1, false);
-#endif  // METHOD2_WHEEL
-
+            composite[i].resize(i_reindex_wheel_count[m_wheel] + 1, false);
             composite[i][0] = true;
             allocated += composite[i].size();
         }
-#if METHOD2_WHEEL
-        if (config.verbose >= 1) {
+        if (config.verbose >= 1 && reindex_m_wheel > 1) {
             printf("%*s", align_print, "");
             printf("coprime wheel %ld/%d, ~%'ldMB\n",
                 allocated / (2 * valid_ms), SIEVE_LENGTH,
                 allocated / 8 / 1024 / 1024);
         }
-#endif  // METHOD2_WHEEL
 
         if (config.verbose >= 1) {
             align_print += 1;  // avoid unused warning
@@ -1246,109 +1357,12 @@ void prime_gap_parallel(struct Config& config) {
 
     // For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
     // This makes it harder to print (see awkward inner loop)
-    primesieve::iterator it;
-    uint64_t prime = 0;
-    while (true) {
-        // Handle primes (+1) <= stats.next_mult
+    method2_small_primes(config, K, stats, valid_mi, m_reindex, reindex_m_wheel, i_reindex_wheel,
+                         SMALL_THRESHOLD, prp_time_est, composite);
 
-        vector<pair<uint32_t, uint32_t>> p_and_r;
-        for (prime = it.next_prime(); prime <= SMALL_THRESHOLD; prime = it.next_prime()) {
-            stats.pi_interval += 1;
-
-            // Handled by coprime_composite above
-            if (D % prime != 0 && prime <= P)
-                continue;
-
-            if (reindex_m_wheel % prime == 0) {
-                if (config.verbose >= 2) {
-                    printf("\t%ld handled by coprime wheel(%d)\n", prime, reindex_m_wheel);
-                }
-                continue;
-            }
-
-            const uint32_t base_r = mpz_fdiv_ui(K, prime);
-            p_and_r.push_back({(uint32_t) prime, base_r});
-
-            if (prime >= stats.next_print)
-                break;
-        }
-
-        for (uint32_t mi : valid_mi) {
-            int32_t mii = m_reindex[mi];
-            assert(mii >= 0);
-
-            uint64_t m = M_start + mi;
-            const vector<uint32_t> &i_reindex_m = i_reindex_wheel[m % reindex_m_wheel];
-            vector<bool> &composite_mii = composite[mii];
-
-            bool centerOdd = ((D & 1) == 0) && (m & 1);
-            bool lowIsEven = centerOdd == (SIEVE_LENGTH & 1);
-
-            for (auto pr : p_and_r) {
-                uint64_t a_prime = pr.first;
-                uint64_t base_r = pr.second;
-                // For each interval that prints
-
-                uint64_t modulo = (base_r * m) % a_prime;
-
-                // flip = (m * K - SL) % a_prime
-                uint32_t flip = modulo + a_prime - ((SIEVE_LENGTH + 1) % a_prime);
-                if (flip >= a_prime) flip -= a_prime;
-
-                uint32_t first = a_prime - flip - 1;
-                assert(first < a_prime );
-
-                if (first < SIEVE_INTERVAL) {
-                    uint32_t shift = a_prime;
-                    if (a_prime > 2) {
-                        bool evenFromLow = (first & 1) == 0;
-                        bool firstIsEven = lowIsEven == evenFromLow;
-
-                        #ifdef GMP_VALIDATE_FACTORS
-                            validate_factor_m_k_x(stats, test, K, M_start + mi, first, a_prime, SL);
-                            assert( (mpz_even_p(test) > 0) == firstIsEven );
-                            assert( mpz_odd_p(test) != firstIsEven );
-                        #endif  // GMP_VALIDATE_FACTORS
-
-                        if (firstIsEven) {
-                            assert( (first >= SIEVE_INTERVAL) || composite_mii[i_reindex_m[first]] );
-
-                            // divisible by 2 move to next multiple (an odd multiple)
-                            first += a_prime;
-                        }
-
-                        // Don't need to count cross off even multiples.
-                        shift *= 2;
-                    }
-
-                    for (size_t x = first; x < SIEVE_INTERVAL; x += shift) {
-                        composite_mii[i_reindex_m[x]] = true;
-                        stats.small_prime_factors_interval += 1;
-                    }
-                }
-            }
-        }
-
-        // Don't print final partial interval
-        if (prime < stats.next_print)
-            break;
-
-        // Calculated here with locals
-        double prob_prime_after_sieve = prob_prime * log(prime) * exp(GAMMA);
-        // See THEORY.md
-        double skipped_prp = 2 * valid_ms * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
-        stats.current_prob_prime = prob_prime_after_sieve;
-
-        // Print counters & stats.
-        method2_increment_print(
-            prime, LAST_PRIME,
-            valid_ms,
-            skipped_prp, prp_time_est,
-            composite,
-            stats, config);
-
-    }
-
+    primesieve::iterator it(SMALL_THRESHOLD);
+    uint64_t prime = it.next_prime();
+    assert(prime > SMALL_THRESHOLD);
     assert(SIEVE_INTERVAL < prime);
 
     const bool K_odd  = mpz_odd_p(K);
@@ -1438,6 +1452,7 @@ void prime_gap_parallel(struct Config& config) {
 #if METHOD2_WHEEL
                 composite[mii][i_reindex_wheel[m % reindex_m_wheel][X]] = true;
 #else
+                // avoids trivial lookup + modulo
                 composite[mii][i_reindex[X]] = true;
 #endif  // METHOD2_WHEEL
 
@@ -1599,6 +1614,8 @@ void prime_gap_parallel(struct Config& config) {
     stats.m_stops += stats.m_stops_interval;
 
     {
+        // See Merten's Third Theorem
+        float expected_m_stops = (log(log(LAST_PRIME)) - log(log(MEDIUM_THRESHOLD))) * 2*SL * M_inc;
         float error_percent = (100.0 * fabs(expected_m_stops - stats.m_stops)) / expected_m_stops;
         if (config.verbose >= 3 || error_percent > 0.1 ) {
             printf("Estimated modulo searches (m/prime) error %.2f%%,\t%ld vs expected %.0f\n",
