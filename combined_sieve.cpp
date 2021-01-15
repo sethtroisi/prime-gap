@@ -1011,7 +1011,7 @@ void method2_small_primes(const Config &config, const __mpz_struct *K,
                           const vector<int32_t> &m_reindex, uint32_t reindex_m_wheel,
                           const vector<uint32_t> *i_reindex_wheel, const uint64_t SMALL_THRESHOLD,
                           const double prp_time_est, vector<bool> *composite) {
-
+    method2_stats temp_stats(config, valid_mi.size(), SMALL_THRESHOLD, stats.prob_prime);
     const uint32_t P = config.p;
     const uint32_t D = config.d;
 
@@ -1026,7 +1026,7 @@ void method2_small_primes(const Config &config, const __mpz_struct *K,
 
         std::vector<std::pair<uint32_t, uint32_t>> p_and_r;
         for (prime = iter.next_prime(); prime <= SMALL_THRESHOLD; prime = iter.next_prime()) {
-            stats.pi_interval += 1;
+            temp_stats.pi_interval += 1;
 
             // Handled by coprime_composite above
             if (D % prime != 0 && prime <= P)
@@ -1042,7 +1042,7 @@ void method2_small_primes(const Config &config, const __mpz_struct *K,
             const uint32_t base_r = mpz_fdiv_ui(K, prime);
             p_and_r.push_back({(uint32_t) prime, base_r});
 
-            if (prime >= stats.next_print) {
+            if (prime >= temp_stats.next_print) {
                 break;
             }
         }
@@ -1079,9 +1079,9 @@ void method2_small_primes(const Config &config, const __mpz_struct *K,
                         bool firstIsEven = lowIsEven == evenFromLow;
 
 #ifdef GMP_VALIDATE_FACTORS
-                        validate_factor_m_k_x(stats, test, K, M_start + mi, first, a_prime, SL);
-                            assert( (mpz_even_p(test) > 0) == firstIsEven );
-                            assert( mpz_odd_p(test) != firstIsEven );
+                        validate_factor_m_k_x(temp_stats, test, K, M_start + mi, first, a_prime, SL);
+                        assert( (mpz_even_p(test) > 0) == firstIsEven );
+                        assert( mpz_odd_p(test) != firstIsEven );
 #endif  // GMP_VALIDATE_FACTORS
 
                         if (firstIsEven) {
@@ -1097,14 +1097,16 @@ void method2_small_primes(const Config &config, const __mpz_struct *K,
 
                     for (size_t x = first; x < SIEVE_INTERVAL; x += shift) {
                         composite_mii[i_reindex_m[x]] = true;
-                        stats.small_prime_factors_interval += 1;
+                        temp_stats.small_prime_factors_interval += 1;
                     }
                 }
             }
         }
+        stats.small_prime_factors_interval += temp_stats.small_prime_factors_interval;
+        stats.validated_factors += temp_stats.validated_factors;
 
         // Don't print final partial interval
-        if (prime >= stats.next_print) {
+        if (prime >= temp_stats.next_print) {
             // Calculated here with locals
             double prob_prime_after_sieve = stats.prob_prime * log(prime) * exp(GAMMA);
             // See THEORY.md
@@ -1117,7 +1119,7 @@ void method2_small_primes(const Config &config, const __mpz_struct *K,
                     valid_mi.size(),
                     skipped_prp, prp_time_est,
                     composite,
-                    stats, config);
+                    temp_stats, config);
         }
     }
 }
@@ -1357,8 +1359,19 @@ void prime_gap_parallel(struct Config& config) {
 
     // For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
     // This makes it harder to print (see awkward inner loop)
-    method2_small_primes(config, K, stats, valid_mi, m_reindex, reindex_m_wheel, i_reindex_wheel,
-                         SMALL_THRESHOLD, prp_time_est, composite);
+    const size_t THREADS = 1;
+    vector<int32_t> valid_mi_split[THREADS];
+    for (size_t i = 0; i < valid_mi.size(); i++) {
+        valid_mi_split[i * THREADS / valid_mi.size()].push_back(valid_mi[i]);
+    }
+
+    #pragma omp parallel for
+    for (auto t : valid_mi_split) {
+        cout << "Hi " << t.size() << endl;
+        method2_small_primes(config, K, stats, t, m_reindex, reindex_m_wheel, i_reindex_wheel,
+                             SMALL_THRESHOLD, prp_time_est, composite);
+    }
+    exit(1);
 
     primesieve::iterator it(SMALL_THRESHOLD);
     uint64_t prime = it.next_prime();
@@ -1526,7 +1539,6 @@ void prime_gap_parallel(struct Config& config) {
 #else
             if (0) {
 #endif
-                stats.validated_factors += 1;
                 validate_factor_m_k_x(stats, test, K, m, first, prime, SIEVE_LENGTH);
 //                assert( mpz_odd_p(test) );
             }
