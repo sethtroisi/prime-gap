@@ -22,6 +22,7 @@
 #include <functional>
 #include <iostream>
 #include <map>
+#include <thread>
 #include <vector>
 
 #include <gmp.h>
@@ -846,11 +847,14 @@ void signal_callback_handler(int) {
 class method2_stats {
     public:
         method2_stats(
+                uint32_t thread_i,
                 const struct Config& config,
                 size_t valid_ms,
                 uint64_t threshold,
                 double initial_prob_prime
         ) {
+            thread = thread_i;
+
             start_t = high_resolution_clock::now();
             interval_t = high_resolution_clock::now();
             total_unknowns = (2 * config.sieve_length + 1) * valid_ms;
@@ -862,28 +866,30 @@ class method2_stats {
             current_prob_prime = prob_prime;
         }
 
-        uint64_t  next_print = 0;
-        uint64_t  next_mult = 100000;
+        // Somethings will only print if thread == 0
+        int32_t thread = 0;
+        uint64_t next_print = 0;
+        uint64_t next_mult = 100000;
 
         high_resolution_clock::time_point  start_t;
         high_resolution_clock::time_point  interval_t;
 
-        long  total_unknowns;
-        long  prime_factors = 0;
-        long  small_prime_factors_interval = 0;
-        long  large_prime_factors_interval = 0;
+        long total_unknowns = 0;
+        long small_prime_factors_interval = 0;
+        long large_prime_factors_interval = 0;
+        // Sum of above two, mostly handled in method2_increment_print
+        long prime_factors = 0;
 
         size_t pi = 0;
         size_t pi_interval = 0;
 
-        uint64_t  m_stops = 0;
-        uint64_t  m_stops_interval = 0;
+        uint64_t m_stops = 0;
+        uint64_t m_stops_interval = 0;
 
-        uint64_t  validated_factors = 0;
+        uint64_t validated_factors = 0;
 
         double prob_prime = 0;
         double current_prob_prime = 0;
-
 };
 
 void method2_increment_print(
@@ -893,49 +899,57 @@ void method2_increment_print(
         double skipped_prp, double prp_time_est,
         vector<bool> *composite,
         method2_stats &stats,
-        const struct Config& config
-) {
-        if (prime >= stats.next_print) {
-            const size_t max_mult = 100'000'000'000;
+        const struct Config& config) {
+    if (prime >= stats.next_print) {
+        const size_t max_mult = 100'000'000'000;
 
-            // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
-            // Print 60,70,80,90 billion because intervals are wider.
-            size_t all_ten = prime > 1'000'000'000;
-            size_t next_next_mult = (5 + 4 * all_ten) * stats.next_mult;
-            if (next_next_mult <= max_mult && stats.next_print == next_next_mult) {
-                stats.next_mult *= 10;
-                stats.next_print = 0;
-            }
-            stats.next_print += stats.next_mult;
-            stats.next_print = std::min(stats.next_print, LAST_PRIME);
+        // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
+        // Print 60,70,80,90 billion because intervals are wider.
+        size_t all_ten = prime > 1'000'000'000;
+        size_t next_next_mult = (5 + 4 * all_ten) * stats.next_mult;
+        if (next_next_mult <= max_mult && stats.next_print == next_next_mult) {
+            stats.next_mult *= 10;
+            stats.next_print = 0;
+        }
+        stats.next_print += stats.next_mult;
+        stats.next_print = std::min(stats.next_print, LAST_PRIME);
+    }
+
+    auto   s_stop_t = high_resolution_clock::now();
+    // total time, interval time
+    double     secs = duration<double>(s_stop_t - stats.start_t).count();
+    double int_secs = duration<double>(s_stop_t - stats.interval_t).count();
+
+    uint32_t SIEVE_INTERVAL = 2 * config.sieve_length + 1;
+
+    bool is_last = (prime == LAST_PRIME) || g_control_c;
+
+    if (config.verbose + is_last >= 1) {
+        if (stats.thread >= 1) {
+            printf("Thread %d\t", stats.thread);
         }
 
-        auto   s_stop_t = high_resolution_clock::now();
-        // total time, interval time
-        double     secs = duration<double>(s_stop_t - stats.start_t).count();
-        double int_secs = duration<double>(s_stop_t - stats.interval_t).count();
-
-        uint32_t SIEVE_INTERVAL = 2 * config.sieve_length + 1;
-
-        bool is_last = (prime == LAST_PRIME) || g_control_c;
-
-        if (config.verbose + is_last >= 1) {
-            printf("%'-10ld (primes %'ld/%ld)\t(seconds: %.2f/%-.1f | per m: %.3g)",
-                prime,
-                stats.pi_interval, stats.pi,
-                int_secs, secs,
-                secs / valid_ms);
-            if (int_secs > 240) {
-                // Add " @ HH:MM:SS" so that it is easier to predict when the next print will happen
-                time_t rawtime = std::time(nullptr);
-                struct tm *tm = localtime( &rawtime );
-                printf(" @ %d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec);
-            }
-            printf("\n");
-            stats.interval_t = s_stop_t;
+        printf("%'-10ld (primes %'ld/%ld)\t(seconds: %.2f/%-.1f | per m: %.3g)",
+            prime,
+            stats.pi_interval, stats.pi,
+            int_secs, secs,
+            secs / valid_ms);
+        if (int_secs > 240) {
+            // Add " @ HH:MM:SS" so that it is easier to predict when the next print will happen
+            time_t rawtime = std::time(nullptr);
+            struct tm *tm = localtime( &rawtime );
+            printf(" @ %d:%02d:%02d", tm->tm_hour, tm->tm_min, tm->tm_sec);
         }
+        printf("\n");
+        stats.interval_t = s_stop_t;
 
-        if ((config.verbose + 2*is_last + (prime > 1e9)) >= 2) {
+        int verbose = config.verbose + (2 * is_last) + (prime > 1e9) + (stats.thread == 0);
+        if (verbose >= 3) {
+            stats.pi += stats.pi_interval;
+            stats.prime_factors += stats.small_prime_factors_interval;
+            stats.prime_factors += stats.large_prime_factors_interval;
+            stats.m_stops += stats.m_stops_interval;
+
             uint64_t t_total_unknowns = 0;
             for (size_t i = 0; i < valid_ms; i++) {
                 t_total_unknowns += std::count(composite[i].begin(), composite[i].end(), false);
@@ -972,11 +986,6 @@ void method2_increment_print(
 
             printf("\n");
 
-            stats.pi += stats.pi_interval;
-            stats.prime_factors += stats.small_prime_factors_interval;
-            stats.prime_factors += stats.large_prime_factors_interval;
-            stats.m_stops += stats.m_stops_interval;
-
             stats.total_unknowns = t_total_unknowns;
 
             stats.small_prime_factors_interval = 0;
@@ -984,6 +993,7 @@ void method2_increment_print(
             stats.m_stops_interval = 0;
             stats.pi_interval = 0;
         }
+    }
 }
 
 void validate_factor_m_k_x(
@@ -1000,13 +1010,15 @@ void validate_factor_m_k_x(
 #endif  // GMP_VALIDATE_FACTORS
 }
 
-void method2_small_primes(const Config &config, const __mpz_struct *K,
-                          method2_stats &stats,
+void method2_small_primes(const Config &config, method2_stats &stats,
+                          const __mpz_struct *K,
+                          uint32_t thread_i,
                           const vector<int32_t> &valid_mi,
                           const vector<int32_t> &m_reindex, uint32_t reindex_m_wheel,
                           const vector<uint32_t> *i_reindex_wheel, const uint64_t SMALL_THRESHOLD,
                           const double prp_time_est, vector<bool> *composite) {
-    method2_stats temp_stats(config, valid_mi.size(), SMALL_THRESHOLD, stats.prob_prime);
+
+    method2_stats temp_stats(thread_i, config, valid_mi.size(), SMALL_THRESHOLD, stats.prob_prime);
     const uint32_t P = config.p;
     const uint32_t D = config.d;
 
@@ -1028,7 +1040,7 @@ void method2_small_primes(const Config &config, const __mpz_struct *K,
                 continue;
 
             if (reindex_m_wheel % prime == 0) {
-                if (config.verbose >= 2) {
+                if (thread_i == 1 && config.verbose >= 2) {
                     printf("\t%ld handled by coprime wheel(%d)\n", prime, reindex_m_wheel);
                 }
                 continue;
@@ -1097,11 +1109,8 @@ void method2_small_primes(const Config &config, const __mpz_struct *K,
                 }
             }
         }
-        stats.small_prime_factors_interval += temp_stats.small_prime_factors_interval;
-        stats.validated_factors += temp_stats.validated_factors;
-
         // Don't print final partial interval
-        if (prime >= temp_stats.next_print) {
+        if (temp_stats.next_print <= prime && prime < SMALL_THRESHOLD) {
             // Calculated here with locals
             double prob_prime_after_sieve = stats.prob_prime * log(prime) * exp(GAMMA);
             // See THEORY.md
@@ -1115,7 +1124,18 @@ void method2_small_primes(const Config &config, const __mpz_struct *K,
                     skipped_prp, prp_time_est,
                     composite,
                     temp_stats, config);
+
         }
+        // Update global counters for a couple variables
+        if (thread_i == 1) {
+            stats.pi          = temp_stats.pi;
+            stats.pi_interval = temp_stats.pi_interval;
+        }
+        stats.small_prime_factors_interval += temp_stats.small_prime_factors_interval;
+        stats.validated_factors += temp_stats.validated_factors;
+
+        stats.next_print = temp_stats.next_print;
+        stats.next_mult = temp_stats.next_mult;
     }
 }
 
@@ -1348,23 +1368,32 @@ void prime_gap_parallel(struct Config& config) {
     }
 
     // Used for various stats
-    method2_stats stats(config, valid_ms, SMALL_THRESHOLD, prob_prime);
+    method2_stats stats(/* thread */ -1, config, valid_ms, SMALL_THRESHOLD, prob_prime);
 
     // For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
     // This makes it harder to print (see awkward inner loop)
+    // TODO move to command line option
     const size_t THREADS = 1;
     vector<int32_t> valid_mi_split[THREADS];
     for (size_t i = 0; i < valid_mi.size(); i++) {
         valid_mi_split[i * THREADS / valid_mi.size()].push_back(valid_mi[i]);
     }
 
-    #pragma omp parallel for
-    for (auto t : valid_mi_split) {
-        cout << "Hi " << t.size() << endl;
-        method2_small_primes(config, K, stats, t, m_reindex, reindex_m_wheel, i_reindex_wheel,
+    #pragma omp parallel for num_threads(THREADS)
+    for (size_t t = 0; t < THREADS; t++) {
+        // Helps keep printing in order
+        std::this_thread::sleep_for(milliseconds(50 * t));
+
+        if (config.verbose + THREADS >= 4) {
+            printf("\tThread %ld method2_small_primes(%'ld/%'ld)\n",
+                    t, valid_mi_split[t].size(), valid_ms);
+        }
+        int32_t thread_i = (THREADS == 1) ? 0 : (t + 1);
+        method2_small_primes(config, stats, K, thread_i,
+                             valid_mi_split[t],
+                             m_reindex, reindex_m_wheel, i_reindex_wheel,
                              SMALL_THRESHOLD, prp_time_est, composite);
     }
-    exit(1);
 
     primesieve::iterator it(SMALL_THRESHOLD);
     uint64_t prime = it.next_prime();
