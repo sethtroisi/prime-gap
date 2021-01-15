@@ -60,6 +60,9 @@ void prime_gap_parallel(struct Config& config);
 
 
 int main(int argc, char* argv[]) {
+    // Display %'d with commas i.e. 12,345
+    setlocale(LC_NUMERIC, "");
+
     Config config = Args::argparse(argc, argv);
 
     if (config.verbose >= 2) {
@@ -87,13 +90,11 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    setlocale(LC_NUMERIC, "");
     if (config.verbose >= 0) {
         printf("\n");
         printf("Testing m * %u#/%u, m = %'ld + [0, %'ld)\n",
             config.p, config.d, config.mstart, config.minc);
     }
-    setlocale(LC_NUMERIC, "C");
 
     #ifdef GMP_VALIDATE_FACTORS
     printf("\tValidating factors with GMP\n");
@@ -397,12 +398,10 @@ void prime_gap_search(const struct Config& config) {
     mpz_init(test);
 
     if (config.verbose >= 2) {
-        setlocale(LC_NUMERIC, "");
         printf("\n");
         printf("sieve_length: 2x %'d\n", config.sieve_length);
         printf("max_prime:       %'ld\n", MAX_PRIME);
         printf("\n");
-        setlocale(LC_NUMERIC, "C");
     }
 
     // ----- Generate primes under SMALL_PRIME_LIMIT_METHOD1
@@ -519,7 +518,6 @@ void prime_gap_search(const struct Config& config) {
         assert(prime_and_remainder.size() == small_primes.size());
         if (config.verbose >= 1) {
             printf("\tSum of m1: %ld\n", first_m_sum);
-            setlocale(LC_NUMERIC, "");
             if (pi == expected_primes) {
                 printf("\tPrimePi(%ld) = %ld\n", MAX_PRIME, pi);
             } else {
@@ -534,7 +532,6 @@ void prime_gap_search(const struct Config& config) {
             double theory_count = (2 * SL + 1) * mertens3;
             printf("\texpected large primes/m: %.1f (theoretical: %.1f)\n",
                 expected_primes_per, theory_count);
-            setlocale(LC_NUMERIC, "C");
         }
     }
     if (config.verbose >= 0) {
@@ -922,7 +919,6 @@ void method2_increment_print(
 
         bool is_last = (prime == LAST_PRIME) || g_control_c;
 
-        setlocale(LC_NUMERIC, "");
         if (config.verbose + is_last >= 1) {
             printf("%'-10ld (primes %'ld/%ld)\t(seconds: %.2f/%-.1f | per m: %.3g)",
                 prime,
@@ -988,7 +984,6 @@ void method2_increment_print(
             stats.m_stops_interval = 0;
             stats.pi_interval = 0;
         }
-        setlocale(LC_NUMERIC, "C");
 }
 
 void validate_factor_m_k_x(
@@ -1269,12 +1264,10 @@ void prime_gap_parallel(struct Config& config) {
     const uint64_t SMALL_THRESHOLD = THRESHOLDS.first;
     const uint64_t MEDIUM_THRESHOLD = THRESHOLDS.second;
     if (config.verbose >= 1) {
-        setlocale(LC_NUMERIC, "");
         printf("sieve_length:  2x %'d\n", config.sieve_length);
         printf("max_prime:        %'ld\n", config.max_prime);
         printf("small_threshold:  %'ld\n", SMALL_THRESHOLD);
         printf("middle_threshold: %'ld\n", MEDIUM_THRESHOLD);
-        setlocale(LC_NUMERIC, "C");
     }
 
     // SMALL_THRESHOLD must handle all primes that can mark off two items in SIEVE_INTERVAL.
