@@ -886,13 +886,13 @@ class method2_stats {
 
         uint64_t validated_factors = 0;
 
+        uint64_t last_prime = 0;
         double prob_prime = 0;
         double current_prob_prime = 0;
 };
 
 void method2_increment_print(
         uint64_t prime,
-        uint64_t LAST_PRIME,
         size_t valid_ms,
         double skipped_prp, double prp_time_est,
         vector<bool> *composite,
@@ -910,7 +910,7 @@ void method2_increment_print(
             stats.next_print = 0;
         }
         stats.next_print += stats.next_mult;
-        stats.next_print = std::min(stats.next_print, LAST_PRIME);
+        stats.next_print = std::min(stats.next_print, stats.last_prime);
     }
 
     auto   s_stop_t = high_resolution_clock::now();
@@ -920,7 +920,7 @@ void method2_increment_print(
 
     uint32_t SIEVE_INTERVAL = 2 * config.sieve_length + 1;
 
-    bool is_last = (prime == LAST_PRIME) || g_control_c;
+    bool is_last = (prime == stats.last_prime) || g_control_c;
 
     if (config.verbose + is_last >= 1) {
         if (stats.thread >= 1) {
@@ -1123,11 +1123,11 @@ void method2_small_primes(const Config &config, method2_stats &stats,
 
             // Print counters & stats.
             method2_increment_print(
-                    prime, config.max_prime,
-                    valid_mi.size(),
-                    skipped_prp, prp_time_est,
-                    composite,
-                    temp_stats, config);
+                prime,
+                valid_mi.size(),
+                skipped_prp, prp_time_est,
+                composite,
+                temp_stats, config);
 
         }
         // Update global counters for a couple variables
@@ -1275,7 +1275,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
             // Print counters & stats.
             method2_increment_print(
-                prime, config.max_prime,
+                prime,
                 valid_ms,
                 skipped_prp, prp_time_est,
                 composite,
@@ -1511,145 +1511,146 @@ void prime_gap_parallel(struct Config& config) {
 
     // Used for various stats
     method2_stats stats(/* thread */ 0, config, valid_ms, SMALL_THRESHOLD, prob_prime);
+    stats.last_prime = LAST_PRIME;
 
     // TODO move to command line option
     const size_t THREADS = 1;
 
     { // Small Primes
-        // For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
-        // This makes it harder to print (see awkward inner loop)
-        vector<int32_t> valid_mi_split[THREADS];
-        for (size_t i = 0; i < valid_mi.size(); i++) {
-            valid_mi_split[i * THREADS / valid_mi.size()].push_back(valid_mi[i]);
-        }
+    // For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
+    // This makes it harder to print (see awkward inner loop)
+    vector<int32_t> valid_mi_split[THREADS];
+    for (size_t i = 0; i < valid_mi.size(); i++) {
+        valid_mi_split[i * THREADS / valid_mi.size()].push_back(valid_mi[i]);
+    }
 
-        for (size_t t = 0; t < THREADS; t++) {
-            // Helps keep printing in order
-            std::this_thread::sleep_for(milliseconds(50 * t));
+    for (size_t t = 0; t < THREADS; t++) {
+        // Helps keep printing in order
+        std::this_thread::sleep_for(milliseconds(50 * t));
 
-            if (config.verbose + THREADS >= 4) {
-                printf("\tThread %ld method2_small_primes(%'ld/%'ld)\n",
-                        t, valid_mi_split[t].size(), valid_ms);
-            }
-            int32_t thread_i = (THREADS == 1) ? 0 : (t + 1);
-            method2_small_primes(config, stats, K, thread_i,
-                                 valid_mi_split[t],
-                                 m_reindex,
-                                 x_reindex_m_wheel, x_reindex_wheel,
-                                 SMALL_THRESHOLD, prp_time_est, composite);
+        if (config.verbose + THREADS >= 4) {
+            printf("\tThread %ld method2_small_primes(%'ld/%'ld)\n",
+                    t, valid_mi_split[t].size(), valid_ms);
         }
+        int32_t thread_i = (THREADS == 1) ? 0 : (t + 1);
+        method2_small_primes(config, stats, K, thread_i,
+                             valid_mi_split[t],
+                             m_reindex,
+                             x_reindex_m_wheel, x_reindex_wheel,
+                             SMALL_THRESHOLD, prp_time_est, composite);
+    }
     }
 
     { // Medium Primes
-        // NOTES: It probably would work better to transpose composite
-        // composite[m,X] would become composite[X,m]
-        // Then reverse the loops (for prime, for X) to (for X, for prime)
-        // This would make printing harder (like small primes) and means x_reindex_m_wheel
-        // wouldn't help BUT composite[x, ?] would fit in L3 cache instead of RAM
+    // NOTES: It probably would work better to transpose composite
+    // composite[m,X] would become composite[X,m]
+    // Then reverse the loops (for prime, for X) to (for X, for prime)
+    // This would make printing harder (like small primes) and means x_reindex_m_wheel
+    // wouldn't help BUT composite[x, ?] would fit in L3 cache instead of RAM
 
-        const int K_odd = mpz_odd_p(K);
-        primesieve::iterator iter(SMALL_THRESHOLD+1);
-        uint32_t prime = iter.prev_prime();
-        assert(prime <= SMALL_THRESHOLD);
-        prime = iter.next_prime();
-        assert(prime > SMALL_THRESHOLD);
-        assert(prime > SIEVE_INTERVAL);
-        for (; prime <= MEDIUM_THRESHOLD; prime = iter.next_prime()) {
-            stats.pi_interval += 1;
+    const int K_odd = mpz_odd_p(K);
+    primesieve::iterator iter(SMALL_THRESHOLD+1);
+    uint32_t prime = iter.prev_prime();
+    assert(prime <= SMALL_THRESHOLD);
+    prime = iter.next_prime();
+    assert(prime > SMALL_THRESHOLD);
+    assert(prime > SIEVE_INTERVAL);
+    for (; prime <= MEDIUM_THRESHOLD; prime = iter.next_prime()) {
+        stats.pi_interval += 1;
 
-            const uint64_t base_r = mpz_fdiv_ui(K, prime);
-            mpz_set_ui(test, base_r);
-            mpz_set_ui(test2, prime);
-            assert(mpz_invert(test, test, test2) > 0);
+        const uint64_t base_r = mpz_fdiv_ui(K, prime);
+        mpz_set_ui(test, base_r);
+        mpz_set_ui(test2, prime);
+        assert(mpz_invert(test, test, test2) > 0);
 
-            const int64_t inv_K = mpz_get_ui(test);
-            assert((inv_K * base_r) % prime == 1);
+        const int64_t inv_K = mpz_get_ui(test);
+        assert((inv_K * base_r) % prime == 1);
 
-            // -M_start % p
-            const int32_t m_start_shift = (prime - (M_start % prime)) % prime;
+        // -M_start % p
+        const int32_t m_start_shift = (prime - (M_start % prime)) % prime;
 
-            const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
+        const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
 
-            /* Unoptimized expressive code
+        /* Unoptimized expressive code
 
-            - // (X & 1) == X_odd_test <-> ((X + SIEVE_LENGTH) % 2 == 1)
-            - const bool X_odd_test = (SIEVE_LENGTH & 1) == 0;
-            + const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
+        - // (X & 1) == X_odd_test <-> ((X + SIEVE_LENGTH) % 2 == 1)
+        - const bool X_odd_test = (SIEVE_LENGTH & 1) == 0;
+        + const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
 
-            - // (m + M_start) * K = (X - SIEVE_LENGTH)
-            - // m = (-X*K^-1 - M_start) % p = (X * -(K^-1) - M_start) % p
-              int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
-            - assert( (base_r * (mi_0 + M_start) + dist) % prime == 0 );
+        - // (m + M_start) * K = (X - SIEVE_LENGTH)
+        - // m = (-X*K^-1 - M_start) % p = (X * -(K^-1) - M_start) % p
+          int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
+        - assert( (base_r * (mi_0 + M_start) + dist) % prime == 0 );
 
-            - / **
-            -  * When K is odd
-            -  * m parity (even/odd) must not match X parity
-            -  * odd m * odd K + odd X   -> even
-            -  * even m * odd K + even X -> even
-            -  * /
-            - size_t m_odd = (M_start + mi_0) & 1;
-            - if (((X & 1) == X_odd_test) == m_odd) {
-            + if (((X^mi_0) & M_start_X_odd_not_same_parity)) {
+        - / **
+        -  * When K is odd
+        -  * m parity (even/odd) must not match X parity
+        -  * odd m * odd K + odd X   -> even
+        -  * even m * odd K + even X -> even
+        -  * /
+        - size_t m_odd = (M_start + mi_0) & 1;
+        - if (((X & 1) == X_odd_test) == m_odd) {
+        + if (((X^mi_0) & M_start_X_odd_not_same_parity)) {
 
-                stats.small_prime_factors_interval += 1;
-            -    / *
-            -    // Doesn't seem to help, slightly tested.
-            -    if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
-            -        continue;
-            -    if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
-            -        continue;
-            -    if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
-            -        continue;
-            -    // * /
-            */
+            stats.small_prime_factors_interval += 1;
+        -    / *
+        -    // Doesn't seem to help, slightly tested.
+        -    if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
+        -        continue;
+        -    if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
+        -        continue;
+        -    if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
+        -        continue;
+        -    // * /
+        */
 
-            size_t small_factors = 0;
-            // Find m*K = X, X in [L, R]
-            for (int64_t X : coprime_X) {
-                int32_t dist = X - SIEVE_LENGTH;
-                int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
+        size_t small_factors = 0;
+        // Find m*K = X, X in [L, R]
+        for (int64_t X : coprime_X) {
+            int32_t dist = X - SIEVE_LENGTH;
+            int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
 
-                assert( K_odd || (dist&1) );
+            assert( K_odd || (dist&1) );
 
-                uint32_t shift = (1 + K_odd) * prime;
-                if (K_odd) {
-                    // Check if X parity == m parity
-                    if (((dist ^ mi_0) & 1) == M_X_parity) {
-                        mi_0 += prime;
-                    }
-                }
-
-                // Separate loop when shift > M_inc not significantly faster
-                for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
-                    if (m_not_coprime[mi])
-                        continue;
-
-                    size_t m = M_start + mi;
-                    int32_t mii = m_reindex[mi];
-                    assert(mii >= 0);
-
-                    small_factors += 1;
-                    composite[mii][x_reindex_wheel[m % x_reindex_m_wheel][X]] = true;
+            uint32_t shift = (1 + K_odd) * prime;
+            if (K_odd) {
+                // Check if X parity == m parity
+                if (((dist ^ mi_0) & 1) == M_X_parity) {
+                    mi_0 += prime;
                 }
             }
-            stats.small_prime_factors_interval += small_factors;
 
-            if (prime >= stats.next_print) {
-                // Calculated here with locals
-                double prob_prime_after_sieve = stats.prob_prime * log(prime) * exp(GAMMA);
-                // See THEORY.md
-                double skipped_prp = 2 * valid_ms * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
-                stats.current_prob_prime = prob_prime_after_sieve;
+            // Separate loop when shift > M_inc not significantly faster
+            for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
+                if (m_not_coprime[mi])
+                    continue;
 
-                // Print counters & stats.
-                method2_increment_print(
-                        prime, config.max_prime,
-                        valid_ms,
-                        skipped_prp, prp_time_est,
-                        composite,
-                        stats, config);
+                size_t m = M_start + mi;
+                int32_t mii = m_reindex[mi];
+                assert(mii >= 0);
+
+                small_factors += 1;
+                composite[mii][x_reindex_wheel[m % x_reindex_m_wheel][X]] = true;
             }
         }
+        stats.small_prime_factors_interval += small_factors;
+
+        if (prime >= stats.next_print) {
+            // Calculated here with locals
+            double prob_prime_after_sieve = stats.prob_prime * log(prime) * exp(GAMMA);
+            // See THEORY.md
+            double skipped_prp = 2 * valid_ms * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
+            stats.current_prob_prime = prob_prime_after_sieve;
+
+            // Print counters & stats.
+            method2_increment_print(
+                prime,
+                valid_ms,
+                skipped_prp, prp_time_est,
+                composite,
+                stats, config);
+        }
+    }
 
         /*
         vector<int32_t> coprime_X_split[THREADS];
@@ -1775,7 +1776,7 @@ void prime_gap_parallel(struct Config& config) {
 
             // Print counters & stats.
             method2_increment_print(
-                prime, LAST_PRIME,
+                prime,
                 valid_ms,
                 skipped_prp, prp_time_est,
                 composite,
