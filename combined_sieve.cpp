@@ -1019,6 +1019,8 @@ void method2_small_primes(const Config &config, method2_stats &stats,
                           vector<bool> *composite) {
 
     method2_stats temp_stats(thread_i, config, valid_mi.size(), SMALL_THRESHOLD, stats.prob_prime);
+    temp_stats.last_prime = stats.last_prime;
+
     const uint32_t P = config.p;
     const uint32_t D = config.d;
 
@@ -1135,9 +1137,11 @@ void method2_small_primes(const Config &config, method2_stats &stats,
             stats.pi          = temp_stats.pi;
             stats.pi_interval = temp_stats.pi_interval;
         }
-        stats.small_prime_factors_interval += temp_stats.small_prime_factors_interval;
-        stats.validated_factors += temp_stats.validated_factors;
 
+        // XXX: this will break if -qqq is used
+        stats.small_prime_factors_interval += temp_stats.small_prime_factors_interval;
+
+        stats.validated_factors = temp_stats.validated_factors;
         stats.next_print = temp_stats.next_print;
         stats.next_mult = temp_stats.next_mult;
     }
@@ -1425,7 +1429,7 @@ void prime_gap_parallel(struct Config& config) {
     const auto THRESHOLDS =
         calculate_thresholds_method2(config, count_coprime_sieve, valid_ms);
     const uint64_t SMALL_THRESHOLD = THRESHOLDS.first;
-    const uint64_t MEDIUM_THRESHOLD = THRESHOLDS.second;
+    const uint64_t MEDIUM_THRESHOLD = config.max_prime; //THRESHOLDS.second;
     if (config.verbose >= 1) {
         printf("sieve_length:  2x %'d\n", config.sieve_length);
         printf("max_prime:        %'ld\n", config.max_prime);
@@ -1817,7 +1821,7 @@ void prime_gap_parallel(struct Config& config) {
         }
     }
 
-    // Likely zeroed in the last interval, but needed no printing
+    // Likely zeroed in the last interval, but needed if no printing
     stats.pi += stats.pi_interval;
     stats.prime_factors += stats.small_prime_factors_interval;
     stats.prime_factors += stats.large_prime_factors_interval;
@@ -1833,6 +1837,7 @@ void prime_gap_parallel(struct Config& config) {
         }
     }
 
+    /*
     if (config.save_unknowns) {
         save_unknowns_method2(
             config,
@@ -1844,6 +1849,7 @@ void prime_gap_parallel(struct Config& config) {
         double   secs = duration<double>(s_stop_t - stats.start_t).count();
         insert_range_db(config, valid_mi.size(), secs);
     }
+    */
 
     delete[] composite;
 
