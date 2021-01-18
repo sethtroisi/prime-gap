@@ -589,6 +589,8 @@ void Args::show_usage(char* name) {
     cout << "    parse p, d, mstart, minc, sieve-length, max-prime from filename" << endl;
     cout  << endl;
     cout << "[OPTIONALLY]" << endl;
+    cout << "  -t, --threads N" << endl;
+    cout << "    Use N threads (OpenMP)" << endl;
     cout << "  --min-merit <min_merit>" << endl;
     cout << "    only display prime gaps with merit >= min_merit" << endl;
     cout << "  --sieve-length" << endl;
@@ -657,6 +659,7 @@ bool Args::is_rle_unknowns(std::ifstream& unknown_file) {
 
 
 Config Args::argparse(int argc, char* argv[]) {
+    // NOTE: Remember to add to getopt_long(argc, argv, OPTIONS_STRING, ...) below
     static struct option long_options[] = {
         {"p",                required_argument, 0,  'p' },
         {"d",                required_argument, 0,  'd' },
@@ -668,6 +671,8 @@ Config Args::argparse(int argc, char* argv[]) {
 
         {"sieve-length",     required_argument, 0,   4  },
         {"max-prime",        required_argument, 0,   5  },
+
+        {"threads",                required_argument, 0,  't' },
 
         {"min-merit",        required_argument, 0,   3  },
 
@@ -689,7 +694,7 @@ Config Args::argparse(int argc, char* argv[]) {
 
     int option_index = 0;
     char c;
-    while ((c = getopt_long(argc, argv, "qhp:d:u:", long_options, &option_index)) >= 0) {
+    while ((c = getopt_long(argc, argv, "qhp:d:u:t:", long_options, &option_index)) >= 0) {
         switch (c) {
             case 'h':
                 show_usage(argv[0]);
@@ -760,6 +765,10 @@ Config Args::argparse(int argc, char* argv[]) {
                     assert( std::strcmp(t, "M.txt") == 0 || std::strcmp(t, "M.m1.txt") == 0 );
                     free(copy);
                 }
+                break;
+
+            case 't':
+                config.threads = atoi(optarg);
                 break;
 
             case 3:
@@ -891,6 +900,11 @@ Config Args::argparse(int argc, char* argv[]) {
     if (config.d <= 0) {
         config.valid = 0;
         cout << "d must be greater than 0: " << config.d << endl;
+    }
+
+    if (config.threads <= 0 || config.threads > 8) {
+        config.valid = 0;
+        cout << "invalid number of threads(" << config.threads << ") only 1-8 supported" << endl;
     }
 
     if (config.valid == 0) {

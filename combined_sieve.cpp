@@ -72,52 +72,60 @@ int main(int argc, char* argv[]) {
             __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
     }
 
-    set_defaults(config);
+    // More combined sieve specific validation
+    {
+        set_defaults(config);
 
-    if (config.save_unknowns == 0) {
-        cout << "Must set --save-unknowns" << endl;
-        exit(1);
+        if (config.save_unknowns == 0) {
+            cout << "Must set --save-unknowns" << endl;
+            exit(1);
+        }
+
+        if (config.sieve_length < 6 * config.p || config.sieve_length > 22 * config.p) {
+            int sl_low = ((config.p * 8 - 1) / 500 + 1) * 500;
+            int sl_high = ((config.p * 20 - 1) / 500 + 1) * 500;
+            printf("--sieve_length(%d) should be between [%d, %d]\n",
+                config.sieve_length, sl_low, sl_high);
+            exit(1);
+        }
+
+        if (config.valid == 0) {
+            Args::show_usage(argv[0]);
+            exit(1);
+        }
+
+        if (config.max_prime > 500'000'000) {
+            float m_per = config.max_prime / ((float) config.minc * config.sieve_length);
+            if (m_per < .1 && config.p <= 8000) {
+                printf("\tmax_prime(%ldB) is probably too large\n",
+                    config.max_prime / 1'000'000'000);
+            }
+        }
+
+        if (config.save_unknowns) {
+            std::string fn = Args::gen_unknown_fn(config, ".txt");
+            std::ifstream f(fn);
+            if (f.good()) {
+                printf("\nOutput file '%s' already exists\n", fn.c_str());
+                exit(1);
+            }
+        }
     }
 
-    if (config.sieve_length < 6 * config.p || config.sieve_length > 22 * config.p) {
-        int sl_low = ((config.p * 8 - 1) / 500 + 1) * 500;
-        int sl_high = ((config.p * 20 - 1) / 500 + 1) * 500;
-        printf("--sieve_length(%d) should be between [%d, %d]\n",
-            config.sieve_length, sl_low, sl_high);
-        exit(1);
-    }
-
-    if (config.valid == 0) {
-        Args::show_usage(argv[0]);
-        exit(1);
-    }
-
+    // Status lines
     if (config.verbose >= 0) {
         printf("\n");
         printf("Testing m * %u#/%u, m = %'ld + [0, %'ld)\n",
             config.p, config.d, config.mstart, config.minc);
     }
 
-    #ifdef GMP_VALIDATE_FACTORS
+    if (config.verbose >= 2 && config.threads > 1) {
+        printf("Running with %d threads\n", config.threads);
+    }
+
+#ifdef GMP_VALIDATE_FACTORS
     printf("\tValidating factors with GMP\n");
-    #endif  // GMP_VALIDATE_FACTORS
-
-    if (config.max_prime > 500'000'000) {
-        float m_per = config.max_prime / ((float) config.minc * config.sieve_length);
-        if (m_per < .1 && config.p <= 8000) {
-            printf("\tmax_prime(%ldB) is probably too large\n",
-                config.max_prime / 1'000'000'000);
-        }
-    }
-
-    if (config.save_unknowns) {
-        std::string fn = Args::gen_unknown_fn(config, ".txt");
-        std::ifstream f(fn);
-        if (f.good()) {
-            printf("\nOutput file '%s' already exists\n", fn.c_str());
-            exit(1);
-        }
-    }
+#endif
 
     if (config.method1) {
         prime_gap_search(config);
@@ -1354,9 +1362,9 @@ void method2_large_primes(Config &config, method2_stats &stats,
             printf("\tmethod2_large_primes(%d) [%'ld, %'ld]\n",
                     omp_get_thread_num(), first, end);
         }
-
         method2_stats test_stats;
-        primesieve::iterator it(first);
+
+        primesieve::iterator it(first - 1);
         for (uint64_t prime = it.next_prime(); prime <= end; prime = it.next_prime()) {
             test_stats.pi_interval += 1;
 
@@ -1718,8 +1726,7 @@ void prime_gap_parallel(struct Config& config) {
     method2_stats stats(/* thread */ 0, config, valid_ms, SMALL_THRESHOLD, prob_prime);
     stats.last_prime = LAST_PRIME;
 
-    // TODO move to command line option
-    const size_t THREADS = 1;
+    const size_t THREADS = config.threads;
 
     { // Small Primes
     // NOTE: For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
@@ -1839,7 +1846,7 @@ void prime_gap_parallel(struct Config& config) {
 
         auto s_stop_t = high_resolution_clock::now();
         double   secs = duration<double>(s_stop_t - stats.start_t).count();
-        insert_range_db(config, valid_mi.size(), secs);
+        insert_range_db(config, valid_mi.size(), THREADS * secs);
     }
 
     delete[] composite;

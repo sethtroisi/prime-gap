@@ -58,6 +58,8 @@ struct Config {
     bool rle = false;
 #endif
 
+    int threads = 1;
+
     /**
      * -1: results only
      *  0: results & final stats
