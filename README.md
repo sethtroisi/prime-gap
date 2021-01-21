@@ -622,7 +622,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * Project
   * [ ] Change min-merit to 15, 18, or 20
     * [ ] Warning when gap_test doesn't match?
-  * [ ] Records / day in status.py or record_check.py
   * [x] --update flag for `misc/show_ranges.sh`
     * [x] Finalize field
     * [ ] Faster finalize.py
@@ -630,6 +629,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * combined\_sieve.cpp
 * gap\_stats.cpp
 * gap\_test.py
+  * [ ] Validate the unknown-file matches expectations (unknowns / line, ...)
   * [ ] Ctrl+C sometimes hangs waiting for one more result
 * gap\_test\_simple.cpp
 * schema.sql
@@ -642,6 +642,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * Project
   * [ ] Figure out how to load (in c & python) and set config occasionally
   * [ ] Try and unify prev/next, high/low naming
+  * [ ] Records / day in status.py or record_check.py
 * THEORY.md
 * New script to update DB (and maybe delete uninteresting results
   * [ ] Finalize script should update ranges being finalized

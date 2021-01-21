@@ -318,19 +318,7 @@ void store_stats(
         vector<float>& prob_gap_high,
         /* Per m value */
         vector<uint64_t>& M_vals,
-        vector<float>& expected_prev,
-        vector<float>& expected_next,
-        vector<float>& probs_seen,
-        vector<float>& probs_record,
-        vector<float>& probs_missing,
-        vector<float>& probs_highmerit) {
-
-    assert( M_vals.size() == expected_prev.size() );
-    assert( M_vals.size() == expected_next.size() );
-    assert( M_vals.size() == probs_seen.size() );
-    assert( M_vals.size() == probs_record.size() );
-    assert( M_vals.size() == probs_missing.size() );
-    assert( M_vals.size() == probs_highmerit.size() );
+        vector<ProbM>& M_stats) {
 
     assert( !is_range_already_processed(config) );
 
@@ -465,9 +453,10 @@ void store_stats(
 
     for (size_t i = 0; i < num_rows; i++) {
         uint64_t m = M_vals[i];
+        ProbM &stats = M_stats[i];
 
-        float e_next = expected_next[i];
-        float e_prev = expected_prev[i];
+        float e_next = stats.expected_gap_next;
+        float e_prev = stats.expected_gap_prev;
 
         size_t r = i + 1;
         if (config.verbose >= 2 && (
@@ -481,8 +470,8 @@ void store_stats(
             printf("Saving Row: %6ld/%ld %6ld: %.1f, %.1f | R: %.1e M: %.1e HM(%.1f): %.1e\n",
                     r, num_rows, m,
                     e_next, e_prev,
-                    probs_record[i], probs_missing[i],
-                    config.min_merit, probs_highmerit[i]);
+                    stats.record, stats.is_missing_gap,
+                    config.min_merit, stats.highmerit);
         }
 
         BIND_OR_ERROR(sqlite3_bind_int64, stmt, 1, rid);
@@ -493,9 +482,9 @@ void store_stats(
         BIND_OR_ERROR(sqlite3_bind_int, stmt, 4, m);
 
         // prob_record, prob_missing, prob_merit
-        BIND_OR_ERROR(sqlite3_bind_double, stmt, 5, probs_record[i]);
-        BIND_OR_ERROR(sqlite3_bind_double, stmt, 6, probs_missing[i]);
-        BIND_OR_ERROR(sqlite3_bind_double, stmt, 7, probs_highmerit[i]);
+        BIND_OR_ERROR(sqlite3_bind_double, stmt, 5, stats.record);
+        BIND_OR_ERROR(sqlite3_bind_double, stmt, 6, stats.is_missing_gap);
+        BIND_OR_ERROR(sqlite3_bind_double, stmt, 7, stats.highmerit);
 
         // e_next, e_prev
         BIND_OR_ERROR(sqlite3_bind_double, stmt, 8, e_next);
@@ -1258,12 +1247,7 @@ void run_gap_file(
         vector<float>& prob_gap_low,
         vector<float>& prob_gap_high,
         vector<uint64_t>& M_vals,
-        vector<float>& expected_prev,
-        vector<float>& expected_next,
-        vector<float>& probs_seen,
-        vector<float>& probs_record,
-        vector<float>& probs_missing,
-        vector<float>& probs_highmerit) {
+        vector<ProbM>& M_stats) {
 
     auto s_start_t = high_resolution_clock::now();
 
@@ -1306,12 +1290,7 @@ void run_gap_file(
         sum.record_extended2 += probm.record_extended2;
 
         M_vals.push_back(m);
-        expected_prev.push_back(probm.expected_gap_prev);
-        expected_next.push_back(probm.expected_gap_next);
-        probs_seen.push_back(probm.seen);
-        probs_record.push_back(probm.record);
-        probs_missing.push_back(probm.is_missing_gap);
-        probs_highmerit.push_back(probm.highmerit);
+        M_stats.push_back(probm);
 
         if (config.verbose >= 1) {
             if (probm.record > max_r.record) {
@@ -1352,7 +1331,7 @@ void run_gap_file(
     }
 
     if (config.verbose >= 0) {
-        long  s_tests = probs_seen.size();
+        long  s_tests = M_stats.size();
         auto s_stop_t = high_resolution_clock::now();
         double   secs = duration<double>(s_stop_t - s_start_t).count();
         printf("%ld m's processed in %.2f seconds (%.2f/sec)\n",
@@ -1364,6 +1343,10 @@ void run_gap_file(
                 sum.record_extended, sum.record_extended2);
     }
     if (config.verbose >= 1) {
+        vector<float> probs_seen;
+        for (auto &m_stat : M_stats) {
+            probs_seen.push_back(m_stat.seen);
+        }
         cout << endl;
         printf("\tsum(prob(gap[X])): %.5f\n", average_v(prob_gap_norm) * prob_gap_norm.size());
         printf("\tavg missing prob : %.7f\n", 1 - average_v(probs_seen));
@@ -1553,13 +1536,9 @@ void prime_gap_stats(struct Config config) {
 
     /* Per m stats */
     vector<uint64_t> M_vals;
-    vector<float> expected_prev;
-    vector<float> expected_next;
+    vector<ProbM> M_stats;
+
     /* Per m probabilities */
-    vector<float> probs_seen;
-    vector<float> probs_record;
-    vector<float> probs_missing;
-    vector<float> probs_highmerit;
 
     // ----- Main calculation
     run_gap_file(
@@ -1572,18 +1551,23 @@ void prime_gap_stats(struct Config config) {
         unknown_file,
         /* output */
         prob_gap_norm, prob_gap_low, prob_gap_high,
-        M_vals,
-        expected_prev, expected_next,
-        probs_seen,
-        probs_record, probs_missing, probs_highmerit
+        M_vals, M_stats
     );
+
+    vector<float> expected_gap;
+    vector<float> probs_record;
+    vector<float> probs_missing;
+    vector<float> probs_highmerit;
+
+    for (auto m_stat : M_stats) {
+        expected_gap.push_back(m_stat.expected_gap_prev + m_stat.expected_gap_next);
+        probs_record.push_back(m_stat.record);
+        probs_missing.push_back(m_stat.is_missing_gap);
+        probs_highmerit.push_back(m_stat.highmerit);
+    }
 
     // Compute sum_missing_prob, sum_record_prob @1,5,10,20,50,100%
     if (config.verbose >= 2) {
-        vector<float> expected_gap;
-        for (size_t i = 0; i < expected_prev.size(); i++) {
-            expected_gap.push_back(expected_prev[i] + expected_next[i]);
-        }
         prob_stats("EXPECTED GAP", expected_gap);
         prob_stats("RECORD", probs_record);
 
@@ -1610,10 +1594,6 @@ void prime_gap_stats(struct Config config) {
         printf("\n");
     }
 
-    // Make sure probs_record didn't sort our copy.
-    assert(!std::is_sorted(probs_record.begin(), probs_record.end(), std::greater<>()));
-
-
     if (config.save_unknowns) {
         auto s_stop_t = high_resolution_clock::now();
         double   secs = duration<double>(s_stop_t - s_start_t).count();
@@ -1622,10 +1602,7 @@ void prime_gap_stats(struct Config config) {
             config,
             secs,
             prob_gap_norm, prob_gap_low, prob_gap_high,
-            M_vals,
-            expected_prev, expected_next,
-            probs_seen,
-            probs_record, probs_missing, probs_highmerit
+            M_vals, M_stats
         );
     }
 
