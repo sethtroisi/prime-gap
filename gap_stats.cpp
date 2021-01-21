@@ -25,6 +25,7 @@
 #include <numeric>
 #include <tuple>
 #include <vector>
+#include <unordered_map>
 
 #include <gmp.h>
 #include <sqlite3.h>
@@ -37,6 +38,7 @@ using std::endl;
 using std::pair;
 using std::tuple;
 using std::vector;
+using std::unordered_map;
 using namespace std::chrono;
 
 
@@ -317,8 +319,8 @@ void store_stats(
         vector<float>& prob_gap_low,
         vector<float>& prob_gap_high,
         /* Per m value */
-        vector<uint64_t>& M_vals,
-        vector<ProbM>& M_stats) {
+        vector<uint32_t>& valid_m,
+        unordered_map<uint64_t,ProbM> &M_stats) {
 
     assert( !is_range_already_processed(config) );
 
@@ -334,7 +336,7 @@ void store_stats(
     }
 
     const uint64_t rid = db_helper.config_hash(config);
-    const size_t num_rows = M_vals.size();
+    const size_t num_rows = M_stats.size();
     char sSQL[500];
     sprintf(sSQL,
         "INSERT INTO range(rid, P,D, m_start,m_inc,"
@@ -451,14 +453,15 @@ void store_stats(
         printf("\n");
     }
 
-    for (size_t i = 0; i < num_rows; i++) {
-        uint64_t m = M_vals[i];
-        ProbM &stats = M_stats[i];
+    size_t row_i = 0;
+    for (uint32_t mi : valid_m) {
+        uint64_t m = config.mstart + mi;
+        ProbM &stats = M_stats[mi];
 
         float e_next = stats.expected_gap_next;
         float e_prev = stats.expected_gap_prev;
 
-        size_t r = i + 1;
+        size_t r = ++row_i;
         if (config.verbose >= 2 && (
                     (r <= 2) ||
                     (r <= 200 && r % 100 == 0) ||
@@ -493,7 +496,7 @@ void store_stats(
         int rc = sqlite3_step(stmt);
         if (rc != SQLITE_DONE) {
             printf("\nm_stats insert failed %ld: (%d, %d, %ld): %d: %s\n",
-                i, config.p, config.d, m, rc, sqlite3_errmsg(db));
+                row_i, config.p, config.d, m, rc, sqlite3_errmsg(db));
             break;
         }
 
@@ -1246,8 +1249,7 @@ void run_gap_file(
         vector<float>& prob_gap_norm,
         vector<float>& prob_gap_low,
         vector<float>& prob_gap_high,
-        vector<uint64_t>& M_vals,
-        vector<ProbM>& M_stats) {
+        unordered_map<uint64_t,ProbM> &M_stats) {
 
     auto s_start_t = high_resolution_clock::now();
 
@@ -1274,51 +1276,59 @@ void run_gap_file(
     for (uint32_t mi : valid_m) {
         uint64_t m = config.mstart + mi;
 
-        vector <uint32_t> unknown_low, unknown_high;
-        read_unknown_line(config, mi, unknown_file, unknown_low, unknown_high);
-
         // Note slightly different from N_log
         float log_M = K_log + log(m);
 
-        ProbM probm = calculate_probm(m, log_M, unknown_low, unknown_high,
-                                      config, records, min_record_gap, min_gap_min_merit,
-                                      gap_probs, prob_gap_norm, prob_gap_low, prob_gap_high);
+        vector <uint32_t> unknown_low, unknown_high;
 
-        sum.record += probm.record;
-        sum.record_inner += probm.record_inner;
-        sum.record_extended += probm.record_extended;
-        sum.record_extended2 += probm.record_extended2;
-
-        M_vals.push_back(m);
-        M_stats.push_back(probm);
-
-        if (config.verbose >= 1) {
-            if (probm.record > max_r.record) {
-                max_r.record = probm.record;
-
-                printf("RECORD :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
-                       "prob record: %.2e   (%.2e + %.2e + %.2e)\n",
-                       m, M_vals.size(), unknown_low.size(), unknown_high.size(),
-                       probm.record, probm.record_inner,
-                       probm.record_extended, probm.record_extended2);
-            }
-
-            if (probm.highmerit > max_r.highmerit) {
-                max_r.highmerit = probm.highmerit;
-                printf("MERIT  :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
-                       "      merit: %.2g\n",
-                       m, M_vals.size(), unknown_low.size(), unknown_high.size(),
-                       probm.highmerit);
-            }
+        {
+            read_unknown_line(config, mi, unknown_file, unknown_low, unknown_high);
         }
 
-        if (config.verbose >= 2) {
-            if (probm.is_missing_gap > max_r.is_missing_gap) {
-                max_r.is_missing_gap= probm.is_missing_gap;
-                printf("MISSING:%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
-                       "prob record: %.2e   missing: %.4e\n",
-                       m, M_vals.size(), unknown_low.size(), unknown_high.size(),
-                       probm.record, probm.is_missing_gap);
+        ProbM probm;
+        {
+            probm = calculate_probm(m, log_M, unknown_low, unknown_high,
+                                    config, records, min_record_gap, min_gap_min_merit,
+                                    gap_probs, prob_gap_norm, prob_gap_low, prob_gap_high);
+            probm.seen = 1 / log_M;
+
+            sum.record += probm.record;
+            sum.record_inner += probm.record_inner;
+            sum.record_extended += probm.record_extended;
+            sum.record_extended2 += probm.record_extended2;
+        }
+
+        {
+            M_stats[mi] = probm;
+
+            if (config.verbose >= 1) {
+                if (probm.record > max_r.record) {
+                    max_r.record = probm.record;
+
+                    printf("RECORD :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
+                           "prob record: %.2e   (%.2e + %.2e + %.2e)\n",
+                           m, M_stats.size(), unknown_low.size(), unknown_high.size(),
+                           probm.record, probm.record_inner,
+                           probm.record_extended, probm.record_extended2);
+                }
+
+                if (probm.highmerit > max_r.highmerit) {
+                    max_r.highmerit = probm.highmerit;
+                    printf("MERIT  :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
+                           "      merit: %.2g\n",
+                           m, M_stats.size(), unknown_low.size(), unknown_high.size(),
+                           probm.highmerit);
+                }
+            }
+
+            if (config.verbose >= 2) {
+                if (probm.is_missing_gap > max_r.is_missing_gap) {
+                    max_r.is_missing_gap= probm.is_missing_gap;
+                    printf("MISSING:%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
+                           "prob record: %.2e   missing: %.4e\n",
+                           m, M_stats.size(), unknown_low.size(), unknown_high.size(),
+                           probm.record, probm.is_missing_gap);
+                }
             }
         }
     }
@@ -1345,7 +1355,7 @@ void run_gap_file(
     if (config.verbose >= 1) {
         vector<float> probs_seen;
         for (auto &m_stat : M_stats) {
-            probs_seen.push_back(m_stat.seen);
+            probs_seen.push_back(m_stat.second.seen);
         }
         cout << endl;
         printf("\tsum(prob(gap[X])): %.5f\n", average_v(prob_gap_norm) * prob_gap_norm.size());
@@ -1534,11 +1544,8 @@ void prime_gap_stats(struct Config config) {
     vector<float> prob_gap_low;
     vector<float> prob_gap_high;
 
-    /* Per m stats */
-    vector<uint64_t> M_vals;
-    vector<ProbM> M_stats;
-
-    /* Per m probabilities */
+    /* Per m stats & probabilities */
+    unordered_map<uint64_t,ProbM> M_stats;
 
     // ----- Main calculation
     run_gap_file(
@@ -1551,7 +1558,7 @@ void prime_gap_stats(struct Config config) {
         unknown_file,
         /* output */
         prob_gap_norm, prob_gap_low, prob_gap_high,
-        M_vals, M_stats
+        M_stats
     );
 
     vector<float> expected_gap;
@@ -1560,10 +1567,11 @@ void prime_gap_stats(struct Config config) {
     vector<float> probs_highmerit;
 
     for (auto m_stat : M_stats) {
-        expected_gap.push_back(m_stat.expected_gap_prev + m_stat.expected_gap_next);
-        probs_record.push_back(m_stat.record);
-        probs_missing.push_back(m_stat.is_missing_gap);
-        probs_highmerit.push_back(m_stat.highmerit);
+        auto stats = m_stat.second;
+        expected_gap.push_back(stats.expected_gap_prev + stats.expected_gap_next);
+        probs_record.push_back(stats.record);
+        probs_missing.push_back(stats.is_missing_gap);
+        probs_highmerit.push_back(stats.highmerit);
     }
 
     // Compute sum_missing_prob, sum_record_prob @1,5,10,20,50,100%
@@ -1602,7 +1610,7 @@ void prime_gap_stats(struct Config config) {
             config,
             secs,
             prob_gap_norm, prob_gap_low, prob_gap_high,
-            M_vals, M_stats
+            valid_m, M_stats
         );
     }
 
