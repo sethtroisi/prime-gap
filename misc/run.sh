@@ -14,18 +14,45 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -eux
+set -eu
 
-UNKNOWN_FN="$1"
+usage() {
+  echo "Usage: $0 [OPTION]... [UNKNOWN_FN]"
+  echo ""
+  echo -e "\t-u UNKNOWN_FN"
+  echo -e "\t-t THREADS"
+  echo -e "\t-h Print this help message"
+}
 
-echo "Running --unknown-filename $UNKNOWN_FN"
+UNKNOWN_FN=""
+THREADS=1
 
-make clean
-make combined_sieve gap_stats
+while getopts u:t:h flag; do
+    case "${flag}" in
+        u) UNKNOWN_FN=${OPTARG};;
+        t) THREADS=${OPTARG};;
+        h) usage; exit 0;;
+    esac
+done
 
-time ./combined_sieve --save-unknowns --unknown-filename "$UNKNOWN_FN"
+if [ -z "$UNKNOWN_FN" ]; then
+  UNKNOWN_FN="${@:$OPTIND:1}"
+fi
 
-time ./gap_stats --save-unknowns --unknown-filename "$UNKNOWN_FN"
+if [ -z "$UNKNOWN_FN" ]; then
+  echo "Missing -u"
+  echo
+  usage
+  exit 1;
+fi
 
-echo "Run when thread are free"
-echo "time python missing_gap_test.py -t <THREADS> --unknown-filename $UNKNOWN_FN"
+set -x
+
+echo "Running --threads $THREADS --unknown-filename $UNKNOWN_FN"
+
+make clean combined_sieve gap_stats
+
+time ./combined_sieve -t $THREADS --save -u "$UNKNOWN_FN"
+time ./gap_stats      -t $THREADS --save -u "$UNKNOWN_FN"
+
+time python gap_test.py -t $THREADS -u "$UNKNOWN_FN"

@@ -60,7 +60,7 @@ def get_arg_parser():
         help="Search for megagaps (of this size or greater)")
 
     parser.add_argument(
-        '--threads', type=int, default=1,
+        '-t', '--threads', type=int, default=1,
         help="Number of threads to use for searching (default: %(default)s)")
 
     parser.add_argument(
