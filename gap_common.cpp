@@ -672,7 +672,7 @@ Config Args::argparse(int argc, char* argv[]) {
         {"sieve-length",     required_argument, 0,   4  },
         {"max-prime",        required_argument, 0,   5  },
 
-        {"threads",                required_argument, 0,  't' },
+        {"threads",          required_argument, 0,  't' },
 
         {"min-merit",        required_argument, 0,   3  },
 

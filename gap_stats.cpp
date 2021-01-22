@@ -903,7 +903,7 @@ void setup_prob_nth(
 }
 
 /** Parse line (potentially with rle) to two positive lists */
-void read_unknown_line(
+int read_unknown_line(
         const struct Config& config,
         uint64_t mi,
         std::ifstream& unknown_file,
@@ -918,7 +918,7 @@ void read_unknown_line(
         int m_test = -1;
         unknown_file >> m_test;
         assert( m_test >= 0 );
-        assert( (size_t) m_test == mi );
+        //assert( (size_t) m_test == mi );
 
         std::string delim;
         char delim_char;
@@ -965,15 +965,20 @@ void read_unknown_line(
             }
             unknown_high.push_back(c);
         }
+
+        return m_test;
     }
 }
 
 
 ProbM calculate_probm(
         const uint64_t &m, float log_M,
-        const vector<uint32_t> &unknown_low, const vector<uint32_t> &unknown_high,
-        const Config &config, const vector<float> &records,
-        const uint32_t &min_record_gap, const uint32_t &min_gap_min_merit,
+        const vector<uint32_t> &unknown_low,
+        const vector<uint32_t> &unknown_high,
+        const Config &config,
+        const vector<float> &records,
+        const uint32_t &min_record_gap,
+        const uint32_t &min_gap_min_merit,
         const ProbNth &gap_probs,
         vector<float> &prob_gap_norm, vector<float> &prob_gap_low, vector<float> &prob_gap_high) {
 
@@ -1273,67 +1278,103 @@ void run_gap_file(
                valid_m.front(), valid_m.back());
     }
 
-    for (uint32_t mi : valid_m) {
-        uint64_t m = config.mstart + mi;
+    #pragma omp parallel num_threads(config.threads)
+    {
+        // Declare thread local prob_gap norm/low/high (later they get sum'ed)
+        vector<float> local_p_gap_norm(2 * config.sieve_length + 1, 0);
+        vector<float> local_p_gap_low(2 * config.sieve_length + 1, 0);
+        vector<float> local_p_gap_high(2 * config.sieve_length + 1, 0);
 
-        // Note slightly different from N_log
-        float log_M = K_log + log(m);
+        #pragma omp for ordered schedule(static, 1)
+        for (uint32_t mi : valid_m) {
+            uint64_t m;
 
-        vector <uint32_t> unknown_low, unknown_high;
+            vector <uint32_t> unknown_low, unknown_high;
 
-        {
-            read_unknown_line(config, mi, unknown_file, unknown_low, unknown_high);
-        }
-
-        ProbM probm;
-        {
-            probm = calculate_probm(m, log_M, unknown_low, unknown_high,
-                                    config, records, min_record_gap, min_gap_min_merit,
-                                    gap_probs, prob_gap_norm, prob_gap_low, prob_gap_high);
-            probm.seen = 1 / log_M;
-
-            sum.record += probm.record;
-            sum.record_inner += probm.record_inner;
-            sum.record_extended += probm.record_extended;
-            sum.record_extended2 += probm.record_extended2;
-        }
-
-        {
-            M_stats[mi] = probm;
-
-            if (config.verbose >= 1) {
-                if (probm.record > max_r.record) {
-                    max_r.record = probm.record;
-
-                    printf("RECORD :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
-                           "prob record: %.2e   (%.2e + %.2e + %.2e)\n",
-                           m, M_stats.size(), unknown_low.size(), unknown_high.size(),
-                           probm.record, probm.record_inner,
-                           probm.record_extended, probm.record_extended2);
-                }
-
-                if (probm.highmerit > max_r.highmerit) {
-                    max_r.highmerit = probm.highmerit;
-                    printf("MERIT  :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
-                           "      merit: %.2g\n",
-                           m, M_stats.size(), unknown_low.size(), unknown_high.size(),
-                           probm.highmerit);
-                }
+            /**
+             * Note: it would be nice to use ordered here but omp doesn't end
+             * the ordered section, omp critical could be used with
+             * read_unknown_line returning mi but still not optimal.
+             * https://stackoverflow.com/questions/43540605/must-ordered
+             */
+            #pragma omp critical
+            {
+                m = config.mstart +
+                    read_unknown_line(config, mi, unknown_file, unknown_low, unknown_high);
             }
 
-            if (config.verbose >= 2) {
-                if (probm.is_missing_gap > max_r.is_missing_gap) {
-                    max_r.is_missing_gap= probm.is_missing_gap;
-                    printf("MISSING:%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
-                           "prob record: %.2e   missing: %.4e\n",
-                           m, M_stats.size(), unknown_low.size(), unknown_high.size(),
-                           probm.record, probm.is_missing_gap);
+            ProbM probm;
+            { // This section in parallel
+                // Note slightly different from N_log
+                float log_M = K_log + log(m);
+
+                probm = calculate_probm(m, log_M, unknown_low, unknown_high,
+                                        config, records, min_record_gap, min_gap_min_merit,
+                                        gap_probs,
+                                        local_p_gap_norm, local_p_gap_low, local_p_gap_high);
+
+                sum.record += probm.record;
+                sum.record_inner += probm.record_inner;
+                sum.record_extended += probm.record_extended;
+                sum.record_extended2 += probm.record_extended2;
+            }
+
+            #pragma omp critical
+            { // Handle saving and stats 1 thread at a time
+                // Becuase of note above we validate nothing saved for this mi before.
+                assert(M_stats.count(mi) == 0);
+                M_stats[mi] = probm;
+
+                if (config.verbose >= 1) {
+                    if (probm.record > max_r.record) {
+                        max_r.record = probm.record;
+
+                        printf("RECORD :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
+                               "prob record: %.2e   (%.2e + %.2e + %.2e)\n",
+                               m, M_stats.size(), unknown_low.size(), unknown_high.size(),
+                               probm.record, probm.record_inner,
+                               probm.record_extended, probm.record_extended2);
+                    }
+
+                    if (probm.highmerit > max_r.highmerit) {
+                        max_r.highmerit = probm.highmerit;
+                        printf("MERIT  :%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
+                               "      merit: %.2g\n",
+                               m, M_stats.size(), unknown_low.size(), unknown_high.size(),
+                               probm.highmerit);
+                    }
+                }
+
+                if (config.verbose >= 2) {
+                    if (probm.is_missing_gap > max_r.is_missing_gap) {
+                        max_r.is_missing_gap= probm.is_missing_gap;
+                        printf("MISSING:%-6ld line %-6ld  unknowns: %3ld, %3ld\t| "
+                               "prob record: %.2e   missing: %.4e\n",
+                               m, M_stats.size(), unknown_low.size(), unknown_high.size(),
+                               probm.record, probm.is_missing_gap);
+                    }
                 }
             }
+        }
+
+        #pragma omp critical
+        for (size_t i = 0; i < local_p_gap_norm.size(); i++) {
+            prob_gap_norm[i] += local_p_gap_norm[i];
+            prob_gap_low[i] += local_p_gap_low[i];
+            prob_gap_high[i] += local_p_gap_high[i];
         }
     }
 
-    // Normalize the probability of gap (across all m) to per m
+    /**
+     * Workaround the openmp ordered limitations.
+     * Double check that every valid_m was stored once.
+     */
+    assert(valid_m.size() == M_stats.size());
+    for (uint32_t mi : valid_m) {
+        assert(M_stats.count(mi) == 1);
+    }
+
+        // Normalize the probability of gap (across all m) to per m
     for (size_t i = 0; i < prob_gap_norm.size(); i++) {
         prob_gap_norm[i] /= valid_m.size();
         prob_gap_low[i]  /= valid_m.size();
@@ -1499,7 +1540,7 @@ void prime_gap_stats(struct Config config) {
     }
 
     // ----- Get Record Prime Gaps
-    vector<float> records = get_record_gaps(config);
+    const vector<float> records = get_record_gaps(config);
 
     // gap that would be a record with m*P#/d
     vector<uint32_t> poss_record_gaps;
