@@ -23,7 +23,6 @@
 #include <limits>
 #include <map>
 #include <numeric>
-#include <tuple>
 #include <vector>
 #include <unordered_map>
 
@@ -85,7 +84,7 @@ class ProbNth {
          * ((m % wheel_d) * K + X) with factors of 2,3,5,7 can be eliminated
          * where these X aren't coprime to K
          */
-        int wheel_d;
+        int wheel_d = -1;
         /**
          * Probability of gap[i] on prev side, next gap > SL, and is record.
          * Sum(prob_combined_sieve[i-1 + unknowns[side] + j-1,
@@ -215,15 +214,19 @@ vector<float> get_record_gaps(const struct Config& config) {
 
     /* Create SQL statement */
     char sql[] = "SELECT gapsize, merit FROM gaps";
-    char *zErrMsg = 0;
+    char *zErrMsg = nullptr;
 
     /* Execute SQL statement */
     int rc = sqlite3_exec(db.get_db(), sql, [](void* recs, int argc, char **argv, char **azColName)->int {
-        uint64_t gap = atol(argv[0]);
-        vector<float> *recs_vec = static_cast<vector<float>*>(recs);
-        if (gap < recs_vec->size()) {
+        char *test;
+        int64_t gap = strtol(argv[0], &test, 10);
+        assert(test != argv[0] && *test == '\0');
+        assert(gap > 0 && gap < 10'000'000);
+
+        auto *recs_vec = static_cast<vector<float>*>(recs);
+        if ((size_t)gap < recs_vec->size()) {
             // Recover log(startprime)
-            (*recs_vec)[gap] = gap / atof(argv[1]);
+            (*recs_vec)[gap] = gap / strtof(argv[1], nullptr);
         }
         return 0;
     }, (void*)&records, &zErrMsg);
@@ -268,12 +271,14 @@ bool is_range_already_processed(const struct Config& config) {
     uint64_t hash = db_helper.config_hash(config);
     char sql[200];
     sprintf(sql, "SELECT count(*) FROM range WHERE rid = %ld and time_stats > 0", hash);
-    char *zErrMsg = 0;
+    char *zErrMsg = nullptr;
 
     int count = 0;
     int rc = sqlite3_exec(db, sql, [](void* data, int argc, char **argv, char **azColName)->int {
         assert( argc == 1 );
-        *static_cast<int*>(data) = atoi(argv[0]);
+        int64_t test = strtol(argv[0], nullptr, 10);
+        assert(test >= 0 && test <= 1);
+        *static_cast<int*>(data) = test;
         return 0;
     }, &count, &zErrMsg);
 
@@ -293,12 +298,12 @@ double get_range_time(const struct Config& config) {
     uint64_t hash = db_helper.config_hash(config);
     char sql[200];
     sprintf(sql, "SELECT time_sieve + time_stats FROM range WHERE rid = %ld and time_sieve > 0", hash);
-    char *zErrMsg = 0;
+    char *zErrMsg = nullptr;
 
     double time = 0;
     int rc = sqlite3_exec(db, sql, [](void* data, int argc, char **argv, char **azColName)->int {
         assert( argc == 1 );
-        *static_cast<double*>(data) = atof(argv[0]);
+        *static_cast<double*>(data) = strtof(argv[0], nullptr);
         return 0;
     }, &time, &zErrMsg);
 
@@ -329,8 +334,8 @@ void store_stats(
     // Wait up to 60s to try and commit these records (range is most important)
     sqlite3_busy_timeout(db, 60'000);
 
-    char *zErrMsg = 0;
-    if (sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &zErrMsg) != SQLITE_OK) {
+    char *zErrMsg = nullptr;
+    if (sqlite3_exec(db, "BEGIN TRANSACTION", nullptr, nullptr, &zErrMsg) != SQLITE_OK) {
         printf("BEGIN TRANSACTION failed: %s\n", zErrMsg);
         exit(1);
     }
@@ -355,7 +360,7 @@ void store_stats(
             time_stats, time_stats);
 
     {
-        int rc = sqlite3_exec(db, sSQL, NULL, NULL, &zErrMsg);
+        int rc = sqlite3_exec(db, sSQL, nullptr, nullptr, &zErrMsg);
         if (rc != SQLITE_OK) {
             printf("\nrange INSERT/UPDATE failed %d: %s\n",
                    rc, sqlite3_errmsg(db));
@@ -377,7 +382,7 @@ void store_stats(
     sqlite3_stmt *insert_range_stmt;
     {
         /* Prepare SQL statement */
-        int rc = sqlite3_prepare_v2(db, insert_range_stats, -1, &insert_range_stmt, 0);
+        int rc = sqlite3_prepare_v2(db, insert_range_stats, -1, &insert_range_stmt, nullptr);
         if (rc != SQLITE_OK) {
             printf("Could not prepare statement: '%s'\n", insert_range_stats);
             exit(1);
@@ -387,7 +392,7 @@ void store_stats(
     assert( prob_gap_norm.size() == prob_gap_low.size() );
     assert( prob_gap_norm.size() == prob_gap_high.size() );
     size_t skipped_gap_stats = 0;
-    for (int g = prob_gap_norm.size() - 1; g >= 0; g--) {
+    for (int g = (int) prob_gap_norm.size() - 1; g >= 0; g--) {
         if (prob_gap_norm[g] < 1e-10 &&
             prob_gap_low[g]  < 1e-10 &&
             prob_gap_high[g] < 1e-10) {
@@ -442,7 +447,7 @@ void store_stats(
     sqlite3_stmt *stmt;
     {
         /* Prepare SQL statement */
-        int rc = sqlite3_prepare_v2(db, insert_m_stats, -1, &stmt, 0);
+        int rc = sqlite3_prepare_v2(db, insert_m_stats, -1, &stmt, nullptr);
         if (rc != SQLITE_OK) {
             printf("Could not prepare statement: '%s'\n", insert_m_stats);
             exit(1);
@@ -509,7 +514,7 @@ void store_stats(
         }
     }
 
-    if (sqlite3_exec(db, "END TRANSACTION", NULL, NULL, &zErrMsg) != SQLITE_OK) {
+    if (sqlite3_exec(db, "END TRANSACTION", nullptr, nullptr, &zErrMsg) != SQLITE_OK) {
         printf("END TRANSACTION failed: %s\n", zErrMsg);
         exit(1);
     }
@@ -526,7 +531,7 @@ cdouble NTH_PRIME_CUTOFF = 1e-12;
 cdouble COMBINED_CUTOFF = 1e-14;
 
 float nth_prob_or_zero(const vector<float>& prob_nth, size_t nth) {
-    return nth < prob_nth.size() ? prob_nth[nth] : 0.0;
+    return nth < prob_nth.size() ? prob_nth[nth] : 0.0f;
 }
 
 void prob_nth_prime(
@@ -619,7 +624,7 @@ void prob_extended_gap(
     map<uint32_t, uint32_t> k_mod_p;
 
     uint32_t wheel = 1;
-    for (uint32_t p : {2, 3, 5, 7}) {
+    for (uint32_t p : {2u, 3u, 5u, 7u}) {
         if (config.d % p == 0) {
             wheel *= p;
             prob_prime_coprime /= (1 - 1.0 / p);
@@ -678,8 +683,8 @@ void prob_extended_gap(
 
             {
                 auto middle = is_coprime_m.begin() + SL;
-                size_t inner_coprime    = std::count(is_coprime_m.begin(), middle, true);
-                size_t extended_coprime = std::count(middle, is_coprime_m.end(), true);
+                long inner_coprime    = std::count(is_coprime_m.begin(), middle, true);
+                long extended_coprime = std::count(middle, is_coprime_m.end(), true);
                 average_inner_coprime += inner_coprime;
                 average_extended_coprime += extended_coprime;
 
@@ -946,7 +951,7 @@ int read_unknown_line(
                 unknown_file >> c;
                 c *= -1;
             }
-            unknown_low.push_back(c);
+            unknown_low.push_back((unsigned) c);
         }
 
         unknown_file >> delim;
@@ -963,7 +968,7 @@ int read_unknown_line(
             } else {
                 unknown_file >> c;
             }
-            unknown_high.push_back(c);
+            unknown_high.push_back((unsigned) c);
         }
 
         return m_test;
@@ -1181,7 +1186,7 @@ void prob_record_vs_plimit(struct Config config) {
     // Passing an empty vector to prob_gap_norm causes those values to be skipped.
     vector<float> empty_vector;
 
-    vector<bool> composite(SIEVE_INTERVAL, 0);
+    vector<bool> composite(SIEVE_INTERVAL, false);
 
     int64_t prime = 0, offset = -1;
     char delim = -1;
@@ -1204,7 +1209,7 @@ void prob_record_vs_plimit(struct Config config) {
             assert( 0 == mpz_fdiv_ui(test, prime) );
         }
 
-        composite[offset] = 1;
+        composite[offset] = true;
 
         if (prime < START_PRIME) {
             continue;
@@ -1464,13 +1469,13 @@ void calculate_prp_top_percent(
     printf("\n");
 
     // Both sides & One sided at 1% (assume 80% of prob also)
-    for (size_t side_percent : {100, 1}) {
+    for (int side_percent : {100, 1}) {
 
         double sum_prob = 0.0;
         double time = combined_time;
 
         if (side_percent != 100) {
-            printf("\tAssuming %ld%% of next_prime(...) are skipped\n", 100 - side_percent);
+            printf("\tAssuming %d%% of next_prime(...) are skipped\n", 100 - side_percent);
         }
 
         bool max_happened = false;
