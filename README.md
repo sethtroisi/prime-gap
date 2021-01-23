@@ -624,6 +624,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
     * [ ] Faster finalize.py
   * [ ] Consider new names for prp-top-percent, no-one-side-skip, sieve-length
 * combined\_sieve.cpp
+  * [ ] Benchmark bitset vs vector<bool>
 * gap\_stats.cpp
 * gap\_test.py
   * [ ] Validate the unknown-file matches expectations (unknowns / line, ...)
