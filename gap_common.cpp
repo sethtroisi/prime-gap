@@ -828,9 +828,9 @@ Config Args::argparse(int argc, char* argv[]) {
 
     uint32_t last_m;
     if (__builtin_uadd_overflow(config.mstart, config.minc, &last_m) ||
-            last_m >= 1'000'000'001 ) {
+            last_m > 2'000'000'001 ) {
         config.valid = 0;
-        cout << "mstart + minc must be < 1e9" << endl;
+        cout << "mstart + minc must be <= 2e9" << endl;
     }
 
     if (config.minc <= 0) {
@@ -838,9 +838,9 @@ Config Args::argparse(int argc, char* argv[]) {
         cout << "minc must be greater than 0: " << config.minc << endl;
     }
 
-    if (config.minc >= 100'000'000) {
+    if (config.minc > 500'000'000) {
         config.valid = 0;
-        cout << "minc > 100M will use to much memory" << endl;
+        cout << "minc > 500M very like to use too much memory" << endl;
     }
 
     if (config.max_prime > 10'000'000'000'000) {
