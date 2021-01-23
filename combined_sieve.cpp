@@ -898,6 +898,8 @@ class method2_stats {
         uint64_t validated_factors = 0;
 
         uint64_t last_prime = 0;
+
+        double prp_time_estimate = std::nan("");
         double prob_prime = 0;
         double current_prob_prime = 0;
 };
@@ -905,10 +907,10 @@ class method2_stats {
 void method2_increment_print(
         uint64_t prime,
         size_t valid_ms,
-        double skipped_prp, double prp_time_est,
         vector<bool> *composite,
         method2_stats &stats,
         const struct Config& config) {
+
     if (prime >= stats.next_print) {
         const size_t max_mult = 100'000'000'000;
 
@@ -930,6 +932,11 @@ void method2_increment_print(
     double int_secs = duration<double>(s_stop_t - stats.interval_t).count();
 
     uint32_t SIEVE_INTERVAL = 2 * config.sieve_length + 1;
+
+    // See THEORY.md
+    double prob_prime_after_sieve = stats.prob_prime * log(prime) * exp(GAMMA);
+    double skipped_prp = 2 * valid_ms * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
+    stats.current_prob_prime = prob_prime_after_sieve;
 
     bool is_last = (prime == stats.last_prime) || g_control_c;
 
@@ -987,7 +994,7 @@ void method2_increment_print(
                 printf("\tValidated %ld factors\n", stats.validated_factors);
             }
 
-            double run_prp_mult = int_secs / (prp_time_est * skipped_prp);
+            double run_prp_mult = int_secs / (stats.prp_time_estimate * skipped_prp);
             if (run_prp_mult > 2) {
                 printf("\t\tEstimated ~%.1fx faster to just run PRP now (CTRL+C to stop sieving)\n",
                     run_prp_mult);
@@ -1026,7 +1033,6 @@ void method2_small_primes(const Config &config, method2_stats &stats,
                           const vector<int32_t> &m_reindex,
                           uint32_t x_reindex_m_wheel, const vector<uint32_t> *x_reindex_wheel,
                           const uint64_t SMALL_THRESHOLD,
-                          const double prp_time_est,
                           vector<bool> *composite) {
 
     method2_stats temp_stats(thread_i, config, valid_mi.size(), SMALL_THRESHOLD, stats.prob_prime);
@@ -1128,19 +1134,9 @@ void method2_small_primes(const Config &config, method2_stats &stats,
         }
         // Don't print final partial interval
         if (temp_stats.next_print <= prime && prime < SMALL_THRESHOLD) {
-            // Calculated here with locals
-            double prob_prime_after_sieve = stats.prob_prime * log(prime) * exp(GAMMA);
-            // See THEORY.md
-            double skipped_prp = 2 * valid_mi.size() * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
-            stats.current_prob_prime = prob_prime_after_sieve;
-
             // Print counters & stats.
             method2_increment_print(
-                prime,
-                valid_mi.size(),
-                skipped_prp, prp_time_est,
-                composite,
-                temp_stats, config);
+                prime, valid_mi.size(), composite, temp_stats, config);
 
         }
         // Update global counters for a couple variables
@@ -1169,7 +1165,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                            const vector<int32_t> &m_reindex,
                            uint32_t x_reindex_m_wheel, const vector<uint32_t> *x_reindex_wheel,
                            const uint64_t SMALL_THRESHOLD, const uint64_t MEDIUM_THRESHOLD,
-                           const double prp_time_est, const size_t valid_ms,
+                           const size_t valid_ms,
                            vector<bool> *composite) {
 
     const uint32_t SIEVE_LENGTH = config.sieve_length;
@@ -1281,19 +1277,8 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         stats.small_prime_factors_interval += small_factors;
 
         if (prime >= stats.next_print && prime != stats.last_prime) {
-            // Calculated here with locals
-            double prob_prime_after_sieve = stats.prob_prime * log(prime) * exp(GAMMA);
-            // See THEORY.md
-            double skipped_prp = 2 * valid_ms * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
-            stats.current_prob_prime = prob_prime_after_sieve;
-
             // Print counters & stats.
-            method2_increment_print(
-                prime,
-                valid_ms,
-                skipped_prp, prp_time_est,
-                composite,
-                stats, config);
+            method2_increment_print(prime, valid_ms, composite, stats, config);
         }
     }
 
@@ -1311,7 +1296,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                           const vector<int32_t> &m_reindex,
                           uint32_t x_reindex_m_wheel, const vector<uint32_t> *x_reindex_wheel,
                           const uint64_t MEDIUM_THRESHOLD,
-                          const double prp_time_est, const size_t valid_ms,
+                          const size_t valid_ms,
                           vector<bool> *composite) {
     const uint32_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
@@ -1445,20 +1430,8 @@ void method2_large_primes(Config &config, method2_stats &stats,
 
             uint64_t prime = end;
             if (prime >= stats.next_print) {
-                // TODO move into method2_increment_print
-                // Calculated here with locals
-                double prob_prime_after_sieve = stats.prob_prime * log(prime) * exp(GAMMA);
-                // See THEORY.md
-                double skipped_prp = 2 * valid_ms * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
-                stats.current_prob_prime = prob_prime_after_sieve;
-
                 // Print counters & stats.
-                method2_increment_print(
-                    prime,
-                    valid_ms,
-                    skipped_prp, prp_time_est,
-                    composite,
-                    stats, config);
+                method2_increment_print(prime, valid_ms, composite, stats, config);
 
                 #ifdef SAVE_INCREMENTS
                 if (config.save_unknowns && end > 1e10 && end < LAST_PRIME) {
@@ -1725,6 +1698,7 @@ void prime_gap_parallel(struct Config& config) {
     // Used for various stats
     method2_stats stats(/* thread */ 0, config, valid_ms, SMALL_THRESHOLD, prob_prime);
     stats.last_prime = LAST_PRIME;
+    stats.prp_time_estimate = prp_time_est;
 
     const size_t THREADS = config.threads;
 
@@ -1751,7 +1725,7 @@ void prime_gap_parallel(struct Config& config) {
                                  valid_mi_split[t],
                                  m_reindex,
                                  x_reindex_m_wheel, x_reindex_wheel,
-                                 SMALL_THRESHOLD, prp_time_est, composite);
+                                 SMALL_THRESHOLD, composite);
         }
     }
 
@@ -1785,24 +1759,14 @@ void prime_gap_parallel(struct Config& config) {
                                   m_reindex,
                                   x_reindex_m_wheel, x_reindex_wheel,
                                   SMALL_THRESHOLD, MEDIUM_THRESHOLD,
-                                  prp_time_est, valid_ms,
+                                  valid_ms,
                                   composite);
 
         }
         if (MEDIUM_THRESHOLD >= stats.last_prime) {
-            // TODO move into method2_increment_print
-            // Calculated here with locals
-            double prob_prime_after_sieve = stats.prob_prime * log(stats.last_prime) * exp(GAMMA);
-            // See THEORY.md
-            double skipped_prp = 2 * valid_ms * (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
-            stats.current_prob_prime = prob_prime_after_sieve;
-
             // Handle final print
             method2_increment_print(
-                stats.last_prime, valid_ms,
-                skipped_prp, prp_time_est,
-                composite,
-                stats, config);
+                stats.last_prime, valid_ms, composite, stats, config);
         }
     }
 
@@ -1816,7 +1780,7 @@ void prime_gap_parallel(struct Config& config) {
             m_reindex,
             x_reindex_m_wheel, x_reindex_wheel,
             MEDIUM_THRESHOLD,
-            prp_time_est, valid_ms,
+            valid_ms,
             composite);
     }
 
