@@ -1165,11 +1165,23 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                            const vector<int32_t> &m_reindex,
                            uint32_t x_reindex_m_wheel, const vector<uint32_t> *x_reindex_wheel,
                            const uint64_t SMALL_THRESHOLD, const uint64_t MEDIUM_THRESHOLD,
-                           const vector<int32_t> &valid_mi, const size_t valid_ms,
+                           const size_t valid_ms,
                            vector<bool> *composite) {
-    cout << "New medium_primes method" << endl;
+    /**
+     * NOTE: Theoretically memory access would be better if composite was transposed
+     * composite[m,X] would become composite[X,m]
+     * Then reverse the loops (for prime, for X) to (for X, for prime)
+     * This would make printing harder (like small primes) and means
+     * x_reindex_m_wheel wouldn't help.
+     * After transpose composite[x, ?] would fit in cache instead of RAM read.
+     * This was tried in commit 03e0f6d1 but failed for a number of reasons
+     * 1. Takes a long time to invert composite
+     * 2. Have to iterate over all primes/inv_k & recalculate m_start_shift for each X
+     * 3. REINDEX_WHEEL doesn't work (would require a different reindex)
+     */
+
     const uint32_t SIEVE_LENGTH = config.sieve_length;
-    //const uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
+    const uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
 
     const uint32_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
@@ -1178,145 +1190,14 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
     mpz_init(test);
     mpz_init(test2);
 
-    //const int K_odd = mpz_odd_p(K);
+    const int K_odd = mpz_odd_p(K);
 
     primesieve::iterator iter(SMALL_THRESHOLD+1);
     uint32_t prime = iter.prev_prime();
     assert(prime <= SMALL_THRESHOLD);
-    //prime = iter.next_prime();
-    //assert(prime > SMALL_THRESHOLD);
-    //assert(prime > SIEVE_INTERVAL);
-
-
-    while (prime <= MEDIUM_THRESHOLD) {
-        // Handle primes (+1) <= stats.next_mult
-
-        std::vector<std::pair<uint32_t, uint32_t>> p_and_inv;
-        for (prime = iter.next_prime(); prime <= MEDIUM_THRESHOLD; prime = iter.next_prime()) {
-            const uint32_t base_r = mpz_fdiv_ui(K, prime);
-            mpz_set_ui(test, base_r);
-            mpz_set_ui(test2, prime);
-            assert(mpz_invert(test, test, test2) > 0);
-
-            const int64_t inv_K = mpz_get_ui(test);
-            assert((inv_K * base_r) % prime == 1);
-
-            p_and_inv.push_back({(uint32_t) prime, inv_K});
-
-            if (prime >= stats.next_print) {
-                break;
-            }
-        }
-        cout << "P & INV: " << p_and_inv.size() << " " << p_and_inv.front().first << " to " <<
-            p_and_inv.back().first << endl;
-        cout << stats.next_print << endl;
-
-
-        const size_t SLICE_SIZE = 3;
-
-        // Slice of composite
-        vector<bool> slice[SLICE_SIZE];
-        vector<bool> slice2[SLICE_SIZE];
-        for(size_t i = 0; i < SLICE_SIZE; i++) {
-            slice[i].reserve(valid_ms);
-            slice2[i].reserve(valid_ms);
-        }
-
-
-        double A = 0, B = 0;
-
-        // SLICE_SIZE of 2-4 seems to be slightly faster
-        // This could probably be highly optimized but currently is an order
-        // of magnituted too slow (~200seconds vs sieving taking ~20-150)
-        for (size_t XI = 0; XI < coprime_X.size(); XI += SLICE_SIZE) {
-            auto s_start_t = high_resolution_clock::now();
-            for (int32_t mii = 0; (size_t) mii < valid_ms; mii++) {
-                int32_t mi = valid_mi[mii];
-                assert(mii == m_reindex[mi]);
-                uint64_t m = config.mstart + mi;
-
-                for (size_t XIP = 0; XIP < SLICE_SIZE && ((XI + XIP) < coprime_X.size()); XIP++) {
-                    uint32_t xii = x_reindex_wheel[m % x_reindex_m_wheel][coprime_X[XI + XIP]];
-                    slice[XIP][mii] = slice2[XIP][mii] = (xii == 0) ? true : composite[mii][xii];
-                }
-            }
-
-            auto s_stop_t = high_resolution_clock::now();
-            double   secs = duration<double>(s_stop_t - s_start_t).count();
-
-            for (size_t XIP = 0; XIP < SLICE_SIZE && ((XI + XIP) < coprime_X.size()); XIP++) {
-                int64_t X = coprime_X[XI + XIP];
-
-                /**
-                 * While memory is more local this is slower because have to store
-                 * prime and inv to memory and re-calculate m_start_shift, M_X_parity each time
-                 */
-                size_t small_factors = 0;
-                for (auto pinv : p_and_inv) {
-                    uint64_t a_prime = pinv.first;
-                    uint64_t inv_K = pinv.second;
-
-                    // -M_start % p
-                    const int32_t m_start_shift = (a_prime - (M_start % a_prime)) % a_prime;
-                    //const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
-
-                    int32_t dist = X - SIEVE_LENGTH;
-                    int64_t mi_0 = ((a_prime - dist) * inv_K + m_start_shift) % a_prime;
-
-                    // Given memory locality (and computation cost) this might not actually help.
-                    uint32_t shift = a_prime;
-                    /*
-                    uint32_t shift = (1 + K_odd) * a_prime;
-                    if (K_odd) {
-                        // Check if X parity == m parity
-                        if (((dist ^ mi_0) & 1) == M_X_parity) {
-                            mi_0 += a_prime;
-                        }
-                    }
-                    */
-
-                    // Separate loop when shift > M_inc not significantly faster
-                    for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
-                        if (m_not_coprime[mi])
-                            continue;
-
-                        int32_t mii = m_reindex[mi];
-                        assert(mii >= 0);
-
-                        small_factors += 1;
-                        slice[XIP][mii] = true;
-                    }
-                }
-                stats.small_prime_factors_interval += small_factors;
-
-                for (int32_t mii = 0; (size_t) mii < valid_ms; mii++) {
-                    if (slice[XIP][mii] != slice2[XIP][mii]) {
-                        int32_t mi = valid_mi[mii];
-                        assert(mii == m_reindex[mi]);
-                        uint64_t m = config.mstart + mi;
-
-                        uint32_t xii = x_reindex_wheel[m % x_reindex_m_wheel][X];
-                        composite[mii][xii] = true;
-                    }
-                }
-            }
-
-            auto s_stop_t2 = high_resolution_clock::now();
-            double   secs2 = duration<double>(s_stop_t2 - s_stop_t).count();
-            A += secs;
-            B += secs2;
-
-        }
-
-        cout << A << "\t" << B << endl;
-
-        if (prime >= stats.next_print && prime != stats.last_prime) {
-            // Print counters & stats.
-            method2_increment_print(prime, valid_ms, composite, stats, config);
-        }
-    }
-
-    /*
+    prime = iter.next_prime();
+    assert(prime > SMALL_THRESHOLD);
+    assert(prime > SIEVE_INTERVAL);
     for (; prime <= MEDIUM_THRESHOLD; prime = iter.next_prime()) {
         stats.pi_interval += 1;
 
@@ -1333,7 +1214,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
         const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
 
-        // * Unoptimized expressive code
+        /* Unoptimized expressive code
 
         - // (X & 1) == X_odd_test <-> ((X + SIEVE_LENGTH) % 2 == 1)
         - const bool X_odd_test = (SIEVE_LENGTH & 1) == 0;
@@ -1364,7 +1245,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         -    if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
         -        continue;
         -    // * /
-        * /
+        */
 
         size_t small_factors = 0;
         // Find m*K = X, X in [L, R]
@@ -1412,7 +1293,6 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
             method2_increment_print(prime, valid_ms, composite, stats, config);
         }
     }
-    // */
 
     mpz_clear(test);
     mpz_clear(test2);
@@ -1862,13 +1742,6 @@ void prime_gap_parallel(struct Config& config) {
     }
 
     { // Medium Primes
-    // NOTE: It probably would work better to transpose composite
-    // composite[m,X] would become composite[X,m]
-    // Then reverse the loops (for prime, for X) to (for X, for prime)
-    // This would make printing harder (like small primes) and means
-    // x_reindex_m_wheel wouldn't help.
-    // After transpose composite[x, ?] would fit in cache instead of RAM read.
-
         vector<int32_t> coprime_X_split[THREADS];
         for (size_t i = 0; i < coprime_X.size(); i++) {
             coprime_X_split[i * THREADS / coprime_X.size()].push_back(coprime_X[i]);
@@ -1891,7 +1764,7 @@ void prime_gap_parallel(struct Config& config) {
                                   m_reindex,
                                   x_reindex_m_wheel, x_reindex_wheel,
                                   SMALL_THRESHOLD, MEDIUM_THRESHOLD,
-                                  valid_mi, valid_ms,
+                                  valid_ms,
                                   composite);
 
         }
