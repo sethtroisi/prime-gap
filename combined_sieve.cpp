@@ -1444,21 +1444,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
             if (prime >= stats.next_print) {
                 // Print counters & stats.
                 method2_increment_print(prime, valid_ms, composite, stats, config);
-
-                #ifdef SAVE_INCREMENTS
-                if (config.save_unknowns && end > 1e10 && end < LAST_PRIME) {
-                    // reset unknown_filename if cached;
-                    config.unknown_filename = "";
-                    uint64_t old = config.max_prime;
-                    config.max_prime = prime - (prime % 1'000'000);
-                    save_unknowns_method2(
-                        config,
-                        valid_mi, m_reindex,
-                        x_reindex_m_wheel, x_reindex_wheel,
-                        composite);
-                    config.max_prime = old;
-                }
-                #endif // SAVE_INCREMENTS
             }
         }
         mpz_clear(test);
@@ -1481,7 +1466,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
         config.unknown_filename = "";
         config.max_prime = prime - (prime % 1'000'000);
     }
-
 }
 
 // Would be nice to pass const but CTRL+C handler changes max_prime

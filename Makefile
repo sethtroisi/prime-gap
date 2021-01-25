@@ -31,9 +31,6 @@ endif
 ifdef VALIDATE_LARGE
 DEFINES += -DGMP_VALIDATE_LARGE_FACTORS
 endif
-ifdef SAVE_INCREMENTS
-DEFINES += -DSAVE_INCREMENTS
-endif
 
 %.o: %.cpp
 	$(CC) -c -o $@ $< $(CFLAGS) $(DEFINES)

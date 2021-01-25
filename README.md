@@ -498,11 +498,8 @@ $ sqlite3 prime-gap-search.db < schema.sql
   * `skipped PRP/s` is checked in [THEORY.md](THEORY.md#skipped-prp-tests)
 * Run Length Encoding
   * `gap_common.h` contains `bool rle = false;` Setting to true causes `combined_sieve` to output run length encoded data.
-This saves ~60% space, but makes it harder to visually debug data, can be built with `make clean combined_sieve RLE=1`
+      This saves ~60% space, but makes it harder to visually debug data, can be built with `make clean combined_sieve RLE=1`
   * method1 doesn't support rle at this time so it also makes verifying `combined_sieve` slightly harder.
-* Incremental saving
-  * If you run very large/long sieves and afraid of crashes or restarts.
-    * `make clean combined_sieve SAVE_INCREMENT=1` saves at each interval >= 1B.
 
 
 ### Quick test of all functions
