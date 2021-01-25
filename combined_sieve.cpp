@@ -34,8 +34,8 @@
 
 using std::cout;
 using std::endl;
-using std::pair;
 using std::map;
+using std::pair;
 using std::vector;
 using namespace std::chrono;
 
@@ -911,7 +911,7 @@ void method2_increment_print(
         method2_stats &stats,
         const struct Config& config) {
 
-    if (prime >= stats.next_print) {
+    while (prime >= stats.next_print) {
         const size_t max_mult = 100'000'000'000;
 
         // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
@@ -1193,13 +1193,16 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
     const int K_odd = mpz_odd_p(K);
 
     primesieve::iterator iter(SMALL_THRESHOLD+1);
-    uint32_t prime = iter.prev_prime();
+    uint64_t prime = iter.prev_prime();
     assert(prime <= SMALL_THRESHOLD);
     prime = iter.next_prime();
     assert(prime > SMALL_THRESHOLD);
     assert(prime > SIEVE_INTERVAL);
     for (; prime <= MEDIUM_THRESHOLD; prime = iter.next_prime()) {
-        stats.pi_interval += 1;
+        // Only the first thread should
+        if (thread_i == 0) {
+            stats.pi_interval += 1;
+        }
 
         const uint64_t base_r = mpz_fdiv_ui(K, prime);
         mpz_set_ui(test, base_r);
@@ -1255,7 +1258,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
  //           assert( K_odd || (dist&1) );
 
-            uint32_t shift = (1 + K_odd) * prime;
+            uint64_t shift = prime << K_odd; // (1 + K_odd) * prime;
             if (K_odd) {
                 // Check if X parity == m parity
                 if (((dist ^ mi_0) & 1) == M_X_parity) {
@@ -1288,7 +1291,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         }
         stats.small_prime_factors_interval += small_factors;
 
-        if (prime >= stats.next_print && prime != stats.last_prime) {
+        if (thread_i == 0 && prime >= stats.next_print && prime != stats.last_prime) {
             // Print counters & stats.
             method2_increment_print(prime, valid_ms, composite, stats, config);
         }
@@ -1332,17 +1335,18 @@ void method2_large_primes(Config &config, method2_stats &stats,
     // Setup CTRL+C catcher
     signal(SIGINT, signal_callback_handler);
 
-    // TODO figure out how to make this better
-    const uint64_t interval_inc = (config.max_prime - MEDIUM_THRESHOLD) > 100'000'000 ?
-        10'000'000 : 1'000'000;
+    const uint64_t rem = config.max_prime - MEDIUM_THRESHOLD;
+    const uint64_t interval_inc =
+        rem > 1'000'000'000 ? 100'000'000 :
+            (rem > 100'000'000  ? 10'000'000 : 1'000'000);
 
     uint64_t last_processed = 0;
+    map<uint64_t, method2_stats> stats_to_process;
 
     // previous multiple of interval_inc
-
-    #pragma omp parallel for schedule(dynamic, 1) num_threads(THREADS)
-    for (uint64_t start = MEDIUM_THRESHOLD - (MEDIUM_THRESHOLD % interval_inc);
-         start <= LAST_PRIME; start += interval_inc) {
+    uint64_t rounded_start = MEDIUM_THRESHOLD - (MEDIUM_THRESHOLD % interval_inc);
+    #pragma omp parallel for ordered schedule(dynamic, 1) num_threads(THREADS)
+    for (uint64_t start = rounded_start; start <= LAST_PRIME; start += interval_inc) {
         // XXX: test should be per thread;
         mpz_t test;
         mpz_init(test);
@@ -1355,11 +1359,16 @@ void method2_large_primes(Config &config, method2_stats &stats,
         // Needed for first/last interval
         uint64_t first = std::max(start, MEDIUM_THRESHOLD) + 1;
         uint64_t end = std::min(LAST_PRIME, start + interval_inc);
-        if (config.verbose >= 3) {
+
+        // Store sentinal for now
+        method2_stats test_stats;
+        #pragma omp critical
+        stats_to_process[end] = test_stats;
+
+        if (config.verbose >= 4) {
             printf("\tmethod2_large_primes(%d) [%'ld, %'ld]\n",
                     omp_get_thread_num(), first, end);
         }
-        method2_stats test_stats;
 
         primesieve::iterator it(first - 1);
         for (uint64_t prime = it.next_prime(); prime <= end; prime = it.next_prime()) {
@@ -1435,15 +1444,38 @@ void method2_large_primes(Config &config, method2_stats &stats,
         // Normally this is inside the loop but not anymore
         #pragma omp critical
         {
-            last_processed = std::max(last_processed, end);
-            stats.pi_interval += test_stats.pi_interval;
-            stats.m_stops_interval += test_stats.m_stops_interval;
-            stats.large_prime_factors_interval += test_stats.large_prime_factors_interval;
+            stats_to_process[end] = test_stats;
+            if (config.verbose >= 4) {
+                size_t queued = 0;
+                for(auto&& kv : stats_to_process) queued += kv.second.pi_interval > 0;
+                printf("\tmethod2_large_primes(%d) finished [%'ld, %'ld] (%ld in queue)\n",
+                        omp_get_thread_num(), first, end, queued);
+            }
 
-            uint64_t prime = end;
-            if (prime >= stats.next_print) {
-                // Print counters & stats.
-                method2_increment_print(prime, valid_ms, composite, stats, config);
+            // Walk through other stats (in increasing order) adding if valid
+            while (!stats_to_process.empty()) {
+                // std::map keys are sorted
+                auto min_end = stats_to_process.begin()->first;
+
+                method2_stats temp = stats_to_process[min_end];
+                if (temp.pi_interval > 0) {
+                    // Stats ready, can process them
+                    stats_to_process.erase(min_end);
+
+                    stats.pi_interval += temp.pi_interval;
+                    stats.m_stops_interval += temp.m_stops_interval;
+                    stats.large_prime_factors_interval += temp.large_prime_factors_interval;
+
+                    while (last_processed < stats.next_print && min_end >= stats.next_print) {
+                        // Print counters & stats.
+                        method2_increment_print(min_end, valid_ms, composite, stats, config);
+                    }
+
+                    last_processed = min_end;
+                    assert(last_processed < stats.next_print);
+                } else {
+                    break;
+                }
             }
         }
         mpz_clear(test);
@@ -1666,7 +1698,7 @@ void prime_gap_parallel(struct Config& config) {
 
         // Try to prevent OOM, check composite < 7GB allocation,
         // combined_sieve seems to use ~5-20% extra space for x_reindex_wheel + extra
-        assert(guess < 7 * 1024);
+        assert(guess < 9 * 1024);
 
         size_t allocated = 0;
         for (size_t i = 0; i < valid_ms; i++) {
@@ -1708,17 +1740,17 @@ void prime_gap_parallel(struct Config& config) {
         }
 
         #pragma omp parallel for num_threads(THREADS)
-        for (size_t t = 0; t < THREADS; t++) {
+        for (size_t thread_i = 0; thread_i < THREADS; thread_i++) {
             // Helps keep printing in order
-            std::this_thread::sleep_for(milliseconds(50 * t));
+            std::this_thread::sleep_for(milliseconds(50 * thread_i));
 
             if (config.verbose + THREADS >= 4) {
                 printf("\tThread %ld method2_small_primes(%'ld/%'ld)\n",
-                        t, valid_mi_split[t].size(), valid_ms);
+                        thread_i, valid_mi_split[thread_i].size(), valid_ms);
             }
-            int32_t thread_i = (THREADS == 1) ? 0 : (t + 1);
+
             method2_small_primes(config, stats, K, thread_i,
-                                 valid_mi_split[t],
+                                 valid_mi_split[thread_i],
                                  m_reindex,
                                  x_reindex_m_wheel, x_reindex_wheel,
                                  SMALL_THRESHOLD, composite);
@@ -1732,18 +1764,18 @@ void prime_gap_parallel(struct Config& config) {
         }
 
         #pragma omp parallel for num_threads(THREADS)
-        for (size_t t = 0; t < THREADS; t++) {
+        for (size_t thread_i = 0; thread_i < THREADS; thread_i++) {
             // Helps keep printing in order
-            std::this_thread::sleep_for(milliseconds(50 * t));
+            std::this_thread::sleep_for(milliseconds(50 * thread_i));
+
             if (config.verbose + THREADS >= 4) {
                 printf("\tThread %ld method2_medium_primes(%'ld/%'ld)\n",
-                       t, coprime_X_split[t].size(), coprime_X.size());
+                        thread_i, coprime_X_split[thread_i].size(), coprime_X.size());
             }
 
-            int32_t thread_i = (THREADS == 1) ? 0 : (t + 1);
             method2_medium_primes(config, stats, K,
                                   thread_i,
-                                  coprime_X_split[t],
+                                  coprime_X_split[thread_i],
                                   m_not_coprime,
                                   m_reindex,
                                   x_reindex_m_wheel, x_reindex_wheel,
