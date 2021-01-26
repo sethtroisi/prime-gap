@@ -843,14 +843,14 @@ Config Args::argparse(int argc, char* argv[]) {
         cout << "minc > 500M very like to use too much memory" << endl;
     }
 
-    if (config.max_prime > 10'000'000'000'000) {
+    if (config.max_prime > 17'500'000'000'000) {
         /**
-         * Currently ~42 bits, much larger and will run into 62bit overflow below.
+         * Currently ~44 bits, much larger and will run into 62bit overflow below.
          * improved primeiterator can find all primes < 1T in ~400s
          * mpz_mod is slow part, modulo_search is always fast.
          */
         config.valid = 0;
-        cout << "max_prime > 10,000B not supported" << endl;
+        cout << "max_prime > 17,500B not supported" << endl;
     }
 
     /**
@@ -902,9 +902,9 @@ Config Args::argparse(int argc, char* argv[]) {
         cout << "d must be greater than 0: " << config.d << endl;
     }
 
-    if (config.threads <= 0 || config.threads > 8) {
+    if (config.threads <= 0 || config.threads > 16) {
         config.valid = 0;
-        cout << "invalid number of threads(" << config.threads << ") only 1-8 supported" << endl;
+        cout << "invalid number of threads(" << config.threads << ") only 1 - 16 supported" << endl;
     }
 
     if (config.valid == 0) {

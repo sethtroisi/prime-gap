@@ -911,7 +911,8 @@ void method2_increment_print(
         method2_stats &stats,
         const struct Config& config) {
 
-    while (prime >= stats.next_print) {
+    while (prime >= stats.next_print && stats.next_print < stats.last_prime) {
+        //printf("\t\tmethod2_increment_print %'ld >= %'ld\n", prime, stats.next_print);
         const size_t max_mult = 100'000'000'000;
 
         // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
@@ -1138,12 +1139,15 @@ void method2_small_primes(const Config &config, method2_stats &stats,
             method2_increment_print(
                 prime, valid_mi.size(), composite, temp_stats, config);
 
+            stats.interval_t = temp_stats.interval_t;
         }
         // Update global counters for a couple variables
         if (thread_i == 1) {
             stats.pi          = temp_stats.pi;
             stats.pi_interval = temp_stats.pi_interval;
         }
+
+        // TODO some of these aren't being copied I think
 
         // XXX: this will break if -qqq is used
         stats.small_prime_factors_interval += temp_stats.small_prime_factors_interval;
@@ -1277,7 +1281,16 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
                 small_factors += 1;
 #if METHOD2_WHEEL
-                composite[mii][x_reindex_wheel[m % x_reindex_m_wheel][X]] = true;
+                uint32_t xii = x_reindex_wheel[m % x_reindex_m_wheel][X];
+                /**
+                 * XXX: This is an iffy optimization.
+                 * For very large composite & multithreading it helps with
+                 * L2/L3 RAM access alot.
+                 * But branch misses hurt more
+                 */
+                if (xii > 0) {
+                    composite[mii][xii] = true;
+                }
 #else
                 // avoids trivial lookup + modulo
                 composite[mii][x_reindex[X]] = true;
@@ -1316,14 +1329,14 @@ void method2_large_primes(Config &config, method2_stats &stats,
     const uint32_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
 
-    const uint32_t D = config.d;
-
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     const uint32_t SL = SIEVE_LENGTH;
 
     const uint64_t LAST_PRIME = stats.last_prime;
 
     const int K_odd = mpz_odd_p(K);
+#if !METHOD2_WHEEL
+    const uint32_t D = config.d;
     const int K_mod3 = mpz_fdiv_ui(K, 3);
     const int K_mod5 = mpz_fdiv_ui(K, 5);
     const int K_mod7 = mpz_fdiv_ui(K, 7);
@@ -1331,13 +1344,14 @@ void method2_large_primes(Config &config, method2_stats &stats,
     const int D_mod3 = D % 3 == 0;
     const int D_mod5 = D % 5 == 0;
     const int D_mod7 = D % 7 == 0;
+#endif
 
     // Setup CTRL+C catcher
     signal(SIGINT, signal_callback_handler);
 
     const uint64_t rem = config.max_prime - MEDIUM_THRESHOLD;
     const uint64_t interval_inc =
-        rem > 1'000'000'000 ? 100'000'000 :
+        rem > 1'000'000'000 ? 200'000'000 :
             (rem > 100'000'000  ? 10'000'000 : 1'000'000);
 
     uint64_t last_processed = 0;
@@ -1345,29 +1359,30 @@ void method2_large_primes(Config &config, method2_stats &stats,
 
     // previous multiple of interval_inc
     uint64_t rounded_start = MEDIUM_THRESHOLD - (MEDIUM_THRESHOLD % interval_inc);
-    #pragma omp parallel for ordered schedule(dynamic, 1) num_threads(THREADS)
+    #pragma omp parallel for schedule(dynamic, 1) num_threads(THREADS)
     for (uint64_t start = rounded_start; start <= LAST_PRIME; start += interval_inc) {
         // XXX: test should be per thread;
         mpz_t test;
         mpz_init(test);
 
-        if (g_control_c) {
-            // Can't break in openMP loop, but this has same effect.
-            continue;
-        }
-
         // Needed for first/last interval
         uint64_t first = std::max(start, MEDIUM_THRESHOLD) + 1;
         uint64_t end = std::min(LAST_PRIME, start + interval_inc);
+        assert(first + 1000 < end);
 
         // Store sentinal for now
         method2_stats test_stats;
         #pragma omp critical
         stats_to_process[end] = test_stats;
 
-        if (config.verbose >= 4) {
+        if (config.verbose >= 3) {
             printf("\tmethod2_large_primes(%d) [%'ld, %'ld]\n",
                     omp_get_thread_num(), first, end);
+        }
+
+        if (g_control_c) {
+            // Can't break in openMP loop, but this has same effect.
+            continue;
         }
 
         primesieve::iterator it(first - 1);
@@ -1414,6 +1429,26 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 }
 #endif
 
+                if (!coprime_composite[first]) {
+                    return;
+                }
+
+                int32_t mii = m_reindex[mi];
+                assert( mii >= 0 );
+
+                // if coprime with K, try to toggle off factor.
+#if METHOD2_WHEEL
+                uint32_t xii = x_reindex_wheel[m % x_reindex_m_wheel][first];
+                /**
+                 * XXX: This is an iffy optimization.
+                 * For very large composite & multithreading it helps with
+                 * L2/L3 RAM access alot.
+                 * But branch preditions start killing us
+                 */
+                if (xii > 0) {
+                    composite[mii][xii] = true;
+                }
+#else
                 int64_t dist = first - SIEVE_LENGTH;
                 if (D_mod2 && (dist & 1))
                     return;
@@ -1424,17 +1459,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
                     return;
 
-                if (!coprime_composite[first]) {
-                    return;
-                }
-
-                int32_t mii = m_reindex[mi];
-                assert( mii >= 0 );
-
-                // if coprime with K, try to toggle off factor.
-#if METHOD2_WHEEL
-                composite[mii][x_reindex_wheel[m % x_reindex_m_wheel][first]] = true;
-#else
                 composite[mii][x_reindex[first]] = true;
 #endif  // METHOD2_WHEEL
                 test_stats.large_prime_factors_interval += 1;
@@ -1444,8 +1468,9 @@ void method2_large_primes(Config &config, method2_stats &stats,
         // Normally this is inside the loop but not anymore
         #pragma omp critical
         {
+            assert(test_stats.pi_interval > 0);  // Would cause infinite loop below.
             stats_to_process[end] = test_stats;
-            if (config.verbose >= 4) {
+            if (config.verbose >= 3) {
                 size_t queued = 0;
                 for(auto&& kv : stats_to_process) queued += kv.second.pi_interval > 0;
                 printf("\tmethod2_large_primes(%d) finished [%'ld, %'ld] (%ld in queue)\n",
@@ -1456,8 +1481,14 @@ void method2_large_primes(Config &config, method2_stats &stats,
             while (!stats_to_process.empty()) {
                 // std::map keys are sorted
                 auto min_end = stats_to_process.begin()->first;
-
                 method2_stats temp = stats_to_process[min_end];
+
+                if (config.verbose >= 3) {
+                    printf("\tStats[%ld] -> %ld with %ld (%ld vs %ld)\n",
+                            stats_to_process.size(),
+                            min_end, temp.pi_interval,
+                            last_processed, stats.next_print);
+                }
                 if (temp.pi_interval > 0) {
                     // Stats ready, can process them
                     stats_to_process.erase(min_end);
@@ -1466,19 +1497,27 @@ void method2_large_primes(Config &config, method2_stats &stats,
                     stats.m_stops_interval += temp.m_stops_interval;
                     stats.large_prime_factors_interval += temp.large_prime_factors_interval;
 
-                    while (last_processed < stats.next_print && min_end >= stats.next_print) {
+                    assert(last_processed < min_end);
+                    assert(last_processed < stats.next_print || stats.next_print == 0);
+                    if (min_end >= stats.next_print) {
                         // Print counters & stats.
                         method2_increment_print(min_end, valid_ms, composite, stats, config);
                     }
-
+                    assert(min_end <= stats.next_print);
                     last_processed = min_end;
-                    assert(last_processed < stats.next_print);
+
                 } else {
                     break;
                 }
             }
         }
         mpz_clear(test);
+        if (config.verbose >= 3) {
+            printf("\tmethod2_large_primes(%d) done\n", omp_get_thread_num());
+        }
+    }
+    if (config.verbose >= 2) {
+        printf("\tmethod2_large_primes done");
     }
 
     // if is_last would truncate .max_prime by 1 million
@@ -1677,6 +1716,7 @@ void prime_gap_parallel(struct Config& config) {
      *      composite[m_reindex[mi]][x_reindex[SL + x]]
      * m_reindex[mi] with (D, M + mi) > 0 are mapped to -1 (and must be handled by code)
      * x_reindex[x]  with (K, x) > 0 are mapped to 0 (and that bit is ignored)
+     * x_reindex_wheel[x] same as x_reindex[x]
      */
 
     // <char> is faster (0-5%?) than <bool>, but uses 8x the memory.
@@ -1785,9 +1825,12 @@ void prime_gap_parallel(struct Config& config) {
 
         }
         if (MEDIUM_THRESHOLD >= stats.last_prime) {
-            // Handle final print
+            // Handle final print (if no large_prime will be run)
             method2_increment_print(
                 stats.last_prime, valid_ms, composite, stats, config);
+        }
+        if (config.verbose >= 2) {
+            printf("\tmethod2_medium_primes done\n");
         }
     }
 
