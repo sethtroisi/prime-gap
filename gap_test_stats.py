@@ -436,9 +436,10 @@ def should_print_stats(
     print_secs = stop_t - sc.last_print_t
 
     # Print a little bit if we resume but mostly as we test.
-    if ((args.megagap and sc.tested % 10 == 0) or sc.tested in (1, 10, 30, 100, 300, 1000, 3000)
-            or (sc.tested and sc.tested % 5000 == 0)
-            or m == data.last_m or print_secs > 1200):
+    if ((args.megagap and sc.tested % 10 == 0)
+            or sc.tested in (1, 10, 30, 100, 300, 1000, 3000, 5000, 10000, 15000)
+            or (sc.tested and sc.tested % 20000 == 0)
+            or m == data.last_m or print_secs > 1800): # 30 minutes => 48/day
         secs = stop_t - sc.start_t
 
         print("\t{:3d} {:4d} <- unknowns -> {:-4d}\t{:4d} <- gap -> {:-4d}".format(
