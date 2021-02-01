@@ -902,9 +902,16 @@ Config Args::argparse(int argc, char* argv[]) {
         cout << "d must be greater than 0: " << config.d << endl;
     }
 
-    if (config.threads <= 0 || config.threads > 16) {
+    //if (config.threads <= 0 || config.threads > 16) {
+    //    config.valid = 0;
+    //    cout << "invalid number of threads(" << config.threads << ") only 1 - 16 supported" << endl;
+    //}
+    if (config.threads != 1) {
         config.valid = 0;
-        cout << "invalid number of threads(" << config.threads << ") only 1 - 16 supported" << endl;
+        cout << endl << endl << endl;
+        cout << "multi threading temporarily disabled" << endl;
+        cout << "\tsearching for possible bug / race condition" << endl;
+        cout << endl << endl << endl;
     }
 
     if (config.valid == 0) {
