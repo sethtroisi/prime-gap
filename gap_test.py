@@ -47,7 +47,7 @@ def get_arg_parser():
              "See github.com/primegap-list-project/prime-gap-list")
 
     parser.add_argument(
-        '-u', '--unknown-filename', type=str,
+        '-u', '--unknown-filename', type=str, required=True,
         help="determine p, d, mstart, minc, sieve-length, and max-prime"
              " from unknown-results filename")
 
