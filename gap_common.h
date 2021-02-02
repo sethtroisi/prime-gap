@@ -69,6 +69,8 @@ struct Config {
      */
     int verbose = 2;
 
+    bool show_timing = true;
+
     string unknown_filename;
 
     string search_db  = "prime-gap-search.db";

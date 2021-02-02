@@ -341,7 +341,7 @@ double combined_sieve_method2_time_estimate(
     //      middle primes
     //      marking off factors (small and large)
 
-    if (config.verbose >= 2) {
+    if (config.verbose >= 2 && config.show_timing) {
         const double N_log = K_log + log(config.mstart);
         const double prob_prime = 1 / N_log - 1 / (N_log * N_log);
         const double estimated_prp_per_m = 1 / (prob_prime * log(config.max_prime) * exp(GAMMA));
@@ -684,6 +684,9 @@ Config Args::argparse(int argc, char* argv[]) {
 
         {"method1",          no_argument,       0,   8  },
 
+        // Secret option
+        {"hide-timing",      no_argument,       0,  11  },
+
         {"quiet",            no_argument,       0,  'q' },
         {"help",             no_argument,       0,  'h' },
         {0,                  0,                 0,   0  }
@@ -795,6 +798,10 @@ Config Args::argparse(int argc, char* argv[]) {
             case 10:
                 config.records_db = optarg;
                 assert_file_exists(optarg);
+                break;
+
+            case 11:
+                config.show_timing = false;
                 break;
 
             case 0:

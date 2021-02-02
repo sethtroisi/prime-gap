@@ -57,8 +57,8 @@ md5sum -c <(echo "a0df27e7c40eef11f0d48953676b5a2f  unknowns/$FN2")
 ./gap_stats --save-unknowns --unknown-filename $FN1 --search-db $TEST_DB | tee temp_tests.log
 
 grep -q 'avg missing prob : 0.0000000' temp_tests.log
-grep -q 'RECORD : top  50% (    26) sum(prob) = 1.49e-05 (avg: 5.74e-07)' temp_tests.log
-grep -q 'RECORD : top 100% (    53) sum(prob) = 2.14e-05 (avg: 4.04e-07)' temp_tests.log
+grep -q 'RECORD : top  50% (    26) sum(prob) = 1.\(49\|50\)e-05 (avg: 5.74e-07)' temp_tests.log
+grep -q 'RECORD : top 100% (    53) sum(prob) = 2.14e-05 (avg: 4.0[34]e-07)' temp_tests.log
 
 ./gap_stats --save-unknowns --unknown-filename $FN2 --search-db $TEST_DB -q -q
 

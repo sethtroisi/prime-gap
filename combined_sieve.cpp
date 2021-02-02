@@ -987,16 +987,18 @@ void method2_increment_print(
                 100.0 * new_composites / (SIEVE_INTERVAL * valid_ms),
                 new_composites);
 
-            printf("\t~ 2x %.2f PRP/m\t\t"
-                   "(~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
-                1 / stats.current_prob_prime, skipped_prp,
-                skipped_prp / int_secs);
+            if (config.show_timing) {
+                printf("\t~ 2x %.2f PRP/m\t\t"
+                       "(~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
+                    1 / stats.current_prob_prime, skipped_prp,
+                    skipped_prp / int_secs);
+            }
             if (stats.validated_factors) {
                 printf("\tValidated %ld factors\n", stats.validated_factors);
             }
 
             double run_prp_mult = int_secs / (stats.prp_time_estimate * skipped_prp);
-            if (run_prp_mult > 2) {
+            if (run_prp_mult > 0.25 && config.show_timing) {
                 printf("\t\tEstimated ~%.1fx faster to just run PRP now (CTRL+C to stop sieving)\n",
                     run_prp_mult);
             }
@@ -1709,7 +1711,8 @@ void prime_gap_parallel(struct Config& config) {
         printf("\n");
     }
     // Prints estimate of PRP/s
-    const double prp_time_est = prp_time_estimate_composite(N_log, config.verbose);
+    const double prp_time_est = prp_time_estimate_composite(
+            N_log, config.verbose * config.show_timing);
 
     // Detailed timing info about different stages
     combined_sieve_method2_time_estimate(config, K, valid_ms, prp_time_est);
@@ -1805,6 +1808,7 @@ void prime_gap_parallel(struct Config& config) {
         vector<int32_t> coprime_X_split[THREADS];
         for (size_t i = 0; i < coprime_X.size(); i++) {
             coprime_X_split[i * THREADS / coprime_X.size()].push_back(coprime_X[i]);
+        }
 
         #pragma omp parallel for num_threads(THREADS)
         for (size_t thread_i = 0; thread_i < THREADS; thread_i++) {
@@ -1843,7 +1847,7 @@ void prime_gap_parallel(struct Config& config) {
             config, stats,
             K,
             THREADS,
-            valid_mi, m_not_coprime, m_reindex
+            valid_mi, m_not_coprime, m_reindex,
             is_offset_coprime,
             x_reindex_m_wheel, x_reindex_wheel,
             MEDIUM_THRESHOLD,
