@@ -69,7 +69,9 @@ struct Config {
      */
     int verbose = 2;
 
+    // Show timing information (turn off --hide-timing for easier diff'ing)
     bool show_timing = true;
+    bool no_times = false;
 
     string unknown_filename;
 

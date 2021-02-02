@@ -22,6 +22,7 @@
 #include <functional>
 #include <iostream>
 #include <map>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -35,6 +36,7 @@
 using std::cout;
 using std::endl;
 using std::map;
+using std::mutex;
 using std::pair;
 using std::vector;
 using namespace std::chrono;
@@ -913,7 +915,8 @@ void method2_increment_print(
 
     while (prime >= stats.next_print && stats.next_print < stats.last_prime) {
         //printf("\t\tmethod2_increment_print %'ld >= %'ld\n", prime, stats.next_print);
-        const size_t max_mult = 100'000'000'000;
+        const size_t max_mult = 100'000'000'000L * (config.threads > 2 ? 10L : 1L);
+
 
         // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
         // Print 60,70,80,90 billion because intervals are wider.
@@ -1067,7 +1070,7 @@ void method2_small_primes(const Config &config, method2_stats &stats,
                 continue;
 
             if (x_reindex_m_wheel % prime == 0) {
-                if (thread_i == 1 && config.verbose >= 2) {
+                if (thread_i == 0 && config.verbose >= 2) {
                     printf("\t%ld handled by coprime wheel(%d)\n", prime, x_reindex_m_wheel);
                 }
                 continue;
@@ -1132,6 +1135,10 @@ void method2_small_primes(const Config &config, method2_stats &stats,
                     }
 
                     for (size_t x = first; x < SIEVE_INTERVAL; x += shift) {
+                        /**
+                         * NOTE: No synchronization issues
+                         * Each thread gets a set of mii so no overlap of bits
+                         */
                         composite_mii[x_reindex[x]] = true;
                         temp_stats.small_prime_factors_interval += 1;
                     }
@@ -1147,12 +1154,10 @@ void method2_small_primes(const Config &config, method2_stats &stats,
             stats.interval_t = temp_stats.interval_t;
         }
         // Update global counters for a couple variables
-        if (thread_i == 1) {
+        if (thread_i == 0) {
             stats.pi          = temp_stats.pi;
             stats.pi_interval = temp_stats.pi_interval;
         }
-
-        // TODO some of these aren't being copied I think
 
         // XXX: this will break if -qqq is used
         stats.small_prime_factors_interval += temp_stats.small_prime_factors_interval;
@@ -1329,6 +1334,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                           const vector<int32_t> &valid_mi,
                           const vector<bool> &m_not_coprime,
                           const vector<int32_t> &m_reindex,
+                          vector<mutex> &mutex_mi,
                           const vector<char> &is_offset_coprime,
                           uint32_t x_reindex_m_wheel, const vector<uint32_t> *x_reindex_wheel,
                           const uint64_t MEDIUM_THRESHOLD,
@@ -1357,10 +1363,13 @@ void method2_large_primes(Config &config, method2_stats &stats,
     // Setup CTRL+C catcher
     signal(SIGINT, signal_callback_handler);
 
+    // TODO unequal intervals
     const uint64_t rem = config.max_prime - MEDIUM_THRESHOLD;
     const uint64_t interval_inc =
-        rem > 1'000'000'000 ? 200'000'000 :
+        rem > 100'000'000'000 ? 100'000'000 :
             (rem > 100'000'000  ? 10'000'000 : 1'000'000);
+
+    const bool use_lock = config.threads > 1;
 
     uint64_t last_processed = 0;
     map<uint64_t, method2_stats> stats_to_process;
@@ -1452,7 +1461,13 @@ void method2_large_primes(Config &config, method2_stats &stats,
                  * But branch preditions start killing us
                  */
                 if (xii > 0) {
-                    composite[mii][xii] = true;
+                    if (use_lock) {
+                        mutex_mi[mii].lock();
+                        composite[mii][xii] = true;
+                        mutex_mi[mii].unlock();
+                    } else {
+                        composite[mii][xii] = true;
+                    }
                 }
 #else
                 int64_t dist = first - SIEVE_LENGTH;
@@ -1465,7 +1480,13 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
                     return;
 
-                composite[mii][x_reindex[first]] = true;
+                if (use_lock) {
+                    mutex_mi[mii].lock();
+                    composite[mii][x_reindex[first]] = true;
+                    mutex_mi[mii].unlock();
+                } else {
+                    composite[mii][x_reindex[first]] = true;
+                }
 #endif  // METHOD2_WHEEL
                 test_stats.large_prime_factors_interval += 1;
             });
@@ -1519,7 +1540,8 @@ void method2_large_primes(Config &config, method2_stats &stats,
         }
         mpz_clear(test);
         if (config.verbose >= 3) {
-            printf("\tmethod2_large_primes(%d) done\n", omp_get_thread_num());
+            printf("\tmethod2_large_primes(%d) done (%ld)\n",
+                omp_get_thread_num(), MEDIUM_THRESHOLD);
         }
     }
     if (config.verbose >= 2) {
@@ -1597,6 +1619,11 @@ void prime_gap_parallel(struct Config& config) {
         }
     }
     const size_t valid_ms = valid_mi.size();
+    vector<mutex> mutex_mi;
+    { // hack around mutex not having move constructor
+        vector<mutex> temp(valid_ms);
+        mutex_mi.swap(temp);
+    }
 
     // if [X] is coprime to K
     vector<char> is_offset_coprime(SIEVE_INTERVAL, 1);
@@ -1778,8 +1805,11 @@ void prime_gap_parallel(struct Config& config) {
     const size_t THREADS = config.threads;
 
     { // Small Primes
-    // NOTE: For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
-    // This makes it harder to print (see awkward inner loop)
+        /**
+         * NOTE: For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
+         * This also avoids need to synchronize access to composite
+         * It does make printing slightly harder (see awkward inner loop)
+         */
 
         vector<int32_t> valid_mi_split[THREADS];
         for (size_t i = 0; i < valid_mi.size(); i++) {
@@ -1804,10 +1834,25 @@ void prime_gap_parallel(struct Config& config) {
         }
     }
 
+
     { // Medium Primes
         vector<int32_t> coprime_X_split[THREADS];
-        for (size_t i = 0; i < coprime_X.size(); i++) {
-            coprime_X_split[i * THREADS / coprime_X.size()].push_back(coprime_X[i]);
+        size_t per_thread = coprime_X.size() / THREADS;
+        per_thread -= per_thread % 8;
+
+        /**
+         * To avoid possible synchronization issues round coprime_X_split to a
+         * multiples of 8 so vector<bool>[i]  never overlaps between threads
+         */
+        for (size_t t = 0; t < THREADS; t++) {
+            bool is_final = (t+1) >= THREADS;
+            size_t xi_start = t * per_thread;
+            size_t xi_end = !is_final ? xi_start + per_thread : coprime_X.size();
+            assert( xi_start % 8 == 0);
+            assert( (xi_end - xi_start) % 8 == 0 || is_final );
+            for (size_t xi = xi_start; xi < xi_end; xi++) {
+                coprime_X_split[t].push_back(coprime_X[xi]);
+            }
         }
 
         #pragma omp parallel for num_threads(THREADS)
@@ -1815,10 +1860,10 @@ void prime_gap_parallel(struct Config& config) {
             // Helps keep printing in order
             std::this_thread::sleep_for(milliseconds(50 * thread_i));
 
-            if (config.verbose + THREADS >= 4) {
+            //if (config.verbose + THREADS >= 4) {
                 printf("\tThread %ld method2_medium_primes(%'ld/%'ld)\n",
                         thread_i, coprime_X_split[thread_i].size(), coprime_X.size());
-            }
+            //}
 
             method2_medium_primes(config, stats, K,
                                   thread_i,
@@ -1841,6 +1886,7 @@ void prime_gap_parallel(struct Config& config) {
         }
     }
 
+
     { // Large Primes
         // THREADS are handled inside function.
         method2_large_primes(
@@ -1848,6 +1894,7 @@ void prime_gap_parallel(struct Config& config) {
             K,
             THREADS,
             valid_mi, m_not_coprime, m_reindex,
+            mutex_mi,
             is_offset_coprime,
             x_reindex_m_wheel, x_reindex_wheel,
             MEDIUM_THRESHOLD,
@@ -1856,13 +1903,10 @@ void prime_gap_parallel(struct Config& config) {
     }
 
 
-    // Likely zeroed in the last interval, but needed if no printing
-    stats.pi += stats.pi_interval;
-    stats.prime_factors += stats.small_prime_factors_interval;
-    stats.prime_factors += stats.large_prime_factors_interval;
-    stats.m_stops += stats.m_stops_interval;
+    { // Verify some computation.
+        // Likely zeroed in the last interval, but needed if no printing
+        stats.m_stops += stats.m_stops_interval;
 
-    {
         // See Merten's Third Theorem
         float expected_m_stops = (log(log(LAST_PRIME)) - log(log(MEDIUM_THRESHOLD))) * 2*SL * M_inc;
         float error_percent = (100.0 * fabs(expected_m_stops - stats.m_stops)) / expected_m_stops;
@@ -1890,4 +1934,3 @@ void prime_gap_parallel(struct Config& config) {
     mpz_clear(test);
     mpz_clear(test2);
 }
-
