@@ -177,6 +177,7 @@ def Appendix1():
     # 503, 1009, 1511, 5003, 10007
     for P, mp in [
         (1511, 250e9),
+        (1511, 15000e9),
         (2111, 1800e9),
         (4441, 2000e9),
         (5333, 2000e9),
@@ -213,7 +214,7 @@ def Trick2():
         print(f"{count}/{primes} = {count / primes:.2%}\t", time.time() - t)
 
 
-Runtime()
+# Runtime()
 # MertensThird()
 # Speedup()
 # Appendix1()

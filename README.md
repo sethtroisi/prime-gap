@@ -463,6 +463,7 @@ $ python -m pip install --user gmpy2==2.1.0b5 primegapverify
 
 # For misc/double_check.py
 $ sudo apt install gmp-ecm
+$ sudo apt install sympy
 ```
 
 ```
@@ -624,6 +625,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Benchmark bitset vs vector<bool>
 * gap\_stats.cpp
 * gap\_test.py
+  * [ ] Save prp-percentage finalized for faster skipping of complete files
   * [ ] Validate the unknown-file matches expectations (unknowns / line, ...)
   * [ ] Ctrl+C sometimes hangs waiting for one more result
 * gap\_test\_simple.cpp

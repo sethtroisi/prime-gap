@@ -838,19 +838,19 @@ Config Args::argparse(int argc, char* argv[]) {
         cout << "minc must be greater than 0: " << config.minc << endl;
     }
 
-    if (config.minc > 500'000'000) {
+    if (config.minc > 200'000'000) {
         config.valid = 0;
-        cout << "minc > 500M very like to use too much memory" << endl;
+        cout << "minc > 200M very like to use too much memory" << endl;
     }
 
     if (config.max_prime > 17'500'000'000'000) {
         /**
-         * Currently ~44 bits, much larger and will run into 62bit overflow below.
          * improved primeiterator can find all primes < 1T in ~400s
          * mpz_mod is slow part, modulo_search is always fast.
+         * module_search_..._large avoids overflow.
          */
         config.valid = 0;
-        cout << "max_prime > 17,500B not supported" << endl;
+        cout << "max_prime > 17,500,000 Million not supported" << endl;
     }
 
     /**

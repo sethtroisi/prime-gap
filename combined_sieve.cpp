@@ -1045,6 +1045,8 @@ void method2_small_primes(const Config &config, method2_stats &stats,
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     const uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
 
+    assert(SMALL_THRESHOLD < (size_t) std::numeric_limits<int32_t>::max());
+
     mpz_t test;
     mpz_init(test);
 
@@ -1058,7 +1060,7 @@ void method2_small_primes(const Config &config, method2_stats &stats,
         for (prime = iter.next_prime(); prime <= SMALL_THRESHOLD; prime = iter.next_prime()) {
             temp_stats.pi_interval += 1;
 
-            // Handled by coprime_composite above
+            // Handled by is_offset_coprime above
             if (D % prime != 0 && prime <= P)
                 continue;
 
@@ -1093,6 +1095,7 @@ void method2_small_primes(const Config &config, method2_stats &stats,
                 uint64_t base_r = pr.second;
                 // For each interval that prints
 
+                // Safe as base_r < prime < 2^32
                 uint64_t modulo = (base_r * m) % a_prime;
 
                 // flip = (m * K - SL) % a_prime
@@ -1184,6 +1187,8 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
      * 3. REINDEX_WHEEL doesn't work (would require a different reindex)
      */
 
+    assert(MEDIUM_THRESHOLD < (size_t)std::numeric_limits<int32_t>::max());
+
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     const uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
 
@@ -1208,12 +1213,12 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
             stats.pi_interval += 1;
         }
 
-        const uint64_t base_r = mpz_fdiv_ui(K, prime);
-        mpz_set_ui(test, base_r);
+        const uint64_t base_r = mpz_mod_ui(test, K, prime);
         mpz_set_ui(test2, prime);
         assert(mpz_invert(test, test, test2) > 0);
 
         const int64_t inv_K = mpz_get_ui(test);
+        // overflow safe as base_r < prime < 2^32
         assert((inv_K * base_r) % prime == 1);
 
         // -M_start % p
@@ -1280,6 +1285,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                 assert(mii >= 0);
 
                 small_factors += 1;
+
 #if METHOD2_WHEEL
                 uint32_t xii = x_reindex_wheel[m % x_reindex_m_wheel][X];
                 /**
@@ -1320,8 +1326,8 @@ void method2_large_primes(Config &config, method2_stats &stats,
                           uint32_t THREADS,
                           const vector<int32_t> &valid_mi,
                           const vector<bool> &m_not_coprime,
-                          const vector<char> &coprime_composite,
                           const vector<int32_t> &m_reindex,
+                          const vector<char> &is_offset_coprime,
                           uint32_t x_reindex_m_wheel, const vector<uint32_t> *x_reindex_wheel,
                           const uint64_t MEDIUM_THRESHOLD,
                           const size_t valid_ms,
@@ -1392,6 +1398,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
             // Big improvement over surround_prime is reusing this for each m.
             const uint64_t base_r = mpz_fdiv_ui(K, prime);
 
+            // first from modulo_search_euclid_all_small is faster and helps avoid overflow
             modulo_search_euclid_all_large(M_start, M_inc, SL, prime, base_r, [&](
                         uint32_t mi, uint64_t first) {
                 assert (mi < M_inc);
@@ -1408,9 +1415,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
 
                 if (m_not_coprime[mi])
                     return;
-
-                // Returning first from modulo_search_euclid_all_small is
-                // slightly faster on benchmarks, and slightly faster here
 
                 // first = (SL - m * K) % prime
                 //     Computed as
@@ -1429,7 +1433,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 }
 #endif
 
-                if (!coprime_composite[first]) {
+                if (!is_offset_coprime[first]) {
                     return;
                 }
 
@@ -1593,7 +1597,7 @@ void prime_gap_parallel(struct Config& config) {
     const size_t valid_ms = valid_mi.size();
 
     // if [X] is coprime to K
-    vector<char> coprime_composite(SIEVE_INTERVAL, 1);
+    vector<char> is_offset_coprime(SIEVE_INTERVAL, 1);
     // reindex composite[m][X] for composite[m_reindex[m]][x_reindex[X]]
     vector<uint32_t> x_reindex(SIEVE_INTERVAL, 0);
     // which X are coprime to K (X has SIEVE_LENGTH added so x is positive)
@@ -1630,16 +1634,16 @@ void prime_gap_parallel(struct Config& config) {
                 assert( (SIEVE_LENGTH - first) % prime == 0 );
 
                 for (size_t x = first; x < SIEVE_INTERVAL; x += prime) {
-                    coprime_composite[x] = 0;
+                    is_offset_coprime[x] = 0;
                 }
             }
         }
         // Center should be marked composite by every prime.
-        assert(coprime_composite[SL] == 0);
+        assert(is_offset_coprime[SL] == 0);
         {
             size_t coprime_count = 0;
             for (size_t X = 0; X < SIEVE_INTERVAL; X++) {
-                if (coprime_composite[X] > 0) {
+                if (is_offset_coprime[X] > 0) {
                     coprime_X.push_back(X);
                     coprime_count += 1;
                     x_reindex[X] = coprime_count;
@@ -1660,7 +1664,7 @@ void prime_gap_parallel(struct Config& config) {
 
             size_t coprime_count = 0;
             for (size_t i = 0; i < SIEVE_INTERVAL; i++) {
-                if (coprime_composite[i] > 0) {
+                if (is_offset_coprime[i] > 0) {
                     if (gcd(mod_low + i, x_reindex_m_wheel) == 1) {
                         coprime_count += 1;
                         x_reindex_wheel[m_wheel][i] = coprime_count;
@@ -1736,9 +1740,9 @@ void prime_gap_parallel(struct Config& config) {
             guess = valid_ms * (x_reindex_wheel_count[1] + 1) / 8 / 1024 / 1024;
         }
 
-        // Try to prevent OOM, check composite < 7GB allocation,
+        // Try to prevent OOM, check composite < 10GB allocation,
         // combined_sieve seems to use ~5-20% extra space for x_reindex_wheel + extra
-        assert(guess < 9 * 1024);
+        assert(guess < 8 * 1024);
 
         size_t allocated = 0;
         for (size_t i = 0; i < valid_ms; i++) {
@@ -1801,7 +1805,6 @@ void prime_gap_parallel(struct Config& config) {
         vector<int32_t> coprime_X_split[THREADS];
         for (size_t i = 0; i < coprime_X.size(); i++) {
             coprime_X_split[i * THREADS / coprime_X.size()].push_back(coprime_X[i]);
-        }
 
         #pragma omp parallel for num_threads(THREADS)
         for (size_t thread_i = 0; thread_i < THREADS; thread_i++) {
@@ -1835,13 +1838,13 @@ void prime_gap_parallel(struct Config& config) {
     }
 
     { // Large Primes
-    // NOTE: Handle large primes, THREADS are handled inside function.
+        // THREADS are handled inside function.
         method2_large_primes(
             config, stats,
             K,
             THREADS,
-            valid_mi, m_not_coprime, coprime_composite,
-            m_reindex,
+            valid_mi, m_not_coprime, m_reindex
+            is_offset_coprime,
             x_reindex_m_wheel, x_reindex_wheel,
             MEDIUM_THRESHOLD,
             valid_ms,
