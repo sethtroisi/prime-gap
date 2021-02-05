@@ -379,29 +379,29 @@ double combined_sieve_method2_time_estimate(
  */
 std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& config) {
     uint64_t K_mod_d;
-    double K_log;
+    double N_log;
     const uint64_t d = config.d;
     {
+        double K_log;
         mpz_t K;
         K_stats(config, K, nullptr, &K_log);
 
         // Looks a little silly (P# / d) % d
         K_mod_d = mpz_fdiv_ui(K, d);
         mpz_clear(K);
+
+        N_log = K_log + log(config.mstart);
     }
 
     vector<uint32_t> P_primes = get_sieve_primes(config.p);
     assert( P_primes.back() == config.p );
 
     // Prob prime if no factor of number less than P
-    double prob_prime_adj = 1 / K_log - 1 / (K_log * K_log);
-    for (uint32_t prime : P_primes) {
-        prob_prime_adj /= (1 - 1.0/prime);
-    }
+    double prob_prime_adj = prob_prime_coprime(config);
 
     if (config.verbose >= 3) {
         printf("prob_prime: %.6f => %.6f\n",
-            1 / K_log - 1 / (K_log * K_log),
+            1 / N_log - 1 / (N_log * N_log),
             prob_prime_adj);
     }
 
@@ -527,6 +527,21 @@ double prob_prime_and_stats(const struct Config& config, mpz_t &K) {
     return K_log;
 }
 
+/**
+ * Change that a number near K is prime
+ * GIVEN no factor of K or D => no factor of P#
+ */
+double prob_prime_coprime(const struct Config& config) {
+    double N_log = calc_log_K(config) + log(config.mstart);
+    double prob_prime_coprime_P = 1 / N_log - 1 / (N_log * N_log);
+
+    // Adjust for prob_prime for no primes <= P
+    for (auto prime : get_sieve_primes(config.p)) {
+        prob_prime_coprime_P /= (1 - 1.0 / prime);
+    }
+
+    return prob_prime_coprime_P;
+}
 
 // Small sieve of Eratosthenes.
 vector<uint32_t> get_sieve_primes(uint32_t n) {
@@ -686,6 +701,7 @@ Config Args::argparse(int argc, char* argv[]) {
 
         // Secret option
         {"hide-timing",      no_argument,       0,  11  },
+        {"testing",          no_argument,       0,  12  },
 
         {"quiet",            no_argument,       0,  'q' },
         {"help",             no_argument,       0,  'h' },
@@ -802,6 +818,10 @@ Config Args::argparse(int argc, char* argv[]) {
 
             case 11:
                 config.show_timing = false;
+                break;
+
+            case 12:
+                config.testing = true;
                 break;
 
             case 0:

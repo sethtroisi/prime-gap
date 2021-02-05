@@ -55,4 +55,4 @@ make clean combined_sieve gap_stats
 time ./combined_sieve -t $THREADS --save -u "$UNKNOWN_FN"
 time ./gap_stats      -t $THREADS --save -u "$UNKNOWN_FN"
 
-time python gap_test.py -t $THREADS -u "$UNKNOWN_FN"
+time ./gap_test.py -t $THREADS -u "$UNKNOWN_FN"

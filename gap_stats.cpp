@@ -188,7 +188,7 @@ int main(int argc, char* argv[]) {
         printf("Not saving unknowns (--save-unknowns=0)\n");
     } else if (is_range_already_processed(config)) {
         cout << "Range already processed!" << endl;
-        return 1;
+        //return 1;
     }
 
     if (config.minc == 1 && config.mstart != 1) {
@@ -327,7 +327,7 @@ void store_stats(
         vector<uint32_t>& valid_m,
         unordered_map<uint64_t,ProbM> &M_stats) {
 
-    assert( !is_range_already_processed(config) );
+    //assert( !is_range_already_processed(config) );
 
     DB db_helper(config.search_db.c_str());
     sqlite3 *db = db_helper.get_db();

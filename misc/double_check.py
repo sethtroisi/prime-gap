@@ -93,7 +93,7 @@ def get_test_offsets(args, m, K, SL, boring_composites, unknowns, small_primes):
             #if args.verbose >= -1:
             #    print(f"\t\t\t{x:<+3} had trivial factor of {trivial_p} skipping")
             assert sieve_had_factor, f"{trivial_p} divides {str_start} + {x}"
-            trivial += -1
+            trivial += 1
             continue
 
         # Interesting factor

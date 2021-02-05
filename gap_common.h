@@ -71,7 +71,9 @@ struct Config {
 
     // Show timing information (turn off --hide-timing for easier diff'ing)
     bool show_timing = true;
-    bool no_times = false;
+
+    // Secret option for testing code
+    bool testing = false;
 
     string unknown_filename;
 
@@ -147,6 +149,8 @@ std::tuple<double, uint32_t, double, double>
 count_K_d(const struct Config& config);
 
 double prob_prime_and_stats(const struct Config& config, mpz_t &K);
+
+double prob_prime_coprime(const struct Config& config);
 
 
 /* Prime Stuff */
