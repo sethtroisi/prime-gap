@@ -1134,7 +1134,7 @@ void method2_small_primes(const Config &config, method2_stats &stats,
             bool centerOdd = ((D & 1) == 0) && (m & 1);
             bool lowIsEven = centerOdd == (SIEVE_LENGTH & 1);
 
-            for (auto pr : p_and_r) {
+            for (const auto &pr : p_and_r) {
                 uint64_t a_prime = pr.first;
                 uint64_t base_r = pr.second;
                 // For each interval that prints
@@ -1406,11 +1406,33 @@ void method2_large_primes(Config &config, method2_stats &stats,
     // Setup CTRL+C catcher
     signal(SIGINT, signal_callback_handler);
 
-    // TODO unequal intervals
-    const uint64_t rem = config.max_prime - MEDIUM_THRESHOLD;
-    const uint64_t interval_inc =
-        rem > 100'000'000'000 ? 100'000'000 :
-            (rem > 100'000'000  ? 10'000'000 : 1'000'000);
+
+    /**
+     * Use un-even intervals
+     * first ones need to be small enough to print most mults.
+     * later larger to reduce overhead in prime iterator
+     */
+    std::vector<std::pair<uint64_t, uint64_t>> intervals;
+    {
+        uint64_t start = 0;
+        while(start < LAST_PRIME) {
+            const uint64_t interval_inc =
+                start >= 200'000'000'000 ? 1'000'000'000 :
+                    (start >= 2'000'000'000  ? 10'000'000 :
+                        (start >= 100'000'000 ? 1'000'000 : 100'000));
+            uint64_t end = std::min(start + interval_inc, LAST_PRIME);
+
+            if (end > MEDIUM_THRESHOLD) {
+                uint64_t first = std::max(start, MEDIUM_THRESHOLD) + 1;
+                intervals.emplace_back(first, end);
+            }
+            start = end;
+        }
+
+        if (config.verbose >= 2) {
+            printf("\tmethod2_large_primes %ld intervals\n", intervals.size());
+        }
+    }
 
     const bool use_lock = config.threads > 1;
 
@@ -1418,27 +1440,26 @@ void method2_large_primes(Config &config, method2_stats &stats,
     map<uint64_t, method2_stats> stats_to_process;
 
     // previous multiple of interval_inc
-    uint64_t rounded_start = MEDIUM_THRESHOLD - (MEDIUM_THRESHOLD % interval_inc);
     #pragma omp parallel for schedule(dynamic, 1) num_threads(THREADS)
-    for (uint64_t start = rounded_start; start <= LAST_PRIME; start += interval_inc) {
-        // XXX: test should be per thread;
+    for (const auto &interval : intervals) {
+        uint64_t first = interval.first;
+        uint64_t end = interval.second;
+
         mpz_t test;
         mpz_init(test);
 
-        // Needed for first/last interval
-        uint64_t first = std::max(start, MEDIUM_THRESHOLD) + 1;
-        uint64_t end = std::min(LAST_PRIME, start + interval_inc);
+        if (config.verbose >= 3) {
+            printf("\tmethod2_large_primes(%d) [%'ld, %'ld]\n",
+                    omp_get_thread_num(), first, end);
+        }
+
+        // Else it's possible test_stats.pi_interval == 0 below
         assert(first + 1000 < end);
 
         // Store sentinal for now
         method2_stats test_stats;
         #pragma omp critical
         stats_to_process[end] = test_stats;
-
-        if (config.verbose >= 3) {
-            printf("\tmethod2_large_primes(%d) [%'ld, %'ld]\n",
-                    omp_get_thread_num(), first, end);
-        }
 
         if (g_control_c) {
             // Can't break in openMP loop, but this has same effect.
@@ -1479,17 +1500,16 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 assert( first <= 2*SL );
                 first = 2*SL - first;
 
-#ifdef GMP_VALIDATE_FACTORS
-                validate_factor_m_k_x(stats, test, K, m, first, prime, SIEVE_LENGTH);
-#elif defined GMP_VALIDATE_LARGE_FACTORS
-                if (prime > LARGE_PRIME_THRESHOLD) {
-                    validate_factor_m_k_x(stats, test, K, m, first, prime, SIEVE_LENGTH);
-                }
-#endif
-
                 if (!is_offset_coprime[first]) {
                     return;
                 }
+
+#ifdef GMP_VALIDATE_FACTORS
+                validate_factor_m_k_x(stats, test, K, m, first, prime, SIEVE_LENGTH);
+#elif defined GMP_VALIDATE_LARGE_FACTORS
+                if (prime > LARGE_PRIME_THRESHOLD)
+                    validate_factor_m_k_x(stats, test, K, m, first, prime, SIEVE_LENGTH);
+#endif
 
                 int32_t mii = m_reindex[mi];
                 assert( mii >= 0 );
