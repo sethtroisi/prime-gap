@@ -740,6 +740,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_test.py
+  * [x] Read min-merit from DB in gap_test.py
   * [x] Reduce memory if not --stats / --num-plots
   * [x] First Ctrl+C stops new results, 2nd breaks.
   * [x] Use primegapverify.sieve for better prev_prime

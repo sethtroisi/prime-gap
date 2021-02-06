@@ -22,6 +22,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 
 import gmpy2
+import sqlite3
 
 import gap_utils
 
@@ -94,6 +95,15 @@ def config_hash(config):
     h = h * 31 + config.max_prime
     return h % (2 ** 64)
 
+
+def load_range(conn, args):
+    """Load range data for args"""
+    cursor = conn.execute(
+            "SELECT * FROM range WHERE rid = ?",
+            (config_hash(args),))
+    # Set row factor for just this cursor
+    cursor.row_factory = sqlite3.Row
+    return cursor.fetchone()
 
 def load_records(conn, log_N):
     # Find records merit <= gap * log_N

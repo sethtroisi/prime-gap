@@ -32,6 +32,8 @@ import gap_test_stats
 import misc.misc_utils as misc_utils
 
 
+MIN_MERIT_DEFAULT = 12
+
 def get_arg_parser():
     parser = argparse.ArgumentParser('Test prime gaps')
 
@@ -52,7 +54,7 @@ def get_arg_parser():
              " from unknown-results filename")
 
     parser.add_argument(
-        '--min-merit', type=int, default=12,
+        '--min-merit', type=int, default=MIN_MERIT_DEFAULT,
         help="only display prime gaps with merit >= min merit")
 
     parser.add_argument(
@@ -385,24 +387,35 @@ def prime_gap_test(args):
 
     K, K_digits, K_bits, K_log = gap_utils.K_and_stats(args)
     M_log = K_log + math.log(M)
-    min_merit_gap = int(args.min_merit * M_log)
     print("K = {} bits, {} digits, log(K) = {:.2f}".format(
         K_bits, K_digits, K_log))
-    print("Min Gap ~= {} (for merit > {:.1f})\n".format(
-        min_merit_gap, args.min_merit))
+
+    # ----- Open prime-gap-search.db
+    # Longer timeout so that record_checking doesn't break when saving
+    conn = sqlite3.connect(args.search_db, timeout=60)
+
+    # Try to load range data for args
+    range_data_db = gap_test_stats.load_range(conn, args)
+    if range_data_db['min_merit'] and args.min_merit == MIN_MERIT_DEFAULT:
+        args.min_merit = range_data_db['min_merit']
+
 
     # ----- Load Record sized gaps
-
-    with sqlite3.connect(args.prime_gaps_db) as conn:
-        record_gaps = gap_test_stats.load_records(conn, M_log)
-        print("\tLoaded {} records ({} to {}) from {!r}".format(
-            len(record_gaps), record_gaps[0], record_gaps[-1], args.prime_gaps_db))
+    with sqlite3.connect(args.prime_gaps_db) as prime_db_conn:
+        record_gaps = gap_test_stats.load_records(prime_db_conn, M_log)
 
         # Calculate min_merit record, min_merit for 50% record, min_merit for 90% record
         min_record = record_gaps[0] / M_log
         # Look 250 records later and check if contains more than half of numbers
         avg_record = next(record_gaps[r] for r in range(len(record_gaps) - 250)
             if record_gaps[r + 250] - record_gaps[r] < 1000)
+
+        min_merit_gap = int(args.min_merit * M_log)
+        print("Min Gap ~= {} (for merit > {:.1f})\n".format(
+            min_merit_gap, args.min_merit))
+
+        print("\tLoaded {} records ({} to {}) from {!r}".format(
+            len(record_gaps), record_gaps[0], record_gaps[-1], args.prime_gaps_db))
         print("\tMin merit for record {:.2f}, gapsize for likely record {:.2f} {}".format(
             min_record, avg_record / M_log, avg_record))
         if args.megagap:
@@ -410,6 +423,7 @@ def prime_gap_test(args):
                 args.megagap, args.megagap / M_log))
 
         record_gaps = set(record_gaps)
+
 
     # ----- Open Output file
     print("\tLoading unknowns from {!r}".format(args.unknown_filename))
@@ -422,9 +436,8 @@ def prime_gap_test(args):
 
     count_m = misc_utils.count_num_m(M, M_inc, D)
 
-    # ----- Open Prime-Gap-Search DB
-    # Longer timeout so that record_checking doesn't break when saving
-    conn = sqlite3.connect(args.search_db, timeout=60)
+
+    # ----- Load data from prime-gap-search.db
     t0 = time.time()
     existing = gap_test_stats.load_existing(conn, args)
     t1 = time.time()
