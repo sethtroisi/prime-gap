@@ -44,7 +44,7 @@ struct Config {
     uint64_t mstart  = 0;
     uint64_t minc    = 0;
 
-    float min_merit = 12;
+    float min_merit = 18;
 
     uint32_t sieve_length = 0;
     uint64_t max_prime    = 0;

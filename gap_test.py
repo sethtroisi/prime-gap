@@ -32,7 +32,7 @@ import gap_test_stats
 import misc.misc_utils as misc_utils
 
 
-MIN_MERIT_DEFAULT = 12
+MIN_MERIT_DEFAULT = 18
 
 def get_arg_parser():
     parser = argparse.ArgumentParser('Test prime gaps')
