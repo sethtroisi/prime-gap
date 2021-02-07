@@ -40,27 +40,27 @@ sqlite3 $TEST_DB < schema.sql
 
 #### COMBINED SIEVE ####
 
-./combined_sieve --method1 -qqq --save-unknowns $PARAMS                 --search-db $TEST_DB
-./combined_sieve           -qqq --save-unknowns --unknown-filename $FN1 --search-db $TEST_DB
+./combined_sieve --method1 -qqq --save $PARAMS --search-db $TEST_DB
+./combined_sieve           -qqq --save -u $FN1 --search-db $TEST_DB
 
 # Verify md5sum unknowns/907_2190_1_200_s11000_l100M.{txt,m1.txt}
 md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.txt")
 md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.m1.txt")
 
 # Tests MIDDLE_THRESHOLD
-./combined_sieve           -qqq --save-unknowns --unknown-filename $FN2 --search-db $TEST_DB
+./combined_sieve           -qqq --save -u $FN2 --search-db $TEST_DB
 md5sum -c <(echo "a0df27e7c40eef11f0d48953676b5a2f  unknowns/$FN2")
 
 
 #### GAP STATS ####
 
-./gap_stats --save-unknowns --unknown-filename $FN1 --search-db $TEST_DB | tee temp_tests.log
+./gap_stats --save -u $FN1 --search-db $TEST_DB --min-merit 8 | tee temp_tests.log
 
 grep -q 'avg missing prob : 0.0000000' temp_tests.log
-grep -q 'RECORD : top  50% (    26) sum(prob) = 1.\(49\|50\)e-05 (avg: 5.74e-07)' temp_tests.log
-grep -q 'RECORD : top 100% (    53) sum(prob) = 2.14e-05 (avg: 4.0[34]e-07)' temp_tests.log
+grep -q 'RECORD : top  50% (    26) sum(prob) = 1.\(49\|50\)e-05 (avg: 5.7[234]e-07)' temp_tests.log
+grep -q 'RECORD : top 100% (    53) sum(prob) = 2.1[34]e-05 (avg: 4.0[34]e-07)' temp_tests.log
 
-./gap_stats --save-unknowns --unknown-filename $FN2 --search-db $TEST_DB -q -q
+./gap_stats --save -u $FN2 --search-db $TEST_DB -q -q
 
 #### MISC ####
 #python misc/double_check.py --seed=123 --unknown-filename $FN1 -c 5 --B1 1000
@@ -68,13 +68,13 @@ grep -q 'RECORD : top 100% (    53) sum(prob) = 2.14e-05 (avg: 4.0[34]e-07)' tem
 
 #### GAP_TEST ####
 
-./gap_test_simple  --unknown-filename $FN1 --min-merit 8 -q | tee temp_tests.log
+./gap_test_simple  -u $FN1 --min-merit 8 -q | tee temp_tests.log
 # erase (XX.YY/sec)  Z seconds elapsed
 sed -E -i -e 's#[0-9.]+( ?)(tests)?/sec\)#XX.YY\1\2/sec)#' -e 's#[0-9]+ sec#Z sec#' temp_tests.log
 
 md5sum -c <(echo "42b30c4e7850aa9dbdda509df20a9e92  temp_tests.log")
 
-python gap_test.py --unknown-filename $FN1 --min-merit 8 --search-db $TEST_DB
+python gap_test.py -u $FN1 --search-db $TEST_DB
 diff <(echo "2") <(sqlite3 local_tests.db 'SELECT COUNT(*) FROM result WHERE merit > 8')
 diff <(echo "1215") <(sqlite3 local_tests.db 'SELECT SUM(prp_next+prp_prev) FROM m_stats')
 
@@ -89,6 +89,7 @@ diff <(echo "1215") <(sqlite3 local_tests.db 'SELECT SUM(prp_next+prp_prev) FROM
 
 set +x;
 rm $TEST_DB temp_tests.log
+rm "unknowns/$FN1" "unknowns/$FN2"
 
 green=`tput setaf 2`
 reset=`tput sgr0`
