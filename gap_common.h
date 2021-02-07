@@ -128,7 +128,7 @@ void K_stats(
 
 
 /* Utils */
-std::pair<uint32_t, uint32_t> calculate_thresholds_method2(
+std::pair<uint64_t, uint64_t> calculate_thresholds_method2(
         struct Config config,
         size_t count_coprime_sieve,
         size_t valid_ms);

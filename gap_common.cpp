@@ -256,7 +256,7 @@ size_t count_coprime_sieve(const struct Config& config) {
 }
 
 
-pair<uint32_t, uint32_t> calculate_thresholds_method2(
+pair<uint64_t, uint64_t> calculate_thresholds_method2(
         const struct Config config,
         size_t count_coprime_sieve,
         size_t valid_ms) {
@@ -283,9 +283,15 @@ pair<uint32_t, uint32_t> calculate_thresholds_method2(
     }
 
     uint64_t MEDIUM_THRESHOLD = std::max(SMALL_THRESHOLD, MEDIUM_CROSSOVER_SEARCH);
-    if (MEDIUM_THRESHOLD > config.max_prime) {
-        MEDIUM_THRESHOLD = config.max_prime;
+    MEDIUM_THRESHOLD = std::min(MEDIUM_THRESHOLD, config.max_prime);
+
+    if (MEDIUM_THRESHOLD > std::numeric_limits<uint32_t>::max()) {
+        // NOTE: MEDIUM PRIMES benefit from uint32 * uint32 < int64
+        // XXX: Don't print in `gap_stats`
+        printf("\tWARNING REDUCING OPTIMAL MEDIUM_THRESHOLD TO FIT IN UINT32\n");
+        MEDIUM_THRESHOLD = std::numeric_limits<uint32_t>::max();
     }
+
     return {SMALL_THRESHOLD, MEDIUM_THRESHOLD};
 }
 

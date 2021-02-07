@@ -939,16 +939,15 @@ void method2_increment_print(
         stats.next_print = std::min(stats.next_print, stats.last_prime);
     }
 
-    auto   s_stop_t = high_resolution_clock::now();
-    // total time, interval time
-    double     secs = duration<double>(s_stop_t - stats.start_t).count();
-    double int_secs = duration<double>(s_stop_t - stats.interval_t).count();
-
-    uint32_t SIEVE_INTERVAL = 2 * config.sieve_length + 1;
-
     bool is_last = (prime == stats.last_prime) || g_control_c;
 
     if (config.verbose + is_last >= 1) {
+        auto   s_stop_t = high_resolution_clock::now();
+        // total time, interval time
+        double     secs = duration<double>(s_stop_t - stats.start_t).count();
+        double int_secs = duration<double>(s_stop_t - stats.interval_t).count();
+        uint32_t SIEVE_INTERVAL = 2 * config.sieve_length + 1;
+
         if (stats.thread >= 1) {
             printf("Thread %d\t", stats.thread);
         }
@@ -1085,7 +1084,7 @@ void method2_small_primes(const Config &config, method2_stats &stats,
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     const uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
 
-    assert(SMALL_THRESHOLD > P);
+    assert(P < SMALL_THRESHOLD);
     assert(SMALL_THRESHOLD < (size_t) std::numeric_limits<uint32_t>::max());
 
     mpz_t test;
@@ -1099,6 +1098,7 @@ void method2_small_primes(const Config &config, method2_stats &stats,
         std::vector<std::pair<uint32_t, uint32_t>> p_and_r;
 
         size_t stop = std::min((prime == 0) ? P : temp_stats.next_print, SMALL_THRESHOLD);
+        // Verify this interval contains non-zero numbers (requires all threads call method2_print)
         assert(stop >= prime);
         for (prime = iter.next_prime(); ; prime = iter.next_prime()) {
             temp_stats.pi_interval += 1;
@@ -1187,7 +1187,6 @@ void method2_small_primes(const Config &config, method2_stats &stats,
 
         // Don't print final partial interval
         if (prime >= temp_stats.next_print) {
-            // Print counters & stats.
             method2_increment_print(
                 prime, valid_mi.size(), composite, temp_stats, config);
         }
@@ -1237,7 +1236,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
      * 3. REINDEX_WHEEL doesn't work (would require a different reindex)
      */
 
-    assert(MEDIUM_THRESHOLD < (size_t)std::numeric_limits<uint32_t>::max());
+    assert(MEDIUM_THRESHOLD <= (size_t)std::numeric_limits<uint32_t>::max());
 
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     const uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
@@ -1341,8 +1340,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                 /**
                  * XXX: This is an iffy optimization.
                  * For very large composite & multithreading it helps with
-                 * L2/L3 RAM access alot.
-                 * But branch misses hurt more
+                 * L2/L3 RAM access a lot, but increases branch misses.
                  */
                 if (xii > 0) {
                     composite[mii][xii] = true;
@@ -1417,9 +1415,11 @@ void method2_large_primes(Config &config, method2_stats &stats,
         uint64_t start = 0;
         while(start < LAST_PRIME) {
             const uint64_t interval_inc =
-                start >= 200'000'000'000 ? 1'000'000'000 :
-                    (start >= 2'000'000'000  ? 10'000'000 :
-                        (start >= 100'000'000 ? 1'000'000 : 100'000));
+                start >= 2'000'000'000'000 ? 10'000'000'000 :
+                    (start >= 200'000'000'000 ? 1'000'000'000 :
+                    (start >= 20'000'000'000 ? 100'000'000 :
+                    (start >= 2'000'000'000 ? 10'000'000 :
+                    (start >= 100'000'000 ? 1'000'000 : 100'000))));
             uint64_t end = std::min(start + interval_inc, LAST_PRIME);
 
             if (end > MEDIUM_THRESHOLD) {
@@ -1786,7 +1786,7 @@ void prime_gap_parallel(struct Config& config) {
     assert( SMALL_THRESHOLD >= SIEVE_INTERVAL );
     assert( MEDIUM_THRESHOLD >= SMALL_THRESHOLD );
     assert( MEDIUM_THRESHOLD <= config.max_prime );
-    assert( MEDIUM_THRESHOLD < (size_t)std::numeric_limits<uint32_t>::max());
+    assert( MEDIUM_THRESHOLD <= (size_t)std::numeric_limits<uint32_t>::max());
 
 #if defined GMP_VALIDATE_LARGE_FACTORS && !defined GMP_VALIDATE_FACTORS
     // No overflow from gap_common.cpp checks
@@ -1885,7 +1885,7 @@ void prime_gap_parallel(struct Config& config) {
             // Helps keep printing in order
             std::this_thread::sleep_for(milliseconds(50 * thread_i));
 
-            if (config.verbose + THREADS >= 4) {
+            if (config.verbose + (THREADS > 1) >= 3) {
                 printf("\tThread %ld method2_small_primes(%'ld/%'ld)\n",
                         thread_i, valid_mi_split[thread_i].size(), valid_ms);
             }
@@ -1924,10 +1924,10 @@ void prime_gap_parallel(struct Config& config) {
             // Helps keep printing in order
             std::this_thread::sleep_for(milliseconds(50 * thread_i));
 
-            //if (config.verbose + THREADS >= 4) {
+            if (config.verbose + (THREADS > 1) >= 3) {
                 printf("\tThread %ld method2_medium_primes(%'ld/%'ld)\n",
                         thread_i, coprime_X_split[thread_i].size(), coprime_X.size());
-            //}
+            }
 
             method2_medium_primes(config, stats, K,
                                   thread_i,
@@ -1938,7 +1938,6 @@ void prime_gap_parallel(struct Config& config) {
                                   SMALL_THRESHOLD, MEDIUM_THRESHOLD,
                                   valid_ms,
                                   composite);
-
         }
         if (MEDIUM_THRESHOLD >= stats.last_prime) {
             // Handle final print (if no large_prime will be run)

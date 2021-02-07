@@ -648,8 +648,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * combined\_sieve.cpp
   * [ ] Improve optimize D helper
     * [ ] Document D helper
-  * [ ] `M_inc * max_prime > 2^64` use `modulo_search_euclid_all_large`
-    * [ ] Benchmark GMP_VALIDATE_LARGE_FACTORS
+  * [ ] Benchmark GMP_VALIDATE_LARGE_FACTORS
 * gap\_stats.cpp
   * [ ] Check that records from m < mstart aren't being counted as improvable
   * [ ] Produce P(record) / day / core estimate
@@ -692,6 +691,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] config.verbose in gap\_search, gap\_stats, gap\_test
   * [x] Make sure that next_p = 0, = -1, is handled correctly in places.
 * combined\_sieve.cpp
+  * [x] `M_inc * max_prime > 2^64` use `modulo_search_euclid_all_large`
   * [x] Improve error messages (gap_stats missing, SL size)
   * [X] Calculating coprime [L, R] * K^-1 mod p for medium p
   * [x] Wheel for coprime i (saves 50-80% of space)
