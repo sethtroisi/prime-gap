@@ -498,8 +498,8 @@ $ sqlite3 prime-gap-search.db < schema.sql
     * `python misc/double_check.py --unknown-filename <unknown_file.txt> -c 10`
   * `skipped PRP/s` is checked in [THEORY.md](THEORY.md#skipped-prp-tests)
 * Run Length Encoding
-  * `gap_common.h` contains `bool rle = false;` Setting to true causes `combined_sieve` to output run length encoded data.
-      This saves ~60% space, but makes it harder to visually debug data, can be built with `make clean combined_sieve RLE=1`
+  * making with RLE=1 (`make all RLE=1`) causes `combined_sieve` to output run length encoded data.
+      This saves ~60% space, but makes it harder to visually debug data.
   * method1 doesn't support rle at this time so it also makes verifying `combined_sieve` slightly harder.
 
 

@@ -112,6 +112,11 @@ int main(int argc, char* argv[]) {
                 exit(1);
             }
         }
+
+        if (!config.rle && (config.minc * config.sieve_length) > 30'000'000'000L) {
+            printf("\tSetting RLE=1 to prevent very large output file\n");
+            config.rle = true;
+        }
     }
 
     // Status lines
