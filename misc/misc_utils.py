@@ -24,12 +24,12 @@ def count_num_m(ms, mi, d):
     if ms + mi < 10000:
         return sum(1 for m in range(ms, ms+mi) if math.gcd(m, d) == 1)
 
-    factors_d = factor_simple(d)
-    return (r_count_num_m(ms + mi - 1, factors_d, len(factors_d)-1) -
-            r_count_num_m(ms - 1,      factors_d, len(factors_d)-1))
+    factors_d = _factor_simple(d)
+    return (_r_count_num_m(ms + mi - 1, factors_d, len(factors_d)-1) -
+            _r_count_num_m(ms - 1,      factors_d, len(factors_d)-1))
 
 
-def factor_simple(d):
+def _factor_simple(d):
     # Most d are a primorial so this is quite quick
     factors = []
     for p in range(2, int(math.sqrt(d)+2)):
@@ -43,8 +43,8 @@ def factor_simple(d):
     return factors
 
 
-def r_count_num_m(n, factors_d, i):
-    """Count of numbers coprime to d less than end; sum( gcd(m, d) == 1 for m in range(end) )
+def _r_count_num_m(n, factors_d, i):
+    """Count of numbers coprime to d less than end; sum( gcd(m, d) == 1 for m in range(n, n+i) )
 
     Uses inclusion exclusion on prime factorization of d
     """
@@ -55,4 +55,4 @@ def r_count_num_m(n, factors_d, i):
     if i < 0:
         return n
 
-    return r_count_num_m(n, factors_d, i-1) - r_count_num_m(n // factors_d[i], factors_d, i-1)
+    return _r_count_num_m(n, factors_d, i-1) - _r_count_num_m(n // factors_d[i], factors_d, i-1)
