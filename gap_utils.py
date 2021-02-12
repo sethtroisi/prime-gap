@@ -14,13 +14,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import array
 import contextlib
 import logging
 import os
 import re
 import sys
-
-import gmpy2
 
 
 UNKNOWN_FILENAME_RE = re.compile(
@@ -131,22 +130,6 @@ def verify_args(args):
         args.unknown_filename = fn
 
 
-def K_and_stats(args):
-    P = args.p
-    D = args.d
-
-    assert P <= 80000
-    K = gmpy2.primorial(P)
-    K, r = divmod(K, D)
-    assert r == 0
-
-    K_digits = gmpy2.num_digits(K, 10)
-    K_bits = gmpy2.num_digits(K, 2)
-    K_log = float(gmpy2.log(K))
-
-    return K, K_digits, K_bits, K_log
-
-
 def parse_unknown_line(line):
     unknowns = [[], []]
 
@@ -154,14 +137,15 @@ def parse_unknown_line(line):
 
     match = re.match(rb"^([0-9]+) : -([0-9]+) \+([0-9]+)", start)
     assert match, start
-    m_test, unknown_l, unknown_u = map(int, match.groups())
+    m_test, unknown_l, unknown_h = map(int, match.groups())
 
     # Check if rle or raw
     rle = b" " not in c_l[:20]
     if rle:
         def accum_rle(sign, digits):
+            assert len(digits) % 2 == 0 or digits[-1] == ord("\n")
             # Read digits(bytes) in pairs (see save_unknowns_method2)
-            values = []
+            values = array.array('l')
             accum = 0
             for i in range(0, len(digits)//2):
                 delta = 128 * (digits[2*i] - 48) + (digits[2*i+1] - 48)
@@ -169,17 +153,45 @@ def parse_unknown_line(line):
                 values.append(sign * accum)
             return values
 
+        assert len(c_l) == 2 * unknown_l
+        assert len(c_h) == 2 * unknown_h + (c_h[-1] == ord("\n"))
         unknowns[0] = accum_rle(-1, c_l)
-        unknowns[1] = accum_rle(+1, c_h[:-1])
+        unknowns[1] = accum_rle(+1, c_h)
     else:
-        # TODO investigate using array.array
-        unknowns[0] = list(map(int, c_l.split(b" ")))
-        unknowns[1] = list(map(int, c_h.split(b" ")))
+        unknowns[0] = array.array('l', map(int, c_l.split(b" ")))
+        unknowns[1] = array.array('l', map(int, c_h.split(b" ")))
 
     unknown_l_test = len(unknowns[0])
-    unknown_u_test = len(unknowns[1])
+    unknown_h_test = len(unknowns[1])
     assert unknown_l == unknown_l_test, (unknown_l, unknown_l_test, "\t", start)
-    assert unknown_u == unknown_u_test, (unknown_u, unknown_u_test, "\t", start)
+    assert unknown_h == unknown_h_test, (unknown_h, unknown_h_test, "\t", start)
 
-    return m_test, unknown_l, unknown_u, unknowns
+    return m_test, unknown_l, unknown_h, unknowns
+
+import numpy
+
+def convert_to_rle_line(parts):
+    """Convert (start, c_l, c_h, (unknowns_l, unknowns_h)) to rle encoded line"""
+
+    assert len(parts) == 4, parts
+
+    line_bytes = array.array('B')
+    line_bytes.extend("{} : -{} +{}".format(*parts[:3]).encode())
+
+    for side in parts[3]:
+        line_bytes.extend(b" | ")
+
+        last = 0
+        for x in side:
+            x = abs(x)
+            delta = x - last
+            last = x
+            assert 0 <= delta < (128 * 128)
+            upper = 48 + (delta // 128)
+            lower = 48 + (delta % 128)
+            line_bytes.append(upper)
+            line_bytes.append(lower)
+
+    return line_bytes.tobytes()
+
 

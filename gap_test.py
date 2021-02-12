@@ -88,6 +88,22 @@ def get_arg_parser():
     return parser
 
 
+def K_and_stats(args):
+    P = args.p
+    D = args.d
+
+    assert P <= 80000
+    K = gmpy2.primorial(P)
+    K, r = divmod(K, D)
+    assert r == 0
+
+    K_digits = gmpy2.num_digits(K, 10)
+    K_bits = gmpy2.num_digits(K, 2)
+    K_log = float(gmpy2.log(K))
+
+    return K, K_digits, K_bits, K_log
+
+
 # ---- gap_testing ---- #
 
 # NOTE: Manager is prime_gap_test maintains workers who run process_line.
@@ -115,9 +131,10 @@ def process_line(
 
     print(f"\tThread {thread_i} started")
     while True:
-        # timeout should never happen, but might happen
-        # if iterating the file without queuing anything on large file (or slow filesystem)
-        work = work_q.get(timeout=50)
+        # timeout should never happen, but might happen if iterating the file
+        # without queuing anything on large file (or slow filesystem)
+        work = work_q.get(timeout=600) # See note above
+
         # Always mark the item as done, progress is tracked with sc.will_test
         work_q.task_done()
 
@@ -130,29 +147,39 @@ def process_line(
         m, mi, prev_p, next_p, prob_record, log_n, line = work
 
         m_test, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
+
         assert mi == m_test
 
         # Used for openPFGW
         str_n = "{}*{}#/{}+".format(m, P, D)
 
-        t0 = time.time()
+        p_tests = 0
+        n_tests = 0
+        # next_p of 0 would mean next_prime was skipped
+        next_p = 0
+        # Prob(record) after finding prev_prime
+        new_prob_record = 0
+        # Will be updated based on side_skip_enabled / new_prob_record
+        test_next = True
 
         if megagap:
             action = "Starting" if prev_p == next_p == 0 else "Resuming"
             print(f"\t{action} {str_n:25} on thread {thread_i}")
 
-        p_tests = 0
+        t0 = time.time()
+
         # prev_p > 0 means we loaded a partial result
         if prev_p <= 0:
             p_tests, prev_p = gap_utils_primes.determine_prev_prime(
                     m, str_n, K, unknowns[0], SL, primes, remainder)
 
-        test_next = True
-        new_prob_record = 0
+        prev_time = time.time() - t0
+
         if side_skip_enabled:
             # Check if slower to test a new record or next prime
 
             # On average sum(new_prob_record) should approx equal sum(prob_record)
+            # benchmarked at 2.5% overheard of prev_prime for P=1511
             new_prob_record = gap_test_stats.prob_record_one_sided(
                     record_gaps, megagap, prev_p,
                     unknowns[1], prob_prime_after_sieve,
@@ -160,18 +187,14 @@ def process_line(
 
             # This is probable the wrong logic for --megagap, because it requires gap_stats
             # to have been called with the correct --min-merit.
-            with prob_side_threshold.get_lock(), sides_tested.get_lock():
+
+            with prob_side_threshold.get_lock():
                 threshold = prob_side_threshold.value / sides_tested.value
 
-                if new_prob_record < threshold:
-                    test_next = False
-                    prob_side_threshold.value += prob_record - new_prob_record
-                    sides_tested.value += 1
-                else:
-                    prob_side_threshold.value += prob_record
-                    sides_tested.value += 2
+                test_next = new_prob_record > threshold
+                prob_side_threshold.value += prob_record - (0 if test_next else new_prob_record)
+                sides_tested.value += 1 + test_next
 
-        prev_time = time.time() - t0
         should_save_partial = megagap or (p_tests and prev_time > 100)
         if should_save_partial:
             print("\t{:5} | m: {:8} | count: {}/{} {} | {:.3g} => {:.3g} | {:.0f} secs".format(
@@ -193,7 +216,6 @@ def process_line(
                     # will cleanup at top
                     continue
 
-        n_tests, next_p = 0, 0
         if test_next:
             n_tests, next_p = gap_utils_primes.determine_next_prime(m, str_n, K, unknowns[1], SL)
 
@@ -214,7 +236,7 @@ def run_in_parallel(
         prob_prime, prob_prime_after_sieve,
         existing,
         K, K_log,
-        data, sc
+        data
 ):
     # XXX: Cleanup after gmpy2.prev_prime.
     # Remainders of (p#/d) mod prime
@@ -236,12 +258,12 @@ def run_in_parallel(
     # Worker setup
     assert args.threads in range(1, 65), args.threads
 
+    # Try to keep at least this many in the queue
+    min_work_queued = 3 * (args.threads + 1)
+
     early_stop_flag = multiprocessing.Event()
     work_q = multiprocessing.JoinableQueue()
     results_q = multiprocessing.Queue()
-
-    # Try to keep at least this many in the queue
-    min_work_queued = 2 * args.threads + 2
 
     # Used to dynamically set prob_threshold, See THEORY.md#one-sided-tests
     prob_side_threshold = multiprocessing.Value('d', 5 * prob_threshold)
@@ -284,6 +306,8 @@ def run_in_parallel(
 
     time.sleep(1)
     print()
+
+    sc = gap_test_stats.StatCounters(time.time(), time.time())
 
     try:
         for mi in data.valid_mi:
@@ -329,6 +353,8 @@ def run_in_parallel(
         print("Received first  Ctrl+C | Waiting for current work to finish")
         time.sleep(0.1)
 
+        early_stop_flag.set()
+
         # Flush queue and wait on current results
         try:
             while True:
@@ -339,7 +365,6 @@ def run_in_parallel(
             pass
 
         time.sleep(0.01)
-        early_stop_flag.set()
 
     print("No more work pushing NONE")
     for _ in processes:
@@ -385,10 +410,9 @@ def prime_gap_test(args):
     SL = args.sieve_length
     max_prime = args.max_prime
 
-    K, K_digits, K_bits, K_log = gap_utils.K_and_stats(args)
+    K, K_digits, K_bits, K_log = K_and_stats(args)
     M_log = K_log + math.log(M)
-    print("K = {} bits, {} digits, log(K) = {:.2f}".format(
-        K_bits, K_digits, K_log))
+    print("K = {} bits, {} digits, log(K) = {:.2f}".format(K_bits, K_digits, K_log))
 
     # ----- Open prime-gap-search.db
     # Longer timeout so that record_checking doesn't break when saving
@@ -396,7 +420,9 @@ def prime_gap_test(args):
 
     # Try to load range data for args
     range_data_db = gap_test_stats.load_range(conn, args)
-    if range_data_db['min_merit'] and args.min_merit == MIN_MERIT_DEFAULT:
+    if (range_data_db and
+            'min_merit' in range_data_db and
+            args.min_merit == MIN_MERIT_DEFAULT):
         args.min_merit = range_data_db['min_merit']
 
 
@@ -428,10 +454,10 @@ def prime_gap_test(args):
     # ----- Open Output file
     print("\tLoading unknowns from {!r}".format(args.unknown_filename))
     print()
-    folder_unk = gap_utils.transform_unknown_filename(
+    fn_with_unk = gap_utils.transform_unknown_filename(
             args.unknown_filename, "unknowns", "txt")
-    if os.path.exists(folder_unk):
-        args.unknown_filename = folder_unk
+    if os.path.exists(fn_with_unk):
+        args.unknown_filename = fn_with_unk
     unknown_file = open(args.unknown_filename, "rb")
 
     count_m = misc_utils.count_num_m(M, M_inc, D)
@@ -442,7 +468,7 @@ def prime_gap_test(args):
     existing = gap_test_stats.load_existing(conn, args)
     t1 = time.time()
     n_exist = len(existing)
-    print(f"Found {n_exist} ({n_exist/count_m:.1%}) results ({t1-t0:.1f} sec)")
+    print(f"Found {n_exist:,} ({n_exist/count_m:.1%}) results ({t1-t0:.1f} sec)")
 
     # used in next_prime
     assert P <= 80000
@@ -458,10 +484,10 @@ def prime_gap_test(args):
 
     # ----- Main sieve loop.
 
-    sc = gap_test_stats.StatCounters(time.time(), time.time())
+    valid_mi = [mi for mi in range(M_inc) if math.gcd(M + mi, D) == 1]
+
     data = gap_test_stats.GapData()
 
-    valid_mi = [mi for mi in range(M_inc) if math.gcd(M + mi, D) == 1]
     data.first_m = M + valid_mi[0]
     data.last_m = M + valid_mi[-1]
     data.valid_mi = valid_mi
@@ -471,7 +497,7 @@ def prime_gap_test(args):
     elif args.prp_top_percent == 0:
         print("--prp-top-percent=0, skipping testing")
     else:
-        print(f"\nStarting m({len(valid_mi)}) {data.first_m} to {data.last_m}")
+        print(f"\nStarting m({len(valid_mi):,}) {data.first_m:,} to {data.last_m:,}")
         print()
 
         # Load stats for prob_record
@@ -487,7 +513,7 @@ def prime_gap_test(args):
             prob_prime, prob_prime_after_sieve,
             existing,
             K, K_log,
-            data, sc
+            data
         )
 
     # ----- Plots

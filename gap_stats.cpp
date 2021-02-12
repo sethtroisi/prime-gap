@@ -1651,6 +1651,8 @@ void prime_gap_stats(struct Config config) {
     if (config.save_unknowns) {
         auto s_stop_t = high_resolution_clock::now();
         double   secs = duration<double>(s_stop_t - s_start_t).count();
+        // Account for use of multiple threads
+        secs *= config.threads;
 
         store_stats(
             config,

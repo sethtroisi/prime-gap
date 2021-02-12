@@ -51,7 +51,9 @@ class StatCounters:
     # handles one sided testes
     prob_record_processed = 0.0
     sides_processed = 0.0
+
     # To validate one sided prob is working
+    # TODO: validate in some way (value trends to zero?)
     prob_one_side_delta = 0.0
 
     count_record = 0
@@ -222,6 +224,9 @@ def save(conn, p, d, m, next_p, prev_p, merit,
         WHERE p=? AND d=? AND m=?""",
         (next_p, prev_p, round(merit, 4),
          n_tests, p_tests, test_time, p, d, m))
+
+    # TODO benchmark only calling commit X% of time
+    # or once a second...
     conn.commit()
 
 
@@ -255,13 +260,11 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_pri
     chance_coprime_composite = 1 - prob_prime / prob_prime_coprime_p
     prob_gap_shorter_hypothetical = chance_coprime_composite ** count_coprime_p
 
-    expected = count_coprime_p * (unknowns_after_sieve / prob_prime_coprime_p)
-    print("\texpect {:.0f} left, {:.3%} of SL={} after {}M".format(
-        expected, expected / (SL + 1), SL, max_prime // 10 ** 6))
-    print("\t{:.3%} of {} digit numbers are prime".format(
-        prob_prime, K_digits))
-    print("\t{:.3%} of tests should be prime ({:.1f}x speedup)".format(
-        prob_prime_after_sieve, 1 / unknowns_after_sieve))
+    # Printed by C code, less interesting here
+    #print("\t{:.3%} of {} digit numbers are prime".format(
+    #    prob_prime, K_digits))
+    #print("\t{:.3%} of 0tests should be prime ({:.1f}x speedup)".format(
+    #    prob_prime_after_sieve, 1 / unknowns_after_sieve))
     print("\t~2x{:.1f} = {:.1f} PRP tests per m".format(
         1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve))
     print("\tsieve_length={} is insufficient ~{:.2%} of time".format(
@@ -491,9 +494,10 @@ def should_print_stats(
                 avg_prob_side = sc.prob_record_processed / sc.sides_processed
                 avg_prob_no_skip = sc.prob_record_all / (2 * sc.tested)
                 print("\t    side skips {:<9d} ({:.1%}) "
-                      "(avg prob_record {:.3g}/side, {:.3g}/m/2, {:+.1%})".format(
+                      "(prob_record {:.3g}/side, {:.3g}/m/2, {:+.1%})".format(
                     sc.one_side_skips, sc.one_side_skips / sc.tested,
-                    avg_prob_side, avg_prob_no_skip, avg_prob_side / avg_prob_no_skip - 1))
+                    avg_prob_side, avg_prob_no_skip,
+                    avg_prob_side / avg_prob_no_skip - 1))
 
             print("\t    sum(prob_min_merit):  {:7.5g}, {:.3g}/day\tfound: {}".format(
                 sc.prob_min_merit, 86400 / secs * sc.prob_min_merit, sc.count_min_merit))
