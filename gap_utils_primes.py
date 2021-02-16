@@ -41,7 +41,7 @@ def is_prime(num, str_n, dist):
 def openPFGW_is_prime(str_n):
     # XXX: getstatusoutput runs in a shell, does this double the overhead?
     # Overhead of subprocess calls seems to be ~0.03
-    s = subprocess.getstatusoutput("./pfgw64 -f0 -q" + str_n)
+    s = subprocess.getstatusoutput(f'./pfgw64 -f0 -q"{str_n}"')
     assert s[1].startswith('PFGW'), s
     return s[0] == 0
 

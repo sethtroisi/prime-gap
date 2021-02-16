@@ -615,8 +615,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * README.md
 * THEORY.md
 * Project
-  * [ ] Change min-merit to 15, 18, or 20
-    * [ ] Warning when gap_test doesn't match?
   * [x] --update flag for `misc/show_ranges.sh`
     * [x] Finalize field
     * [ ] Faster finalize.py
@@ -681,6 +679,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Fill out gap test section
   * [x] Split out some benchmarking
 * Project level
+  * [x] Change min-merit to 15, 18, or 20
   * [x] Run length encoding to reduce filesize
   * [x] Move UNKNOWN.txt to unknowns/
   * [x] Support --search-db everywhere
@@ -741,6 +740,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_test.py
+  * [x] Load min-merit from db
   * [x] Read min-merit from DB in gap_test.py
   * [x] Reduce memory if not --stats / --num-plots
   * [x] First Ctrl+C stops new results, 2nd breaks.

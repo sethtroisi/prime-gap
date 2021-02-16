@@ -1841,7 +1841,7 @@ void prime_gap_parallel(struct Config& config) {
 
         // Try to prevent OOM, check composite < 10GB allocation,
         // combined_sieve seems to use ~5-20% extra space for x_reindex_wheel + extra
-        assert(guess < 8 * 1024);
+        assert(guess < 10 * 1024);
 
         size_t allocated = 0;
         for (size_t i = 0; i < valid_ms; i++) {

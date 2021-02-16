@@ -414,6 +414,17 @@ def prime_gap_test(args):
     M_log = K_log + math.log(M)
     print("K = {} bits, {} digits, log(K) = {:.2f}".format(K_bits, K_digits, K_log))
 
+    # ----- Check if pfgw64 is present for large P
+    if K_bits > 7800:
+        try:
+            assert gap_utils_primes.openPFGW_is_prime("2 ^ 8000 + 3081")
+        except AssertionError:
+            print()
+            print("pfgw64 suggested for P# > 7800#")
+            print("please download and place executable in prime-gap/ directory")
+            print()
+            exit(1)
+
     # ----- Open prime-gap-search.db
     # Longer timeout so that record_checking doesn't break when saving
     conn = sqlite3.connect(args.search_db, timeout=60)
