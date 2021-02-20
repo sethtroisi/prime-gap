@@ -1241,10 +1241,12 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
      * 3. REINDEX_WHEEL doesn't work (would require a different reindex)
      */
 
-    assert(MEDIUM_THRESHOLD <= (size_t)std::numeric_limits<uint32_t>::max());
 
     const uint32_t SIEVE_LENGTH = config.sieve_length;
-    const uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
+    // Prime can be larger than int32, prime * SIEVE_LENGTH must not overflow
+    int64_t largest;
+    assert(MEDIUM_THRESHOLD <= (size_t)std::numeric_limits<int64_t>::max());
+    assert(!__builtin_smull_overflow(SIEVE_LENGTH, 2 * MEDIUM_THRESHOLD, &largest));
 
     const uint32_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
@@ -1260,7 +1262,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
     assert(prime <= SMALL_THRESHOLD);
     prime = iter.next_prime();
     assert(prime > SMALL_THRESHOLD);
-    assert(prime > SIEVE_INTERVAL);
+    assert(prime > (2 * SIEVE_LENGTH + 1));
     for (; prime <= MEDIUM_THRESHOLD; prime = iter.next_prime()) {
         // Only the first thread should
         if (thread_i == 0) {
@@ -1274,9 +1276,14 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         const int64_t inv_K = mpz_get_ui(test);
         // overflow safe as base_r < prime < (2^32 - 1)
         assert((inv_K * base_r) % prime == 1);
+        const int64_t neg_inv_K = prime - inv_K;
 
         // -M_start % p
         const int64_t m_start_shift = (prime - (M_start % prime)) % prime;
+
+        // -SIEVE_LENGTH * inv_K % prime
+        const int64_t SL_shift = (SIEVE_LENGTH * inv_K) % prime;
+        const int64_t mi_0_shift = (m_start_shift + SL_shift) % prime;
 
         const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
 
@@ -1290,6 +1297,9 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         - // m = (-X*K^-1 - M_start) % p = (X * -(K^-1) - M_start) % p
           int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
         - assert( (base_r * (mi_0 + M_start) + dist) % prime == 0 );
+
+        - int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
+        + int64_t mi_0 = (-X * inv_K + SIEVE_LENGTH * inv_K + m_start_shift)
 
         - / **
         -  * When K is odd
@@ -1317,9 +1327,9 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         // Find m*K = X, X in [L, R]
         for (int64_t X : coprime_X) {
             int32_t dist = X - SIEVE_LENGTH;
-            int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
+            int64_t mi_0 = (X * neg_inv_K + mi_0_shift) % prime;
 
- //           assert( K_odd || (dist&1) );
+            // assert( K_odd || (dist&1) );
 
             uint64_t shift = prime << K_odd; // (1 + K_odd) * prime;
             if (K_odd) {
