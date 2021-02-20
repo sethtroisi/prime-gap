@@ -1801,7 +1801,6 @@ void prime_gap_parallel(struct Config& config) {
     assert( SMALL_THRESHOLD >= SIEVE_INTERVAL );
     assert( MEDIUM_THRESHOLD >= SMALL_THRESHOLD );
     assert( MEDIUM_THRESHOLD <= config.max_prime );
-    assert( MEDIUM_THRESHOLD <= (size_t)std::numeric_limits<uint32_t>::max());
 
 #if defined GMP_VALIDATE_LARGE_FACTORS && !defined GMP_VALIDATE_FACTORS
     // No overflow from gap_common.cpp checks
