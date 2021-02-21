@@ -168,7 +168,6 @@ def parse_unknown_line(line):
 
     return m_test, unknown_l, unknown_h, unknowns
 
-import numpy
 
 def convert_to_rle_line(parts):
     """Convert (start, c_l, c_h, (unknowns_l, unknowns_h)) to rle encoded line"""

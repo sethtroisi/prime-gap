@@ -617,7 +617,10 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * Project
   * [x] --update flag for `misc/show_ranges.sh`
     * [x] Finalize field
+      * [ ] Sum and set test-time in finalize?
+      * [ ] Finalize script should update ranges being finalized
     * [ ] Faster finalize.py
+  * [ ] Slower print intervals in gap_test.py
   * [ ] Consider new names for prp-top-percent, no-one-side-skip, sieve-length
 * combined\_sieve.cpp
   * [ ] Benchmark bitset vs vector<bool>
@@ -641,10 +644,11 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
     * [ ] Test if sum(prob_record) matches with --no-one-side-skip
 * THEORY.md
 * New script to update DB (and maybe delete uninteresting results
-  * [ ] Finalize script should update ranges being finalized
   * [ ] Set rid if null (but reasonable range exists)
   * [ ] Check if range_stats needs cleanup after deleting range?
 * combined\_sieve.cpp
+  * [ ] Possible to squeeze maybe 10% out of large P by not contining the search if m is "close" to the end
+    * [ ] Math is probably like prime * m-total > max-prime * m-remaining then stop
   * [ ] Improve optimize D helper
     * [ ] Document D helper
   * [ ] Benchmark GMP_VALIDATE_LARGE_FACTORS
