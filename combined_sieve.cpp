@@ -1285,13 +1285,9 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         const int64_t SL_shift = (SIEVE_LENGTH * inv_K) % prime;
         const int64_t mi_0_shift = (m_start_shift + SL_shift) % prime;
 
-        const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
+        const bool M_parity = M_start & 1;
 
         /* Unoptimized expressive code
-
-        - // (X & 1) == X_odd_test <-> ((X + SIEVE_LENGTH) % 2 == 1)
-        - const bool X_odd_test = (SIEVE_LENGTH & 1) == 0;
-        + const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
 
         - // (m + M_start) * K = (X - SIEVE_LENGTH)
         - // m = (-X*K^-1 - M_start) % p = (X * -(K^-1) - M_start) % p
@@ -1300,6 +1296,15 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
         - int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
         + int64_t mi_0 = (-X * inv_K + SIEVE_LENGTH * inv_K + m_start_shift)
+
+        // Check if X parity == m parity
+        - // (X & 1) == X_odd_test <-> ((X + SIEVE_LENGTH) % 2 == 1)
+        - const bool X_odd_test = (SIEVE_LENGTH & 1) == 0;
+        - const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
+        - int32_t dist = X - SIEVE_LENGTH;
+        - if (((dist ^ mi_0) & 1) == M_X_parity)
+        + const bool M_parity = M_start & 1;
+        + if (((X ^ mi_0) & 1) == (M_start & 1))
 
         - / **
         -  * When K is odd
@@ -1326,17 +1331,14 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         size_t small_factors = 0;
         // Find m*K = X, X in [L, R]
         for (int64_t X : coprime_X) {
-            int32_t dist = X - SIEVE_LENGTH;
             int64_t mi_0 = (X * neg_inv_K + mi_0_shift) % prime;
 
             // assert( K_odd || (dist&1) );
 
             uint64_t shift = prime << K_odd; // (1 + K_odd) * prime;
-            if (K_odd) {
-                // Check if X parity == m parity
-                if (((dist ^ mi_0) & 1) == M_X_parity) {
-                    mi_0 += prime;
-                }
+            // Check if X parity == m parity
+            if (K_odd && ((X ^ mi_0) & 1) == M_parity) {
+                mi_0 += prime;
             }
 
             // Separate loop when shift > M_inc not significantly faster
