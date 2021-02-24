@@ -35,13 +35,18 @@ class StatCounters:
     tested = 0
 
     test_time = 0
-    t_unk_low = 0
-    t_unk_hgh = 0
+    # Total unknowns on previous / next side
+    t_unk_prev = 0
+    t_unk_next = 0
+    # Total PRP tests performed
     total_prp_tests = 0
+    # Number of times one side was skipped
     one_side_skips = 0
+    # Number of prev_prime / next_prime that exceeded SIEVE_LENGTH
     gap_out_of_sieve_prev = 0
     gap_out_of_sieve_next = 0
 
+    # Highest merit seen recently, m of that merit
     best_merit_interval = 0
     best_merit_interval_m = -1
 
@@ -390,22 +395,22 @@ def setup_extended_gap(SL, P, D, prob_prime):
 
 def prob_record_one_sided(
         record_gaps, megagap, other_side,
-        unknowns_high, prob_prime_after_sieve,
+        unknowns_next, prob_prime_after_sieve,
         m, K_mod_d, d, coprime_extended, prob_prime_coprime):
     """Probability of record given one side"""
     assert other_side > 0
     prob_record = 0
 
     prob_nth = 1
-    for unknown in unknowns_high:
+    for unknown in unknowns_next:
         test_gap = unknown + other_side
         if (megagap and test_gap > megagap) or (not megagap and test_gap in record_gaps):
             prob_record += prob_nth * prob_prime_after_sieve
         prob_nth *= 1 - prob_prime_after_sieve
 
-    # Use -m if wanted to consider unknowns_low
     for x in coprime_extended:
         test_gap = x + other_side
+        # Would use -m if wanted to consider unknowns_prev
         if math.gcd(m * K_mod_d + x, d) > 1:
             if (megagap and test_gap > megagap) or (not megagap and test_gap in record_gaps):
                 prob_record += prob_nth * prob_prime_coprime
@@ -478,14 +483,14 @@ def should_print_stats(
             print("\t    tests      {:<9d} ({}, {})  {:.0f}, {:.0f} secs".format(
                 sc.tested, timing, timing_threads, secs, sc.test_time))
 
-        total_unknown = sc.t_unk_low + sc.t_unk_hgh
+        total_unknown = sc.t_unk_prev + sc.t_unk_next
         if total_unknown:
             print("\t    unknowns   {:<9d} (avg: {:.2f}), {:.2%} composite  "
                   "{:.2%} <- % -> {:.2%}".format(
                 total_unknown, total_unknown / sc.tested,
                 (1 - total_unknown / ((2 * args.sieve_length + 1) * sc.tested)),
-                sc.t_unk_low / total_unknown,
-                sc.t_unk_hgh / total_unknown))
+                sc.t_unk_prev / total_unknown,
+                sc.t_unk_next / total_unknown))
         prp_tests = sc.total_prp_tests
         if sc.tested and prp_tests:
             print("\t    prp tests  {:<9d} (avg: {:.2f}/side, {:.2f}/m) ({:.3f} tests/sec)".format(
@@ -535,8 +540,8 @@ def process_result(conn, args, record_gaps, m_probs, data, sc, result):
     sc.tested += 1
     sc.test_time += test_time
 
-    sc.t_unk_low += unknown_l
-    sc.t_unk_hgh += unknown_u
+    sc.t_unk_prev += unknown_l
+    sc.t_unk_next += unknown_u
 
     sc.prob_min_merit += m_probs[m][0]
     if merit > args.min_merit:

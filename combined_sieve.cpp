@@ -84,10 +84,10 @@ int main(int argc, char* argv[]) {
         }
 
         if (config.sieve_length < 6 * config.p || config.sieve_length > 22 * config.p) {
-            int sl_low = ((config.p * 8 - 1) / 500 + 1) * 500;
-            int sl_high = ((config.p * 20 - 1) / 500 + 1) * 500;
+            int sl_min = ((config.p * 8 - 1) / 500 + 1) * 500;
+            int sl_max = ((config.p * 20 - 1) / 500 + 1) * 500;
             printf("--sieve_length(%d) should be between [%d, %d]\n",
-                config.sieve_length, sl_low, sl_high);
+                config.sieve_length, sl_min, sl_max);
             exit(1);
         }
 
@@ -370,11 +370,11 @@ static void insert_range_db(
 
 void save_unknowns_method1(
         std::ofstream &unknown_file,
-        const uint64_t mi, int unknown_l, int unknown_u,
+        const uint64_t mi, int unknown_p, int unknown_n,
         const unsigned int SL, const vector<char> composite[]) {
 
     unknown_file << mi;
-    unknown_file << " : -" << unknown_l << " +" << unknown_u << " |";
+    unknown_file << " : -" << unknown_p << " +" << unknown_n << " |";
 
     for (int d = 0; d <= 1; d++) {
         char prefix = "-+"[d];
@@ -573,8 +573,8 @@ void prime_gap_search(const struct Config& config) {
     long  s_tests = 0;
     auto  s_start_t = high_resolution_clock::now();
     long  s_total_unknown = 0;
-    long  s_t_unk_low = 0;
-    long  s_t_unk_hgh = 0;
+    long  s_t_unk_prev = 0;
+    long  s_t_unk_next = 0;
     long  s_large_primes_tested = 0;
 
     uint64_t last_mi = M_inc - 1;
@@ -666,17 +666,17 @@ void prime_gap_search(const struct Config& config) {
 
         s_tests += 1;
 
-        int unknown_l = std::count(composite[0].begin(), composite[0].end(), false);
-        int unknown_u = std::count(composite[1].begin(), composite[1].end(), false);
-        s_total_unknown += unknown_l + unknown_u;
-        s_t_unk_low += unknown_l;
-        s_t_unk_hgh += unknown_u;
+        int unknown_p = std::count(composite[0].begin(), composite[0].end(), false);
+        int unknown_n = std::count(composite[1].begin(), composite[1].end(), false);
+        s_total_unknown += unknown_p + unknown_n;
+        s_t_unk_prev += unknown_p;
+        s_t_unk_next += unknown_n;
 
         // Save unknowns
         if (config.save_unknowns) {
             save_unknowns_method1(
                 unknown_file,
-                mi, unknown_l, unknown_u,
+                mi, unknown_p, unknown_n,
                 SL, composite
             );
         }
@@ -691,7 +691,7 @@ void prime_gap_search(const struct Config& config) {
             double t_secs = duration<double>(s_stop_t - s_setup_t).count();
 
             printf("\t%ld %4d <- unknowns -> %-4d\n",
-                    m, unknown_l, unknown_u);
+                    m, unknown_p, unknown_n);
 
             if (config.verbose + is_last >= 1) {
                 // Stats!
@@ -700,8 +700,8 @@ void prime_gap_search(const struct Config& config) {
                 printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f <- %% -> %.2f%%\n",
                         s_total_unknown, s_total_unknown / ((double) s_tests),
                         100.0 * (1 - s_total_unknown / ((2.0 * SIEVE_LENGTH + 1) * s_tests)),
-                        100.0 * s_t_unk_low / s_total_unknown,
-                        100.0 * s_t_unk_hgh / s_total_unknown);
+                        100.0 * s_t_unk_prev / s_total_unknown,
+                        100.0 * s_t_unk_next / s_total_unknown);
                 printf("\t    large prime remaining: %d (avg/test: %ld)\n",
                         s_large_primes_rem, s_large_primes_tested / s_tests);
             }
@@ -775,23 +775,23 @@ void save_unknowns_method2(
         //const size_t size_side = count_coprime_sieve / 2;
         // composite[0] isn't a real entry.
         //auto real_begin = comp.begin() + 1;
-        //size_t unknown_l = std::count(real_begin, real_begin + size_side, false);
-        //size_t unknown_u = std::count(real_begin + size_side, comp.end(), false);
+        //size_t unknown_p = std::count(real_begin, real_begin + size_side, false);
+        //size_t unknown_n = std::count(real_begin + size_side, comp.end(), false);
 
         // XXX: Could be improved to std::count if it was know were x_reindex_m[i] == SL
-        size_t unknown_l = 0;
-        size_t unknown_u = 0;
+        size_t unknown_p = 0;
+        size_t unknown_n = 0;
         for (size_t i = 0; i < x_reindex_m.size(); i++) {
             if (!comp[x_reindex_m[i]]) {
                 if (i <= SL) {
-                    unknown_l++;
+                    unknown_p++;
                 } else {
-                    unknown_u++;
+                    unknown_n++;
                 }
             }
         }
 
-        unknown_file << mi << " : -" << unknown_l << " +" << unknown_u << " |";
+        unknown_file << mi << " : -" << unknown_p << " +" << unknown_n << " |";
         for (int d = 0; d <= 1; d++) {
             char prefix = "-+"[d];
             size_t found = 0;
@@ -827,9 +827,9 @@ void save_unknowns_method2(
             }
             if (d == 0) {
                 unknown_file << " |";
-                assert( found == unknown_l );
+                assert( found == unknown_p );
             } else {
-                assert( found == unknown_u );
+                assert( found == unknown_n );
             }
         }
         unknown_file << "\n";
@@ -1768,13 +1768,13 @@ void prime_gap_parallel(struct Config& config) {
 
             // (m * K - SL) % wheel => (m_wheel - SL) % wheel
             uint32_t mod_center = m_wheel * mpz_fdiv_ui(K, x_reindex_m_wheel);
-            uint32_t mod_low = mod_center + x_reindex_m_wheel - (SL % x_reindex_m_wheel);
-            mod_low %= x_reindex_m_wheel;
+            uint32_t mod_bottom = mod_center + x_reindex_m_wheel - (SL % x_reindex_m_wheel);
+            mod_bottom %= x_reindex_m_wheel;
 
             size_t coprime_count = 0;
             for (size_t i = 0; i < SIEVE_INTERVAL; i++) {
                 if (is_offset_coprime[i] > 0) {
-                    if (gcd(mod_low + i, x_reindex_m_wheel) == 1) {
+                    if (gcd(mod_bottom + i, x_reindex_m_wheel) == 1) {
                         coprime_count += 1;
                         x_reindex_wheel[m_wheel][i] = coprime_count;
                     }

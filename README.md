@@ -639,7 +639,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 
 * Project
   * [ ] Figure out how to load (in c & python) and set config occasionally
-  * [ ] Try and unify prev/next, high/low naming
   * [ ] Records / day in status.py or record_check.py
     * [ ] Test if sum(prob_record) matches with --no-one-side-skip
 * THEORY.md

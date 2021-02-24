@@ -271,8 +271,8 @@ void prime_gap_test(const struct Config config) {
     auto  s_start_t = high_resolution_clock::now();
     uint32_t  s_tests     = 0;
     size_t    s_total_unknown = 0;
-    size_t    s_t_unk_low = 0;
-    size_t    s_t_unk_hgh = 0;
+    size_t    s_t_unk_prev = 0;
+    size_t    s_t_unk_next = 0;
     size_t    s_total_prp_tests = 0;
     size_t    s_gap_out_of_sieve_prev = 0;
     size_t    s_gap_out_of_sieve_next = 0;
@@ -294,8 +294,8 @@ void prime_gap_test(const struct Config config) {
         size_t unknown_u = unknowns[1].size();
 
         s_total_unknown += unknown_l + unknown_u;
-        s_t_unk_low += unknown_l;
-        s_t_unk_hgh += unknown_u;
+        s_t_unk_prev += unknown_l;
+        s_t_unk_next += unknown_u;
 
         int prev_p = 0;
         int next_p = 0;
@@ -346,8 +346,8 @@ void prime_gap_test(const struct Config config) {
                 printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f%% <- %% -> %.2f%%\n",
                     s_total_unknown, s_total_unknown / ((double) s_tests),
                     100.0 * (1 - s_total_unknown / ((2.0 * SIEVE_LENGTH + 1) * s_tests)),
-                    100.0 * s_t_unk_low / s_total_unknown,
-                    100.0 * s_t_unk_hgh / s_total_unknown);
+                    100.0 * s_t_unk_prev / s_total_unknown,
+                    100.0 * s_t_unk_next / s_total_unknown);
                 printf("\t    prp tests %-10ld (avg: %.2f) (%.1f tests/sec)\n",
                     s_total_prp_tests,
                     s_total_prp_tests / (float) s_tests,
