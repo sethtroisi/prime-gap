@@ -622,6 +622,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
     * [ ] Faster finalize.py
   * [ ] Slower print intervals in gap_test.py
   * [ ] Consider new names for prp-top-percent, no-one-side-skip, sieve-length
+  * [ ] misc/tests.sh breaks because records improve (so chance goes down) used fixed gaps.db
 * combined\_sieve.cpp
   * [ ] Benchmark bitset vs vector<bool>
 * gap\_stats.cpp
