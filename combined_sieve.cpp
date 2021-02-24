@@ -1243,10 +1243,9 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
 
     const uint32_t SIEVE_LENGTH = config.sieve_length;
-    // Prime can be larger than int32, prime * SIEVE_LENGTH must not overflow
-    int64_t largest;
     assert(MEDIUM_THRESHOLD <= (size_t)std::numeric_limits<int64_t>::max());
-    assert(!__builtin_smull_overflow(SIEVE_LENGTH, 2 * MEDIUM_THRESHOLD, &largest));
+    // Prime can be larger than int32, prime * SIEVE_LENGTH must not overflow
+    assert(!__builtin_mul_overflow_p(SIEVE_LENGTH, 4 * MEDIUM_THRESHOLD, (int64_t) 0));
 
     const uint32_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
@@ -1274,8 +1273,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         assert(mpz_invert(test, test, test2) > 0);
 
         const int64_t inv_K = mpz_get_ui(test);
-        // overflow safe as base_r < prime < (2^32 - 1)
-        assert((inv_K * base_r) % prime == 1);
+        assert(((__int128) inv_K * base_r) % prime == 1);
         const int64_t neg_inv_K = prime - inv_K;
 
         // -M_start % p
@@ -1331,6 +1329,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         size_t small_factors = 0;
         // Find m*K = X, X in [L, R]
         for (int64_t X : coprime_X) {
+            // Safe from overflow as SL * prime < int64
             int64_t mi_0 = (X * neg_inv_K + mi_0_shift) % prime;
 
             // assert( K_odd || (dist&1) );
