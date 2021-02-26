@@ -59,6 +59,10 @@ def get_arg_parser():
         const=0, default=8, type=int,
         help="Ignore 'records' with small merit (default: 8 or passed arg)")
 
+    parser.add_argument(
+        '-s', '--sort', action="store_true",
+        help="Sort new records by gapsize")
+
     return parser
 
 
@@ -165,6 +169,9 @@ def print_record_gaps(args, gaps):
 
         if record_lines:
             print()
+            if args.sort:
+                record_lines.sort()
+
             for line in record_lines:
                 print(line)
             print()
