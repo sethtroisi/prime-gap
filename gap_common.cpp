@@ -845,6 +845,10 @@ Config Args::argparse(int argc, char* argv[]) {
         printf("\n");
     }
 
+    if (config.testing) {
+        config.save_unknowns = false;
+    }
+
     // ----- Validation
 
     if (config.mstart <= 0) {

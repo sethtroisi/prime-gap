@@ -78,6 +78,9 @@ int main(int argc, char* argv[]) {
     {
         set_defaults(config);
 
+        // Both shouldn't be true from gap_common.
+        assert(!(config.save_unknowns && config.testing));
+
         if (!config.save_unknowns && !config.testing) {
             cout << "Must set --save-unknowns" << endl;
             exit(1);
@@ -929,18 +932,34 @@ void method2_increment_print(
 
     while (prime >= stats.next_print && stats.next_print < stats.last_prime) {
         //printf("\t\tmethod2_increment_print %'ld >= %'ld\n", prime, stats.next_print);
-        const size_t max_mult = 100'000'000'000L * (config.threads > 2 ? 10L : 1L);
-
+        const size_t max_mult = 1'000'000'000L * (config.threads > 2 ? 10L : 1L);
 
         // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
-        // Print 60,70,80,90 billion because intervals are wider.
-        size_t all_ten = prime > 1'000'000'000;
-        size_t next_next_mult = (5 + 4 * all_ten) * stats.next_mult;
-        if (next_next_mult <= max_mult && stats.next_print == next_next_mult) {
+        // 60, 70, 80, 90, 100, 120, 150, 200, 300 billion because intervals are wider.
+        size_t extra_multiples = prime > 1'000'000;
+        // Next time to increment the interval size
+        size_t next_next_mult = (5 + 10 * extra_multiples) * stats.next_mult;
+        if (stats.next_mult < max_mult && stats.next_print == next_next_mult) {
             stats.next_mult *= 10;
             stats.next_print = 0;
         }
+
+        // 1,2,3,4,5,6,7,8,9,10, SKIP to 12, SKIP to 15
         stats.next_print += stats.next_mult;
+        assert(stats.next_print % stats.next_mult == 0);
+
+        if (stats.next_mult < max_mult) {
+            int64_t ratio = stats.next_print / stats.next_mult;
+            assert(ratio >= 1 && ratio <= 14);
+
+            if (ratio > 10 && ratio < 12) {  // Skip 11 => 12
+                stats.next_print = 12 * stats.next_mult;
+            } else if (ratio > 12) {  // Skip 13, 14 => 15
+                stats.next_print = 15 * stats.next_mult;
+            }
+        }
+
+        // Never set next_print beyond last_prime
         stats.next_print = std::min(stats.next_print, stats.last_prime);
     }
 
