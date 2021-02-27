@@ -29,10 +29,6 @@
 #include "modulo_search.h"
 
 #include <cassert>
-#include <iostream>
-#include <vector>
-
-using std::vector;
 
 
 static

@@ -1,6 +1,7 @@
 # Table of Contents
 
 - [Benchmarks](#benchmarks)
+  * [Google Benchmark](#google-benchmark)
   * [Microbenchmarks](#microbenchmarks)
   * [`combined_sieve`](#combined_sieve)
   * [`gap_test`](#gap_test)
@@ -10,6 +11,20 @@
     + [Just sieving](#just-sieving)
 
 # Benchmarks
+
+## Google Benchmark
+
+Some `module_search` functions are microbenchmarked with
+[Google's benchmark](https://github.com/google/benchmark/)
+
+That code is in [misc/benchmark_google.cpp](misc/benchmark_google.cpp) and can be run with
+
+```
+$ make google_benchmark
+$ ./google_benchmark
+$ ./google_benchmark --benchmark_filter="_verify"
+```
+
 
 ## Microbenchmarks
 
