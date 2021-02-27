@@ -14,7 +14,7 @@
 
 
 OBJS	= gap_common.o modulo_search.o
-OUT	= combined_sieve gap_stats gap_test_simple benchmark
+OUT	= combined_sieve gap_stats gap_test_simple benchmark benchmark_google
 CC	= g++
 CFLAGS	= -Wall -Werror -O3
 LDFLAGS	= -lgmp -lsqlite3 -fopenmp
@@ -56,9 +56,10 @@ benchmark: misc/benchmark.cpp modulo_search.o
 
 benchmark_google: misc/benchmark_google.cpp modulo_search.o
 	$(CC) -o $@ $^ $(CFLAGS) -std=c++14 -lprimesieve -lbenchmark -lpthread -I.
-	./benchmark_google
+
 
 .PHONY: clean
+
 
 clean:
 	rm -f $(OBJS) $(OUT)

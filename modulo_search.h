@@ -22,6 +22,8 @@ uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R);
 uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t r);
 
 uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r);
+uint64_t modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_t r);
+
 uint64_t modulo_search_euclid_gcd(
         uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
         uint64_t prime, uint64_t base_r);

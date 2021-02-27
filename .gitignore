@@ -21,6 +21,8 @@ done/
 *M.txt.png
 *M.txt.stats
 temp_tests.log
+perf.data
+perf.data.old
 
 # PrimeForms
 pfgw

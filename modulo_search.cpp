@@ -29,6 +29,10 @@
 #include "modulo_search.h"
 
 #include <cassert>
+#include <iostream>
+#include <vector>
+
+using std::vector;
 
 
 static
@@ -68,9 +72,6 @@ uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
 
 
 uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t r) {
-    // min m : l <= (a * m) % p <= r
-    if (l == 0) return 0;
-
     if (a > (p >> 1)) {
         std::swap(l, r);
         a = p - a; l = p - l; r = p - r;
@@ -80,31 +81,21 @@ uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t
         // a = p - a; l = p - r; r = t;
     }
 
-    if (a <= r) {
-        // next multiple of a after L <= R
-        uint32_t mult = (l-1) / a;
-        uint32_t test = mult * a;
-        if (a <= r - test)
-            return mult + 1;
-
-        // uint64_t mult = (l-1) / a + 1;
-        // uint64_t test = mult * a;
-        // if (test <= r)
-        //     return mult;
+    // Check if l <= ceil(l/a)*a <= r
+    uint32_t l_div = l / a;
+    uint32_t l_mod = l - l_div * a;
+    uint32_t r_div = r / a + (l_mod == 0); // Wrong but faster than (l_div < r_div) || (l_div == 0)
+    uint32_t r_mod = r - r_div * a;
+    if (l_div < r_div) {
+        return l_div + (l_mod > 0);
     }
 
-    // XXX: reduce to simpler problem
     uint32_t new_a = a - (p % a);
+    uint64_t k = modulo_search_euclid_small(a, new_a, l_mod, r_mod);
 
-//    assert( 0 <= new_a && new_a < a );
-    uint64_t k = modulo_search_euclid_small(a, new_a, l % a, r % a);
-//    assert(k <= a);
-
-    // XXX: A good portion of all execution time is spent on this line
     uint64_t tl = k * p + l;
     uint64_t mult = (tl - 1) / a + 1;
 
-//    assert( mult < p );
     return mult;
 }
 
@@ -133,26 +124,24 @@ uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
         return modulo_search_euclid_small(p, a, l, r);
     }
 
-    // 2 *a > p, but avoids int max
+    // 2 * a > p, but avoids int max
     if (a > (p >> 1)) {
         std::swap(l, r);
         a = p - a; l = p - l; r = p - r;
     }
 
-    if (a <= r) {
-        // find next multiple of a >= l
-        // check if <= r
-        uint64_t mult = (l-1) / a + 1;
-        uint64_t test = mult * a;
-        if (test <= r) {
-            return mult;
-        }
+    uint64_t l_div = l / a;
+    uint64_t l_mod = l - l_div * a;
+    uint64_t r_div = r / a + (l_mod == 0); // Wrong but faster than (l_div < r_div) || (l_div == 0)
+    uint64_t r_mod = r - r_div * a;
+    if (l_div < r_div) {
+        return l_div + (l_mod > 0);
     }
 
     // reduce to simpler problem
     uint64_t new_a = a - (p % a);
 //    assert( 0 <= new_a && new_a < a );
-    uint64_t k = modulo_search_euclid(a, new_a, l % a, r % a);
+    uint64_t k = modulo_search_euclid(a, new_a, l_mod, r_mod);
 
     __int128 tl = (__int128) p * k + l;
     uint64_t mult = (tl-1) / a + 1;
@@ -167,6 +156,74 @@ uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
     return mult;
 }
 
+uint64_t modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
+    if (p < 0xFFFFFFFF) {
+        return modulo_search_euclid_small(p, a, l, r);
+    }
+
+    static uint64_t stack[4 * 64];
+
+    uint64_t stack_i = 0;
+    uint64_t k = 0;
+
+    assert(l < r);
+    uint64_t delta = r - l;
+
+    while (true) {
+        // Check for modulo_search_euclid_small inside loop doesn't seem to help.
+
+        // 2 * a > p, but avoids int max
+        if (a > (p >> 1)) {
+            l = l + delta;
+            if (l >= p) {
+                assert(false);
+                // I think the answer is break with k = 0
+            }
+            a = p - a;
+            l = p - l;
+        }
+
+        uint64_t l_div = (l - 1) / a;
+        uint64_t l_mod = l - l_div * a;
+        uint64_t r_mod = l_mod + delta;
+        if (r_mod >= a) {
+            k = l_div + 1;
+            break;
+        }
+
+        // reduce to simpler problem
+        uint64_t div = p / a;
+        uint64_t rem = p - div * a; // p % a
+        uint64_t new_a = a - rem; // a - (p % a);
+
+        stack[stack_i++] = rem;
+        stack[stack_i++] = div;
+        stack[stack_i++] = a;
+        stack[stack_i++] = l;
+        p = a;
+        a = new_a;
+        l = l_mod;
+    }
+
+    for (; stack_i > 0; ) {
+        auto l = stack[--stack_i];
+        auto a = stack[--stack_i];
+        auto div = stack[--stack_i]; // p / a
+        auto rem = stack[--stack_i]; // p % a
+
+        auto k_1 = k * div + 1;
+        uint64_t k_2;
+        //if (rem < 0x7FFFFFFF && k < 0x7FFFFFFF) {
+        //    k_2 = (k * rem + l - 1) / a;
+        //} else {
+            k_2 = ((__int128) k * rem + l - 1) / a;
+        //}
+        k = k_1 + k_2;
+
+        //k = ((__int128)k * p + l - 1) / a + 1;
+    }
+    return k;
+}
 
 /**
  * find (base_r * (M + mi) + SL) <= 2 * SL
@@ -339,7 +396,7 @@ void modulo_search_euclid_all_large(
         uint64_t low  = prime - modulo;
         uint64_t high = low + two_SL;
 
-        mi += modulo_search_euclid(prime, base_r, low, high);
+        mi += modulo_search_euclid_stack(prime, base_r, low, high);
         if (mi >= max_m) return;
 
         __int128 mult = (__int128) base_r * mi + initial_modulo;

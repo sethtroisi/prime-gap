@@ -14,7 +14,6 @@
 
 #include <cassert>
 #include <cmath>
-#include <cstdio>
 #include <random>
 
 #include <primesieve.hpp>
@@ -120,10 +119,10 @@ static void BM_module_search_euclid(benchmark::State& state) {
         assert(bits == state.range(0));
         assert(SL == (size_t) state.range(1));
 
-        i = (i + 1) % primes.size();
-
         uint64_t p = primes[i];
         uint64_t m = modulo_search_euclid(p, A[i], L[i], R[i]);
+        i++;
+
         uint64_t t = ((__int128) m * A[i]) % p;
         assert( (L[i] <= t) && (t <= R[i]) );
     }
@@ -132,14 +131,61 @@ BENCHMARK(BM_module_search_euclid)
     // {Number of bits, SL}
     ->Args({25, 15'000})
     ->Args({25, 100'000})
-    ->Args({30, 15'000})
-    ->Args({31, 15'000})
-    ->Args({32, 15'000})
+//    ->Args({30, 15'000})
+//    ->Args({31, 15'000})
+//    ->Args({32, 15'000})
     ->Args({35, 15'000})
-    ->Args({40, 15'000})
+//    ->Args({40, 15'000})
     ->Args({45, 15'000})
-    ->Args({55, 15'000})
+//    ->Args({55, 15'000})
     ->Args({60, 15'000})
     ->Args({60, 100'000});
+
+
+static void BM_module_search_euclid_stack(benchmark::State& state) {
+    assert(state.max_iterations <= 50'000'000);
+    size_t count = state.max_iterations;
+
+    int bits = state.range(0);
+    size_t SL = state.range(1);
+    vector<uint64_t> primes, A, L, R;
+    generate_PALR(bits, count, 2 * SL + 1, primes, A, L, R);
+
+    assert( (primes.size() == count) || (bits <= 25));
+    assert( (primes.size() == A.size()) &&
+            (primes.size() == L.size()) &&
+            (primes.size() == R.size()) );
+
+    size_t i = 0;
+
+    for (auto _ : state) {
+        assert(bits == state.range(0));
+        assert(SL == (size_t) state.range(1));
+
+        uint64_t p = primes[i];
+        uint64_t m = modulo_search_euclid_stack(p, A[i], L[i], R[i]);
+        //uint64_t m2 = modulo_search_euclid(p, A[i], L[i], R[i]);
+        //assert(m == m2);
+        i++;
+
+        uint64_t t = ((__int128) m * A[i]) % p;
+        assert( (L[i] <= t) && (t <= R[i]) );
+    }
+}
+
+BENCHMARK(BM_module_search_euclid_stack)
+    // {Number of bits, SL}
+    ->Args({25, 15'000})
+    ->Args({25, 100'000})
+//    ->Args({30, 15'000})
+//    ->Args({31, 15'000})
+//    ->Args({32, 15'000})
+    ->Args({35, 15'000})
+//    ->Args({40, 15'000})
+    ->Args({45, 15'000})
+//    ->Args({55, 15'000})
+    ->Args({60, 15'000})
+    ->Args({60, 100'000});
+
 
 BENCHMARK_MAIN();

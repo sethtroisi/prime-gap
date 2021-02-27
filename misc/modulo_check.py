@@ -16,24 +16,30 @@ def modulo_search(p, a, l, r):
     if l == 0:
         return 0
 
+    #assert l < r, (p, a, l, r)
+    delta = abs(r - l)
+
+    '''
+    l_div, l_mod = divmod(l, a)
+    r_div, r_mod = divmod(r, a)
+    if l_div < r_div or l_mod == 0:
+        assert l_mod == 0 or l_mod + delta >= a, (l_mod + delta, a)
+        return l_div + (l_mod > 0)
+    assert r_mod == l_mod + delta
+    assert r_div == l_div
+    '''
+    l_div, l_mod = divmod(l - 1, a)
+    l_mod += 1
+    r_mod = l_mod + delta
+    if r_mod >= a:
+        return l_div + 1
+
     if 2*a > p:
         return modulo_search(p, p - a, p - r, p - l)
 
-    if a <= r:
-        # mult = (l - 1) // a + 1;
-        # test = mult * a
-        # if test <= r:
-        #   return mult
-
-        mult = (l - 1) // a
-        test = mult * a
-        assert mult < l
-        if a <= r - test:
-            return mult + 1
-
     new_a = a - (p % a)
     assert 0 <= new_a < a, (a, new_a)
-    k = modulo_search(a, new_a, l % a, r % a)
+    k = modulo_search(a, new_a, l_mod, r_mod)
 
     tl = k * p + l
     mult = (tl - 1) // a + 1
@@ -41,7 +47,20 @@ def modulo_search(p, a, l, r):
 
 def unwind(k, stack):
     for p, a, l in reversed(stack):
-        k = (k * p + l - 1) // a + 1
+        #assert k < p
+        #assert a < p
+        #assert k < a
+        #assert l > 0  # Helps guarentee r * k + l - 1 >= 0
+
+        # XXX: these are probably already computed (for new_a)
+        div, rem = divmod(p, a)
+        k_1 = k * div + 1
+
+        # No larger than a^2 + l
+        k_2 = (rem * k + l - 1) // a
+        k = k_1 + k_2
+
+        #k = (k * p + l - 1) // a + 1
     return k
 
 def modulo_search_stack(p, a, l, r, stack):
@@ -51,17 +70,10 @@ def modulo_search_stack(p, a, l, r, stack):
     if 2*a > p:
         a, l, r = p - a, p - r, p - l
 
-    if a <= r:
-        # mult = (l - 1) // a + 1;
-        # test = mult * a
-        # if test <= r:
-        #   return mult
-
-        mult = (l - 1) // a
-        test = mult * a
-        assert mult < l
-        if a <= r - test:
-            return unwind(mult + 1, stack)
+    l_div, l_mod = divmod(l, a)
+    r_div, r_mod = divmod(r, a)
+    if l_div < r_div or l_mod == 0:
+        return unwind(l_div + (l_mod > 0), stack)
 
     new_a = a - (p % a)
     assert 0 <= new_a < a, (a, new_a)
@@ -70,29 +82,45 @@ def modulo_search_stack(p, a, l, r, stack):
     # return (tl - 1) // a + 1
 
     stack.append((p, a, l))
-    return modulo_search_stack(a, new_a, l % a, r % a, stack)
+    return modulo_search_stack(a, new_a, l_mod, r_mod, stack)
 
 
+def main():
+    # Test case where m*K = L first
+    z = modulo_search(10**9+7, 123, 5*123, 5*123+6)
+    assert z == 5, z
+    # Test case where m*K = R first
+    z = modulo_search(10**9+7, 123, 5*123-6, 5*123)
+    assert z == 5, z
 
-import sympy
-s = 0
-for p in list(sympy.primerange(10 ** 4, 10 ** 5))[-100:]:
-    s += modulo_search(p, 123, 1000, 1010)
-print()
-print(s, "vs 780012")
+
+    import sympy
+    s = 0
+    for p in list(sympy.primerange(10 ** 4, 10 ** 5))[-100:]:
+        s1 = modulo_search(p, 123, 1000, 1010)
+        s2 = modulo_search_stack(p, 123, 1000, 1010, [])
+        if s1 != s2: print(f"\tError with {p} | {s1} != {s2}")
+        s += s1
+    print()
+    print(s, "vs 780012")
+
+    '''
+    import time
+    primes = list(sympy.primerange(10 ** 4, 2 * 10 ** 6))
+    s = 0
+    t0 = time.time()
+    for p in primes:
+        s += modulo_search(p, 123, 1000, 1010)
+
+    t1 = time.time()
+    for p in primes:
+        s -= modulo_search_stack(p, 123, 1000, 1010, [])
+
+    t2 = time.time()
+
+    print (f"diff: {s} | {t1 - t0:.3f} vs {t2 - t1:.3f}")
+    '''
 
 
-import time
-primes = list(sympy.primerange(10 ** 4, 2 * 10 ** 6))
-s = 0
-t0 = time.time()
-for p in primes:
-    s += modulo_search(p, 123, 1000, 1010)
-
-t1 = time.time()
-for p in primes:
-    s -= modulo_search_stack(p, 123, 1000, 1010, [])
-
-t2 = time.time()
-
-print (f"diff: {s} | {t1 - t0:.3f} vs {t2 - t1:.3f}")
+if __name__ == "__main__":
+    main()
