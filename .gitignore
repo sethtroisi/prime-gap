@@ -5,6 +5,7 @@ gap_stats
 gap_stats_missing
 gap_test_simple
 benchmark
+benchmark_google
 *.o
 
 # data
@@ -19,6 +20,7 @@ done/
 *M.txt.log
 *M.txt.png
 *M.txt.stats
+temp_tests.log
 
 # PrimeForms
 pfgw

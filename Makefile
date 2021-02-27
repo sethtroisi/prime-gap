@@ -17,9 +17,9 @@ OBJS	= gap_common.o modulo_search.o
 OUT	= combined_sieve gap_stats gap_test_simple benchmark
 CC	= g++
 CFLAGS	= -Wall -Werror -O3
+LDFLAGS	= -lgmp -lsqlite3 -fopenmp
 # Need for local gmp / primesieve
-LDFLAGS	= -L /usr/local/lib -lgmp -lsqlite3 -fopenmp
-#LDFLAGS	=
+LDFLAGS+= -L /usr/local/lib
 DEFINES =
 
 ifdef RLE
@@ -54,6 +54,9 @@ gap_test_simple: gap_test_simple.cpp gap_common.o
 benchmark: misc/benchmark.cpp modulo_search.o
 	$(CC) -o $@ $^ $(CFLAGS) -lprimesieve $(LDFLAGS) -I.
 
+benchmark_google: misc/benchmark_google.cpp modulo_search.o
+	$(CC) -o $@ $^ $(CFLAGS) -std=c++14 -lprimesieve -lbenchmark -lpthread -I.
+	./benchmark_google
 
 .PHONY: clean
 
