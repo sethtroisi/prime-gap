@@ -932,7 +932,7 @@ void method2_increment_print(
 
     while (prime >= stats.next_print && stats.next_print < stats.last_prime) {
         //printf("\t\tmethod2_increment_print %'ld >= %'ld\n", prime, stats.next_print);
-        const size_t max_mult = 1'000'000'000L * (config.threads > 2 ? 10L : 1L);
+        const size_t max_mult = 100'000'000'000L * (config.threads > 2 ? 10L : 1L);
 
         // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
         // 60, 70, 80, 90, 100, 120, 150, 200, 300 billion because intervals are wider.
@@ -1643,7 +1643,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
         }
     }
     if (config.verbose >= 2) {
-        printf("\tmethod2_large_primes done");
+        printf("\tmethod2_large_primes done\n");
     }
 
     // if is_last would truncate .max_prime by 1 million
@@ -1808,7 +1808,6 @@ void prime_gap_parallel(struct Config& config) {
     const auto THRESHOLDS =
         calculate_thresholds_method2(config, count_coprime_sieve, valid_ms);
     const uint64_t SMALL_THRESHOLD = THRESHOLDS.first;
-    //const uint64_t MEDIUM_THRESHOLD = config.max_prime;
     const uint64_t MEDIUM_THRESHOLD = THRESHOLDS.second;
     if (config.verbose >= 1) {
         printf("sieve_length:  2x %'d\n", config.sieve_length);
@@ -1902,7 +1901,7 @@ void prime_gap_parallel(struct Config& config) {
 
     const size_t THREADS = config.threads;
 
-    { // Small Primes
+    if (1) { // Small Primes
         /**
          * NOTE: For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
          * This also avoids need to synchronize access to composite
@@ -1930,10 +1929,13 @@ void prime_gap_parallel(struct Config& config) {
                                  x_reindex_m_wheel, x_reindex_wheel,
                                  SMALL_THRESHOLD, composite);
         }
+    } else {
+        // Have to do this to make method2_increment_print happy
+        method2_increment_print(config.p, valid_ms, composite, stats, config);
     }
 
 
-    { // Medium Primes
+    if (1) { // Medium Primes
         vector<int32_t> coprime_X_split[THREADS];
         size_t per_thread = coprime_X.size() / THREADS;
         per_thread -= per_thread % 8;

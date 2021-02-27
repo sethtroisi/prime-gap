@@ -33,6 +33,7 @@ TEST_DB="local_tests.db"
 
 make --quiet clean
 make --quiet combined_sieve gap_stats gap_test_simple -j3 VALIDATE_FACTORS=1
+mkdir -p unknowns/
 
 rm -f "$TEST_DB" "unknowns/907_2190_1_200_s11000_l100M."{txt,m1.txt} "unknowns/$FN2"
 sqlite3 $TEST_DB < schema.sql
@@ -46,6 +47,13 @@ sqlite3 $TEST_DB < schema.sql
 # Verify md5sum unknowns/907_2190_1_200_s11000_l100M.{txt,m1.txt}
 md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.txt")
 md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.m1.txt")
+
+# Test multithreaded
+rm unknowns/907_2190_1_200_s11000_l100M.txt
+./combined_sieve           -qqq --save -u $FN1 --search-db $TEST_DB -t 4
+md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.txt")
+
+
 
 # Tests MIDDLE_THRESHOLD
 ./combined_sieve           -qqq --save -u $FN2 --search-db $TEST_DB

@@ -161,7 +161,7 @@ uint64_t modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_t
         return modulo_search_euclid_small(p, a, l, r);
     }
 
-    static uint64_t stack[4 * 64];
+    static thread_local uint64_t stack[4 * 64];
 
     uint64_t stack_i = 0;
     uint64_t k = 0;
@@ -175,10 +175,7 @@ uint64_t modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_t
         // 2 * a > p, but avoids int max
         if (a > (p >> 1)) {
             l = l + delta;
-            if (l >= p) {
-                assert(false);
-                // I think the answer is break with k = 0
-            }
+            assert(l <= p);  // technically l < p, but l = p also magically works
             a = p - a;
             l = p - l;
         }

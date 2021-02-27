@@ -288,6 +288,12 @@ void benchmark_method_large(
             assert( (L[i] <= t) && (t <= R[i]) );
 
         } else if (method == 2) {
+            m = modulo_search_euclid_stack(p, A[i], L[i], R[i]);
+            found++;
+            uint64_t t = ((__int128) m * A[i]) % p;
+            assert( (L[i] <= t) && (t <= R[i]) );
+
+        } else if (method == 3) {
             // M = 1, D = 1, max_m = 1e9
             // D = 1 mean only zero/one modulo_search.
             m = modulo_search_euclid_gcd(M_START, 1, max_m, SL, p, base_r);
@@ -298,7 +304,7 @@ void benchmark_method_large(
             uint64_t t = ((__int128) base_r * (M_START + m)) % p;
             assert( (t <= SL) || (t + SL) >= p );
 
-        } else if (method == 3) {
+        } else if (method == 4) {
             // D = 1 mean only zero/one modulo_search.
             m = modulo_search_euclid_gcd2(M_START, 1, max_m, SL, p, base_r);
             found++;
@@ -308,7 +314,7 @@ void benchmark_method_large(
             uint64_t t = ((__int128) base_r * (M_START + m)) % p;
             assert( (t <= SL) || (t + SL) >= p );
 
-        } else if (method == 4) {
+        } else if (method == 5) {
             uint64_t previous = found2;
             modulo_search_euclid_all_small(
                 M_START, max_m, SL, p, base_r,
@@ -408,12 +414,16 @@ void benchmark(int bits, size_t count, const char* filter) {
         SL, max_m_overflow, primes, A, L, R, 1);
 
     benchmark_method_large(
-        benchmark_row, "modulo_search_euclid_gcd", filter, bits, N,
+        benchmark_row, "modulo_search_euclid_stack", filter, bits, N,
         SL, max_m_overflow, primes, A, L, R, 2);
 
     benchmark_method_large(
-        benchmark_row, "modulo_search_euclid_gcd2", filter, bits, N,
+        benchmark_row, "modulo_search_euclid_gcd", filter, bits, N,
         SL, max_m_overflow, primes, A, L, R, 3);
+
+    benchmark_method_large(
+        benchmark_row, "modulo_search_euclid_gcd2", filter, bits, N,
+        SL, max_m_overflow, primes, A, L, R, 4);
 
     /**
      * Try to set max_m so it finds 1m per p
@@ -427,11 +437,11 @@ void benchmark(int bits, size_t count, const char* filter) {
 
     benchmark_method_large(
         benchmark_row, "modulo_search_euclid_all_small", filter, bits, N,
-        SL, max_m, primes, A, L, R, 4);
+        SL, max_m, primes, A, L, R, 5);
 
     benchmark_method_large(
         benchmark_row, "modulo_search_euclid_all_large", filter, bits, N,
-        SL, max_m, primes, A, L, R, 5);
+        SL, max_m, primes, A, L, R, 6);
 
     if (strstr("# mod < bits>p", filter) != NULL) {
         printf("\n");

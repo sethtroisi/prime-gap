@@ -14,6 +14,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <iostream>
 #include <random>
 
 #include <primesieve.hpp>
@@ -65,9 +66,9 @@ void generate_PALR(
     auto prime_tmp = generate_primes(bits, count);
     primes.swap(prime_tmp);
 
-    A.reserve(primes.size());
-    L.reserve(primes.size());
-    R.reserve(primes.size());
+    A.reserve(count);
+    L.reserve(count);
+    R.reserve(count);
 
     std::mt19937_64 mt_rand(bits + count);
     for (uint64_t p : primes) {
@@ -96,96 +97,125 @@ void generate_PALR(
         L.push_back(l);
         R.push_back(l + S);
     }
+
+    if (primes.size() < count) {
+        assert(bits <= 25);
+        // Ran out of primes for small bit count
+        primes.reserve(count);
+
+        for (size_t i = 0; primes.size() < count; i++) {
+            primes.push_back(primes[i]);
+            A.push_back(A[i]);
+            L.push_back(L[i]);
+            R.push_back(R[i]);
+        }
+    }
 }
 
 
 static void BM_module_search_euclid(benchmark::State& state) {
     assert(state.max_iterations <= 50'000'000);
     size_t count = state.max_iterations;
+    assert(count > 0);
 
+    // state doesn't change while we iterate
     int bits = state.range(0);
     size_t SL = state.range(1);
     vector<uint64_t> primes, A, L, R;
     generate_PALR(bits, count, 2 * SL + 1, primes, A, L, R);
 
-    assert( (primes.size() == count) || (bits <= 25));
+    assert( (primes.size() == count) );
     assert( (primes.size() == A.size()) &&
             (primes.size() == L.size()) &&
             (primes.size() == R.size()) );
 
     size_t i = 0;
-
     for (auto _ : state) {
-        assert(bits == state.range(0));
-        assert(SL == (size_t) state.range(1));
+        uint64_t m = modulo_search_euclid(primes[i], A[i], L[i], R[i]);
+        benchmark::DoNotOptimize(m);
 
-        uint64_t p = primes[i];
-        uint64_t m = modulo_search_euclid(p, A[i], L[i], R[i]);
         i++;
-
-        uint64_t t = ((__int128) m * A[i]) % p;
-        assert( (L[i] <= t) && (t <= R[i]) );
     }
 }
-BENCHMARK(BM_module_search_euclid)
-    // {Number of bits, SL}
-    ->Args({25, 15'000})
-    ->Args({25, 100'000})
-//    ->Args({30, 15'000})
-//    ->Args({31, 15'000})
-//    ->Args({32, 15'000})
-    ->Args({35, 15'000})
-//    ->Args({40, 15'000})
-    ->Args({45, 15'000})
-//    ->Args({55, 15'000})
-    ->Args({60, 15'000})
-    ->Args({60, 100'000});
 
 
 static void BM_module_search_euclid_stack(benchmark::State& state) {
     assert(state.max_iterations <= 50'000'000);
     size_t count = state.max_iterations;
+    assert(count > 0);
 
     int bits = state.range(0);
     size_t SL = state.range(1);
     vector<uint64_t> primes, A, L, R;
     generate_PALR(bits, count, 2 * SL + 1, primes, A, L, R);
 
-    assert( (primes.size() == count) || (bits <= 25));
+    assert( (primes.size() == count) );
     assert( (primes.size() == A.size()) &&
             (primes.size() == L.size()) &&
             (primes.size() == R.size()) );
 
     size_t i = 0;
+    for (auto _ : state) {
+        uint64_t m = modulo_search_euclid_stack(primes[i], A[i], L[i], R[i]);
+        benchmark::DoNotOptimize(m);
 
+        i++;
+    }
+}
+
+static void BM_module_search_euclid_verify_both(benchmark::State& state) {
+    assert(state.max_iterations <= 50'000'000);
+    size_t count = state.max_iterations;
+    assert(count > 0);
+
+    int bits = state.range(0);
+    size_t SL = state.range(1);
+    vector<uint64_t> primes, A, L, R;
+    generate_PALR(bits, count, 2 * SL + 1, primes, A, L, R);
+
+    assert( (primes.size() == count) );
+    assert( (primes.size() == A.size()) &&
+            (primes.size() == L.size()) &&
+            (primes.size() == R.size()) );
+
+    size_t i = 0;
     for (auto _ : state) {
         assert(bits == state.range(0));
         assert(SL == (size_t) state.range(1));
 
         uint64_t p = primes[i];
         uint64_t m = modulo_search_euclid_stack(p, A[i], L[i], R[i]);
-        //uint64_t m2 = modulo_search_euclid(p, A[i], L[i], R[i]);
-        //assert(m == m2);
-        i++;
+        uint64_t m2 = modulo_search_euclid(p, A[i], L[i], R[i]);
+        assert(m == m2);
 
         uint64_t t = ((__int128) m * A[i]) % p;
         assert( (L[i] <= t) && (t <= R[i]) );
+
+        i++;
     }
 }
 
-BENCHMARK(BM_module_search_euclid_stack)
-    // {Number of bits, SL}
-    ->Args({25, 15'000})
-    ->Args({25, 100'000})
-//    ->Args({30, 15'000})
-//    ->Args({31, 15'000})
-//    ->Args({32, 15'000})
-    ->Args({35, 15'000})
-//    ->Args({40, 15'000})
-    ->Args({45, 15'000})
-//    ->Args({55, 15'000})
-    ->Args({60, 15'000})
-    ->Args({60, 100'000});
+
+static void LargeBitArguments(benchmark::internal::Benchmark* benchmark) {
+    benchmark
+        // {Number of bits, SL}
+        ->Args({25, 15'000})
+        ->Args({25, 100'000})
+    //    ->Args({30, 15'000})
+    //    ->Args({31, 15'000})
+    //    ->Args({32, 15'000})
+        ->Args({35, 15'000})
+    //    ->Args({40, 15'000})
+        ->Args({45, 15'000})
+    //    ->Args({55, 15'000})
+        ->Args({60, 15'000})
+        ->Args({60, 100'000});
+}
+
+
+BENCHMARK(BM_module_search_euclid)->Apply(LargeBitArguments);
+BENCHMARK(BM_module_search_euclid_stack)->Apply(LargeBitArguments);
+BENCHMARK(BM_module_search_euclid_verify_both)->Apply(LargeBitArguments);
 
 
 BENCHMARK_MAIN();
