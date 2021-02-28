@@ -38,7 +38,7 @@ uint32_t gcd(uint32_t a, uint32_t b) {
 }
 
 
-uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
+uint32_t _modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
     // A + p must not overflow.
 //    uint32_t check = p + A;
 //    assert( check > p );
@@ -67,27 +67,27 @@ uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
 }
 
 
-uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t r) {
-    if (a > (p >> 1)) {
-        std::swap(l, r);
-        a = p - a; l = p - l; r = p - r;
+uint32_t _modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t r) {
+    uint32_t delta = r >= l ? r - l : l - r;
 
-        // Seems like this should be 1 or 2 ops faster
-        // uint32_t t = p - l
+    if (a > (p >> 1)) {
         // a = p - a; l = p - r; r = t;
+
+        l = l + delta;
+        a = p - a;
+        l = p - l;
     }
 
     // Check if l <= ceil(l/a)*a <= r
-    uint32_t l_div = l / a;
+    uint32_t l_div = (l - 1) / a;
     uint32_t l_mod = l - l_div * a;
-    uint32_t r_div = r / a + (l_mod == 0); // Wrong but faster than (l_div < r_div) || (l_div == 0)
-    uint32_t r_mod = r - r_div * a;
-    if (l_div < r_div) {
-        return l_div + (l_mod > 0);
+    uint32_t r_mod = l_mod + delta;
+    if (r_mod >= a) {
+        return l_div + 1;
     }
 
     uint32_t new_a = a - (p % a);
-    uint64_t k = modulo_search_euclid_small(a, new_a, l_mod, r_mod);
+    uint64_t k = _modulo_search_euclid_small(a, new_a, l_mod, r_mod);
 
     uint64_t tl = k * p + l;
     uint64_t mult = (tl - 1) / a + 1;
@@ -96,65 +96,42 @@ uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t
 }
 
 
-// k1 = modulo(a1, new_a, l % a, r % a)
-//      k2 = modulo
-//      tl_inner = k * a1 + l
-//      mult = (tl_inner - 1) / new_a + 1
-//      return mult
-// tl = k1 * p + l
-//    = ((tl_inner - 1) / new_a + 1) * p + l
-// mult = (tl - 1) / new_a + 1
-//      = (((tl_inner - 1) / new_a + 1) * p + l - 1) / new_a + 1
-
-
-uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
-/*
-    assert( 0 <= a && a < p );
-    assert( 0 <= l && l < p );
-    assert( 0 <= r && r < p );
-    assert(      l <= r     );
-*/
+uint64_t _modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
     if (l == 0) return 0;
 
     if (p < 0xFFFFFFFF) {
-        return modulo_search_euclid_small(p, a, l, r);
+        return _modulo_search_euclid_small(p, a, l, r);
     }
+
+    uint64_t delta = r - l;
 
     // 2 * a > p, but avoids int max
     if (a > (p >> 1)) {
-        std::swap(l, r);
-        a = p - a; l = p - l; r = p - r;
+        l = l + delta;
+        a = p - a;
+        l = p - l;
     }
 
-    uint64_t l_div = l / a;
+
+    uint64_t l_div = (l - 1) / a;
     uint64_t l_mod = l - l_div * a;
-    uint64_t r_div = r / a + (l_mod == 0); // Wrong but faster than (l_div < r_div) || (l_div == 0)
-    uint64_t r_mod = r - r_div * a;
-    if (l_div < r_div) {
-        return l_div + (l_mod > 0);
+    uint64_t r_mod = l_mod + delta;
+    if (r_mod >= a) {
+        return l_div + 1;
     }
 
     // reduce to simpler problem
     uint64_t new_a = a - (p % a);
-//    assert( 0 <= new_a && new_a < a );
-    uint64_t k = modulo_search_euclid(a, new_a, l_mod, r_mod);
+    uint64_t k = _modulo_search_euclid(a, new_a, l_mod, r_mod);
 
     __int128 tl = (__int128) p * k + l;
     uint64_t mult = (tl-1) / a + 1;
-
-//    assert( mult < p );
-/*
-    __int128 tr = r + p * k;
-    uint64_t test = mult * a;
-    assert(       test <= tr );
-    assert( tl <= test );
-// */
     return mult;
 }
 
-uint64_t modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
+uint64_t _modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
     if (p < 0xFFFFFFFF) {
-        return modulo_search_euclid_small(p, a, l, r);
+        return _modulo_search_euclid_small(p, a, l, r);
     }
 
     static thread_local uint64_t stack[4 * 64];
@@ -254,7 +231,7 @@ uint64_t modulo_search_euclid_gcd2(
         uint64_t high = low + two_SL;
         //assert( 0 <= low && high < prime );
 
-        mi += modulo_search_euclid(prime, base_r, low, high);
+        mi += _modulo_search_euclid(prime, base_r, low, high);
         if (mi >= max_m)
             return max_m;
 
@@ -298,7 +275,7 @@ uint64_t modulo_search_euclid_gcd(
         uint64_t high = low + 2*SL;
         assert( 0 <= low && high < prime );
 
-        uint64_t mi2 = modulo_search_euclid(prime, base_r, low, high);
+        uint64_t mi2 = _modulo_search_euclid(prime, base_r, low, high);
         mi += mi2;
         if (mi >= max_m)
             return max_m;
@@ -345,7 +322,7 @@ void modulo_search_euclid_all_small(
         uint64_t low  = prime - modulo;
         uint64_t high = low + two_SL;
 
-        mi += modulo_search_euclid(prime, base_r, low, high);
+        mi += _modulo_search_euclid(prime, base_r, low, high);
         if (mi >= max_m) return;
 
         /**
@@ -389,7 +366,7 @@ void modulo_search_euclid_all_large(
         uint64_t low  = prime - modulo;
         uint64_t high = low + two_SL;
 
-        mi += modulo_search_euclid_stack(prime, base_r, low, high);
+        mi += _modulo_search_euclid_stack(prime, base_r, low, high);
         if (mi >= max_m) return;
 
         __int128 mult = (__int128) base_r * mi + initial_modulo;

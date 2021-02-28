@@ -17,12 +17,24 @@
 #include <cstdint>
 #include <functional>
 
+/**
+ * These four methods are "private"
+ * They should only be used by internal and for benchmarking
+ *
+ * They each return the smallest m such that
+ * L <= (m * a % p) <= R
+ *
+ * They should be called (and recurse with)
+ *   0 <  a < p
+ *   0 <= l < p
+ *   0 <= r < p
+ *   l <= r
+ */
+uint32_t _modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R);
+uint32_t _modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t r);
 
-uint32_t modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R);
-uint32_t modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t r);
-
-uint64_t modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r);
-uint64_t modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_t r);
+uint64_t _modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r);
+uint64_t _modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_t r);
 
 uint64_t modulo_search_euclid_gcd(
         uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,

@@ -131,7 +131,7 @@ static void BM_module_search_euclid(benchmark::State& state) {
 
     size_t i = 0;
     for (auto _ : state) {
-        uint64_t m = modulo_search_euclid(primes[i], A[i], L[i], R[i]);
+        uint64_t m = _modulo_search_euclid(primes[i], A[i], L[i], R[i]);
         benchmark::DoNotOptimize(m);
 
         i++;
@@ -156,7 +156,7 @@ static void BM_module_search_euclid_stack(benchmark::State& state) {
 
     size_t i = 0;
     for (auto _ : state) {
-        uint64_t m = modulo_search_euclid_stack(primes[i], A[i], L[i], R[i]);
+        uint64_t m = _modulo_search_euclid_stack(primes[i], A[i], L[i], R[i]);
         benchmark::DoNotOptimize(m);
 
         i++;
@@ -184,8 +184,8 @@ static void BM_module_search_euclid_verify_both(benchmark::State& state) {
         assert(SL == (size_t) state.range(1));
 
         uint64_t p = primes[i];
-        uint64_t m = modulo_search_euclid_stack(p, A[i], L[i], R[i]);
-        uint64_t m2 = modulo_search_euclid(p, A[i], L[i], R[i]);
+        uint64_t m = _modulo_search_euclid_stack(p, A[i], L[i], R[i]);
+        uint64_t m2 = _modulo_search_euclid(p, A[i], L[i], R[i]);
         assert(m == m2);
 
         uint64_t t = ((__int128) m * A[i]) % p;

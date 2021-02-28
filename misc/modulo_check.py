@@ -16,8 +16,8 @@ def modulo_search(p, a, l, r):
     if l == 0:
         return 0
 
-    #assert l < r, (p, a, l, r)
-    delta = abs(r - l)
+    assert l < r, (p, a, l, r)
+    delta = r - l
 
     '''
     l_div, l_mod = divmod(l, a)

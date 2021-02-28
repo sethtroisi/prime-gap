@@ -263,7 +263,7 @@ void benchmark_method_large(
             } else {
                 l = p - l;
                 uint64_t r = l + 2*SL;
-                m = modulo_search_euclid(p, A[i], l, r);
+                m = _modulo_search_euclid(p, A[i], l, r);
             }
             // Only verify interesting solutions here
             if (m == 0 || m >= max_m)
@@ -282,13 +282,13 @@ void benchmark_method_large(
             found++;
 
         } else if (method == 1) {
-            m = modulo_search_euclid(p, A[i], L[i], R[i]);
+            m = _modulo_search_euclid(p, A[i], L[i], R[i]);
             found++;
             uint64_t t = ((__int128) m * A[i]) % p;
             assert( (L[i] <= t) && (t <= R[i]) );
 
         } else if (method == 2) {
-            m = modulo_search_euclid_stack(p, A[i], L[i], R[i]);
+            m = _modulo_search_euclid_stack(p, A[i], L[i], R[i]);
             found++;
             uint64_t t = ((__int128) m * A[i]) % p;
             assert( (L[i] <= t) && (t <= R[i]) );
@@ -395,12 +395,12 @@ void benchmark(int bits, size_t count, const char* filter) {
         if (bits != 32) {
             benchmark_method_small(
                 benchmark_row, "modulo_search_brute", filter, bits, N / 10,
-                primes, A, L, R, modulo_search_brute);
+                primes, A, L, R, _modulo_search_brute);
         }
 
         benchmark_method_small(
             benchmark_row, "modulo_search_euclid_small", filter, bits, N,
-            primes, A, L, R, modulo_search_euclid_small);
+            primes, A, L, R, _modulo_search_euclid_small);
     }
 
     size_t max_m_overflow = std::numeric_limits<uint64_t>::max() / primes.back() - 10;
