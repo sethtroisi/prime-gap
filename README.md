@@ -456,7 +456,7 @@ $ make install
 # Need sqlite >= 3.24 for upsert "on conflict" statement.
 $ sudo apt install sqlite3
 
-$ sudo apt install libmpfr-dev libmpc-dev libomp-dev libsqlite3-dev
+$ sudo apt install libmpfr-dev libmpc-dev libomp-dev libsqlite3-dev libbenchmark-dev
 
 # Make sure this is >= python3.7 and not python2
 $ python -m pip install --user gmpy2==2.1.0b5 primegapverify
