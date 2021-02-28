@@ -49,7 +49,7 @@ const uint32_t MAX_GAP = 1'000'000;
 const float    GAP_INF = std::numeric_limits<float>::max();   // log(starting_prime)
 
 // Generated from https://primegap-list-project.github.io/lists/missing-gaps/
-// Range of missing gap to search, values are loaded from records_db.
+// Range of missing gap to search, values are loaded from gaps_db.
 const uint32_t MISSING_GAPS_MIN  = 113326;
 
 
@@ -209,7 +209,7 @@ vector<float> get_record_gaps(const struct Config& config) {
 
     vector<float> records(records_size, GAP_INF);
 
-    DB db(config.records_db.c_str());
+    DB db(config.gaps_db.c_str());
 
     /* Create SQL statement */
     char sql[] = "SELECT gapsize, merit FROM gaps";

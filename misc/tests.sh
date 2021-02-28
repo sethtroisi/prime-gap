@@ -14,13 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -eux
+set -eu
 
+shopt -s expand_aliases
+alias trace_on='set -x'
+alias trace_off='{ set +x; } 2>/dev/null'
+
+trace_on
 
 PARAMS="-p 907 -d 2190 --mstart 1 --minc 200 --max-prime 100 --sieve-length 11000"
 FN1="907_2190_1_200_s11000_l100M.txt"
 FN2="953_1_1_10000_s8000_l20M.txt"
 TEST_DB="local_tests.db"
+COMMIT="49CC07DA"
+TEST_GAPS_DB="test_gaps_$COMMIT.db"
 
 #### MISC ####
 
@@ -33,10 +40,20 @@ TEST_DB="local_tests.db"
 
 make --quiet clean
 make --quiet combined_sieve gap_stats gap_test_simple -j3 VALIDATE_FACTORS=1
+
+trace_off
 mkdir -p unknowns/
 
 rm -f "$TEST_DB" "unknowns/907_2190_1_200_s11000_l100M."{txt,m1.txt} "unknowns/$FN2"
 sqlite3 $TEST_DB < schema.sql
+
+if [ ! -f "$TEST_GAPS_DB" ]; then  # create gaps.db from last commit of 2020
+    trace_on
+    echo "Creating stable $TEST_GAPS_DB from last commit of 2020"
+    (cd prime-gap-list; git show $COMMIT:allgaps.sql) | sqlite3 "$TEST_GAPS_DB"
+    trace_off
+fi
+trace_on
 
 
 #### COMBINED SIEVE ####
@@ -54,7 +71,6 @@ rm unknowns/907_2190_1_200_s11000_l100M.txt
 md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.txt")
 
 
-
 # Tests MIDDLE_THRESHOLD
 ./combined_sieve           -qqq --save -u $FN2 --search-db $TEST_DB
 md5sum -c <(echo "a0df27e7c40eef11f0d48953676b5a2f  unknowns/$FN2")
@@ -62,16 +78,20 @@ md5sum -c <(echo "a0df27e7c40eef11f0d48953676b5a2f  unknowns/$FN2")
 
 #### GAP STATS ####
 
-./gap_stats --save -u $FN1 --search-db $TEST_DB --min-merit 8 | tee temp_tests.log
+trace_off
+DBS="--search-db $TEST_DB --prime-gaps-db $TEST_GAPS_DB"
+trace_on
+
+./gap_stats --save -u $FN1 $DBS --min-merit 8 | tee temp_tests.log
 
 grep -q 'avg missing prob : 0.0000000' temp_tests.log
-grep -q 'RECORD : top  50% (    26) sum(prob) = 1.4[89]e-05 (avg: 5.6[6789]e-07)' temp_tests.log
-grep -q 'RECORD : top 100% (    53) sum(prob) = 2.1[123]e-05 (avg: 4.00e-07)' temp_tests.log
+grep -q 'RECORD : top  50% (    26) sum(prob) = 1.50e-05 (avg: 5.77e-07)' temp_tests.log
+grep -q 'RECORD : top 100% (    53) sum(prob) = 2.15e-05 (avg: 4.06e-07)' temp_tests.log
 
-./gap_stats --save -u $FN2 --search-db $TEST_DB -q -q
+./gap_stats --save -u $FN2 $DBS -q -q
 
 #### MISC ####
-#python misc/double_check.py --seed=123 --unknown-filename $FN1 -c 5 --B1 1000
+# python misc/double_check.py --seed=123 --unknown-filename $FN1 -c 5 --B1 1000
 
 
 #### GAP_TEST ####
@@ -82,10 +102,9 @@ sed -E -i -e 's#[0-9.]+( ?)(tests)?/sec\)#XX.YY\1\2/sec)#' -e 's#[0-9]+ sec#Z se
 
 md5sum -c <(echo "42b30c4e7850aa9dbdda509df20a9e92  temp_tests.log")
 
-python gap_test.py -u $FN1 --search-db $TEST_DB
-diff <(echo "2") <(sqlite3 local_tests.db 'SELECT COUNT(*) FROM result WHERE merit > 8')
-diff <(echo "1215") <(sqlite3 local_tests.db 'SELECT SUM(prp_next+prp_prev) FROM m_stats')
-
+python gap_test.py -u $FN1 $DBS
+diff <(echo "2") <(sqlite3 $TEST_DB 'SELECT COUNT(*) FROM result WHERE merit > 8')
+diff <(echo "1215") <(sqlite3 $TEST_DB 'SELECT SUM(prp_next+prp_prev) FROM m_stats')
 
 # TODO
 #  - num-plots
@@ -95,7 +114,7 @@ diff <(echo "1215") <(sqlite3 local_tests.db 'SELECT SUM(prp_next+prp_prev) FROM
 
 #### FINALIZE ####
 
-set +x;
+trace_off
 rm $TEST_DB temp_tests.log
 rm "unknowns/$FN1" "unknowns/$FN2"
 

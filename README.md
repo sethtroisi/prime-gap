@@ -436,7 +436,6 @@ In general this is going to be easy under Ubuntu 20.04 as you need **Python 3.7*
 and **sqlite3 >= 3.24** both of which are harder to install in previous versions
 of Ubuntu.
 
-  * [ ] Updated setup from thread (python version, sqlite, ubuntu)
 ```bash
 #$ sudo apt install libgmp10 libgmp-dev
 #$ sudo apt install mercurial build-essential automake autoconf bison make libtool texinfo m4
@@ -622,7 +621,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
     * [ ] Faster finalize.py
   * [ ] Slower print intervals in gap_test.py
   * [ ] Consider new names for prp-top-percent, no-one-side-skip, sieve-length
-  * [ ] misc/tests.sh breaks because records improve (so chance goes down) used fixed gaps.db
 * combined\_sieve.cpp
   * [ ] Benchmark bitset vs vector<bool>
 * gap\_stats.cpp
@@ -774,6 +772,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * prime-gap-search.db
   * [x] A plan for how to clean up [partially] finished ranges
 * misc/
+  * tests.sh
+    * [x] misc/tests.sh breaks because records improve (so chance goes down) used fixed gaps.db
   * Finalize script
     * [x] dump to csv, dump stats
   * show\_ranges.sh

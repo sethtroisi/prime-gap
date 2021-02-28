@@ -618,8 +618,8 @@ void Args::show_usage(char* name) {
     cout << "[OPTIONAL]" << endl;
     cout << "  --search-db" << endl;
     cout << "    Database for this project (Default: '" << defaults.search_db << "')" << endl;
-    cout << "  --records-db" << endl;
-    cout << "    Prime gap prime gap search db (Default: '" << defaults.records_db << "')" << endl;
+    cout << "  --prime-gaps-db" << endl;
+    cout << "    Prime gap prime gap search db (Default: '" << defaults.gaps_db << "')" << endl;
     cout << endl;
     cout << "  -q, --quiet" << endl;
     cout << "    suppress some status output (twice for more suppression)" << endl;
@@ -811,7 +811,7 @@ Config Args::argparse(int argc, char* argv[]) {
                 assert_file_exists(optarg);
                 break;
             case 10:
-                config.records_db = optarg;
+                config.gaps_db = optarg;
                 assert_file_exists(optarg);
                 break;
 
