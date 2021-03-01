@@ -23,6 +23,7 @@
 #include <iostream>
 #include <map>
 #include <mutex>
+#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -745,6 +746,7 @@ void prime_gap_search(const struct Config& config) {
 
 void save_unknowns_method2(
         const struct Config& config,
+        const vector<uint32_t> coprime_X,
         const vector<int32_t> &valid_mi,
         const vector<int32_t> &m_reindex,
         const uint32_t x_reindex_m_wheel,
@@ -762,17 +764,32 @@ void save_unknowns_method2(
 
     const uint32_t M_start = config.mstart;
     const uint32_t D = config.d;
-    const uint32_t SL = config.sieve_length;
+    const int32_t SL = config.sieve_length;
 
+    vector<int32_t> coprime_prev;
+    vector<int32_t> coprime_next;
+    for (int32_t x : coprime_X) {
+        // Need to head outwards from SL this is easiest way
+        if (x > SL) {
+            uint32_t dist = x - SL;
+            coprime_prev.push_back(SL - dist);
+            coprime_next.push_back(SL + dist);
+        }
+    }
+
+    size_t count_a = 0;
+    size_t count_b = 0;
+
+    #pragma omp parallel for ordered schedule(dynamic, 1) num_threads(config.threads)
     for (uint64_t mi : valid_mi) {
         uint64_t m = M_start + mi;
         assert(gcd(m, D) == 1);
         int32_t mii = m_reindex[mi];
         assert( mii >= 0 );
 
-        const auto& comp = composite[mii];
-        const vector<uint32_t> &x_reindex_m = x_reindex_wheel[m % x_reindex_m_wheel];
-        assert(x_reindex_m.size() == 2 * SL + 1);
+        const auto &comp = composite[mii];
+        const auto &x_reindex_m = x_reindex_wheel[m % x_reindex_m_wheel];
+        assert(x_reindex_m.size() == (size_t) 2 * SL + 1);
 
         //const size_t count_coprime_sieve = *std::max_element(x_reindex.begin(), x_reindex.end());
         //const size_t size_side = count_coprime_sieve / 2;
@@ -781,61 +798,62 @@ void save_unknowns_method2(
         //size_t unknown_p = std::count(real_begin, real_begin + size_side, false);
         //size_t unknown_n = std::count(real_begin + size_side, comp.end(), false);
 
-        // XXX: Could be improved to std::count if it was know were x_reindex_m[i] == SL
-        size_t unknown_p = 0;
-        size_t unknown_n = 0;
-        for (size_t i = 0; i < x_reindex_m.size(); i++) {
-            if (!comp[x_reindex_m[i]]) {
-                if (i <= SL) {
-                    unknown_p++;
-                } else {
-                    unknown_n++;
-                }
-            }
-        }
 
-        unknown_file << mi << " : -" << unknown_p << " +" << unknown_n << " |";
+        std::stringstream header;
+        std::stringstream line;
+        header << mi << " : ";
+
         for (int d = 0; d <= 1; d++) {
-            char prefix = "-+"[d];
-            size_t found = 0;
+            int64_t found = 0;
+            int32_t sign = d == 0 ? -1 : 1;
+            line << "|";
 
             if (config.rle) {
-                unknown_file << " ";
-                int last = 0;
-                for (size_t i = 1; i <= SL; i++) {
-                    int a = SL + (2*d - 1) * i;
-                    if (!comp[x_reindex_m[a]]) {
+                line << " ";
+                int last = SL;
+
+                for (int32_t x : (d == 0 ? coprime_prev : coprime_next)) {
+                    if (!comp[x_reindex_m[x]]) {
                         found += 1;
 
-                        int delta = i - last;
-                        last = i;
+                        int delta = sign * (x - last);
+                        last = x;
 
                         // Ascii 48 to 122 are all "safe" -> 75 characters -> 5625
                         // Not quite enough so we use 48 + 128 which includes
                         // non printable characters.
-                        assert(0 <= delta && delta < (128L*128));
-                        unsigned char upper = 48 + (delta / 128);
-                        unsigned char lower = 48 + (delta % 128);
-                        unknown_file << upper << lower;
+                        // assert(0 <= delta && delta < (128L*128));
+                        unsigned char upper = 48 + (delta >> 7);
+                        unsigned char lower = 48 + (delta & 127);
+                        line << upper << lower;
                     }
                 }
             } else {
-                for (size_t i = 1; i <= SL; i++) {
-                    int a = SL + (2*d - 1) * i;
-                    if (!comp[x_reindex_m[a]]) {
-                        unknown_file << " " << prefix << i;
+                char prefix = "-+"[d];
+                for (int32_t x : (d == 0 ? coprime_prev : coprime_next)) {
+                    if (!comp[x_reindex_m[x]]) {
+                        line << " " << prefix << sign * (x - SL);
                         found += 1;
                     }
                 }
             }
-            if (d == 0) {
-                unknown_file << " |";
-                assert( found == unknown_p );
-            } else {
-                assert( found == unknown_n );
-            }
+            count_a += coprime_prev.size();
+            count_b += found;
+
+            line << " \n"[d];
+            char prefix = "-+"[d];
+            header << prefix << found << " ";
         }
-        unknown_file << "\n";
+
+        #pragma omp ordered
+        {
+            // unknown_file format is "<m> : -10 : +9 | -1 -5 -10 ... | 3 7 11 ...\n"
+            unknown_file << header.str() << line.str();
+        }
+    }
+    if (config.verbose >= 2) {
+        printf("\tsaving %ld/%ld (%.1f%%) from sieve array\n",
+                count_b, count_a, 100.0f * count_b / count_a);
     }
 }
 
@@ -1240,7 +1258,7 @@ void method2_small_primes(const Config &config, method2_stats &stats,
 void method2_medium_primes(const Config &config, method2_stats &stats,
                            const mpz_t &K,
                            uint32_t thread_i,
-                           vector<int32_t> &coprime_X,
+                           vector<uint32_t> &coprime_X,
                            const vector<bool> &m_not_coprime,
                            const vector<int32_t> &m_reindex,
                            uint32_t x_reindex_m_wheel, const vector<uint32_t> *x_reindex_wheel,
@@ -1728,7 +1746,7 @@ void prime_gap_parallel(struct Config& config) {
     // reindex composite[m][X] for composite[m_reindex[m]][x_reindex[X]]
     vector<uint32_t> x_reindex(SIEVE_INTERVAL, 0);
     // which X are coprime to K (X has SIEVE_LENGTH added so x is positive)
-    vector<int32_t> coprime_X;
+    vector<uint32_t> coprime_X;
 
     // reindex composite[m][i] using (m, wheel) (wheel is 1!,2!,3!,5!)
     // This could be first indexed by x_reindex,
@@ -1936,7 +1954,7 @@ void prime_gap_parallel(struct Config& config) {
 
 
     if (1) { // Medium Primes
-        vector<int32_t> coprime_X_split[THREADS];
+        vector<uint32_t> coprime_X_split[THREADS];
         size_t per_thread = coprime_X.size() / THREADS;
         per_thread -= per_thread % 8;
 
@@ -2018,14 +2036,23 @@ void prime_gap_parallel(struct Config& config) {
     }
 
     if (config.save_unknowns) {
+        auto s_save_t = high_resolution_clock::now();
+
         save_unknowns_method2(
             config,
+            coprime_X,
             valid_mi, m_reindex,
             x_reindex_m_wheel, x_reindex_wheel,
             composite);
 
         auto s_stop_t = high_resolution_clock::now();
         double   secs = duration<double>(s_stop_t - stats.start_t).count();
+
+        if (config.verbose >= 2) {
+            printf("Saving unknowns took %.1f seconds\n",
+                    duration<double>(s_stop_t - s_save_t).count());
+        }
+
         insert_range_db(config, valid_mi.size(), THREADS * secs);
     }
 
