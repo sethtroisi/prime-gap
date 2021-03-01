@@ -22,9 +22,6 @@ LDFLAGS	= -lgmp -lsqlite3 -fopenmp
 LDFLAGS+= -L /usr/local/lib
 DEFINES =
 
-ifdef RLE
-DEFINES += -DRLE
-endif
 ifdef VALIDATE_FACTORS
 DEFINES += -DGMP_VALIDATE_FACTORS
 endif

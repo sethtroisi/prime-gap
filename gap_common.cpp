@@ -614,6 +614,8 @@ void Args::show_usage(char* name) {
     cout  << endl;
     cout << "  --save-unknowns" << endl;
     cout << "    save unknowns to a temp file where they are processed in a 2nd pass." << endl;
+    cout << "  --rle" << endl;
+    cout << "    save in run-length encoded format" << endl;
     cout << endl;
     cout << "[OPTIONAL]" << endl;
     cout << "  --search-db" << endl;
@@ -692,6 +694,7 @@ Config Args::argparse(int argc, char* argv[]) {
 
         {"save",             no_argument,       0,   7  },
         {"save-unknowns",    no_argument,       0,   7  },
+        {"rle",              no_argument,       0,  13  },
 
         {"search-db",        required_argument, 0,   9  },
         {"prime-gaps-db",    required_argument, 0,  10  },
@@ -823,6 +826,10 @@ Config Args::argparse(int argc, char* argv[]) {
                 config.testing = true;
                 break;
 
+            case 13:
+                config.rle = true;
+                break;
+
             case 0:
                 printf("option %s arg %s\n", long_options[option_index].name, optarg);
                 config.valid = 0;
@@ -850,6 +857,9 @@ Config Args::argparse(int argc, char* argv[]) {
     }
 
     // ----- Validation
+#ifdef RLE
+#error "Don't build with RLE=1 anymore instead pass --rle or let combined_sieve auto select"
+#endif
 
     if (config.mstart <= 0) {
         config.valid = 0;

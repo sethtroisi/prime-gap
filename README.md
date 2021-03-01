@@ -497,9 +497,10 @@ $ sqlite3 prime-gap-search.db < schema.sql
     * `python misc/double_check.py --unknown-filename <unknown_file.txt> -c 10`
   * `skipped PRP/s` is checked in [THEORY.md](THEORY.md#skipped-prp-tests)
 * Run Length Encoding
-  * making with RLE=1 (`make all RLE=1`) causes `combined_sieve` to output run length encoded data.
+  * Auto selected for large output files (can be forced with `--rle`).
       This saves ~60% space, but makes it harder to visually debug data.
   * method1 doesn't support rle at this time so it also makes verifying `combined_sieve` slightly harder.
+  * `misc/convert_rle.py` can convert existing files to RLE if you want to double check / shrink old files.
 
 
 ### Quick test of all functions

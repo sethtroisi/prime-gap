@@ -52,11 +52,7 @@ struct Config {
     bool save_unknowns = false;
 
     bool method1 = false;
-#ifdef RLE
-    bool rle = true;
-#else
     bool rle = false;
-#endif
 
     int threads = 1;
 

@@ -65,10 +65,21 @@ trace_on
 md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.txt")
 md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.m1.txt")
 
+
 # Test multithreaded
 rm unknowns/907_2190_1_200_s11000_l100M.txt
 ./combined_sieve           -qqq --save -u $FN1 --search-db $TEST_DB -t 4
 md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.txt")
+
+
+# Test --rle
+#./misc/convert_rle.py -u $FN1
+#md5sum -c <(echo "c36fd8e481e1c329a90745779c2f6ed9  unknowns/907_2190_1_200_s11000_l100M.txt2")
+#rm unknowns/907_2190_1_200_s11000_l100M.txt2
+rm unknowns/907_2190_1_200_s11000_l100M.txt
+
+./combined_sieve           -qqq --save -u $FN1 --search-db $TEST_DB --rle
+md5sum -c <(echo "c36fd8e481e1c329a90745779c2f6ed9  unknowns/907_2190_1_200_s11000_l100M.txt")
 
 
 # Tests MIDDLE_THRESHOLD
@@ -116,7 +127,7 @@ diff <(echo "1215") <(sqlite3 $TEST_DB 'SELECT SUM(prp_next+prp_prev) FROM m_sta
 
 trace_off
 rm $TEST_DB temp_tests.log
-rm "unknowns/$FN1" "unknowns/$FN2"
+rm -f "unknowns/$FN1" "unknowns/$FN2"
 
 green=`tput setaf 2`
 reset=`tput sgr0`
