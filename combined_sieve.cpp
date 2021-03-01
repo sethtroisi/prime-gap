@@ -950,7 +950,7 @@ void method2_increment_print(
 
     while (prime >= stats.next_print && stats.next_print < stats.last_prime) {
         //printf("\t\tmethod2_increment_print %'ld >= %'ld\n", prime, stats.next_print);
-        const size_t max_mult = 100'000'000'000L * (config.threads > 2 ? 10L : 1L);
+        const size_t max_mult = 100'000'000L * (config.threads > 2 ? 10L : 1L);
 
         // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
         // 60, 70, 80, 90, 100, 120, 150, 200, 300 billion because intervals are wider.
@@ -1519,6 +1519,8 @@ void method2_large_primes(Config &config, method2_stats &stats,
             continue;
         }
 
+        vector<size_t> counts = {0,0,0,0,0};
+
         primesieve::iterator it(first - 1);
         for (uint64_t prime = it.next_prime(); prime <= end; prime = it.next_prime()) {
             test_stats.pi_interval += 1;
@@ -1532,60 +1534,56 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 assert (mi < M_inc);
 
                 test_stats.m_stops_interval += 1;
+                counts[0]++;
 
-                // With D even (K odd), (ms + mi) must be odd (or D and m will share a factor of 2)
-                // Helps avoid wide memory read
+                /**
+                 * With D even (K odd)
+                 *   (ms + mi) must be odd (or D and m will share a factor of 2)
+                 * Filters 50% (if K_odd else 0%) but requires 0 memory read
+                 */
                 uint32_t m = M_start + mi;
                 if (K_odd && ((m & 1) == 0)) {
                     // assert(m_reindex[mi] < 0);
                     return;
                 }
+                counts[1]++;
 
+                /**
+                 * Filters ~80% (requires up to 12MB)
+                 * This is a better filter than is_offset_coprime
+                 * BUT requires a much larger cache so more likely to spill to L2/L3
+                 */
                 if (m_not_coprime[mi])
                     return;
+                counts[2]++;
 
-                // first = (SL - m * K) % prime
-                //     Computed as
-                // first =  2*SL - ((SL + m*K) % prime)
-                //       =  SL - m * K
-                //     Requires prime > 2*SL
-                //uint64_t first = (base_r * (M_start + mi) + SL) % prime;
+                /**
+                 * first = (SL - m * K) % prime
+                 *     Computed as
+                 * first =  2*SL - ((SL + m*K) % prime)
+                 *     =  SL - m * K
+                 *     Requires prime > 2*SL
+                 * first = (base_r * (M_start + mi) + SL) % prime;
+                 *
+                 * Filters 70% more (requires ~10-200kb)
+                 */
                 assert( first <= 2*SL );
                 first = 2*SL - first;
-
                 if (!is_offset_coprime[first]) {
                     return;
                 }
+                counts[3]++;
 
-#ifdef GMP_VALIDATE_FACTORS
-                validate_factor_m_k_x(stats, test, K, m, first, prime, SIEVE_LENGTH);
-#elif defined GMP_VALIDATE_LARGE_FACTORS
-                if (prime > LARGE_PRIME_THRESHOLD)
-                    validate_factor_m_k_x(stats, test, K, m, first, prime, SIEVE_LENGTH);
-#endif
-
-                int32_t mii = m_reindex[mi];
-                assert( mii >= 0 );
-
-                // if coprime with K, try to toggle off factor.
-#if METHOD2_WHEEL
-                uint32_t xii = x_reindex_wheel[m % x_reindex_m_wheel][first];
+                #if METHOD2_WHEEL
                 /**
-                 * XXX: This is an iffy optimization.
-                 * For very large composite & multithreading it helps with
-                 * L2/L3 RAM access alot.
-                 * But branch preditions start killing us
+                 * Filters ~80% (assuming 3 and 5 divide D)
+                 * Requires a wide memory read (SL * 30 ~= X MB)
+                 * But removes multiples of 3 and 5
                  */
-                if (xii > 0) {
-                    if (use_lock) {
-                        mutex_mi[mii].lock();
-                        composite[mii][xii] = true;
-                        mutex_mi[mii].unlock();
-                    } else {
-                        composite[mii][xii] = true;
-                    }
-                }
-#else
+                uint32_t xii = x_reindex_wheel[m % x_reindex_m_wheel][first];
+                if (xii == 0)
+                    return;
+                #else
                 int64_t dist = first - SIEVE_LENGTH;
                 if (D_mod2 && (dist & 1))
                     return;
@@ -1596,21 +1594,42 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
                     return;
 
+                uint32_t xii = x_reindex_wheel[first];
+                #endif
+
+                // if coprime with K, try to toggle off factor.
+                test_stats.large_prime_factors_interval += 1;
+
+                int32_t mii = m_reindex[mi];
+                assert( mii >= 0 );
+                counts[4]++;
+
                 if (use_lock) {
                     mutex_mi[mii].lock();
-                    composite[mii][x_reindex[first]] = true;
+                    composite[mii][xii] = true;
                     mutex_mi[mii].unlock();
                 } else {
-                    composite[mii][x_reindex[first]] = true;
+                    composite[mii][xii] = true;
                 }
-#endif  // METHOD2_WHEEL
-                test_stats.large_prime_factors_interval += 1;
+                #endif
+
+                #ifdef GMP_VALIDATE_FACTORS
+                validate_factor_m_k_x(stats, test, K, m, first, prime, SIEVE_LENGTH);
+                #elif defined GMP_VALIDATE_LARGE_FACTORS
+                if (prime > LARGE_PRIME_THRESHOLD)
+                    validate_factor_m_k_x(stats, test, K, m, first, prime, SIEVE_LENGTH);
+                #endif
             });
         }
+
 
         // Normally this is inside the loop but not anymore
         #pragma omp critical
         {
+            for (count : counts) {
+                cout << " " << count;
+            }
+
             assert(test_stats.pi_interval > 0);  // Would cause infinite loop below.
             stats_to_process[end] = test_stats;
             if (config.verbose >= 3) {
@@ -1919,7 +1938,7 @@ void prime_gap_parallel(struct Config& config) {
 
     const size_t THREADS = config.threads;
 
-    if (1) { // Small Primes
+    if (0) { // Small Primes
         /**
          * NOTE: For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
          * This also avoids need to synchronize access to composite
@@ -1953,7 +1972,7 @@ void prime_gap_parallel(struct Config& config) {
     }
 
 
-    if (1) { // Medium Primes
+    if (0) { // Medium Primes
         vector<uint32_t> coprime_X_split[THREADS];
         size_t per_thread = coprime_X.size() / THREADS;
         per_thread -= per_thread % 8;

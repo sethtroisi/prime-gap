@@ -617,7 +617,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 * Project
   * [x] --update flag for `misc/show_ranges.sh`
     * [x] Finalize field
-      * [ ] Sum and set test-time in finalize?
+      * [ ] Sum and set test-time in finalize? (IGNORE very large values which are likely pause)
       * [ ] Finalize script should update ranges being finalized
     * [ ] Faster finalize.py
   * [ ] Slower print intervals in gap_test.py
@@ -626,6 +626,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Benchmark bitset vs vector<bool>
 * gap\_stats.cpp
 * gap\_test.py
+  * [ ] benchmark smaller number of commits
   * [ ] Save prp-percentage finalized for faster skipping of complete files
   * [ ] Validate the unknown-file matches expectations (unknowns / line, ...)
   * [ ] Ctrl+C sometimes hangs waiting for one more result
