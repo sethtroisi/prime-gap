@@ -950,7 +950,7 @@ void method2_increment_print(
 
     while (prime >= stats.next_print && stats.next_print < stats.last_prime) {
         //printf("\t\tmethod2_increment_print %'ld >= %'ld\n", prime, stats.next_print);
-        const size_t max_mult = 10'000'000L * (config.threads > 2 ? 10L : 1L);
+        const size_t max_mult = 100'000'000'000L * (config.threads > 2 ? 10L : 1L);
 
         // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
         // 60, 70, 80, 90, 100, 120, 150, 200, 300 billion because intervals are wider.
@@ -1536,8 +1536,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
             continue;
         }
 
-        vector<size_t> counts = {0,0,0,0,0,0,0};
-
         primesieve::iterator it(first - 1);
         for (uint64_t prime = it.next_prime(); prime <= end; prime = it.next_prime()) {
             test_stats.pi_interval += 1;
@@ -1551,7 +1549,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 assert (mi < M_inc);
 
                 test_stats.m_stops_interval += 1;
-                counts[0]++;
 
                 /**
                  * x = (SL - m * K) % prime
@@ -1569,7 +1566,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 uint32_t m_mod2310 = m % 2310;
                 if (!is_m_coprime2310[m_mod2310])
                     return;
-                counts[1]++;
 
                 /**
                  * Check if (m * K + x) has any small factors
@@ -1584,12 +1580,10 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 uint32_t n_mod210 = ((K_mod210 * m_mod2310) + x + neg_SL_mod210) % 210;
                 if (!is_coprime210[n_mod210])
                     return;
-                counts[2]++;
 
                 // Filters ~75% more (coprime to P#) (requires ~10-200kb)
                 if (!is_offset_coprime[x])
                     return;
-                counts[3]++;
 
                 /**
                  * Would Filters ~60-80%, only ~10-20% after is_m_coprime2310
@@ -1597,7 +1591,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
                  */
                 if (m_not_coprime[mi])
                     return;
-                counts[4]++;
 
 
                 #if METHOD2_WHEEL
@@ -1610,9 +1603,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 uint32_t xii = x_reindex_wheel[x];
                 #endif
                 assert(xii > 0); // something wrong with n_mod210 calculation?
-                counts[5]++;
-
-                counts[6]++;
 
                 // if coprime with K, try to toggle off factor.
                 test_stats.large_prime_factors_interval += 1;
@@ -1641,12 +1631,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
         // Normally this is inside the loop but not anymore
         #pragma omp critical
         {
-            cout << "Filter/Selectivity Rates:";
-            for (auto count : counts) {
-                cout << " " << count;
-            }
-            cout << endl;
-
             assert(test_stats.pi_interval > 0);  // Would cause infinite loop below.
             stats_to_process[end] = test_stats;
             if (config.verbose >= 3) {
@@ -1955,7 +1939,7 @@ void prime_gap_parallel(struct Config& config) {
 
     const size_t THREADS = config.threads;
 
-    if (0) { // Small Primes
+    if (1) { // Small Primes
         /**
          * NOTE: For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
          * This also avoids need to synchronize access to composite
@@ -1989,7 +1973,7 @@ void prime_gap_parallel(struct Config& config) {
     }
 
 
-    if (0) { // Medium Primes
+    if (1) { // Medium Primes
         vector<uint32_t> coprime_X_split[THREADS];
         size_t per_thread = coprime_X.size() / THREADS;
         per_thread -= per_thread % 8;
