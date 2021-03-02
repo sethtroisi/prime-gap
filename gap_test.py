@@ -381,6 +381,7 @@ def run_in_parallel(
                 sc.tested += 1
 
             gap_test_stats.process_result(conn, args, record_gaps, m_probs, data, sc, result)
+            conn.commit()
         except KeyboardInterrupt:
             print("Received second Ctrl+C | Terminating now")
             for i, p in enumerate(processes):
@@ -393,6 +394,9 @@ def run_in_parallel(
     work_q.join()
     work_q.close()
     work_q.join_thread()
+
+    # Make sure everything was committed
+    conn.commit()
 
     print(f"Joining {len(processes)} processes")
     for i, process in enumerate(processes):

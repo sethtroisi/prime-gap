@@ -17,6 +17,7 @@
 import array
 import itertools
 import math
+import random
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -232,7 +233,10 @@ def save(conn, p, d, m, next_p, prev_p, merit,
 
     # TODO benchmark only calling commit X% of time
     # or once a second...
-    conn.commit()
+    # Commit on average every 200 seconds of testing.
+    # Keep number of raw commits down when testing small p#
+    if 200 * random.random() < test_time:
+        conn.commit()
 
 
 def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_prime):

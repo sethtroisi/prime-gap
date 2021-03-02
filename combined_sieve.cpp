@@ -781,11 +781,11 @@ void save_unknowns_method2(
     size_t count_b = 0;
 
     #pragma omp parallel for ordered schedule(dynamic, 1) num_threads(config.threads)
-    for (uint64_t mi : valid_mi) {
+    for (size_t mii = 0; mii < valid_mi.size(); mii++) {
+        uint64_t mi = valid_mi[mii];
         uint64_t m = M_start + mi;
         assert(gcd(m, D) == 1);
-        int32_t mii = m_reindex[mi];
-        assert( mii >= 0 );
+        assert((signed)mii == m_reindex[mi]);
 
         const auto &comp = composite[mii];
         const auto &x_reindex_m = x_reindex_wheel[m % x_reindex_m_wheel];
