@@ -1442,15 +1442,34 @@ void method2_large_primes(Config &config, method2_stats &stats,
 
     const uint64_t LAST_PRIME = stats.last_prime;
 
-    const bool K_odd = mpz_odd_p(K);
-    const uint32_t D = config.d;
-    const int K_mod3 = mpz_fdiv_ui(K, 3);
-    const int K_mod5 = mpz_fdiv_ui(K, 5);
-    const int D_mod2 = D % 2 == 0;
-    const int D_mod3 = D % 3 == 0;
-    const int D_mod5 = D % 5 == 0;
-    const int K_mod7 = mpz_fdiv_ui(K, 7);
-    const int D_mod7 = D % 7 == 0;
+    /**
+     * 7# = 2*3*5*7 = 210
+     * (1/2) * (2/3) * (4/5) * (6/7) = 23%
+     * 77% of numbers have a small factor
+     * Helps avoid wide reads to x_reindex_wheel, m_not_coprime ...
+     */
+    const int32_t K_mod210 = mpz_fdiv_ui(K, 210);
+    const int32_t neg_SL_mod210 = (210 - (SL % 210)) % 210;
+
+    const vector<char> is_coprime210 = []() {
+        vector<char> temp(210, 1);
+        for (int p : {2, 3, 5, 7})
+            for (int i = 0; i < 210; i += p)
+                temp[i] = 0;
+        return temp;
+    }();
+    assert(count(is_coprime210.begin(), is_coprime210.end(), 1) == 48);
+    assert(210 % x_reindex_m_wheel == 0);   // wheel divides 210
+
+    const vector<bool> is_m_coprime2310 = [&]() {
+        vector<bool> temp(2310, 1);
+        for (int p : {2, 3, 5, 7})
+            if (config.d % p == 0)
+                for (int i = 0; i < 2310; i += p)
+                    temp[i] = 0;
+        return temp;
+    }();
+
 
     // Setup CTRL+C catcher
     signal(SIGINT, signal_callback_handler);
@@ -1526,50 +1545,59 @@ void method2_large_primes(Config &config, method2_stats &stats,
             // Big improvement over surround_prime is reusing this for each m.
             const uint64_t base_r = mpz_fdiv_ui(K, prime);
 
-            // first from modulo_search_euclid_all_small is faster and helps avoid overflow
+            // temp_mod/x from modulo_search_euclid_all_small is faster and helps avoid overflow
             modulo_search_euclid_all_large(M_start, M_inc, SL, prime, base_r, [&](
-                        uint32_t mi, uint64_t first) {
+                        uint32_t mi, uint64_t temp_mod) {
                 assert (mi < M_inc);
 
                 test_stats.m_stops_interval += 1;
                 counts[0]++;
 
                 /**
-                 * With D even (K odd)
-                 *   (ms + mi) must be odd (or D and m will share a factor of 2)
-                 * Filters 50% (if K_odd else 0%) but requires 0 memory read
+                 * x = (SL - m * K) % prime
+                 *     Computed as
+                 * x =  2*SL - ((SL + m*K) % prime)
+                 *     =  SL - m * K
+                 *     Requires prime > 2*SL
+                 * x = (base_r * (M_start + mi) + SL) % prime;
                  */
-                uint32_t m = M_start + mi;
-                if (K_odd && ((m & 1) == 0)) {
-                    // assert(m_reindex[mi] < 0);
+                assert( temp_mod <= 2*SL );
+                int32_t x = 2*SL - temp_mod;
+
+                // Filters ~80% more (coprime to D)
+                uint32_t m = (M_start + mi);
+                uint32_t m_mod2310 = m % 2310;
+                if (!is_m_coprime2310[m_mod2310])
                     return;
-                }
                 counts[1]++;
 
                 /**
-                 * first = (SL - m * K) % prime
-                 *     Computed as
-                 * first =  2*SL - ((SL + m*K) % prime)
-                 *     =  SL - m * K
-                 *     Requires prime > 2*SL
-                 * first = (base_r * (M_start + mi) + SL) % prime;
+                 * Check if (m * K + x) has any small factors
+                 * Filters 77.2%, Leaves 22.8%
                  *
-                 * Filters 70% more (requires ~10-200kb)
+                 * want positive mod so correct x - SL to x + ...
+                 *
+                 * XXX: Benchmark
+                 * 2x int32 modulo should be faster than 1x int64 modulo
+                 * Could save one addition by shifting is_coprime210 table by neg_SL_mod210
                  */
-                assert( first <= 2*SL );
-                first = 2*SL - first;
-                if (!is_offset_coprime[first]) {
+                uint32_t n_mod210 = ((K_mod210 * m_mod2310) + x + neg_SL_mod210) % 210;
+                if (!is_coprime210[n_mod210])
                     return;
-                }
                 counts[2]++;
 
+                // Filters ~75% more (coprime to P#) (requires ~10-200kb)
+                if (!is_offset_coprime[x])
+                    return;
+                counts[3]++;
+
                 /**
-                 * Filters ~60% (requires M_inc/8 which can be multiple megabytes)
-                 * Requires a larger cache so more likely to spill to L3/RAM
+                 * Would Filters ~60-80%, only ~10-20% after is_m_coprime2310
+                 * Requires a M_inc/8 (a few MB) cache so more likely to spill to L3/RAM
                  */
                 if (m_not_coprime[mi])
                     return;
-                counts[3]++;
+                counts[4]++;
 
 
                 #if METHOD2_WHEEL
@@ -1577,36 +1605,12 @@ void method2_large_primes(Config &config, method2_stats &stats,
                  * Filters ~80% (assuming 3 and 5 divide D)
                  * Requires a wide memory read (SL * 8 ~ 1/2 to 3 MB)
                  */
-                uint32_t xii = x_reindex_wheel[m % x_reindex_m_wheel][first];
-                if (xii == 0)
-                    return;
-                counts[4]++;
-
-                int64_t dist = first - SIEVE_LENGTH;
-                if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
-                    return;
+                uint32_t xii = x_reindex_wheel[m % x_reindex_m_wheel][x];
                 #else
-                int64_t dist = first - SIEVE_LENGTH;
-                if (D_mod2 && (dist & 1))
-                    return;
-                if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
-                    return;
-                if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
-                    return;
-                if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
-                    return;
-
-                uint32_t xii = x_reindex_wheel[first];
+                uint32_t xii = x_reindex_wheel[x];
                 #endif
-
+                assert(xii > 0); // something wrong with n_mod210 calculation?
                 counts[5]++;
-
-                if (D_mod2 && (dist & 1))
-                    return;
-                if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
-                    return;
-                if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
-                    return;
 
                 counts[6]++;
 
@@ -1625,10 +1629,10 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 }
 
                 #ifdef GMP_VALIDATE_FACTORS
-                validate_factor_m_k_x(stats, test, K, m, first, prime, SIEVE_LENGTH);
+                validate_factor_m_k_x(stats, test, K, m, x, prime, SIEVE_LENGTH);
                 #elif defined GMP_VALIDATE_LARGE_FACTORS
                 if (prime > LARGE_PRIME_THRESHOLD)
-                    validate_factor_m_k_x(stats, test, K, m, first, prime, SIEVE_LENGTH);
+                    validate_factor_m_k_x(stats, test, K, m, x, prime, SIEVE_LENGTH);
                 #endif
             });
         }
