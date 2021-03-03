@@ -29,6 +29,7 @@
 #include "modulo_search.h"
 
 #include <cassert>
+#include <iostream>
 
 
 static
@@ -68,7 +69,8 @@ uint32_t _modulo_search_brute(uint32_t p, uint32_t A, uint32_t L, uint32_t R) {
 
 
 uint32_t _modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_t r) {
-    uint32_t delta = r >= l ? r - l : l - r;
+    uint32_t delta = r - l;
+    //assert(delta > 0);
 
     if (a > (p >> 1)) {
         // a = p - a; l = p - r; r = t;
@@ -97,8 +99,6 @@ uint32_t _modulo_search_euclid_small(uint32_t p, uint32_t a, uint32_t l, uint32_
 
 
 uint64_t _modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
-    if (l == 0) return 0;
-
     if (p < 0xFFFFFFFF) {
         return _modulo_search_euclid_small(p, a, l, r);
     }
@@ -111,7 +111,6 @@ uint64_t _modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r) {
         a = p - a;
         l = p - l;
     }
-
 
     uint64_t l_div = (l - 1) / a;
     uint64_t l_mod = l - l_div * a;
@@ -142,6 +141,7 @@ uint64_t _modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_
     assert(l < r);
     uint64_t delta = r - l;
 
+    // Reduces ~2 bits per iterations
     while (true) {
         // Check for modulo_search_euclid_small inside loop doesn't seem to help.
 
@@ -170,6 +170,7 @@ uint64_t _modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_
         stack[stack_i++] = div;
         stack[stack_i++] = a;
         stack[stack_i++] = l;
+
         p = a;
         a = new_a;
         l = l_mod;
@@ -181,13 +182,8 @@ uint64_t _modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_
         auto div = stack[--stack_i]; // p / a
         auto rem = stack[--stack_i]; // p % a
 
-        auto k_1 = k * div + 1;
-        uint64_t k_2;
-        //if (rem < 0x7FFFFFFF && k < 0x7FFFFFFF) {
-        //    k_2 = (k * rem + l - 1) / a;
-        //} else {
-            k_2 = ((__int128) k * rem + l - 1) / a;
-        //}
+        uint64_t k_1 = k * div + 1;
+        uint64_t k_2 = ((__int128) k * rem + l - 1) / a;
         k = k_1 + k_2;
 
         //k = ((__int128)k * p + l - 1) / a + 1;

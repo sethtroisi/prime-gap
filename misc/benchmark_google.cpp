@@ -189,8 +189,11 @@ static void BM_module_search_euclid_verify_both(benchmark::State& state) {
         assert(m == m2);
 
         uint64_t t = ((__int128) m * A[i]) % p;
-        assert( (L[i] <= t) && (t <= R[i]) );
-
+        if (!((L[i] <= t) && (t <= R[i])) ) {
+            std::cout << "BAD! " << m << " " << m2 << " | "
+                << p << ", " << A[i] << ", " << L[i] << ", " << R[i] << std::endl;
+            assert(false);
+        }
         i++;
     }
 }
@@ -199,16 +202,13 @@ static void BM_module_search_euclid_verify_both(benchmark::State& state) {
 static void LargeBitArguments(benchmark::internal::Benchmark* benchmark) {
     benchmark
         // {Number of bits, SL}
-        ->Args({25, 15'000})
+        ->Args({25, 30'000})
+        ->Args({31, 30'000})
+        ->Args({32, 30'000})
+        ->Args({35, 30'000})
+        ->Args({45, 30'000})
+        ->Args({60, 30'000})
         ->Args({25, 100'000})
-    //    ->Args({30, 15'000})
-    //    ->Args({31, 15'000})
-    //    ->Args({32, 15'000})
-        ->Args({35, 15'000})
-    //    ->Args({40, 15'000})
-        ->Args({45, 15'000})
-    //    ->Args({55, 15'000})
-        ->Args({60, 15'000})
         ->Args({60, 100'000});
 }
 
