@@ -1278,7 +1278,6 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
      * 3. REINDEX_WHEEL doesn't work (would require a different reindex)
      */
 
-
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     assert(MEDIUM_THRESHOLD <= (size_t)std::numeric_limits<int64_t>::max());
     // Prime can be larger than int32, prime * SIEVE_LENGTH must not overflow
@@ -1286,12 +1285,43 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
     const uint32_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
+    assert(config.minc <= std::numeric_limits<int32_t>::max());
 
     mpz_t test, test2;
     mpz_init(test);
     mpz_init(test2);
 
     const int K_odd = mpz_odd_p(K);
+
+    // TODO deduplicate with method2_large_primes
+    // TODO store with m_not_coprime in some class object
+    /**
+     * 7# = 2*3*5*7 = 210
+     * (1/2) * (2/3) * (4/5) * (6/7) = 23%
+     * 77% of numbers have a small factor
+     * Helps avoid wide reads to x_reindex_wheel, m_not_coprime ...
+     */
+    const int32_t K_mod210 = mpz_fdiv_ui(K, 210);
+    const int32_t neg_SL_mod210 = (210 - (SIEVE_LENGTH % 210)) % 210;
+
+    const vector<char> is_coprime210 = []() {
+        vector<char> temp(210, 1);
+        for (int p : {2, 3, 5, 7})
+            for (int i = 0; i < 210; i += p)
+                temp[i] = 0;
+        return temp;
+    }();
+    assert(count(is_coprime210.begin(), is_coprime210.end(), 1) == 48);
+    assert(210 % x_reindex_m_wheel == 0);   // wheel divides 210
+
+    const vector<bool> is_m_coprime2310 = [&]() {
+        vector<bool> temp(2310, 1);
+        for (int p : {2, 3, 5, 7})
+            if (config.d % p == 0)
+                for (int i = 0; i < 2310; i += p)
+                    temp[i] = 0;
+        return temp;
+    }();
 
     primesieve::iterator iter(SMALL_THRESHOLD+1);
     uint64_t prime = iter.prev_prime();
@@ -1369,8 +1399,6 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
             // Safe from overflow as SL * prime < int64
             int64_t mi_0 = (X * neg_inv_K + mi_0_shift) % prime;
 
-            // assert( K_odd || (dist&1) );
-
             uint64_t shift = prime << K_odd; // (1 + K_odd) * prime;
             // Check if X parity == m parity
             if (K_odd && ((X ^ mi_0) & 1) == M_parity) {
@@ -1379,10 +1407,19 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
             // Separate loop when shift > M_inc not significantly faster
             for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
+                size_t m = M_start + mi;
+                uint32_t m_mod2310 = m % 2310;
+                if (!is_m_coprime2310[m_mod2310])
+                    continue;
+
+                uint32_t n_mod210 = ((K_mod210 * m_mod2310) + X + neg_SL_mod210) % 210;
+                if (!is_coprime210[n_mod210])
+                    continue;
+
+                // Wide memory read
                 if (m_not_coprime[mi])
                     continue;
 
-                size_t m = M_start + mi;
                 int32_t mii = m_reindex[mi];
                 assert(mii >= 0);
 
@@ -1390,18 +1427,12 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
 #if METHOD2_WHEEL
                 uint32_t xii = x_reindex_wheel[m % x_reindex_m_wheel][X];
-                /**
-                 * XXX: This is an iffy optimization.
-                 * For very large composite & multithreading it helps with
-                 * L2/L3 RAM access a lot, but increases branch misses.
-                 */
-                if (xii > 0) {
-                    composite[mii][xii] = true;
-                }
 #else
-                // avoids trivial lookup + modulo
-                composite[mii][x_reindex[X]] = true;
+                uint32_t xii = x_reindex[X];
 #endif  // METHOD2_WHEEL
+
+                assert(xii > 0);
+                composite[mii][xii] = true;
 
 #ifdef GMP_VALIDATE_FACTORS
                 validate_factor_m_k_x(stats, test, K, M_start + mi, X, prime, SIEVE_LENGTH);
