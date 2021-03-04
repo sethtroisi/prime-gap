@@ -1108,6 +1108,204 @@ void validate_factor_m_k_x(
 #endif  // GMP_VALIDATE_FACTORS
 }
 
+
+/**
+ * TODO better name:
+ *      RangeStats, KStats, Helpers, Indexes?
+ */
+class Cached {
+    public:
+        // mi such that gcd(m_start + mi, D) = 1
+        vector<int32_t> valid_mi;
+        // valid_mi.size()
+        size_t valid_ms;
+
+        /**
+         * m_reindex[mi] = composite[mii] if coprime
+         * 0 if gcd(ms + i, D) > 1
+         *
+         * This is potentially very large use is_m_coprime and is_m_coprime2310
+         * to pre check it's a coprime mi before doing the L3/RAM lookup.
+         */
+        vector<int32_t> m_reindex;
+        // if gcd(ms + mi, D) = 1
+        vector<bool> is_m_coprime;
+        // if (i, D) == 1 (first 2310 values)
+        // XXX: Can I just do is_m_coprime[i] and that will live in cache?
+        vector<bool> is_m_coprime2310;
+
+        // X which are coprime to K (X has SIEVE_LENGTH added so x is positive)
+        vector<uint32_t> coprime_X;
+        // reindex composite[m][X] for composite[m_reindex[m]][x_reindex[X]]
+        vector<uint32_t> x_reindex;
+        // if [x+SL] is coprime to K (x has SL added to make value always positive)
+        vector<char> is_offset_coprime;
+
+        int32_t K_mod210;
+        int32_t neg_SL_mod210;
+
+        /** is_comprime210[i] = (i % 2) &&(i % 3) && (i % 5) && (i % 7) */
+        vector<char> is_coprime210;
+
+        /*
+    // reindex composite[m][i] using (m, wheel) (wheel is 1!, 2!, 3!, or 5!)
+    // This could be first indexed by x_reindex,
+    // Would reduce size from wheel * (2*SL+1) to wheel * coprime_i
+#if METHOD2_WHEEL
+    // Note: Larger wheel eliminates more numbers but takes more space.
+    // 6 seems reasonable for larger numbers  (saves 2/3 memory)
+    // 30 is maybe better for smaller numbers (saves 4/15 memory)
+    const uint32_t x_reindex_m_wheel = gcd(D, (SIEVE_INTERVAL < 80000) ? 30 : 6);
+    vector<uint32_t> x_reindex_wheel[x_reindex_m_wheel];
+#else
+    const uint32_t x_reindex_m_wheel = 1;
+    const vector<uint32_t> *x_reindex_wheel = &x_reindex;
+#endif  // METHOD2_WHEEL
+
+    vector<size_t> x_reindex_wheel_count(x_reindex_m_wheel, 0);
+    */
+};
+
+
+Cached setup_caches(const struct Config& config,
+                    const mpz_t &K,
+                    int32_t m_wheel) {
+    const uint32_t M_start = config.mstart;
+    const uint32_t M_inc = config.minc;
+
+    const uint32_t P = config.p;
+    const uint32_t D = config.d;
+
+    const uint32_t SL = config.sieve_length;
+    const uint32_t SIEVE_INTERVAL = 2 * SL + 1;
+
+    const vector<uint32_t> P_primes = get_sieve_primes(P);
+    assert( P_primes.back() == P);
+
+    // Allocate temp vectors
+    vector<int32_t> valid_mi;
+    vector<int32_t> m_reindex(M_inc, -1);
+    vector<bool> is_m_coprime(M_inc, 0);
+    {
+        for (uint32_t mi = 0; mi < M_inc; mi++) {
+            if (gcd(M_start + mi, D) == 1) {
+                m_reindex[mi] = valid_mi.size();
+                is_m_coprime[mi] = 1;
+                valid_mi.push_back(mi);
+            }
+        }
+    }
+
+    // if [X] is coprime to K
+    vector<char> is_offset_coprime(SIEVE_INTERVAL, 1);
+    // reindex composite[m][X] for composite[m_reindex[m]][x_reindex[X]]
+    vector<uint32_t> x_reindex(SIEVE_INTERVAL, 0);
+    // which X are coprime to K (X has SIEVE_LENGTH added so x is positive)
+    vector<uint32_t> coprime_X;
+
+    // reindex composite[m][i] using (m, wheel) (wheel is 1!,2!,3!,5!)
+    // This could be first indexed by x_reindex,
+    // Would reduce size from wheel * (2*SL+1) to wheel * coprime_i
+#if METHOD2_WHEEL
+    // Note: Larger wheel eliminates more numbers but takes more space.
+    // 6 seems reasonable for larger numbers  (saves 2/3 memory)
+    // 30 is maybe better for smaller numbers (saves 4/15 memory)
+    const uint32_t x_reindex_m_wheel = gcd(D, (SIEVE_INTERVAL < 80000) ? 30 : 6);
+    vector<uint32_t> x_reindex_wheel[x_reindex_m_wheel];
+#else
+    const uint32_t x_reindex_m_wheel = 1;
+    const vector<uint32_t> *x_reindex_wheel = &x_reindex;
+#endif  // METHOD2_WHEEL
+
+    vector<size_t> x_reindex_wheel_count(x_reindex_m_wheel, 0);
+
+    for (uint32_t prime : P_primes) {
+        if (D % prime != 0) {
+            uint32_t first = SL % prime;
+
+            assert( 0 <= first && first < prime );
+            assert( (SL - first) % prime == 0 );
+
+            for (size_t x = first; x < SIEVE_INTERVAL; x += prime) {
+                is_offset_coprime[x] = 0;
+            }
+        }
+    }
+    // Center should be marked composite by every prime.
+    assert(is_offset_coprime[SL] == 0);
+    {
+        size_t coprime_count = 0;
+        for (size_t X = 0; X < SIEVE_INTERVAL; X++) {
+            if (is_offset_coprime[X] > 0) {
+                coprime_X.push_back(X);
+                coprime_count += 1;
+                x_reindex[X] = coprime_count;
+            }
+        }
+        assert(coprime_count == coprime_X.size());
+    }
+
+    // Start at m_wheel == 0 so that re_index_m_wheel == 1 (D=1) works.
+    uint32_t mod_neg_SL = x_reindex_m_wheel - (SL % x_reindex_m_wheel);
+
+    for (size_t m_wheel = 0; m_wheel < x_reindex_m_wheel; m_wheel++) {
+        if (gcd(x_reindex_m_wheel, m_wheel) > 1) continue;
+        x_reindex_wheel[m_wheel].resize(SIEVE_INTERVAL, 0);
+
+        // (m * K - SL) % wheel => (m_wheel - SL) % wheel
+        uint32_t mod_center = m_wheel * mpz_fdiv_ui(K, x_reindex_m_wheel);
+        uint32_t mod_bottom = (mod_center + mod_neg_SL) % x_reindex_m_wheel;
+
+        size_t coprime_count = 0;
+        for (size_t i = 0; i < SIEVE_INTERVAL; i++) {
+            if (is_offset_coprime[i] > 0) {
+                if (gcd(mod_bottom + i, x_reindex_m_wheel) == 1) {
+                    coprime_count += 1;
+                    x_reindex_wheel[m_wheel][i] = coprime_count;
+                }
+            }
+        }
+        x_reindex_wheel_count[m_wheel] = coprime_count;
+    }
+
+    int32_t K_mod210 = mpz_fdiv_ui(K, 210);
+    int32_t neg_SL_mod210 = (210 - (SL % 210)) % 210;
+
+    vector<char> is_coprime210(210, 1);
+    for (int p : {2, 3, 5, 7})
+        for (int i = 0; i < 210; i += p)
+            is_coprime210[i] = 0;
+
+    vector<bool> is_m_coprime2310(2310, 1);
+    for (int p : {2, 3, 5, 7, 11})
+        if (config.d % p == 0)
+            for (int i = 0; i < 2310; i += p)
+                is_m_coprime2310[i] = 0;
+
+    assert(count(is_coprime210.begin(), is_coprime210.end(), 1) == 48);
+    assert(210 % m_wheel == 0);   // 210 is a multiple of wheel
+
+    Cached cache;
+
+    cache.valid_mi = valid_mi;
+    cache.valid_ms = valid_mi.size();
+
+    cache.m_reindex = m_reindex;
+    cache.is_m_coprime = is_m_coprime;
+    cache.is_m_coprime2310 = is_m_coprime2310;
+
+    cache.coprime_X = coprime_X;
+    cache.x_reindex = x_reindex;
+    cache.is_offset_coprime = is_offset_coprime;
+
+    cache.K_mod210 = K_mod210;
+    cache.neg_SL_mod210 = neg_SL_mod210;
+
+    cache.is_coprime210 = is_coprime210;
+    return cache;
+}
+
+
 void method2_small_primes(const Config &config, method2_stats &stats,
                           const mpz_t &K,
                           uint32_t thread_i,
@@ -1229,8 +1427,7 @@ void method2_small_primes(const Config &config, method2_stats &stats,
 
         // Don't print final partial interval
         if (prime >= temp_stats.next_print) {
-            method2_increment_print(
-                prime, valid_mi.size(), composite, temp_stats, config);
+            method2_increment_print(prime, valid_mi.size(), composite, temp_stats, config);
         }
     }
 
@@ -1258,12 +1455,10 @@ void method2_small_primes(const Config &config, method2_stats &stats,
 void method2_medium_primes(const Config &config, method2_stats &stats,
                            const mpz_t &K,
                            uint32_t thread_i,
+                           const Cached &caches,
                            vector<uint32_t> &coprime_X,
-                           const vector<bool> &m_not_coprime,
-                           const vector<int32_t> &m_reindex,
                            uint32_t x_reindex_m_wheel, const vector<uint32_t> *x_reindex_wheel,
                            const uint64_t SMALL_THRESHOLD, const uint64_t MEDIUM_THRESHOLD,
-                           const size_t valid_ms,
                            vector<bool> *composite) {
     /**
      * NOTE: Theoretically memory access would be better if composite was transposed
@@ -1293,35 +1488,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
     const int K_odd = mpz_odd_p(K);
 
-    // TODO deduplicate with method2_large_primes
     // TODO store with m_not_coprime in some class object
-    /**
-     * 7# = 2*3*5*7 = 210
-     * (1/2) * (2/3) * (4/5) * (6/7) = 23%
-     * 77% of numbers have a small factor
-     * Helps avoid wide reads to x_reindex_wheel, m_not_coprime ...
-     */
-    const int32_t K_mod210 = mpz_fdiv_ui(K, 210);
-    const int32_t neg_SL_mod210 = (210 - (SIEVE_LENGTH % 210)) % 210;
-
-    const vector<char> is_coprime210 = []() {
-        vector<char> temp(210, 1);
-        for (int p : {2, 3, 5, 7})
-            for (int i = 0; i < 210; i += p)
-                temp[i] = 0;
-        return temp;
-    }();
-    assert(count(is_coprime210.begin(), is_coprime210.end(), 1) == 48);
-    assert(210 % x_reindex_m_wheel == 0);   // wheel divides 210
-
-    const vector<bool> is_m_coprime2310 = [&]() {
-        vector<bool> temp(2310, 1);
-        for (int p : {2, 3, 5, 7})
-            if (config.d % p == 0)
-                for (int i = 0; i < 2310; i += p)
-                    temp[i] = 0;
-        return temp;
-    }();
 
     primesieve::iterator iter(SMALL_THRESHOLD+1);
     uint64_t prime = iter.prev_prime();
@@ -1409,18 +1576,18 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
             for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
                 size_t m = M_start + mi;
                 uint32_t m_mod2310 = m % 2310;
-                if (!is_m_coprime2310[m_mod2310])
+                if (!caches.is_m_coprime2310[m_mod2310])
                     continue;
 
-                uint32_t n_mod210 = ((K_mod210 * m_mod2310) + X + neg_SL_mod210) % 210;
-                if (!is_coprime210[n_mod210])
+                uint32_t n_mod210 = ((caches.K_mod210 * m_mod2310) + X + caches.neg_SL_mod210) % 210;
+                if (!caches.is_coprime210[n_mod210])
                     continue;
 
                 // Wide memory read
-                if (m_not_coprime[mi])
+                if (!caches.is_m_coprime[mi])
                     continue;
 
-                int32_t mii = m_reindex[mi];
+                int32_t mii = caches.m_reindex[mi];
                 assert(mii >= 0);
 
                 small_factors += 1;
@@ -1444,7 +1611,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
         if (thread_i == 0 && prime >= stats.next_print && prime != stats.last_prime) {
             // Print counters & stats.
-            method2_increment_print(prime, valid_ms, composite, stats, config);
+            method2_increment_print(prime, caches.valid_ms, composite, stats, config);
         }
     }
 
@@ -1456,14 +1623,9 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 void method2_large_primes(Config &config, method2_stats &stats,
                           const mpz_t &K,
                           uint32_t THREADS,
-                          const vector<int32_t> &valid_mi,
-                          const vector<bool> &m_not_coprime,
-                          const vector<int32_t> &m_reindex,
-                          vector<mutex> &mutex_mi,
-                          const vector<char> &is_offset_coprime,
+                          const Cached &caches,
                           uint32_t x_reindex_m_wheel, const vector<uint32_t> *x_reindex_wheel,
                           const uint64_t MEDIUM_THRESHOLD,
-                          const size_t valid_ms,
                           vector<bool> *composite) {
     const uint32_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
@@ -1472,6 +1634,10 @@ void method2_large_primes(Config &config, method2_stats &stats,
     const uint32_t SL = SIEVE_LENGTH;
 
     const uint64_t LAST_PRIME = stats.last_prime;
+
+    // This is a LOT of mutexes (given 1-16 threads) might be better to >> 8
+    // If that could keep in memory...
+    vector<mutex> mutex_mi(caches.valid_ms);
 
     /**
      * 7# = 2*3*5*7 = 210
@@ -1613,14 +1779,14 @@ void method2_large_primes(Config &config, method2_stats &stats,
                     return;
 
                 // Filters ~75% more (coprime to P#) (requires ~10-200kb)
-                if (!is_offset_coprime[x])
+                if (!caches.is_offset_coprime[x])
                     return;
 
                 /**
                  * Would Filters ~60-80%, only ~10-20% after is_m_coprime2310
                  * Requires a M_inc/8 (a few MB) cache so more likely to spill to L3/RAM
                  */
-                if (m_not_coprime[mi])
+                if (!caches.is_m_coprime[mi])
                     return;
 
 
@@ -1638,7 +1804,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 // if coprime with K, try to toggle off factor.
                 test_stats.large_prime_factors_interval += 1;
 
-                int32_t mii = m_reindex[mi];
+                int32_t mii = caches.m_reindex[mi];
                 assert( mii >= 0 );
 
                 if (use_lock) {
@@ -1695,7 +1861,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                     assert(last_processed < stats.next_print || stats.next_print == 0);
                     if (min_end >= stats.next_print) {
                         // Print counters & stats.
-                        method2_increment_print(min_end, valid_ms, composite, stats, config);
+                        method2_increment_print(min_end, caches.valid_ms, composite, stats, config);
                     }
                     assert(min_end <= stats.next_print);
                     last_processed = min_end;
@@ -1773,32 +1939,6 @@ void prime_gap_parallel(struct Config& config) {
 
     // ----- Allocate memory
 
-    vector<int32_t> valid_mi;
-    vector<int32_t> m_reindex(M_inc, -1);
-    vector<bool> m_not_coprime(M_inc, 1);
-    {
-        for (uint32_t mi = 0; mi < M_inc; mi++) {
-            if (gcd(M_start + mi, D) == 1) {
-                m_reindex[mi] = valid_mi.size();
-                m_not_coprime[mi] = 0;
-                valid_mi.push_back(mi);
-            }
-        }
-    }
-    const size_t valid_ms = valid_mi.size();
-    vector<mutex> mutex_mi;
-    { // hack around mutex not having move constructor
-        vector<mutex> temp(valid_ms);
-        mutex_mi.swap(temp);
-    }
-
-    // if [X] is coprime to K
-    vector<char> is_offset_coprime(SIEVE_INTERVAL, 1);
-    // reindex composite[m][X] for composite[m_reindex[m]][x_reindex[X]]
-    vector<uint32_t> x_reindex(SIEVE_INTERVAL, 0);
-    // which X are coprime to K (X has SIEVE_LENGTH added so x is positive)
-    vector<uint32_t> coprime_X;
-
     // reindex composite[m][i] using (m, wheel) (wheel is 1!,2!,3!,5!)
     // This could be first indexed by x_reindex,
     // Would reduce size from wheel * (2*SL+1) to wheel * coprime_i
@@ -1815,39 +1955,12 @@ void prime_gap_parallel(struct Config& config) {
 
     vector<size_t> x_reindex_wheel_count(x_reindex_m_wheel, 0);
 
+    // Various pre-calculated arrays of is_coprime arrays
+    const Cached caches = setup_caches(config, K, x_reindex_m_wheel);
+    // XXX: Check if this should be removed from caches
+    const size_t valid_ms = caches.valid_ms;
+
     {
-        for (uint32_t prime : P_primes) {
-            if (D % prime != 0) {
-                uint32_t first = SIEVE_LENGTH % prime;
-                #ifdef GMP_VALIDATE_FACTORS
-                    mpz_set(test, K);
-                    mpz_sub_ui(test, test, SIEVE_LENGTH);
-                    mpz_add_ui(test, test, first);
-                    assert( 0 == mpz_fdiv_ui(test, prime) );
-                #endif  // GMP_VALIDATE_FACTORS
-
-                assert( 0 <= first && first < prime );
-                assert( (SIEVE_LENGTH - first) % prime == 0 );
-
-                for (size_t x = first; x < SIEVE_INTERVAL; x += prime) {
-                    is_offset_coprime[x] = 0;
-                }
-            }
-        }
-        // Center should be marked composite by every prime.
-        assert(is_offset_coprime[SL] == 0);
-        {
-            size_t coprime_count = 0;
-            for (size_t X = 0; X < SIEVE_INTERVAL; X++) {
-                if (is_offset_coprime[X] > 0) {
-                    coprime_X.push_back(X);
-                    coprime_count += 1;
-                    x_reindex[X] = coprime_count;
-                }
-            }
-            assert(coprime_count == coprime_X.size());
-        }
-
         // Start at m_wheel == 0 so that re_index_m_wheel == 1 (D=1) works.
         for (size_t m_wheel = 0; m_wheel < x_reindex_m_wheel; m_wheel++) {
             if (gcd(x_reindex_m_wheel, m_wheel) > 1) continue;
@@ -1860,7 +1973,7 @@ void prime_gap_parallel(struct Config& config) {
 
             size_t coprime_count = 0;
             for (size_t i = 0; i < SIEVE_INTERVAL; i++) {
-                if (is_offset_coprime[i] > 0) {
+                if (caches.is_offset_coprime[i] > 0) {
                     if (gcd(mod_bottom + i, x_reindex_m_wheel) == 1) {
                         coprime_count += 1;
                         x_reindex_wheel[m_wheel][i] = coprime_count;
@@ -1871,7 +1984,7 @@ void prime_gap_parallel(struct Config& config) {
         }
     }
 
-    const size_t count_coprime_sieve = coprime_X.size();
+    const size_t count_coprime_sieve = caches.coprime_X.size();
     assert( count_coprime_sieve % 2 == 0 );
 
     const auto THRESHOLDS =
@@ -1942,7 +2055,7 @@ void prime_gap_parallel(struct Config& config) {
 
         size_t allocated = 0;
         for (size_t i = 0; i < valid_ms; i++) {
-            int m_wheel = (M_start + valid_mi[i]) % x_reindex_m_wheel;
+            int m_wheel = (M_start + caches.valid_mi[i]) % x_reindex_m_wheel;
             assert(gcd(m_wheel, x_reindex_m_wheel) == 1);
 
             // +1 reserves extra 0th entry for x_reindex[x] = 0
@@ -1978,8 +2091,8 @@ void prime_gap_parallel(struct Config& config) {
          */
 
         vector<int32_t> valid_mi_split[THREADS];
-        for (size_t i = 0; i < valid_mi.size(); i++) {
-            valid_mi_split[i * THREADS / valid_mi.size()].push_back(valid_mi[i]);
+        for (size_t i = 0; i < valid_ms; i++) {
+            valid_mi_split[i * THREADS / valid_ms].push_back(caches.valid_mi[i]);
         }
 
         #pragma omp parallel for num_threads(THREADS)
@@ -1994,7 +2107,7 @@ void prime_gap_parallel(struct Config& config) {
 
             method2_small_primes(config, stats, K, thread_i,
                                  valid_mi_split[thread_i],
-                                 m_reindex,
+                                 caches.m_reindex,
                                  x_reindex_m_wheel, x_reindex_wheel,
                                  SMALL_THRESHOLD, composite);
         }
@@ -2006,7 +2119,8 @@ void prime_gap_parallel(struct Config& config) {
 
     if (1) { // Medium Primes
         vector<uint32_t> coprime_X_split[THREADS];
-        size_t per_thread = coprime_X.size() / THREADS;
+        size_t coprime_X_count = caches.coprime_X.size();
+        size_t per_thread = coprime_X_count / THREADS;
         per_thread -= per_thread % 8;
 
         /**
@@ -2016,11 +2130,11 @@ void prime_gap_parallel(struct Config& config) {
         for (size_t t = 0; t < THREADS; t++) {
             bool is_final = (t+1) >= THREADS;
             size_t xi_start = t * per_thread;
-            size_t xi_end = !is_final ? xi_start + per_thread : coprime_X.size();
+            size_t xi_end = is_final ? coprime_X_count : xi_start + per_thread;
             assert( xi_start % 8 == 0);
             assert( (xi_end - xi_start) % 8 == 0 || is_final );
             for (size_t xi = xi_start; xi < xi_end; xi++) {
-                coprime_X_split[t].push_back(coprime_X[xi]);
+                coprime_X_split[t].push_back(caches.coprime_X[xi]);
             }
         }
 
@@ -2031,17 +2145,15 @@ void prime_gap_parallel(struct Config& config) {
 
             if (config.verbose + (THREADS > 1) >= 3) {
                 printf("\tThread %ld method2_medium_primes(%'ld/%'ld)\n",
-                        thread_i, coprime_X_split[thread_i].size(), coprime_X.size());
+                        thread_i, coprime_X_split[thread_i].size(), coprime_X_count);
             }
 
             method2_medium_primes(config, stats, K,
                                   thread_i,
+                                  caches,
                                   coprime_X_split[thread_i],
-                                  m_not_coprime,
-                                  m_reindex,
                                   x_reindex_m_wheel, x_reindex_wheel,
                                   SMALL_THRESHOLD, MEDIUM_THRESHOLD,
-                                  valid_ms,
                                   composite);
         }
         if (MEDIUM_THRESHOLD >= stats.last_prime) {
@@ -2061,12 +2173,9 @@ void prime_gap_parallel(struct Config& config) {
             config, stats,
             K,
             THREADS,
-            valid_mi, m_not_coprime, m_reindex,
-            mutex_mi,
-            is_offset_coprime,
+            caches,
             x_reindex_m_wheel, x_reindex_wheel,
             MEDIUM_THRESHOLD,
-            valid_ms,
             composite);
     }
 
@@ -2091,8 +2200,8 @@ void prime_gap_parallel(struct Config& config) {
 
         save_unknowns_method2(
             config,
-            coprime_X,
-            valid_mi, m_reindex,
+            caches.coprime_X,
+            caches.valid_mi, caches.m_reindex,
             x_reindex_m_wheel, x_reindex_wheel,
             composite);
 
@@ -2104,7 +2213,7 @@ void prime_gap_parallel(struct Config& config) {
                     duration<double>(s_stop_t - s_save_t).count());
         }
 
-        insert_range_db(config, valid_mi.size(), THREADS * secs);
+        insert_range_db(config, valid_ms, THREADS * secs);
     }
 
     delete[] composite;
