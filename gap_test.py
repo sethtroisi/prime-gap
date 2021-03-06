@@ -307,6 +307,9 @@ def run_in_parallel(
     time.sleep(1)
     print()
 
+    # This sets the start time which can be hundreds of seconds off if most of
+    # valid_mi has already been processed. In that case some stats take a while
+    # to stablize.
     sc = gap_test_stats.StatCounters(time.time(), time.time())
 
     try:
