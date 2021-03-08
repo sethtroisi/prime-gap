@@ -187,7 +187,7 @@ int main(int argc, char* argv[]) {
         printf("Not saving unknowns (--save-unknowns=0)\n");
     } else if (is_range_already_processed(config)) {
         cout << "Range already processed!" << endl;
-        //return 1;
+        return 1;
     }
 
     if (config.minc == 1 && config.mstart != 1) {
@@ -323,10 +323,10 @@ void store_stats(
         vector<float>& prob_gap_prev,
         vector<float>& prob_gap_next,
         /* Per m value */
-        vector<uint32_t>& valid_m,
+        vector<uint64_t>& valid_m,
         unordered_map<uint64_t,ProbM> &M_stats) {
 
-    //assert( !is_range_already_processed(config) );
+    assert( !is_range_already_processed(config) );
 
     DB db_helper(config.search_db.c_str());
     sqlite3 *db = db_helper.get_db();
@@ -458,7 +458,7 @@ void store_stats(
     }
 
     size_t row_i = 0;
-    for (uint32_t mi : valid_m) {
+    for (uint64_t mi : valid_m) {
         uint64_t m = config.mstart + mi;
         ProbM &stats = M_stats[mi];
 
@@ -486,7 +486,7 @@ void store_stats(
         // P, D, m
         BIND_OR_ERROR(sqlite3_bind_int, stmt, 2, config.p);
         BIND_OR_ERROR(sqlite3_bind_int, stmt, 3, config.d);
-        BIND_OR_ERROR(sqlite3_bind_int, stmt, 4, m);
+        BIND_OR_ERROR(sqlite3_bind_int64, stmt, 4, m);
 
         // prob_record, prob_missing, prob_merit
         BIND_OR_ERROR(sqlite3_bind_double, stmt, 5, stats.record);
@@ -652,7 +652,7 @@ void prob_extended_gap(
         float average_inner_coprime = 0;
         float average_extended_coprime = 0;
 
-        for (uint32_t m = 0; m < wheel; m++) {
+        for (uint64_t m = 0; m < wheel; m++) {
             // Hack to make `prob_record_vs_plimit` much faster
             if (config.minc == 1) {
                 uint32_t temp = config.mstart % wheel;
@@ -671,7 +671,7 @@ void prob_extended_gap(
                 assert(config.d % p == 0);
 
                 // (m * K) % p;
-                uint32_t first = (m * k_mod_p[p]) % p;
+                uint64_t first = ((__int128) m * k_mod_p[p]) % p;
 
                 // first multiple on the positive side: -(m*K) % p
                 for (size_t i = p - first; i < EXT_SIZE; i += p) {
@@ -691,7 +691,7 @@ void prob_extended_gap(
                 gap_probs.prob_greater_extended[m] = prob_outer;
 
                 if (config.verbose >= 3) {
-                    printf("\tWheel: %-3d %ld/%d inner, %ld/%d extended coprime, prob last: %.3g\n",
+                    printf("\tWheel: %-3ld %ld/%d inner, %ld/%d extended coprime, prob last: %.3g\n",
                         m, inner_coprime, SL, extended_coprime, SL, prob_outer);
                 }
             }
@@ -907,7 +907,7 @@ void setup_prob_nth(
 }
 
 /** Parse line (potentially with rle) to two positive lists */
-int read_unknown_line(
+int64_t read_unknown_line(
         const struct Config& config,
         uint64_t mi,
         std::ifstream& unknown_file,
@@ -919,7 +919,7 @@ int read_unknown_line(
 
     // Read a line from the file
     {
-        int m_test = -1;
+        int64_t m_test = -1;
         unknown_file >> m_test;
         assert( m_test >= 0 );
         //assert( (size_t) m_test == mi );
@@ -1251,7 +1251,7 @@ void run_gap_file(
         const uint32_t min_record_gap,
         const uint32_t min_gap_min_merit,
         const ProbNth &gap_probs,
-        vector<uint32_t>& valid_m,
+        vector<uint64_t>& valid_m,
         std::ifstream& unknown_file,
         /* output */
         vector<float>& prob_gap_norm,
@@ -1276,7 +1276,7 @@ void run_gap_file(
     max_r.record = max_r.highmerit = max_r.is_missing_gap= 1e-10;
 
     if (config.verbose >= 1) {
-        printf("\n%ld tests M_start(%ld) + mi(%d to %d)\n\n",
+        printf("\n%ld tests M_start(%ld) + mi(%ld to %ld)\n\n",
                valid_m.size(), config.mstart,
                valid_m.front(), valid_m.back());
     }
@@ -1289,7 +1289,7 @@ void run_gap_file(
         vector<float> local_p_gap_next(2 * config.sieve_length + 1, 0);
 
         #pragma omp for ordered schedule(static, 1)
-        for (uint32_t mi : valid_m) {
+        for (uint64_t mi : valid_m) {
             uint64_t m;
 
             vector <uint32_t> unknown_prev, unknown_next;
@@ -1373,7 +1373,7 @@ void run_gap_file(
      * Double check that every valid_m was stored once.
      */
     assert(valid_m.size() == M_stats.size());
-    for (uint32_t mi : valid_m) {
+    for (uint64_t mi : valid_m) {
         assert(M_stats.count(mi) == 1);
     }
 
@@ -1576,7 +1576,7 @@ void prime_gap_stats(struct Config config) {
     ProbNth gap_probs;
     setup_prob_nth(config, records, poss_record_gaps, gap_probs);
 
-    vector<uint32_t> valid_m;
+    vector<uint64_t> valid_m;
     for (uint64_t mi = 0; mi < config.minc; mi++) {
         if (gcd(config.mstart + mi, config.d) == 1) {
             valid_m.push_back(mi);

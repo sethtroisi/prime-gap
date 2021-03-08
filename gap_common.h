@@ -110,7 +110,7 @@ class DB
 
 bool has_prev_prime_gmp();
 
-uint32_t gcd(uint32_t a, uint32_t b);
+uint64_t gcd(uint64_t a, uint64_t b);
 
 
 /* K stuff */

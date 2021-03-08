@@ -60,6 +60,11 @@ using namespace std::chrono;
 // Of increased memory size (and time for count unknows)
 #define METHOD2_WHEEL   1
 
+// This probably should be optimized to fit in L2/L3
+// Related to sizeof(int) * SIEVE_INTERVAL * WHEEL_MAX
+// WHEEL should divide config.d
+#define METHOD2_WHEEL_MAX (2*3*5*7)
+
 
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config& config);
@@ -1011,7 +1016,7 @@ class Cached {
 
         /**
          * m_reindex[mi] = composite[mii] if coprime
-         * 0 if gcd(ms + i, D) > 1
+         * -1 if gcd(ms + i, D) > 1
          *
          * This is potentially very large use is_m_coprime and is_m_coprime2310
          * to pre check it's a coprime mi before doing the L3/RAM lookup.
@@ -1027,6 +1032,7 @@ class Cached {
         // X which are coprime to K (X has SIEVE_LENGTH added so x is positive)
         vector<uint32_t> coprime_X;
         // reindex composite[m][X] for composite[m_reindex[m]][x_reindex[X]]
+        // Special 0'th entry stands for all not coprime
         vector<uint32_t> x_reindex;
         // if [x+SL] is coprime to K (x has SL added to make value always positive)
         vector<char> is_offset_coprime;
@@ -1036,12 +1042,10 @@ class Cached {
         // This could be first indexed by x_reindex,
         // Would reduce size from wheel * (2*SL+1) to wheel * coprime_i
 
-
         // Note: Larger wheel eliminates more numbers but takes more space.
         // 6 (saves 2/3 memory), 30 (saves 11/15 memory)
-        // Not always enabled
         uint32_t x_reindex_m_wheel;
-        vector<uint32_t> x_reindex_wheel[30];
+        vector<uint32_t> x_reindex_wheel[METHOD2_WHEEL_MAX];
         vector<size_t> x_reindex_wheel_count;
 
 
@@ -1094,12 +1098,22 @@ Cached setup_caches(const struct Config& config,
     // Would reduce size from wheel * (2*SL+1) to wheel * coprime_i
 #if METHOD2_WHEEL
     // Note: Larger wheel eliminates more numbers but takes more space.
-    // 6 seems reasonable for larger numbers  (saves 2/3 memory)
-    // 30 is maybe better for smaller numbers (saves 4/15 memory)
-    const uint32_t x_reindex_m_wheel = gcd(D, (SIEVE_INTERVAL < 80000) ? 30 : 6);
-    assert(x_reindex_m_wheel <= 30); // Static size in Caches will break;
+    // 6 seems reasonable for larger numbers  (uses 1/3 memory = 33%)
+    // 30 is maybe better for smaller numbers (uses 4/15 memory = 26%)
+    // 210 is maybe better (uses 24/105 = 23% memory) but x_reindex_wheel might not fit in memory.
+    uint32_t wheel = gcd(D, METHOD2_WHEEL_MAX);
+    uint32_t reindex_size = wheel * SIEVE_INTERVAL * sizeof(uint32_t);
+    if (reindex_size > 7 * 1024 * 1024) {
+        if (wheel % 7) {
+            wheel /= 7;
+        } else if (wheel % 5) {
+            wheel /= 5;
+        }
+    }
+    const uint32_t x_reindex_m_wheel = wheel;
+    assert(x_reindex_m_wheel <= METHOD2_WHEEL_MAX); // Static size in Caches will break;
+    // XXX dynamic use uint16_t when less than 65536 coprimes?
     vector<uint32_t> x_reindex_wheel[x_reindex_m_wheel];
-
 #else
     const uint32_t x_reindex_m_wheel = 1;
     vector<uint32_t> x_reindex_wheel[1];
@@ -1155,6 +1169,7 @@ Cached setup_caches(const struct Config& config,
         }
         x_reindex_wheel_count[m_wheel] = coprime_count_wheel;
     }
+    // TODO print largest x_reindex_wheel_count for uint16_t work.
 
     int32_t K_mod210 = mpz_fdiv_ui(K, 210);
     int32_t neg_SL_mod210 = (210 - (SL % 210)) % 210;
@@ -1433,8 +1448,11 @@ void method2_small_primes(const Config &config, method2_stats &stats,
                          * NOTE: No synchronization issues
                          * Each thread gets a set of mii so no overlap of bits
                          */
-                        composite_mii[x_reindex_m[x]] = true;
-                        temp_stats.small_prime_factors_interval += 1;
+                        uint32_t xii = x_reindex_m[x];
+                        if (xii > 0) {
+                            composite_mii[xii] = true;
+                            temp_stats.small_prime_factors_interval += 1;
+                        }
                     }
                 }
             }
@@ -1489,7 +1507,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     assert(MEDIUM_THRESHOLD <= (size_t)std::numeric_limits<int64_t>::max());
-    // Prime can be larger than int32, prime * SIEVE_LENGTH must not overflow
+    // Prime can be larger than int32, prime * SIEVE_LENGTH must not overflow int64
     assert(!__builtin_mul_overflow_p(SIEVE_LENGTH, 4 * MEDIUM_THRESHOLD, (int64_t) 0));
 
     const uint32_t M_start = config.mstart;
@@ -1829,9 +1847,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
                     composite[mii][xii] = true;
                     mutex_mi[mii].unlock();
                 } else {
-                    if (xii < 0 || xii > 6026) {
-                        cout << "What " << xii << endl;
-                    }
                     composite[mii][xii] = true;
                 }
 

@@ -91,7 +91,7 @@ bool has_prev_prime_gmp() {
 }
 
 
-uint32_t gcd(uint32_t a, uint32_t b) {
+uint64_t gcd(uint64_t a, uint64_t b) {
     if (b == 0) return a;
     return gcd(b, a % b);
 }
@@ -867,9 +867,9 @@ Config Args::argparse(int argc, char* argv[]) {
     }
 
     int64_t last_m = config.mstart + config.minc;
-    if (last_m <= 0 || last_m > 2'000'000'001 ) {
+    if (last_m <= 0 || last_m > 4'000'000'001 ) {
         config.valid = 0;
-        cout << "mstart + minc must be <= 2e9" << endl;
+        cout << "mstart + minc must be <= 4e9" << endl;
     }
 
     if (config.minc <= 0) {
@@ -877,19 +877,14 @@ Config Args::argparse(int argc, char* argv[]) {
         cout << "minc must be greater than 0: " << config.minc << endl;
     }
 
-    if (config.minc > 200'000'000) {
-        config.valid = 0;
-        cout << "minc > 200M very like to use too much memory" << endl;
-    }
-
-    if (config.max_prime > 17'500'000'000'000) {
+    if (config.max_prime > 40'000'000'000'000) {
         /**
          * improved primeiterator can find all primes < 1T in ~400s
          * mpz_mod is slow part, modulo_search is always fast.
          * module_search_..._large avoids overflow.
          */
         config.valid = 0;
-        cout << "max_prime > 17,500,000 Million not supported" << endl;
+        cout << "max_prime > 40 Trillion not supported" << endl;
     }
 
     /**
