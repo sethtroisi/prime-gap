@@ -620,13 +620,12 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
       * [ ] Sum and set test-time in finalize? (IGNORE very large values which are likely pause)
       * [ ] Finalize script should update ranges being finalized
     * [ ] Faster finalize.py
-  * [ ] Slower print intervals in gap_test.py
+  * [ ] Check that correct indexes exist in sql db
   * [ ] Consider new names for prp-top-percent, no-one-side-skip, sieve-length
 * combined\_sieve.cpp
-  * [ ] Benchmark bitset vs vector<bool>
+  * [ ] ncurse or similiar status line with all large_prime intervals & eta
 * gap\_stats.cpp
 * gap\_test.py
-  * [ ] benchmark smaller number of commits
   * [ ] Save prp-percentage finalized for faster skipping of complete files
   * [ ] Validate the unknown-file matches expectations (unknowns / line, ...)
   * [ ] Ctrl+C sometimes hangs waiting for one more result
@@ -744,6 +743,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] load merit from gap.db
   * [x] Load from unknown\_fn
 * gap\_test.py
+  * [x] benchmark not calling commit() on every save result
   * [x] Load min-merit from db
   * [x] Read min-merit from DB in gap_test.py
   * [x] Reduce memory if not --stats / --num-plots

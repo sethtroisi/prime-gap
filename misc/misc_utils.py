@@ -15,6 +15,33 @@
 # limitations under the License.
 
 import math
+import array
+
+
+def calc_valid_mi(ms, mi, d):
+    '''
+    Equivilant to [mi for mi in range(M_inc) if math.gcd(ms + mi, D) == 1]
+    '''
+    valid_mi = array.array('q')
+
+    # Avoids allocating 100M+ byte array for valid
+    interval_size = 1000000
+    for start in range(0, mi, interval_size):
+        end = min(mi, start + interval_size)
+        size = end - start
+
+        valid = array.array('b', (1 for _ in range(start, end)))
+        factors_d = _factor_simple(d)
+        for p in factors_d:
+            first = -(ms + start) % p
+            assert (ms + start + first) % p == 0
+            for i in range(first, size, p):
+                valid[i] = 0
+
+        for mii, v in enumerate(valid, start):
+            if v:
+                valid_mi.append(mii)
+    return valid_mi
 
 
 def count_num_m(ms, mi, d):

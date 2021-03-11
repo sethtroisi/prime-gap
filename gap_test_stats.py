@@ -231,15 +231,14 @@ def save(conn, p, d, m, next_p, prev_p, merit,
         (next_p, prev_p, round(merit, 4),
          n_tests, p_tests, test_time, p, d, m))
 
-    # TODO benchmark only calling commit X% of time
-    # or once a second...
-    # Commit on average every 200 seconds of testing.
-    # Keep number of raw commits down when testing small p#
+    # Commit on average every 200 seconds (always commit if test_time > 200).
+    # Keeps number of raw commits down when testing small p#
+    # conn.commit() in gap_test.py should prevent losing results during cleanup
     if 200 * random.random() < test_time:
         conn.commit()
 
 
-def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_prime):
+def prob_prime_sieve_length(M, K, D, P, prob_prime, K_digits, SL, max_prime):
     assert max_prime >= 10 ** 6, max_prime
 
     # From Mertens' 3rd theorem
@@ -247,6 +246,8 @@ def prob_prime_sieve_length(M, K, D, prob_prime, K_digits, P_primes, SL, max_pri
     unknowns_after_sieve = 1.0 / (math.log(max_prime) * math.exp(gamma))
 
     prob_prime_after_sieve = prob_prime / unknowns_after_sieve
+
+    P_primes = [p for p in range(2, P+1) if gmpy2.is_prime(p)]
 
     prob_prime_coprime_p = 1
     for prime in P_primes:

@@ -18,10 +18,10 @@ import argparse
 import math
 import multiprocessing
 import os
+import queue
 import signal
 import sqlite3
 import time
-import queue
 
 import gmpy2
 
@@ -317,7 +317,7 @@ def run_in_parallel(
             m = args.mstart + mi
             log_n = (K_log + math.log(m))
 
-            # Read a line from the file
+            # Read a line from the file (can be the slowest part of restarting)
             line = unknown_file.readline()
 
             exist = existing.get(m)
@@ -352,7 +352,7 @@ def run_in_parallel(
                 # Process result contains save to DB call see gap_test_stats.py
                 gap_test_stats.process_result(conn, args, record_gaps, m_probs, data, sc, result)
 
-    except (KeyboardInterrupt, queue.Empty):
+    except (KeyboardInterrupt, queue.Empty) as e:
         print("Received first  Ctrl+C | Waiting for current work to finish")
         time.sleep(0.1)
 
@@ -384,8 +384,9 @@ def run_in_parallel(
                 sc.tested += 1
 
             gap_test_stats.process_result(conn, args, record_gaps, m_probs, data, sc, result)
-            conn.commit()
         except KeyboardInterrupt:
+            # commit any potentially uncommitted save() results.
+            conn.commit()
             print("Received second Ctrl+C | Terminating now")
             for i, p in enumerate(processes):
                 if p.is_alive():
@@ -393,17 +394,18 @@ def run_in_parallel(
                     p.terminate()
             exit(1)
 
+    # Make sure everything was committed
+    conn.commit()
+
     print("Joining work_q (should be instant)")
     work_q.join()
     work_q.close()
     work_q.join_thread()
 
-    # Make sure everything was committed
-    conn.commit()
-
     print(f"Joining {len(processes)} processes")
     for i, process in enumerate(processes):
         process.join(timeout=0.1)
+
     print("Done!")
 
 
@@ -488,21 +490,21 @@ def prime_gap_test(args):
     n_exist = len(existing)
     print(f"Found {n_exist:,} ({n_exist/count_m:.1%}) results ({t1-t0:.1f} sec)")
 
-    # used in next_prime
-    assert P <= 80000
-    # Very slow but works.
-    P_primes = [p for p in range(2, P+1) if gmpy2.is_prime(p)]
+    if len(existing) == count_m:
+        print(f"All processed!")
+    elif args.prp_top_percent == 0:
+        print("--prp-top-percent=0, skipping testing")
 
     # ----- Allocate memory for a handful of utility functions.
 
     # ----- Sieve stats
     prob_prime = 1 / M_log - 1 / (M_log * M_log)
     prob_prime_after_sieve = gap_test_stats.prob_prime_sieve_length(
-        M, K, D, prob_prime, K_digits, P_primes, SL, max_prime)
+        M, K, D, P, prob_prime, K_digits, SL, max_prime)
 
     # ----- Main sieve loop.
 
-    valid_mi = [mi for mi in range(M_inc) if math.gcd(M + mi, D) == 1]
+    valid_mi = misc_utils.calc_valid_mi(M, M_inc, D)
 
     data = gap_test_stats.GapData()
 
@@ -510,29 +512,26 @@ def prime_gap_test(args):
     data.last_m = M + valid_mi[-1]
     data.valid_mi = valid_mi
 
-    if len(existing) == len(valid_mi):
-        print(f"All processed!")
-    elif args.prp_top_percent == 0:
-        print("--prp-top-percent=0, skipping testing")
-    else:
-        print(f"\nStarting m({len(valid_mi):,}) {data.first_m:,} to {data.last_m:,}")
-        print()
+    print(f"\nStarting m({len(valid_mi):,}) {data.first_m:,} to {data.last_m:,}")
+    print()
 
-        # Load stats for prob_record
-        temp = gap_test_stats.load_probs_only(conn, args)
-        assert len(temp.prob_merit_gap) == len(valid_mi), "run ./gap_stats first"
-        assert len(temp.prob_record_gap) == len(valid_mi), "run ./gap_stats first"
-        data.prob_merit_gap = temp.prob_merit_gap
-        data.prob_record_gap = temp.prob_record_gap
-        del temp
+    # Load stats for prob_record
+    temp = gap_test_stats.load_probs_only(conn, args)
+    assert len(temp.prob_merit_gap) == len(valid_mi), \
+            ("run ./gap_stats first", len(valid_mi), len(temp.prob_merit_gap))
+    assert len(temp.prob_record_gap) == len(valid_mi), \
+            ("run ./gap_stats first", len(valid_mi), len(temp.prob_record_gap))
+    data.prob_merit_gap = temp.prob_merit_gap
+    data.prob_record_gap = temp.prob_record_gap
+    del temp
 
-        run_in_parallel(
-            args, conn, unknown_file, record_gaps,
-            prob_prime, prob_prime_after_sieve,
-            existing,
-            K, K_log,
-            data
-        )
+    run_in_parallel(
+        args, conn, unknown_file, record_gaps,
+        prob_prime, prob_prime_after_sieve,
+        existing,
+        K, K_log,
+        data
+    )
 
     # ----- Plots
     if args.num_plots:
