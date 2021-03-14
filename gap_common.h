@@ -56,6 +56,9 @@ struct Config {
 
     int threads = 1;
 
+    // Max number of GB allowed (has ~10% error)
+    int max_mem = 10;
+
     /**
      * -1: results only
      *  0: results & final stats

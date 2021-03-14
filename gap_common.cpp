@@ -616,6 +616,8 @@ void Args::show_usage(char* name) {
     cout << "    save unknowns to a temp file where they are processed in a 2nd pass." << endl;
     cout << "  --rle" << endl;
     cout << "    save in run-length encoded format" << endl;
+    cout << "  --maxmem <max memory in GB>" << endl;
+    cout << "    Combined sieve will print a warning if it's likely to use more memory." << endl;
     cout << endl;
     cout << "[OPTIONAL]" << endl;
     cout << "  --search-db" << endl;
@@ -695,6 +697,7 @@ Config Args::argparse(int argc, char* argv[]) {
         {"save",             no_argument,       0,   7  },
         {"save-unknowns",    no_argument,       0,   7  },
         {"rle",              no_argument,       0,  13  },
+        {"max-mem",           required_argument, 0,  14  },
 
         {"search-db",        required_argument, 0,   9  },
         {"prime-gaps-db",    required_argument, 0,  10  },
@@ -828,6 +831,10 @@ Config Args::argparse(int argc, char* argv[]) {
 
             case 13:
                 config.rle = true;
+                break;
+
+            case 14:
+                config.max_mem = atol(optarg);
                 break;
 
             case 0:

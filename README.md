@@ -638,6 +638,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 ### Low Priority TODOs
 
 * Project
+  * [ ] Combined sieve in memory is 2x smaller than disk representation. Can I reuse that representation?
   * [ ] Figure out how to load (in c & python) and set config occasionally
   * [ ] Records / day in status.py or record_check.py
     * [ ] Test if sum(prob_record) matches with --no-one-side-skip

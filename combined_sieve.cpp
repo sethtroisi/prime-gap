@@ -1741,9 +1741,11 @@ void method2_large_primes(Config &config, method2_stats &stats,
     uint64_t last_processed = 0;
     map<uint64_t, method2_stats> stats_to_process;
 
-    // previous multiple of interval_inc
+    // Better as "for (const auto &interval : intervals) ..." but not supportted by gcc8
     #pragma omp parallel for schedule(dynamic, 1) num_threads(THREADS)
-    for (const auto &interval : intervals) {
+    for (size_t ii = 0; ii < intervals.size(); ii++) {
+        const auto &interval = intervals[ii];
+
         uint64_t first = interval.first;
         uint64_t end = interval.second;
         // Else it's possible test_stats.pi_interval == 0 below
@@ -2031,7 +2033,8 @@ void prime_gap_parallel(struct Config& config) {
     vector<bool> *composite = new vector<bool>[valid_ms];
     {
         int align_print = 0;
-        size_t guess = valid_ms * (count_coprime_sieve + 1) / 8 / 1024 / 1024;
+        size_t MB = 8 * 1024 * 1024;
+        size_t guess = valid_ms * (count_coprime_sieve + 1) / MB;
         if (config.verbose >= 1) {
             align_print = printf("coprime m    %ld/%d,  ", valid_ms, M_inc);
             printf("coprime i     %ld/%d, ~%'ldMB\n",
@@ -2040,12 +2043,17 @@ void prime_gap_parallel(struct Config& config) {
 
         if (x_reindex_m_wheel > 1) {
             // Update guess with first wheel count for OOM prevention check
-            guess = valid_ms * (caches.x_reindex_wheel_count[1] + 1) / 8 / 1024 / 1024;
+            guess = valid_ms * (caches.x_reindex_wheel_count[1] + 1) / MB;
         }
 
         // Try to prevent OOM, check composite < 10GB allocation,
         // combined_sieve uses ~5-20% extra space for x_reindex_wheel + extra
-        assert(guess < 10 * 1024); // Requires 10+ GB! Feel free to increase.
+        if (guess > (size_t) config.max_mem * 1024) {
+            printf("combined_sieve expects to use %'ld MB which is greater than %d GB limit\n",
+                    guess, config.max_mem);
+            printf("\tAdd `--max-mem %ld` to skip this warning\n", (guess / 1024) + 1);
+            exit(1);
+        }
 
         size_t allocated = 0;
         for (size_t i = 0; i < valid_ms; i++) {
