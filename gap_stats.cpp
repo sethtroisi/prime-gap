@@ -941,7 +941,7 @@ int64_t read_unknown_line(
         unsigned char a, b;
         int c = 0;
         for (int k = 0; k < unknown_l; k++) {
-            if (config.rle) {
+            if (config.compression) {
                 // Read bits in pairs (see save_unknowns_method2)
                 a = unknown_file.get();
                 b = unknown_file.get();
@@ -960,7 +960,7 @@ int64_t read_unknown_line(
 
         c = 0;
         for (int k = 0; k < unknown_u; k++) {
-            if (config.rle) {
+            if (config.compression) {
                 a = unknown_file.get();
                 b = unknown_file.get();
                 c += (a - 48) * 128 + (b - 48);
@@ -1525,7 +1525,7 @@ void prime_gap_stats(struct Config config) {
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
         assert( unknown_file.good() );    // Can't open save_unknowns file
 
-        config.rle = Args::is_rle_unknowns(unknown_file);
+        config.compression = Args::is_rle_unknowns(unknown_file);
     }
 
     // ----- Merit Stuff

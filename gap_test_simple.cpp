@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
 
 
 void load_and_verify_unknowns(
-        const bool rle,
+        const int compression,
         const uint64_t mi,
         const int SIEVE_LENGTH,
         std::ifstream &unknown_file,
@@ -110,7 +110,7 @@ void load_and_verify_unknowns(
         unknown_file >> delim;
         assert( delim == "|" );
 
-        if (rle) {
+        if (compression) {
             for (int group = 0; group <= 1; group++) {
                 unsigned char c1 = 0, c2 = 0;
                 int accum = 0;
@@ -231,7 +231,7 @@ void prime_gap_test(const struct Config config) {
     }
 
     // ----- Open unknown input file
-    bool is_rle;
+    int compression;
     std::ifstream unknown_file;
     {
         std::string fn = Args::gen_unknown_fn(config, ".txt");
@@ -242,7 +242,7 @@ void prime_gap_test(const struct Config config) {
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
         assert( unknown_file.good() );    // Can't open save_unknowns file
 
-        is_rle = Args::is_rle_unknowns(unknown_file);
+        compression = Args::is_rle_unknowns(unknown_file);
     }
 
     uint64_t valid_ms = 0;
@@ -288,7 +288,7 @@ void prime_gap_test(const struct Config config) {
         vector<int32_t> unknowns[2];
 
         load_and_verify_unknowns(
-            is_rle, mi, SIEVE_LENGTH, unknown_file, unknowns);
+            compression, mi, SIEVE_LENGTH, unknown_file, unknowns);
 
         size_t unknown_l = unknowns[0].size();
         size_t unknown_u = unknowns[1].size();

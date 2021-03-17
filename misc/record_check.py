@@ -241,7 +241,7 @@ def search_db(args):
     assert os.path.exists(args.search_db)
 
     gaps = []
-    with sqlite3.connect(args.search_db, timeout=10) as conn:
+    with sqlite3.connect(args.search_db, timeout=30) as conn:
         conn.row_factory = sqlite3.Row
 
         num_gaps = conn.execute('SELECT COUNT(*) FROM result').fetchone()[0]

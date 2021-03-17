@@ -830,7 +830,7 @@ Config Args::argparse(int argc, char* argv[]) {
                 break;
 
             case 13:
-                config.rle = true;
+                config.compression = 1;
                 break;
 
             case 14:

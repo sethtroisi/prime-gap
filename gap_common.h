@@ -52,7 +52,13 @@ struct Config {
     bool save_unknowns = false;
 
     bool method1 = false;
-    bool rle = false;
+
+    /**
+     * 0: all offsets in plain tex (-2, -4, -8, ...| +2, +4, +8, ...)
+     * 1: run length encoding (delta to next offset)
+     * 2: bitmap over all X coprime to (m * k)
+     */
+    int compression = 0;
 
     int threads = 1;
 

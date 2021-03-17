@@ -124,9 +124,9 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        if (!config.rle && (config.minc * config.sieve_length) > 30'000'000'000L) {
-            printf("\tSetting RLE=1 to prevent very large output file\n");
-            config.rle = true;
+        if (!config.compression && (config.minc * config.sieve_length) > 30'000'000'000L) {
+            printf("\tSetting --rle to prevent very large output file\n");
+            config.compression = 1;
         }
     }
 
@@ -1278,7 +1278,7 @@ void save_unknowns_method2(
             int32_t sign = d == 0 ? -1 : 1;
             line << "|";
 
-            if (config.rle) {
+            if (config.compression == 1) {
                 line << " ";
                 int last = SL;
 
