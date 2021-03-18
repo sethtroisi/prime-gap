@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
 
 void load_and_verify_unknowns(
         const int compression,
-        const uint64_t mi,
+        const uint64_t m,
         const int SIEVE_LENGTH,
         std::ifstream &unknown_file,
         vector<int32_t> (&unknowns)[2]) {
@@ -96,8 +96,9 @@ void load_and_verify_unknowns(
     {
         uint32_t m_test = 0;
         unknown_file >> m_test;
-        if (m_test != mi ) {
-            cout << "Mismatched mi " << m_test << " vs " << mi << endl;
+        if (m_test != m ) {
+            cout << "Mismatched m " << m_test << " vs " << m << endl;
+            assert (m_test == m);
         }
         std::string delim;
         unknown_file >> delim;
@@ -242,7 +243,7 @@ void prime_gap_test(const struct Config config) {
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
         assert( unknown_file.good() );    // Can't open save_unknowns file
 
-        compression = Args::is_rle_unknowns(unknown_file);
+        compression = Args::is_rle_unknowns(config, unknown_file);
     }
 
     uint64_t valid_ms = 0;
@@ -288,7 +289,7 @@ void prime_gap_test(const struct Config config) {
         vector<int32_t> unknowns[2];
 
         load_and_verify_unknowns(
-            compression, mi, SIEVE_LENGTH, unknown_file, unknowns);
+            compression, M_start + mi, SIEVE_LENGTH, unknown_file, unknowns);
 
         size_t unknown_l = unknowns[0].size();
         size_t unknown_u = unknowns[1].size();

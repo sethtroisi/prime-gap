@@ -93,7 +93,9 @@ class Args
         static void show_usage(char* name);
         static Config argparse(int argc, char* argv[]);
         static std::string gen_unknown_fn(const struct Config& config, std::string suffix);
-        static bool is_rle_unknowns(std::ifstream& unknown_file);
+        static bool is_rle_unknowns(
+            const struct Config& config,
+            std::ifstream& unknown_file);
 
     private:
         // Disallow creating instance

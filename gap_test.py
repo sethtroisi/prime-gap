@@ -147,8 +147,7 @@ def process_line(
         m, mi, prev_p, next_p, prob_record, log_n, line = work
 
         m_test, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
-
-        assert mi == m_test
+        assert m == m_test
 
         # Used for openPFGW
         str_n = "{}*{}#/{}+".format(m, P, D)
@@ -205,7 +204,7 @@ def process_line(
                 # Save partial before starting next_prime
                 # XXX: consider updating prob_record to new_prob_record
                 results_q.put((
-                    m, mi, log_n,
+                    m, log_n,
                     unknown_l, unknown_u,
                     0, -1,  # next_p = -1, indicates partial result
                     p_tests, prev_p,
@@ -222,7 +221,7 @@ def process_line(
         test_time = time.time() - t0
 
         results_q.put((
-            m, mi, log_n,
+            m, log_n,
             unknown_l, unknown_u,
             n_tests, next_p,
             p_tests, prev_p,
@@ -319,6 +318,10 @@ def run_in_parallel(
 
             # Read a line from the file (can be the slowest part of restarting)
             line = unknown_file.readline()
+            assert line.startswith(str(m).encode()), (
+                "file format has changed, lines should start with <mstart + mi> not <mi>"
+                "you can add <m> to each line, recreate, or git checkout <old commit>"
+                "sorry")
 
             exist = existing.get(m)
             is_partial = exist and exist[1] < 0
@@ -380,7 +383,7 @@ def run_in_parallel(
             result = results_q.get()
 
             # partial (-1) doesn't increment tested in process_result
-            if early_stop_flag.is_set() and result[6] == -1:
+            if early_stop_flag.is_set() and result[5] == -1:
                 sc.tested += 1
 
             gap_test_stats.process_result(conn, args, record_gaps, m_probs, data, sc, result)
@@ -482,7 +485,6 @@ def prime_gap_test(args):
 
     count_m = misc_utils.count_num_m(M, M_inc, D)
 
-
     # ----- Load data from prime-gap-search.db
     t0 = time.time()
     existing = gap_test_stats.load_existing(conn, args)
@@ -565,7 +567,9 @@ def prime_gap_test(args):
                 line = unknown_file_repeat.readline()
                 assert line, mi
                 if mi in unk_mi_of_interest:
-                    _, _, _, unknowns = gap_utils.parse_unknown_line(line)
+                    m, _, _, unknowns = gap_utils.parse_unknown_line(line)
+                    assert m == config.mstart + mi, (m, config.mstart, mi)
+
                     # TODO append valid_mi[k] and prob
                     misc_db.test_unknowns[mi] = unknowns
 

@@ -381,11 +381,10 @@ static void insert_range_db(
 
 void save_unknowns_method1(
         std::ofstream &unknown_file,
-        const uint64_t mi, int unknown_p, int unknown_n,
+        const uint64_t m, int unknown_p, int unknown_n,
         const unsigned int SL, const vector<char> composite[]) {
 
-    unknown_file << mi;
-    unknown_file << " : -" << unknown_p << " +" << unknown_n << " |";
+    unknown_file << m << " : -" << unknown_p << " +" << unknown_n << " |";
 
     for (int d = 0; d <= 1; d++) {
         char prefix = "-+"[d];
@@ -687,7 +686,7 @@ void prime_gap_search(const struct Config& config) {
         if (config.save_unknowns) {
             save_unknowns_method1(
                 unknown_file,
-                mi, unknown_p, unknown_n,
+                m, unknown_p, unknown_n,
                 SL, composite
             );
         }
@@ -1261,17 +1260,9 @@ void save_unknowns_method2(
         const auto &x_reindex_m = caches.x_reindex_wheel[m % caches.x_reindex_m_wheel];
         assert(x_reindex_m.size() == (size_t) 2 * SL + 1);
 
-        //const size_t count_coprime_sieve = *std::max_element(x_reindex.begin(), x_reindex.end());
-        //const size_t size_side = count_coprime_sieve / 2;
-        // composite[0] isn't a real entry.
-        //auto real_begin = comp.begin() + 1;
-        //size_t unknown_p = std::count(real_begin, real_begin + size_side, false);
-        //size_t unknown_n = std::count(real_begin + size_side, comp.end(), false);
-
-
         std::stringstream header;
         std::stringstream line;
-        header << mi << " : ";
+        header << m << " : ";
 
         for (int d = 0; d <= 1; d++) {
             int64_t found = 0;

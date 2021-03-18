@@ -96,13 +96,14 @@ $ time ./combined_sieve -p 907 -d 210 --mstart 1 --minc 1000 --max-prime 1000 --
 AUTO SET: sieve length: 7554 (coprime: 340, prob_gap longer 0.79%)
 
 Testing m * 907#/210, m = 1 + [0, 1,000)
-	Using 33860 primes for SIEVE_SMALL(400000)
+	Using 33860 primes for SMALL_PRIME_LIMIT(400,000)
 
 	Calculating first m each prime divides
 	......................................
 	Sum of m1: 563865384
+	PrimePi(1000000000) = 50847534
 
-	Setup took 8.8 seconds
+	Setup took 6.4 seconds
 
 Saving unknowns to '907_210_1_1000_s7554_l1000M.m1.txt'
 	1  104 <- unknowns -> 123
@@ -122,7 +123,7 @@ Saving unknowns to '907_210_1_1000_s7554_l1000M.m1.txt'
 	    unknowns  52104      (avg: 228.53), 98.49% composite  49.78 <- % -> 50.22%
 	    large prime remaining: 0 (avg/test: 7155)
 
-real	0m9.107s
+real	0m6.671s
 ```
 
 </p></details>
@@ -140,39 +141,40 @@ $ time ./combined_sieve -p 907 -d 210 --mstart 1 --minc 1000 --max-prime 1000 --
 ```
 Testing m * 907#/210, m = 1 + [0, 1,000)
 sieve_length: 2x 7,554
-max-prime:       1,000,000,000   small_threshold:  137,790 (18.2 x SL)
-coprime m    228/1000,  coprime i 1991/7554,  ~0MB
+max_prime:        1,000,000,000
 
+coprime m    228/1000,  coprime i     1991/7554, ~0MB
+                        coprime wheel 346/7554, ~0MB
 
-2          (primes 1/1)	(seconds: 0.00/0.0 | per m: 9e-06)
-	factors       1,722,312 	(interval: 1,722,312 avg m/large_prime interval: 0.0)
-	unknowns   363,888/228  	(avg/m: 1596.00) (composite: 89.44% +89.437% +3,080,964)
-	~ 2x 698.79 PRP/m		(~ 74738.0 skipped PRP => 36330491.0 PRP/seconds)
+907        (primes 155/155)	(seconds: 0.00/0.0 | per m: 5.39e-07)
+	factors               0 	(interval: 0 avg m/large_prime interval: 0.0)
+	unknowns   157,918/228  	(avg/m: 692.62) (composite: 95.42% +95.416% +3,286,934)
+	~ 2x 71.12 PRP/m		(~ 360955.6 skipped PRP => 2939330029.3 PRP/seconds)
 
-100,003    (primes 9,592/9,593)	(seconds: 0.03/0.0 | per m: 0.00015)
-	factors       3,784,530 	(interval: 2,062,218 avg m/large_prime interval: 0.0)
-	unknowns    94,001/228  	(avg/m: 412.29) (composite: 97.27% +7.835% +269,887)
-	~ 2x 42.07 PRP/m		(~ 299465.8 skipped PRP => 9528126.8 PRP/seconds)
+100,000    (primes 8,363/9593)	(seconds: 0.04/0.0 | per m: 0.000194)
+	factors          82,189 	(interval: 35,101 avg m/large_prime interval: 296.4)
+	unknowns    94,001/228  	(avg/m: 412.29) (composite: 97.27% +97.271% +3,350,851)
+	~ 2x 42.07 PRP/m		(~ 374203.7 skipped PRP => 8452672.8 PRP/seconds)
 ...
-1,000,003  (primes 36,960/78,499)	(seconds: 0.03/0.1 | per m: 0.00055)
-	factors       3,971,493 	(interval: 46,806 avg m/large_prime interval: 1.3)
+1,000,000  (primes 36,960/78499)	(seconds: 0.03/0.1 | per m: 0.000559)
+	factors         110,815 	(interval: 8,186 avg m/large_prime interval: 21.1)
 	unknowns    78,446/228  	(avg/m: 344.06) (composite: 97.72% +0.121% +4,167)
-	~ 2x 35.06 PRP/m		(~ 844.5 skipped PRP => 24296.4 PRP/seconds)
+	~ 2x 35.06 PRP/m		(~ 844.5 skipped PRP => 27948.8 PRP/seconds)
 ...
-100,000,007 (primes 2,760,321/5,761,456)	(seconds: 0.48/1.3 | per m: 0.0055)
-	factors       4,232,762 	(interval: 35,036 avg m/large_prime interval: 0.0)
-	unknowns    58,659/228  	(avg/m: 257.28) (composite: 98.30% +0.068% +2,340)
-	~ 2x 26.29 PRP/m		(~ 468.8 skipped PRP => 977.0 PRP/seconds)
+100,000,000 (primes 544,501/5761456)	(seconds: 0.09/1.2 | per m: 0.00511)
+	factors         156,334 	(interval: 907 avg m/large_prime interval: 0.2)
+	unknowns    58,659/228  	(avg/m: 257.28) (composite: 98.30% +0.009% +325)
+	~ 2x 26.29 PRP/m		(~ 69.0 skipped PRP => 785.3 PRP/seconds)
 ...
-999,999,937 (primes 24,491,666/50,847,534)	(seconds: 4.60/9.6 | per m: 0.042)
-	factors       4,339,924 	(interval: 30,726 avg m/large_prime interval: 0.0)
-	unknowns    52,104/228  	(avg/m: 228.53) (composite: 98.49% +0.052% +1,779)
-	~ 2x 23.37 PRP/m		(~ 368.8 skipped PRP => 80.2 PRP/seconds)
-		Estimated ~31.0x faster to just run PRP now (CTRL+C to stop sieving)
+999,999,937 (primes 4,838,319/50847535)	(seconds: 0.84/8.4 | per m: 0.0368)
+	factors         174,997 	(interval: 812 avg m/large_prime interval: 0.0)
+	unknowns    52,104/228  	(avg/m: 228.53) (composite: 98.49% +0.008% +290)
+	~ 2x 23.37 PRP/m		(~ 54.5 skipped PRP => 64.6 PRP/seconds)
+		Estimated ~36.4x faster to just run PRP now (CTRL+C to stop sieving)
 
 Saving unknowns to '907_210_1_1000_s7554_l1000M.txt'
 
-real	0m9.258s
+real	0m13.558s
 ```
 
 </p></details>
@@ -181,10 +183,10 @@ Verify outputs are the same with
 
 ```bash
 $ md5sum unknowns/907_210_1_1000_s7554_l1000M{.m1,}.txt
-bfdb820237b40de0de2af71e8160ee66  907_210_1_1000_s7554_l1000M.m1.txt
-bfdb820237b40de0de2af71e8160ee66  907_210_1_1000_s7554_l1000M.txt
+d74bd47c8d43eac9a2309fc7722839ac  unknowns/907_210_1_1000_s7554_l1000M.m1.txt
+d74bd47c8d43eac9a2309fc7722839ac  unknowns/907_210_1_1000_s7554_l1000M.txt
 
-$ diff 907_210_1_1000_s7554_l1000M.m1.txt 907_210_1_1000_s7554_l1000M.txt
+$ diff unknowns/907_210_1_1000_s7554_l1000M.m1.txt unknowns/907_210_1_1000_s7554_l1000M.txt
 <empty>
 
 ```
@@ -201,22 +203,23 @@ $ time ./combined_sieve -p 907 -d 210 --mstart 1 --minc 1000 --max-prime 1000 --
 <summary>gap_stats output</summary>
 <p>
 
-```bashA
+```bash
+$ time ./combined_sieve -qq --save -u 907_210_1_1000_s15000_l1000M.txt
 Testing m * 907#/210, m = 1 + [0, 1,000)
-999,999,937 (primes 50,847,534/142,065,175)	(seconds: 9.56/9.6 | per m: 0.042)
-	factors     177,931,017 	(interval: 8,887,445 avg m/large_prime interval: 0.0)
+999,999,937 (primes 50,847,535/50847535)	(seconds: 8.36/8.4 | per m: 0.0367)
+	factors         412,684 	(interval: 412,684 avg m/large_prime interval: 0.4)
 	unknowns   123,678/228  	(avg/m: 542.45) (composite: 98.19% +98.192% +6,716,550)
-	~ 2x 23.37 PRP/m		(~ 382730.2 skipped PRP => 40026.5 PRP/seconds)
+	~ 2x 23.37 PRP/m		(~ 382730.2 skipped PRP => 45793.8 PRP/seconds)
 
 
-Saving unknowns to '907_210_1_1000_s15000_l1000M.txt'
+Saving unknowns to 'unknowns/907_210_1_1000_s15000_l1000M.txt'
 
-$ time ./gap_stats --save-unknowns --unknown-filename 907_210_1_1000_s15000_l1000M.txt
+$ time ./gap_stats --save -u 907_210_1_1000_s15000_l1000M.txt
 
 Reading from 1_907_210_1000_s15000_l1000M.txt'
 
 K = 1244 bits, 375 digits, log(K) = 861.69
-Min Gap ~= 10340 (for merit > 12.0)
+Min Gap ~= 15511 (for merit > 18.0)
 
 Found 3484 possible record gaps (20818 to 30158)
 	If found Gap: 20818 (current: 23.66) would improve to 24.159
@@ -224,7 +227,14 @@ Found 3484 possible record gaps (20818 to 30158)
 	If found Gap: 21164 (current: 24.47) would improve to 24.561
 
 prob prime             : 0.0011592
+prob prime coprime     : 0.0140599
 prob prime after sieve : 0.04278
+
+Extended size: 27574 (32.0 merit)
+Using Wheel: 210 for extended probs
+	Average   817 inner    coprimes => 0.000898% prob_greater
+	Average   939 extended coprimes => 0.000161% prob_greater
+Extended prob records setup (0.11 seconds)
 
 ...
 
@@ -517,8 +527,8 @@ $ make combined_sieve gap_stats gap_test_simple
 $ time ./combined_sieve --method1 -qqq --save-unknowns $PARAMS
 $ time ./combined_sieve           -qqq --save-unknowns $PARAMS
 $ md5sum unknowns/907_2190_1_200_s11000_l100M.{txt,m1.txt}
-080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.txt
-080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.m1.txt
+15a5cbff7301262caf047028c05f0525  unknowns/907_2190_1_200_s11000_l100M.txt
+15a5cbff7301262caf047028c05f0525  unknowns/907_2190_1_200_s11000_l100M.m1.txt
 
 $ ./gap_stats --unknown-filename 907_2190_1_200_s11000_l100M.txt
 # Verify RECORD @ 1,7,13,101,137

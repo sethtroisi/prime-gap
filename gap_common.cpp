@@ -654,12 +654,32 @@ std::string Args::gen_unknown_fn(const struct Config& config, std::string suffix
 }
 
 
-bool Args::is_rle_unknowns(std::ifstream& unknown_file) {
+bool Args::is_rle_unknowns(const struct Config& config, std::ifstream& unknown_file) {
     // Get current position
     int pos = unknown_file.tellg();
     assert(pos == 0);
 
     // 100 characters gets past <m>: -count count | <OFFSETS>
+
+    // Check that <m> is <m> not <mi>
+    {
+        int mtest = -1;
+        unknown_file >> mtest;
+        assert(mtest >= 0);
+
+        int64_t m = config.mstart;
+        for (; gcd(m, config.d) > 1; m++);
+
+        if (m != mtest) {
+            cout << endl;
+            cout << "file format has changed," << endl;
+            cout << "lines should start with <mstart + mi> not <mi>" << endl;
+            cout << "you can add <m> to each line, recreate, or git checkout <old commit>" << endl;
+            cout << "Sorry" << endl;
+            exit(1);
+        }
+    }
+
     char t[100] = {0};
     unknown_file.read(t, sizeof(t) - 1);
 

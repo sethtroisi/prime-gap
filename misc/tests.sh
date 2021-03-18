@@ -62,29 +62,29 @@ trace_on
 ./combined_sieve           -qqq --save -u $FN1 --search-db $TEST_DB
 
 # Verify md5sum unknowns/907_2190_1_200_s11000_l100M.{txt,m1.txt}
-md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.txt")
-md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.m1.txt")
+md5sum -c <(echo "15a5cbff7301262caf047028c05f0525  unknowns/907_2190_1_200_s11000_l100M.txt")
+md5sum -c <(echo "15a5cbff7301262caf047028c05f0525  unknowns/907_2190_1_200_s11000_l100M.m1.txt")
 
 
 # Test multithreaded
 rm unknowns/907_2190_1_200_s11000_l100M.txt
 ./combined_sieve           -qqq --save -u $FN1 --search-db $TEST_DB -t 4
-md5sum -c <(echo "080309453b4310e0310a4fb4d1779ffe  unknowns/907_2190_1_200_s11000_l100M.txt")
+md5sum -c <(echo "15a5cbff7301262caf047028c05f0525  unknowns/907_2190_1_200_s11000_l100M.txt")
 
 
 # Test --rle
-#./misc/convert_rle.py -u $FN1
-#md5sum -c <(echo "c36fd8e481e1c329a90745779c2f6ed9  unknowns/907_2190_1_200_s11000_l100M.txt2")
-#rm unknowns/907_2190_1_200_s11000_l100M.txt2
+./misc/convert_rle.py -u $FN1
+md5sum -c <(echo "2ed7b0b9621dab602f204865360a3c56  unknowns/907_2190_1_200_s11000_l100M.txt2")
+rm unknowns/907_2190_1_200_s11000_l100M.txt2
 rm unknowns/907_2190_1_200_s11000_l100M.txt
 
 ./combined_sieve           -qqq --save -u $FN1 --search-db $TEST_DB --rle
-md5sum -c <(echo "c36fd8e481e1c329a90745779c2f6ed9  unknowns/907_2190_1_200_s11000_l100M.txt")
+md5sum -c <(echo "2ed7b0b9621dab602f204865360a3c56  unknowns/907_2190_1_200_s11000_l100M.txt")
 
 
 # Tests MIDDLE_THRESHOLD
 ./combined_sieve           -qqq --save -u $FN2 --search-db $TEST_DB
-md5sum -c <(echo "a0df27e7c40eef11f0d48953676b5a2f  unknowns/$FN2")
+md5sum -c <(echo "a8d85c965ddf2d9601e93c9920a9aa12  unknowns/$FN2")
 
 
 #### GAP STATS ####

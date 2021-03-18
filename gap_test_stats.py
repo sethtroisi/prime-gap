@@ -350,8 +350,8 @@ def validate_prob_record_merit(
     data = GapData()
     with open(args.unknown_filename, "rb") as unknown_file_repeat:
         for line in unknown_file_repeat.readlines():
-            mi, _, _, unknowns = gap_utils.parse_unknown_line(line)
-            log_n = K_log + math.log(args.mstart + mi)
+            m, _, _, unknowns = gap_utils.parse_unknown_line(line)
+            log_n = K_log + math.log(m)
             min_merit_gap = int(args.min_merit * log_n)
 
             calculate_expected_gaps(
@@ -452,7 +452,7 @@ def determine_test_threshold(args, data):
 
 
 def should_print_stats(
-        args, sc, data, mi, m,
+        args, sc, data, m,
         unknown_l, unknown_u,
         prev_p, next_p):
     stop_t = time.time()
@@ -467,8 +467,6 @@ def should_print_stats(
 
         print("\t{:3d} {:4d} <- unknowns -> {:-4d}\t{:4d} <- gap -> {:-4d}".format(
             m, unknown_l, unknown_u, prev_p, next_p))
-        if mi <= 10 and secs < 6:
-            return False
 
         def roundSig(n, sig):
             return '{:g}'.format(float('{:.{p}g}'.format(n, p=sig)))
@@ -527,7 +525,7 @@ def should_print_stats(
 
 def process_result(conn, args, record_gaps, m_probs, data, sc, result):
     """Handles new results"""
-    (m, mi, r_log_n, unknown_l, unknown_u,
+    (m, r_log_n, unknown_l, unknown_u,
      n_tests, next_p,
      p_tests, prev_p,
      prob_record, new_prob_record,
@@ -587,7 +585,7 @@ def process_result(conn, args, record_gaps, m_probs, data, sc, result):
 
     if should_print_stats(
             args, sc, data,
-            mi, m,
+            m,
             unknown_l, unknown_u,
             prev_p, next_p,
     ):

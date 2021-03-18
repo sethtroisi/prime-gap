@@ -913,7 +913,6 @@ int64_t read_unknown_line(
         std::ifstream& unknown_file,
         vector<uint32_t>& unknown_prev,
         vector<uint32_t>& unknown_next) {
-
     int unknown_l = 0;
     int unknown_u = 0;
 
@@ -922,7 +921,11 @@ int64_t read_unknown_line(
         int64_t m_test = -1;
         unknown_file >> m_test;
         assert( m_test >= 0 );
-        //assert( (size_t) m_test == mi );
+
+        if (config.threads == 1) {
+            assert( (size_t) m_test == mi ||
+                    (size_t) m_test == (mi + config.mstart));
+        }
 
         std::string delim;
         char delim_char;
@@ -1302,8 +1305,7 @@ void run_gap_file(
              */
             #pragma omp critical
             {
-                m = config.mstart +
-                    read_unknown_line(config, mi, unknown_file, unknown_prev, unknown_next);
+                m = read_unknown_line(config, mi, unknown_file, unknown_prev, unknown_next);
             }
 
             ProbM probm;
@@ -1525,7 +1527,7 @@ void prime_gap_stats(struct Config config) {
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
         assert( unknown_file.good() );    // Can't open save_unknowns file
 
-        config.compression = Args::is_rle_unknowns(unknown_file);
+        config.compression = Args::is_rle_unknowns(config, unknown_file);
     }
 
     // ----- Merit Stuff

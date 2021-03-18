@@ -101,9 +101,8 @@ def verify_args(args):
             print(f"{fn!r} doesn't match unknown file format")
             exit(1)
 
-        p, d, ms, mi, sl, mp, m1 = match
         (args.p, args.d, args.mstart, args.minc,
-         args.sieve_length, args.max_prime, _) = match
+         args.sieve_length, args.max_prime, m1) = match
         args.method1 = (m1 == ".m1")
 
     args.max_prime *= 10 ** 6
