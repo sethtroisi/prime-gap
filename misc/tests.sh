@@ -82,6 +82,17 @@ rm unknowns/907_2190_1_200_s11000_l100M.txt
 md5sum -c <(echo "2ed7b0b9621dab602f204865360a3c56  unknowns/907_2190_1_200_s11000_l100M.txt")
 
 
+# Test --bitcompress
+./misc/convert_rle.py -u $FN1 --bitcompress
+md5sum -c <(echo "6edd5f50c4f588890a168461a7240c47  unknowns/907_2190_1_200_s11000_l100M.txt2")
+rm unknowns/907_2190_1_200_s11000_l100M.txt2
+rm unknowns/907_2190_1_200_s11000_l100M.txt
+
+./combined_sieve           -qqq --save -u $FN1 --search-db $TEST_DB --bitcompress
+md5sum -c <(echo "6edd5f50c4f588890a168461a7240c47  unknowns/907_2190_1_200_s11000_l100M.txt")
+
+
+
 # Tests MIDDLE_THRESHOLD
 ./combined_sieve           -qqq --save -u $FN2 --search-db $TEST_DB
 md5sum -c <(echo "a8d85c965ddf2d9601e93c9920a9aa12  unknowns/$FN2")

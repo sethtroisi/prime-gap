@@ -124,6 +124,8 @@ def process_line(
     prob_prime_coprime, coprime_extended = gap_test_stats.setup_extended_gap(SL, P, D, prob_prime)
     K_mod_d = K % D
 
+    D_primes, is_offset_coprime, coprime_X = gap_test_stats.setup_bitarray(SL, P, D)
+
     # Ignore KeyboardInterrupt (Manager catches first and sets early_stop_flag)
     # Normal flow is receive sentinel (None) stop
     signal.signal(signal.SIGINT, signal.SIG_IGN)
@@ -146,7 +148,14 @@ def process_line(
 
         m, mi, prev_p, next_p, prob_record, log_n, line = work
 
-        m_test, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
+        if b' || ' in line[:30]:
+            m_test, unknown_l, unknown_u, unknowns = gap_utils.parse_compressed_line(
+                SL, K, D, m,
+                is_offset_coprime, coprime_X, D_primes,
+                line)
+        else:
+            m_test, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
+
         assert m == m_test
 
         # Used for openPFGW

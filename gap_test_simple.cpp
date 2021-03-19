@@ -243,7 +243,7 @@ void prime_gap_test(const struct Config config) {
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
         assert( unknown_file.good() );    // Can't open save_unknowns file
 
-        compression = Args::is_rle_unknowns(config, unknown_file);
+        compression = Args::guess_compression(config, unknown_file);
     }
 
     uint64_t valid_ms = 0;

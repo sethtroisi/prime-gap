@@ -93,7 +93,7 @@ class Args
         static void show_usage(char* name);
         static Config argparse(int argc, char* argv[]);
         static std::string gen_unknown_fn(const struct Config& config, std::string suffix);
-        static bool is_rle_unknowns(
+        static int guess_compression(
             const struct Config& config,
             std::ifstream& unknown_file);
 

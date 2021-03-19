@@ -616,6 +616,8 @@ void Args::show_usage(char* name) {
     cout << "    save unknowns to a temp file where they are processed in a 2nd pass." << endl;
     cout << "  --rle" << endl;
     cout << "    save in run-length encoded format" << endl;
+    cout << "  --bitcompress" << endl;
+    cout << "    save in new bitcompressed format" << endl;
     cout << "  --maxmem <max memory in GB>" << endl;
     cout << "    Combined sieve will print a warning if it's likely to use more memory." << endl;
     cout << endl;
@@ -654,7 +656,7 @@ std::string Args::gen_unknown_fn(const struct Config& config, std::string suffix
 }
 
 
-bool Args::is_rle_unknowns(const struct Config& config, std::ifstream& unknown_file) {
+int Args::guess_compression(const struct Config& config, std::ifstream& unknown_file) {
     // Get current position
     int pos = unknown_file.tellg();
     assert(pos == 0);
@@ -682,8 +684,18 @@ bool Args::is_rle_unknowns(const struct Config& config, std::ifstream& unknown_f
 
     char t[100] = {0};
     unknown_file.read(t, sizeof(t) - 1);
-
     unknown_file.seekg(pos, std::ios_base::beg);
+
+    // Compression 2 uses || seperator
+    for (size_t i = 0; i < strlen(t) - 1; i++) {
+        if (t[i] == '|') {
+            assert(i + 1 < strlen(t));
+            if (t[i + 1] == '|')
+                return 2;
+            break;
+        }
+    }
+
     bool has_space = false;
     bool has_high_range = false;
     for (size_t i = 50; i < strlen(t) - 1; i++) {
@@ -692,7 +704,7 @@ bool Args::is_rle_unknowns(const struct Config& config, std::ifstream& unknown_f
     }
     assert(has_space ^ has_high_range);
 
-    return has_high_range;
+    return has_high_range ? 1 : 0;
 }
 
 
@@ -717,7 +729,8 @@ Config Args::argparse(int argc, char* argv[]) {
         {"save",             no_argument,       0,   7  },
         {"save-unknowns",    no_argument,       0,   7  },
         {"rle",              no_argument,       0,  13  },
-        {"max-mem",           required_argument, 0,  14  },
+        {"bitcompressed",    no_argument,       0,  15  },
+        {"max-mem",          required_argument, 0,  14  },
 
         {"search-db",        required_argument, 0,   9  },
         {"prime-gaps-db",    required_argument, 0,  10  },
@@ -851,6 +864,9 @@ Config Args::argparse(int argc, char* argv[]) {
 
             case 13:
                 config.compression = 1;
+                break;
+            case 15:
+                config.compression = 2;
                 break;
 
             case 14:

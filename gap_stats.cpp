@@ -110,6 +110,7 @@ class ProbNth {
         map<int, double> prob_greater_extended;
 };
 
+
 class ProbM {
     public:
         /**
@@ -136,6 +137,72 @@ class ProbM {
         float expected_gap_prev = 0.0;
         float expected_gap_next = 0.0;
 };
+
+
+class BitArrayHelper {
+    public:
+        /** Helper method for handling config.compression == 2 */
+        vector<uint32_t> P_primes;
+        vector<uint32_t> D_primes;
+
+        /**
+         * vector of x (in interval [-SL, SL]) with (K, x) == 1
+         * values are storted [0, 2*SL] by adding +SL
+         */
+        vector<int32_t> coprime_X;
+        /** is_offset_coprime[x] = ((K, x) == 1) */
+        vector<char> is_offset_coprime;
+
+        /**
+         * (-K) % d, used to find first multiple of prime in: m * K + [-SL, SL]
+         */
+        uint32_t neg_K_mod_d;
+        uint32_t SL_mod_d;
+
+        BitArrayHelper(const struct Config& config, const mpz_t &K) {
+            const unsigned int SL = config.sieve_length;
+            const unsigned int SIEVE_INTERVAL = 2 * SL + 1;
+            const unsigned int D = config.d;
+
+            SL_mod_d = SL % D;
+            neg_K_mod_d = mpz_cdiv_ui(K, D);
+            if (D > 1) {
+                assert(neg_K_mod_d != 0);
+            }
+
+            is_offset_coprime.resize(SIEVE_INTERVAL);
+            std::fill(is_offset_coprime.begin(), is_offset_coprime.end(), 1);
+
+            for (auto prime : get_sieve_primes(config.p)) {
+                if (config.d % prime == 0) {
+                    D_primes.push_back(prime);
+                } else {
+                    P_primes.push_back(prime);
+                }
+            }
+            assert(D_primes.size() <= 9);  // 23# > 2^32
+            assert( (config.d == 1) || (!D_primes.empty() && D_primes.front() >= 2) );
+
+            for (uint32_t prime : P_primes) {
+                uint32_t first = SL % prime;
+                assert( 0 <= first && first < prime );
+                assert( (SL - first) % prime == 0 );
+                for (size_t x = first; x < SIEVE_INTERVAL; x += prime) {
+                    is_offset_coprime[x] = 0;
+                }
+            }
+
+            for (int x = -SL; x <= (signed) SL; x++) {
+                bool test = (mpz_gcd_ui(nullptr, K, abs(x)) == 1);
+                bool test_array = is_offset_coprime[x + SL];
+                assert(test == test_array);
+                if (test) {
+                    coprime_X.push_back(SL + x);
+                }
+            }
+        };
+};
+
 
 void prob_record_vs_plimit(struct Config config);
 void prime_gap_stats(struct Config config);
@@ -909,7 +976,8 @@ void setup_prob_nth(
 /** Parse line (potentially with rle) to two positive lists */
 int64_t read_unknown_line(
         const struct Config& config,
-        uint64_t mi,
+        const BitArrayHelper& helper,
+        uint64_t m_expected,
         std::ifstream& unknown_file,
         vector<uint32_t>& unknown_prev,
         vector<uint32_t>& unknown_next) {
@@ -923,14 +991,76 @@ int64_t read_unknown_line(
         assert( m_test >= 0 );
 
         if (config.threads == 1) {
-            assert( (size_t) m_test == mi ||
-                    (size_t) m_test == (mi + config.mstart));
+            assert( (size_t) m_test == m_expected );
         }
 
-        std::string delim;
+        std::string delim = "ERROR";
         char delim_char;
         unknown_file >> delim;
         assert( delim == ":" );
+
+        if (config.compression == 2) {
+            const unsigned int SL = config.sieve_length;
+            const unsigned int SIEVE_INTERVAL = 2 * SL + 1;
+
+            vector<char> is_offset_fully_coprime(helper.is_offset_coprime);
+
+            int num_coprimes = helper.coprime_X.size();
+            for (uint32_t d : helper.D_primes) {
+                // First multiple = -(m * K - SL) % d = (m * -K + SL) % d
+                uint64_t first = (m_test * helper.neg_K_mod_d + SL) % d;
+                for (uint64_t mult = first; mult < SIEVE_INTERVAL; mult += d) {
+                    if (is_offset_fully_coprime[mult]) {
+                        is_offset_fully_coprime[mult] = 0;
+                        num_coprimes -= 1;
+                    }
+                }
+            }
+
+            int unknown_total = -1;
+            unknown_file >> unknown_total;
+            assert(unknown_total > 0);
+
+            int bytes_check = -1;
+            unknown_file >> bytes_check;
+            assert(bytes_check > 0);
+
+            int bytes_needed = (num_coprimes + 6) / 7;
+            assert(bytes_check == bytes_needed);
+
+            unknown_file >> delim;
+            assert( delim == "||" );
+            delim_char = unknown_file.get(); // get space character
+            assert( delim_char == ' ');
+
+            unsigned char b = 0;
+            int reads = 0;
+            for (int32_t x : helper.coprime_X) {
+                if (is_offset_fully_coprime[x]) {
+                    if (reads % 7 == 0) {
+                        b = unknown_file.get();
+                    }
+                    if ((b & 1) == 0) {
+                        if (x <= (signed) SL) {
+                            unknown_prev.push_back(-x + SL);
+                        } else {
+                            unknown_next.push_back(x - SL);
+                        }
+                    }
+                    b >>= 1;
+                    reads += 1;
+                }
+            }
+
+            size_t unknowns_found = unknown_prev.size() + unknown_next.size();
+
+            assert((unsigned) unknown_total == unknowns_found);
+            assert(unknown_file.peek() == '\n' || unknown_file.peek() == EOF);
+
+            // Reverse unknown_prev
+            std::reverse(unknown_prev.begin(), unknown_prev.end());
+            return m_test;
+        }
 
         unknown_file >> unknown_l;
         unknown_l *= -1;
@@ -944,7 +1074,7 @@ int64_t read_unknown_line(
         unsigned char a, b;
         int c = 0;
         for (int k = 0; k < unknown_l; k++) {
-            if (config.compression) {
+            if (config.compression == 1) {
                 // Read bits in pairs (see save_unknowns_method2)
                 a = unknown_file.get();
                 b = unknown_file.get();
@@ -1228,16 +1358,16 @@ void prob_record_vs_plimit(struct Config config) {
         setup_prob_nth(config, records, poss_record_gaps, gap_probs);
 
         ProbM probm = calculate_probm(
-            config.mstart, N_log, unknown_prev, unknown_next,
-            config, records, min_record_gap, /* min_gap_min_merit */ min_record_gap,
-            gap_probs, /* prob_gap_norm */ empty_vector, empty_vector, empty_vector);
+                config.mstart, N_log, unknown_prev, unknown_next,
+                config, records, min_record_gap, /* min_gap_min_merit */ min_record_gap,
+                gap_probs, /* prob_gap_norm */ empty_vector, empty_vector, empty_vector);
 
         if (config.verbose >= 2) {
             // Breakdown of prob inner, extended, extended^2
             printf("%7ld, %.7f = %0.3g + %0.3g + %0.3g (unaccounted: %.7f)\n",
-                   config.max_prime, probm.record,
-                   probm.record_inner, probm.record_extended, probm.record_extended2,
-                   1 - probm.seen);
+                    config.max_prime, probm.record,
+                    probm.record_inner, probm.record_extended, probm.record_extended2,
+                    1 - probm.seen);
         }
         cout << config.max_prime << ", " << probm.record << endl;
     }
@@ -1249,6 +1379,7 @@ void prob_record_vs_plimit(struct Config config) {
 void run_gap_file(
         /* input */
         const struct Config& config,
+        const mpz_t &K,
         const float K_log,
         const vector<float>& records,
         const uint32_t min_record_gap,
@@ -1264,14 +1395,17 @@ void run_gap_file(
 
     auto s_start_t = high_resolution_clock::now();
 
+    const uint32_t SIEVE_INTERVAL = 2 * config.sieve_length + 1;
+
+
     prob_gap_norm.clear();
     prob_gap_prev.clear();
     prob_gap_next.clear();
 
     // NOTE: prob_gap_prev uses values <= SL, all being the same size helps in store_stats
-    prob_gap_norm.resize(2 * config.sieve_length + 1, 0);
-    prob_gap_prev .resize(2 * config.sieve_length + 1, 0);
-    prob_gap_next.resize(2 * config.sieve_length + 1, 0);
+    prob_gap_norm.resize(SIEVE_INTERVAL, 0);
+    prob_gap_prev .resize(SIEVE_INTERVAL, 0);
+    prob_gap_next.resize(SIEVE_INTERVAL, 0);
 
     // Keep sum & max of several records
     ProbM sum = {};
@@ -1280,16 +1414,18 @@ void run_gap_file(
 
     if (config.verbose >= 1) {
         printf("\n%ld tests M_start(%ld) + mi(%ld to %ld)\n\n",
-               valid_m.size(), config.mstart,
-               valid_m.front(), valid_m.back());
+                valid_m.size(), config.mstart,
+                valid_m.front(), valid_m.back());
     }
+
+    BitArrayHelper helper(config, K);
 
     #pragma omp parallel num_threads(config.threads)
     {
         // Declare thread local prob_gap norm/low/high (later they get sum'ed)
-        vector<float> local_p_gap_norm(2 * config.sieve_length + 1, 0);
-        vector<float> local_p_gap_prev(2 * config.sieve_length + 1, 0);
-        vector<float> local_p_gap_next(2 * config.sieve_length + 1, 0);
+        vector<float> local_p_gap_norm(SIEVE_INTERVAL, 0);
+        vector<float> local_p_gap_prev(SIEVE_INTERVAL, 0);
+        vector<float> local_p_gap_next(SIEVE_INTERVAL, 0);
 
         #pragma omp for ordered schedule(static, 1)
         for (uint64_t mi : valid_m) {
@@ -1305,14 +1441,16 @@ void run_gap_file(
              */
             #pragma omp critical
             {
-                m = read_unknown_line(config, mi, unknown_file, unknown_prev, unknown_next);
+                uint64_t mtest = config.mstart + mi;
+                m = read_unknown_line(
+                    config, helper,
+                    mtest, unknown_file, unknown_prev, unknown_next);
             }
 
             ProbM probm;
             { // This section in parallel
                 // Note slightly different from N_log
                 float log_M = K_log + log(m);
-
                 probm = calculate_probm(m, log_M, unknown_prev, unknown_next,
                                         config, records, min_record_gap, min_gap_min_merit,
                                         gap_probs,
@@ -1527,7 +1665,7 @@ void prime_gap_stats(struct Config config) {
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
         assert( unknown_file.good() );    // Can't open save_unknowns file
 
-        config.compression = Args::is_rle_unknowns(config, unknown_file);
+        config.compression = Args::guess_compression(config, unknown_file);
     }
 
     // ----- Merit Stuff
@@ -1537,7 +1675,6 @@ void prime_gap_stats(struct Config config) {
     double K_log;
     K_stats(config, K, &K_digits, &K_log);
     double N_log = K_log + log(config.mstart);
-    mpz_clear(K);
 
     uint32_t min_gap_min_merit = std::ceil(config.min_merit * N_log);
     if (config.verbose >= 2) {
@@ -1596,7 +1733,7 @@ void prime_gap_stats(struct Config config) {
     // ----- Main calculation
     run_gap_file(
         /* Input */
-        config, K_log,
+        config, K, K_log,
         records, poss_record_gaps.front(), min_gap_min_merit,
         gap_probs,
         valid_m,
@@ -1606,6 +1743,8 @@ void prime_gap_stats(struct Config config) {
         prob_gap_norm, prob_gap_prev, prob_gap_next,
         M_stats
     );
+
+    mpz_clear(K);
 
     vector<float> expected_gap;
     vector<float> probs_record;

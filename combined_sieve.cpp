@@ -99,7 +99,7 @@ int main(int argc, char* argv[]) {
             int sl_max = ((config.p * 20 - 1) / 500 + 1) * 500;
             printf("--sieve_length(%d) should be between [%d, %d]\n",
                 config.sieve_length, sl_min, sl_max);
-            exit(1);
+            //exit(1); TODO REENABLE
         }
 
         if (config.valid == 0) {
@@ -124,6 +124,10 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        if (!config.compression && (config.minc * config.sieve_length) > 100'000'000'000L) {
+            printf("\tSetting --bitcompress to prevent very large output file\n");
+            config.compression = 2;
+        }
         if (!config.compression && (config.minc * config.sieve_length) > 30'000'000'000L) {
             printf("\tSetting --rle to prevent very large output file\n");
             config.compression = 1;
@@ -958,17 +962,19 @@ void method2_increment_print(
 
             stats.current_prob_prime = prob_prime_after_sieve;
 
+            double prp_rate = skipped_prp / (int_secs * config.threads);
             if (config.show_timing) {
                 printf("\t~ 2x %.2f PRP/m\t\t"
-                       "(~ %4.1f skipped PRP => %.1f PRP/seconds)\n",
+                       "(~ %4.1f skipped PRP => %.1f PRP/%s)\n",
                     1 / stats.current_prob_prime, skipped_prp,
-                    skipped_prp / int_secs);
+                    skipped_prp / int_secs,
+                    config.threads > 1 ? "thread-seconds" : "seconds");
             }
             if (stats.validated_factors) {
                 printf("\tValidated %ld factors\n", stats.validated_factors);
             }
 
-            double run_prp_mult = int_secs / (stats.prp_time_estimate * skipped_prp);
+            double run_prp_mult = stats.prp_time_estimate / prp_rate;
             if (run_prp_mult > 0.25 && config.show_timing) {
                 printf("\t\tEstimated ~%.1fx faster to just run PRP now (CTRL+C to stop sieving)\n",
                     run_prp_mult);
@@ -1219,6 +1225,7 @@ Cached setup_caches(const struct Config& config,
 
 void save_unknowns_method2(
         const struct Config& config,
+        const mpz_t &K,
         const Cached &caches,
         const vector<bool> *composite) {
 
@@ -1234,10 +1241,22 @@ void save_unknowns_method2(
     const uint32_t M_start = config.mstart;
     const uint32_t D = config.d;
     const int32_t SL = config.sieve_length;
+    const uint32_t SIEVE_INTERVAL = 2 * SL + 1;
 
+    const uint32_t neg_K_mod_d = mpz_cdiv_ui(K, D);
+    if (D > 1)
+        assert(neg_K_mod_d != 0);
+
+    /**
+     * coprime_X is [0, 2*SL+1]
+     * coprime_prev is [SL-1 ... 0]
+     * coprime_next is [SL+1 ... 2 * SL]
+     */
+    //
     vector<int32_t> coprime_prev;
     vector<int32_t> coprime_next;
     for (int32_t x : caches.coprime_X) {
+
         // Need to head outwards from SL this is easiest way
         if (x > SL) {
             uint32_t dist = x - SL;
@@ -1245,6 +1264,16 @@ void save_unknowns_method2(
             coprime_next.push_back(SL + dist);
         }
     }
+    assert( (signed) caches.coprime_X.size() ==
+            std::count(caches.is_offset_coprime.begin(), caches.is_offset_coprime.end(), 1) );
+
+    // factors of D = P#/D
+    vector<uint32_t> D_primes = get_sieve_primes(config.p);
+    D_primes.erase(
+        std::remove_if(D_primes.begin(), D_primes.end(), [&](uint32_t p){ return config.d % p != 0; }),
+        D_primes.end());
+    assert(D_primes.size() <= 9);  // 23# > 2^32
+    assert(D_primes.front() >= 2);
 
     size_t count_a = 0;
     size_t count_b = 0;
@@ -1260,8 +1289,68 @@ void save_unknowns_method2(
         const auto &x_reindex_m = caches.x_reindex_wheel[m % caches.x_reindex_m_wheel];
         assert(x_reindex_m.size() == (size_t) 2 * SL + 1);
 
-        std::stringstream header;
+        if (config.compression == 2) {
+            vector<char> is_offset_fully_coprime(caches.is_offset_coprime);
+            for (uint32_t d : D_primes) {
+                // First multiple = -(m * K - SL) % d = (m * -K + SL) % d
+                // needs +SL for is_offset_fully_coprime which cancels out
+                uint64_t first = (m * neg_K_mod_d + SL) % d;
+                for (uint64_t mult = first; mult < SIEVE_INTERVAL; mult += d) {
+                    assert(comp[x_reindex_m[mult]] == 1);
+                    is_offset_fully_coprime[mult] = 0;
+                }
+            }
+
+            std::stringstream line;
+
+            /**
+             * b generally has most bits set it's possible, but any value is possible
+             * especially at low sieve depths. So it's nice to avoid `\n` (dec 10) and
+             * other ascii control characters (null, space, ...)
+             * Could use base64 (6 bits / byte) or ascii85 (6.4 bits / byte), but I decided
+             * to just use 1ABCDEFG (7 bits / byte).
+             */
+
+            size_t unknowns = 0;
+            size_t bytes_written = 0;
+            int bit = 0; // index into byte
+            unsigned char b = 1 << 7; // current byte
+
+            // XXX: could potentially improve performance by 2x by using wheel of size two
+            for (int32_t x : caches.coprime_X) {
+                if (is_offset_fully_coprime[x] == 1) {
+                    unsigned char is_composite = comp[x_reindex_m[x]];
+                    b |= is_composite << bit;
+                    unknowns += !is_composite;
+
+                    bit++;
+                    if (bit == 7) { // Every 7 items
+                        bytes_written++;
+                        bit = 0;
+
+                        line << b;
+                        b = 1 << 7;  // reset
+                    }
+                }
+            }
+            if (bit != 0) {
+                bytes_written++;
+                line << b;
+            }
+            count_a += bytes_written;
+            count_b += caches.coprime_X.size();
+
+            #pragma omp ordered
+            {
+                // unknown_file format is "<m> : 19 <bitcount> || <rawbytes> ...\n"
+                unknown_file << m << " : " << unknowns << " " << bytes_written << " || " << line.str() << "\n";
+            }
+
+            continue;
+        }
+
         std::stringstream line;
+        std::stringstream header;
         header << m << " : ";
 
         for (int d = 0; d <= 1; d++) {
@@ -1270,6 +1359,7 @@ void save_unknowns_method2(
             line << "|";
 
             if (config.compression == 1) {
+                // RLE
                 line << " ";
                 int last = SL;
 
@@ -1298,8 +1388,8 @@ void save_unknowns_method2(
                     }
                 }
             }
-            count_a += coprime_prev.size();
-            count_b += found;
+            count_a += found;
+            count_b += coprime_prev.size();
 
             line << " \n"[d];
             char prefix = "-+"[d];
@@ -1313,8 +1403,10 @@ void save_unknowns_method2(
         }
     }
     if (config.verbose >= 2) {
+        // TODO compression=2 message
+
         printf("\tsaving %ld/%ld (%.1f%%) from sieve array\n",
-                count_b, count_a, 100.0f * count_b / count_a);
+                count_a, count_b, 100.0f * count_a / count_b);
     }
 }
 
@@ -2188,7 +2280,7 @@ void prime_gap_parallel(struct Config& config) {
     if (config.save_unknowns) {
         auto s_save_t = high_resolution_clock::now();
 
-        save_unknowns_method2(config, caches, composite);
+        save_unknowns_method2(config, K, caches, composite);
 
         auto s_stop_t = high_resolution_clock::now();
         double   secs = duration<double>(s_stop_t - stats.start_t).count();
@@ -2202,7 +2294,7 @@ void prime_gap_parallel(struct Config& config) {
     }
 
     if (config.verbose >= 2) {
-        printf("combined sieve Done!");
+        printf("combined sieve Done!\n");
     }
 
     delete[] composite;

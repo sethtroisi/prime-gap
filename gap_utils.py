@@ -16,14 +16,16 @@
 
 import array
 import contextlib
+import itertools
 import logging
+import math
 import os
 import re
 import sys
 
 
 UNKNOWN_FILENAME_RE = re.compile(
-    r"^(\d+)_(\d+)_(\d+)_(\d+)_s(\d+)_l(\d+)M(.m1)?(?:.missing)?.txt")
+    r"^(\d+)_(\d+)_(\d+)_(\d+)_s(\d+)_l(\d+)M(.m1|.rle.bit)?.txt")
 
 
 class TeeLogger:
@@ -129,6 +131,58 @@ def verify_args(args):
         args.unknown_filename = fn
 
 
+def parse_compressed_line(SL, K, d, m, is_offset_coprime, coprime_X, D_primes, line):
+    # line might contain newlines as rawbytes
+
+    # XXX: measure cost of this split vs just smarter indexing
+    start, rawbytes = line.split(b" || ")
+    match = re.match(rb"^([0-9]+) : ([0-9]+) ([0-9]+)$", start)
+    assert match, start
+    m_verify, num_unknowns, byte_count = map(int, match.groups())
+    assert m == m_verify, (m, m_verify)
+
+    # Check if rle or raw
+    K_mod_d = K % d
+
+    # TODO array.array
+    unknowns = [[], []]
+
+    is_fully_coprime = is_offset_coprime[:]
+    for d in D_primes:
+        first = (SL - m * K_mod_d) % d
+        for mult in range(first, len(is_fully_coprime), d):
+            is_fully_coprime[mult] = 0
+
+    i = 0
+    for x in coprime_X:
+        #assert (math.gcd(m * K_mod_d + x, d) == 1) == is_fully_coprime[mult]
+
+        if not is_fully_coprime[SL + x]:
+            continue
+
+        if i % 7 == 0:
+            b = rawbytes[i // 7]
+
+        if (b & 1) == 0:
+            if x < 0:
+                unknowns[0].append(x)
+            else:
+                unknowns[1].append(x)
+
+        b >>= 1
+        i += 1
+
+    u_l = len(unknowns[0])
+    u_h = len(unknowns[1])
+    assert (u_l + u_h) == num_unknowns, (u_l, u_h, num_unknowns)
+    assert (i + 6) // 7 == byte_count
+
+    unknowns[0] = list(reversed(unknowns[0]))
+
+    return m, u_l, u_h, unknowns
+
+
+
 def parse_unknown_line(line):
     unknowns = [[], []]
 
@@ -170,6 +224,7 @@ def parse_unknown_line(line):
 
 def convert_to_rle_line(parts):
     """Convert (start, c_l, c_h, (unknowns_l, unknowns_h)) to rle encoded line"""
+    # TODO move to misc_utils, only used by misc/convert_rle.py
 
     assert len(parts) == 4, parts
 
@@ -193,3 +248,38 @@ def convert_to_rle_line(parts):
     return line_bytes.tobytes()
 
 
+def convert_to_bitcompressed_line(K, D, coprime_X, parts):
+    """Convert (start, c_l, c_h, (unknowns_l, unknowns_h)) to rle encoded line"""
+    # TODO move to misc_utils, only used by misc/convert_rle.py
+
+    assert len(parts) == 4, parts
+    M = parts[0]
+
+    coprimes = [x for x in coprime_X if math.gcd(M * K + x, D) == 1]
+    # XXX: could avoid set here by walking chain(reversed(parts[3][0]), parts[3][1])
+    unknowns = set(itertools.chain(parts[3][0], parts[3][1]))
+    # every unknown should be in coprimes
+    assert len(coprime_X) >= len(coprimes) >= len(unknowns)
+
+    bytes_needed = (len(coprimes) + 6) // 7
+
+    line_bytes = array.array('B')
+    line_bytes.extend("{} : {} {} || ".format(M, parts[1] + parts[2], bytes_needed).encode())
+
+    unknowns_test = 0
+    b = 1 << 7
+    for bitcount, x in enumerate(coprimes):
+        is_composite = (x not in unknowns)
+        unknowns_test += not is_composite
+        b |= is_composite << (bitcount % 7)
+
+        if bitcount % 7 == 6:
+            line_bytes.append(b)
+            b = 1 << 7
+
+    if bitcount % 7 != 6:
+        line_bytes.append(b)
+
+    assert unknowns_test == len(unknowns)
+
+    return line_bytes.tobytes()

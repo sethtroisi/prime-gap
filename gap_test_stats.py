@@ -374,28 +374,55 @@ def validate_prob_record_merit(
     lin_reg("expected prev", data_db.prob_merit_gap, data.prob_merit_gap)
 
 
+def _sieve_side(SL, primes):
+    is_coprime = [True for _ in range(SL+1)]
+    for p in primes:
+        for i in range(0, len(is_coprime), p):
+            is_coprime[i] = False
+
+    return is_coprime
+
+
 def setup_extended_gap(SL, P, D, prob_prime):
     """
     Extends from SL to 2*SL based on coprime K
 
     Used in prob_record_one_sided
     """
-    K_primes = [p for p in range(2, P + 1) if gmpy2.is_prime(p)]
+    P_primes = [p for p in range(2, P + 1) if gmpy2.is_prime(p)]
     prob_prime_coprime = prob_prime
-    for p in K_primes:
+    for p in P_primes:
         # multiples of d are handled in prob_record_one_side
         prob_prime_coprime /= (1 - 1 / p)
 
-    is_coprime = [True for _ in range(2 * SL)]
-    for p in K_primes:
+    is_coprime = _sieve_side(2 * SL, (p for p in P_primes if D % p != 0))
+    for p in P_primes:
         if D % p == 0:
             continue
 
         for i in range(0, len(is_coprime), p):
             is_coprime[i] = False
 
-    coprime_x = [i for i, v in enumerate(is_coprime) if v and i > SL]
-    return prob_prime_coprime, coprime_x
+    coprime_X = [i for i, v in enumerate(is_coprime) if v and i > SL]
+    return prob_prime_coprime, coprime_X
+
+
+def setup_bitarray(SL, P, D):
+    """
+    Extends from [-SL, SL] based on coprime K
+
+    Used in parse_compressed_line for --bitcompress'ed lines
+    """
+    D_primes = [p for p in range(2, P + 1) if D % p == 0 and gmpy2.is_prime(p)]
+    K_primes = [p for p in range(2, P + 1) if gmpy2.is_prime(p) and D % p != 0]
+
+    # [0, SL]
+    is_coprime = _sieve_side(SL, K_primes)
+    # [-Sl, SL]
+    is_offset_coprime= is_coprime[::-1] + is_coprime[1:]
+    coprime_X = [x for x, v in zip(range(-SL, SL+1), is_offset_coprime) if v]
+
+    return D_primes, is_offset_coprime, coprime_X
 
 
 def prob_record_one_sided(

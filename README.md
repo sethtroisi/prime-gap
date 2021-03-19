@@ -506,11 +506,15 @@ $ sqlite3 prime-gap-search.db < schema.sql
   * `misc/double_check.py` double checks using `ecm`, to check that small factor aren't found for numbers in unknown-file.txt
     * `python misc/double_check.py --unknown-filename <unknown_file.txt> -c 10`
   * `skipped PRP/s` is checked in [THEORY.md](THEORY.md#skipped-prp-tests)
-* Run Length Encoding
-  * Auto selected for large output files (can be forced with `--rle`).
-      This saves ~60% space, but makes it harder to visually debug data.
-  * method1 doesn't support rle at this time so it also makes verifying `combined_sieve` slightly harder.
-  * `misc/convert_rle.py` can convert existing files to RLE if you want to double check / shrink old files.
+* Compression
+  * method1 doesn't support compression at this time so it also makes verifying `combined_sieve` slightly harder.
+    * `misc/convert_rle.py` can convert existing files to RLE if you want to double check / shrink old files.
+  * Run Length Encoding
+    * `can be forced with `--rle` saves ~60% of space
+  * `--bitcompress`
+    * Saves ~95% of space, but makes code very hard
+    * Stores 7 bits per byte (to avoid ascii control characters) of is_composite array
+    * Reduces size of is_composite by removing any number coprime to K# or d
 
 
 ### Quick test of all functions
@@ -634,6 +638,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Consider new names for prp-top-percent, no-one-side-skip, sieve-length
 * combined\_sieve.cpp
   * [ ] ncurse or similiar status line with all large_prime intervals & eta
+    * Idea that made sense was to printf then reset position to start of status (so that future prints override them)
 * gap\_stats.cpp
 * gap\_test.py
   * [ ] Save prp-percentage finalized for faster skipping of complete files
@@ -648,6 +653,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 ### Low Priority TODOs
 
 * Project
+  * [ ] convert unknown to start with m, not mi
   * [ ] Combined sieve in memory is 2x smaller than disk representation. Can I reuse that representation?
   * [ ] Figure out how to load (in c & python) and set config occasionally
   * [ ] Records / day in status.py or record_check.py
