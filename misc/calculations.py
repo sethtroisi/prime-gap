@@ -116,61 +116,11 @@ def Speedup():
     import matplotlib.pyplot as plt
     import numpy as np
 
-    # for mi in {100,300,1000,3000,10000,30000,100000,300000,1000000}; do ./combined_sieve --save-unknowns --unknown-filename 1511_2190_2000000_${mi}_s20000_l100000M.txt; done
+    # for mi in {100,300,1000,3000,10000,30000,100000,300000,1000000,3000000,10000000}; do \
+    #   time ./combined_sieve --save -u 1511_2190_2000000_${mi}_s20000_l100000M.txt --search-db test.db; done
     # time ./large_sieve 73 1511 2190 -15000 30000 100''000''000''000 1>test.txt
 
-    M_single = 224.6
-    M_cost = {
-        (1, 1): M_single,
-        (100, 26): 931,
-        (300, 79): 945,
-        (1000, 262): 934,
-        (3000, 789): 944,
-        (10000, 2629): 950,
-        (30000, 7891): 1054.6,
-        (100000, 26301): 1184.3,
-        (300000, 78905): 1776.1,
-        (1000000, 263013): 3966,
-        (3000000, 789041): 10550,
-        (10000000, 2630136): 34814,
-    }
-
-    line = "{:>10}\t& {:>7}\t& {:5.0f}\t& {:.4g} \t& {:.0f} \t&\\"
-
-    first = line.format("M", "coprime", 0.0, 1.1, 2.2)
-    first = (first.replace("0.0", "time(s)")
-             .replace("1.1", "time(s)/coprime")
-             .replace("2.2", "speedup (vs sequential sieve)")
-             .replace("\\", "\rule{0pt}{1em}\\"))
-
-    print(first)
-    for (m, coprime), time in M_cost.items():
-        print(line.format(m, coprime, time, time / coprime, M_single / (time / coprime)))
-
-    fig = plt.figure(figsize=(32 / 3, 9 / 3), dpi=200)
-
-    # M = coprime count.
-    M, time = zip(*[(coprime, time) for (_, coprime), time in M_cost.items()])
-    M = np.array(M)
-
-    ax1 = fig.gca()
-    ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
-
-    p1 = ax1.plot(M, time, marker="o", label="combined sieve time(s)")
-    p2 = ax2.plot(M, M_single * M / time, marker="o", label="speedup", color="C1")
-    plt.grid(which="major", axis="y")
-    plt.xscale("log")
-    ax1.set_yscale("log")
-    ax2.set_yscale("log")
-
-    ax1.set_xlabel("Parallel M")
-
-    ax1.set_ylabel("time(s)")
-    ax2.set_ylabel("speedup")
-
-    ax2.legend(p1 + p2, ["time(s)", "speedup"], loc="upper left", framealpha=0.9)
-    plt.tight_layout()
-    plt.show()
+    # Moved to colab
 
 
 def Appendix1():
