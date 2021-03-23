@@ -1065,8 +1065,8 @@ class Cached {
 
 Cached setup_caches(const struct Config& config,
                     const mpz_t &K) {
-    const uint32_t M_start = config.mstart;
-    const uint32_t M_inc = config.minc;
+    const uint64_t M_start = config.mstart;
+    const uint64_t M_inc = config.minc;
 
     const uint32_t P = config.p;
     const uint32_t D = config.d;
@@ -1080,12 +1080,23 @@ Cached setup_caches(const struct Config& config,
     // Allocate temp vectors
     vector<int32_t> valid_mi;
     vector<int32_t> m_reindex(M_inc, -1);
-    vector<bool> is_m_coprime(M_inc, 0);
+    vector<bool> is_m_coprime(M_inc, 1);
     {
+        for (uint32_t p : P_primes) {
+            if (D % p == 0) {
+                // mark off any m = m_start + mi that shares factor with d
+                uint64_t first = (p - (M_start % p)) % p;
+                assert((M_start + first) % p == 0);
+                for (uint64_t mi = first; mi < M_inc; mi += p) {
+                    is_m_coprime[mi] = 0;
+                }
+            }
+        }
+
         for (uint32_t mi = 0; mi < M_inc; mi++) {
-            if (gcd(M_start + mi, D) == 1) {
+            if (is_m_coprime[mi]) {
+                assert(gcd(M_start + mi, D) == 1);
                 m_reindex[mi] = valid_mi.size();
-                is_m_coprime[mi] = 1;
                 valid_mi.push_back(mi);
             }
         }
@@ -1238,7 +1249,7 @@ void save_unknowns_method2(
         assert( unknown_file.is_open() ); // Can't open save_unknowns file
     }
 
-    const uint32_t M_start = config.mstart;
+    const uint64_t M_start = config.mstart;
     const uint32_t D = config.d;
     const int32_t SL = config.sieve_length;
     const uint32_t SIEVE_INTERVAL = 2 * SL + 1;
@@ -1413,7 +1424,7 @@ void save_unknowns_method2(
 
 
 
-void method2_small_primes(const Config &config, method2_stats &stats,
+method2_stats method2_small_primes(const Config &config, method2_stats &stats,
                           const mpz_t &K,
                           uint32_t thread_i,
                           const Cached &caches,
@@ -1466,7 +1477,7 @@ void method2_small_primes(const Config &config, method2_stats &stats,
 
             if (prime >= stop) break;
         }
-        if (!p_and_r.empty() && config.verbose >= 2 && thread_i == 0) {
+        if (!p_and_r.empty() && config.verbose >= 3 && thread_i == 0) {
             printf("\tmethod2_small_primes | %ld primes [%d, %d] stop: %ld\n\n",
                 p_and_r.size(), p_and_r.front().first, p_and_r.back().first, prime);
         }
@@ -1565,6 +1576,7 @@ void method2_small_primes(const Config &config, method2_stats &stats,
     }
 
     mpz_clear(test);
+    return temp_stats;
 }
 
 
@@ -1593,8 +1605,8 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
     // Prime can be larger than int32, prime * SIEVE_LENGTH must not overflow int64
     assert(!__builtin_mul_overflow_p(SIEVE_LENGTH, 4 * MEDIUM_THRESHOLD, (int64_t) 0));
 
-    const uint32_t M_start = config.mstart;
-    const uint32_t M_inc = config.minc;
+    const uint64_t M_start = config.mstart;
+    const uint64_t M_inc = config.minc;
     assert(config.minc <= (size_t) std::numeric_limits<int32_t>::max());
 
 #if METHOD2_WHEEL
@@ -1691,7 +1703,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
             // Separate loop when shift > M_inc not significantly faster
             for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
-                size_t m = M_start + mi;
+                uint64_t m = M_start + mi;
                 uint32_t m_mod2310 = m % 2310;
                 if (!caches.is_m_coprime2310[m_mod2310])
                     continue;
@@ -2190,10 +2202,18 @@ void prime_gap_parallel(struct Config& config) {
                         thread_i, valid_mi_split[thread_i].size(), valid_ms);
             }
 
-            method2_small_primes(config, stats, K, thread_i,
-                                 caches,
-                                 valid_mi_split[thread_i],
-                                 SMALL_THRESHOLD, composite);
+            auto temp_stats = method2_small_primes(
+                config, stats, K, thread_i,
+                caches,
+                valid_mi_split[thread_i],
+                SMALL_THRESHOLD, composite);
+
+            #pragma omp critical
+            { // Check stats in sync
+                stats.interval_t = temp_stats.interval_t;
+                stats.total_unknowns = temp_stats.total_unknowns;
+                stats.current_prob_prime = temp_stats.current_prob_prime;
+            }
         }
     } else {
         // Have to do this to make method2_increment_print happy
