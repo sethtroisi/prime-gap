@@ -637,6 +637,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Check that correct indexes exist in sql db
   * [ ] Consider new names for prp-top-percent, no-one-side-skip, sieve-length
 * combined\_sieve.cpp
+  * [ ] Better sharing work for medium_primes (or skip unknown counting)
+    * [ ] Unknown counting could be faster with boost or `bit_vector`
   * [ ] ncurse or similiar status line with all large_prime intervals & eta
     * Idea that made sense was to printf then reset position to start of status (so that future prints override them)
 * gap\_stats.cpp

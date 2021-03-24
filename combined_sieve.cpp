@@ -838,9 +838,24 @@ void method2_increment_print(
      */
     if (stats.next_print == 0 && stats.count_coprime_p == 0) {
         assert(prime == config.p);
-        // This sligtly duplicates work below, but we don't care.
-        for (size_t i = 0; i < valid_ms; i++) {
-            stats.count_coprime_p += std::count(composite[i].begin(), composite[i].end(), false);
+
+        if (stats.thread == 0) {
+            // Other threads don't print details
+
+            if (config.threads > 1 && config.verbose) {
+                printf("WARNING stats aren't synchronized when "
+                       "running with multiple threads(%d)\n", config.threads);
+            }
+
+            // This sligtly duplicates work below, but we don't care.
+            auto   temp = high_resolution_clock::now();
+            for (size_t i = 0; i < valid_ms; i++) {
+                stats.count_coprime_p += std::count(composite[i].begin(), composite[i].end(), false);
+            }
+            double interval_count_time = duration<double>(high_resolution_clock::now() - temp).count();
+            if (config.verbose >= 2) {
+                printf("\t\t counting unknowns takes ~%.1f seconds\n", interval_count_time);
+            }
         }
     }
 
@@ -848,9 +863,13 @@ void method2_increment_print(
         //printf("\t\tmethod2_increment_print %'ld >= %'ld\n", prime, stats.next_print);
         const size_t max_mult = 100'000'000'000L * (config.threads > 2 ? 10L : 1L);
 
+
         // 10, 20, 30, 40, 50, 100, 200, 300, 400, 500, 1000 ...
         // 60, 70, 80, 90, 100, 120, 150, 200, 300 billion because intervals are wider.
-        size_t extra_multiples = prime > 1'000'000;
+        size_t extra_multiples = prime > ((config.threads > 4) ? 100'000'000 : 1'000'000);
+        // With lots of threads small intervals are very fast
+        // and large % of time is spent counting unknowns
+
         // Next time to increment the interval size
         size_t next_next_mult = (5 + 10 * extra_multiples) * stats.next_mult;
         if (stats.next_mult < max_mult && stats.next_print == next_next_mult) {
@@ -912,52 +931,56 @@ void method2_increment_print(
             stats.prime_factors += stats.large_prime_factors_interval;
             stats.m_stops += stats.m_stops_interval;
 
-            // See THEORY.md
-            double prob_prime_after_sieve = stats.prob_prime * log(prime) * exp(GAMMA);
-            double delta_sieve_prob = (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
-            double skipped_prp = 2 * valid_ms * delta_sieve_prob;
-
-            uint64_t t_total_unknowns = 0;
-            for (size_t i = 0; i < valid_ms; i++) {
-                t_total_unknowns += std::count(composite[i].begin(), composite[i].end(), false);
-            }
-            uint64_t new_composites = stats.total_unknowns - t_total_unknowns;
-
             printf("\tfactors  %'14ld \t"
                    "(interval: %'ld avg m/large_prime interval: %.1f)\n",
                 stats.prime_factors,
                 stats.small_prime_factors_interval + stats.large_prime_factors_interval,
                 1.0 * stats.m_stops_interval / stats.pi_interval);
-            // count_coprime_sieve * valid_ms also makes sense but leads to smaller numbers
-            printf("\tunknowns %'9ld/%-5ld\t"
-                   "(avg/m: %.2f) (composite: %.2f%% +%.3f%% +%'ld)\n",
-                t_total_unknowns, valid_ms,
-                1.0 * t_total_unknowns / valid_ms,
-                100.0 - 100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms),
-                100.0 * new_composites / (SIEVE_INTERVAL * valid_ms),
-                new_composites);
 
-            if (prime > 100000 && prime > config.p && config.threads <= 1) {
-                // verify total unknowns & interval unknowns
-                const double prob_prime_coprime_P = prob_prime_coprime(config);
+            // See THEORY.md
+            double prob_prime_after_sieve = stats.prob_prime * log(prime) * exp(GAMMA);
+            double delta_sieve_prob = (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
+            double skipped_prp = 2 * valid_ms * delta_sieve_prob;
 
-                float e_unknowns = stats.count_coprime_p * (prob_prime_coprime_P / prob_prime_after_sieve);
-
-                float delta_composite_rate = delta_sieve_prob * prob_prime_coprime_P;
-                float e_new_composites = stats.count_coprime_p * delta_composite_rate;
-
-                float error = 100.0 * fabs(e_unknowns - t_total_unknowns) / e_unknowns;
-                float interval_error = 100.0 * fabs(e_new_composites - new_composites) / e_new_composites;
-
-                // TODO: store max error and print at the end.
-                if (config.verbose >= 3 || error > 0.1 ) {
-                    printf("\tEstimated %.3g unknowns found %.3g (%.2f%% error)\n",
-                        e_unknowns, 1.0f * t_total_unknowns, error);
+            if (is_last || config.threads <= 1) {
+                uint64_t t_total_unknowns = 0;
+                for (size_t i = 0; i < valid_ms; i++) {
+                    t_total_unknowns += std::count(composite[i].begin(), composite[i].end(), false);
                 }
-                if (config.verbose >= 3 || interval_error > 0.3 ) {
-                    printf("\tEstimated %.3g new composites found %.3g (%.2f%% error)\n",
-                        e_new_composites, 1.0f * new_composites, interval_error);
+                uint64_t new_composites = stats.total_unknowns - t_total_unknowns;
+
+                // count_coprime_sieve * valid_ms also makes sense but leads to smaller numbers
+                printf("\tunknowns %'9ld/%-5ld\t"
+                       "(avg/m: %.2f) (composite: %.2f%% +%.3f%% +%'ld)\n",
+                    t_total_unknowns, valid_ms,
+                    1.0 * t_total_unknowns / valid_ms,
+                    100.0 - 100.0 * t_total_unknowns / (SIEVE_INTERVAL * valid_ms),
+                    100.0 * new_composites / (SIEVE_INTERVAL * valid_ms),
+                    new_composites);
+
+                if (prime > 100000 && prime > config.p) {
+                    // verify total unknowns & interval unknowns
+                    const double prob_prime_coprime_P = prob_prime_coprime(config);
+
+                    float e_unknowns = stats.count_coprime_p * (prob_prime_coprime_P / prob_prime_after_sieve);
+
+                    float delta_composite_rate = delta_sieve_prob * prob_prime_coprime_P;
+                    float e_new_composites = stats.count_coprime_p * delta_composite_rate;
+
+                    float error = 100.0 * fabs(e_unknowns - t_total_unknowns) / e_unknowns;
+                    float interval_error = 100.0 * fabs(e_new_composites - new_composites) / e_new_composites;
+
+                    // TODO: store max error and print at the end.
+                    if (config.verbose >= 3 || error > 0.1 ) {
+                        printf("\tEstimated %.3g unknowns found %.3g (%.2f%% error)\n",
+                            e_unknowns, 1.0f * t_total_unknowns, error);
+                    }
+                    if (config.verbose >= 3 || interval_error > 0.3 ) {
+                        printf("\tEstimated %.3g new composites found %.3g (%.2f%% error)\n",
+                            e_new_composites, 1.0f * new_composites, interval_error);
+                    }
                 }
+                stats.total_unknowns = t_total_unknowns;
             }
 
             stats.current_prob_prime = prob_prime_after_sieve;
@@ -982,7 +1005,6 @@ void method2_increment_print(
 
             printf("\n");
 
-            stats.total_unknowns = t_total_unknowns;
             stats.small_prime_factors_interval = 0;
             stats.large_prime_factors_interval = 0;
         }
@@ -1743,6 +1765,13 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
             method2_increment_print(prime, caches.valid_ms, composite, stats, config);
         }
     }
+    if (config.verbose >= 2) {
+        time_t rawtime = std::time(nullptr);
+        struct tm *tm = localtime( &rawtime );
+        printf("\tmethod2_medium_primes(thread %d) done @ %d:%02d:%02d\n",
+            thread_i, tm->tm_hour, tm->tm_min, tm->tm_sec);
+    }
+
 
     mpz_clear(test);
     mpz_clear(test2);
@@ -2242,6 +2271,12 @@ void prime_gap_parallel(struct Config& config) {
             }
         }
 
+        /**
+         * Using this parallelization has two side effects
+         * 1. If THREADS is CORES+1 would wait 2x as long
+         * 2. Most threads finish before stats thread
+         *    Then sit idle waiting for final thread to finish.
+         */
         #pragma omp parallel for num_threads(THREADS)
         for (size_t thread_i = 0; thread_i < THREADS; thread_i++) {
             // Helps keep printing in order
