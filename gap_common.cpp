@@ -665,7 +665,7 @@ int Args::guess_compression(const struct Config& config, std::ifstream& unknown_
 
     // Check that <m> is <m> not <mi>
     {
-        int mtest = -1;
+        int64_t mtest = -1;
         unknown_file >> mtest;
         assert(mtest >= 0);
 
@@ -676,7 +676,8 @@ int Args::guess_compression(const struct Config& config, std::ifstream& unknown_
             cout << endl;
             cout << "file format has changed," << endl;
             cout << "lines should start with <mstart + mi> not <mi>" << endl;
-            cout << "you can add <m> to each line, recreate, or git checkout <old commit>" << endl;
+            cout << "\texpected: " << m << " found: " << mtest << endl;
+            cout << "you can add <mstart> to each line, recreate, or git checkout 74241f7c" << endl;
             cout << "Sorry" << endl;
             exit(1);
         }
@@ -768,10 +769,10 @@ Config Args::argparse(int argc, char* argv[]) {
                 config.d = atoi(optarg);
                 break;
             case 1:
-                config.mstart = atoi(optarg);
+                config.mstart = atoll(optarg);
                 break;
             case 2:
-                config.minc = atoi(optarg);
+                config.minc = atoll(optarg);
                 break;
 
             case 'u':
@@ -800,11 +801,11 @@ Config Args::argparse(int argc, char* argv[]) {
                     t = std::strchr(t, '_');
                     t++;
 
-                    config.mstart = atol(t);
+                    config.mstart = atoll(t);
                     t = std::strchr(t, '_');
                     t++;
 
-                    config.minc = atol(t);
+                    config.minc = atoll(t);
                     t = std::strchr(t, '_');
                     assert( t[0] == '_' && t[1] == 's' );
                     t += 2;
