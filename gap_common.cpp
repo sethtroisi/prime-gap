@@ -256,6 +256,47 @@ size_t count_coprime_sieve(const struct Config& config) {
 }
 
 
+/**
+ * Vector of mi, such that gcd(config.mstart + mi, config.d)
+ * Returns a copy, but that "fast" compared to computation
+ */
+pair<vector<bool>, vector<uint32_t>> is_coprime_and_valid_m(const struct Config& config) {
+    const uint64_t M_start = config.mstart;
+    const uint64_t M_inc = config.minc;
+    assert(M_inc < std::numeric_limits<uint32_t>::max());
+
+    const uint32_t D = config.d;
+    const vector<uint32_t> P_primes = get_sieve_primes(config.p);
+    assert( P_primes.back() == config.p);
+
+    vector<uint32_t> valid_mi;
+    vector<bool> is_m_coprime(M_inc, 1);
+
+    for (uint32_t p : P_primes) {
+        if (D % p == 0) {
+            // mark off any m = m_start + mi that shares factor with d
+            uint64_t first = (p - (M_start % p)) % p;
+            assert((M_start + first) % p == 0);
+            for (uint64_t mi = first; mi < M_inc; mi += p) {
+                is_m_coprime[mi] = 0;
+            }
+        }
+    }
+
+    // Slower than dynamic bitset, but fast enough
+    size_t count = std::count(is_m_coprime.begin(), is_m_coprime.end(), 1);
+    valid_mi.reserve(count);
+
+    for (uint32_t mi = 0; mi < M_inc; mi++) {
+        if (is_m_coprime[mi]) {
+            assert(gcd(M_start + mi, D) == 1);
+            valid_mi.push_back(mi);
+        }
+    }
+
+    return {is_m_coprime, valid_mi};
+}
+
 pair<uint64_t, uint64_t> calculate_thresholds_method2(
         const struct Config config,
         size_t count_coprime_sieve,
@@ -526,6 +567,7 @@ double prob_prime_and_stats(const struct Config& config, mpz_t &K) {
     return K_log;
 }
 
+
 /**
  * Change that a number near K is prime
  * GIVEN no factor of K or D => no factor of P#
@@ -541,6 +583,7 @@ double prob_prime_coprime(const struct Config& config) {
 
     return prob_prime_coprime_P;
 }
+
 
 // Small sieve of Eratosthenes.
 vector<uint32_t> get_sieve_primes(uint32_t n) {
@@ -919,6 +962,10 @@ Config Args::argparse(int argc, char* argv[]) {
     if (config.minc <= 0) {
         config.valid = 0;
         cout << "minc must be greater than 0: " << config.minc << endl;
+    }
+    if (config.minc >= std::numeric_limits<int32_t>::max()) {
+        config.valid = 0;
+        cout << "minc must be less than 2B " << config.minc << endl;
     }
 
     if (config.max_prime > 40'000'000'000'000) {

@@ -135,6 +135,11 @@ void K_stats(
 
 
 /* Utils */
+std::pair<vector<bool>, vector<uint32_t>>
+is_coprime_and_valid_m(const struct Config& config);
+
+
+
 std::pair<uint64_t, uint64_t> calculate_thresholds_method2(
         struct Config config,
         size_t count_coprime_sieve,

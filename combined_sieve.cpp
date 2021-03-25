@@ -1037,7 +1037,7 @@ void validate_factor_m_k_x(
 class Cached {
     public:
         // mi such that gcd(m_start + mi, D) = 1
-        vector<int32_t> valid_mi;
+        vector<uint32_t> valid_mi;
         // valid_mi.size()
         size_t valid_ms;
 
@@ -1087,7 +1087,6 @@ class Cached {
 
 Cached setup_caches(const struct Config& config,
                     const mpz_t &K) {
-    const uint64_t M_start = config.mstart;
     const uint64_t M_inc = config.minc;
 
     const uint32_t P = config.p;
@@ -1100,27 +1099,17 @@ Cached setup_caches(const struct Config& config,
     assert( P_primes.back() == P);
 
     // Allocate temp vectors
-    vector<int32_t> valid_mi;
+    vector<uint32_t> valid_mi;
     vector<int32_t> m_reindex(M_inc, -1);
-    vector<bool> is_m_coprime(M_inc, 1);
+    vector<bool> is_m_coprime;
     {
-        for (uint32_t p : P_primes) {
-            if (D % p == 0) {
-                // mark off any m = m_start + mi that shares factor with d
-                uint64_t first = (p - (M_start % p)) % p;
-                assert((M_start + first) % p == 0);
-                for (uint64_t mi = first; mi < M_inc; mi += p) {
-                    is_m_coprime[mi] = 0;
-                }
-            }
-        }
+        auto temp = is_coprime_and_valid_m(config);
+        is_m_coprime = temp.first;
+        valid_mi = temp.second;
 
-        for (uint32_t mi = 0; mi < M_inc; mi++) {
-            if (is_m_coprime[mi]) {
-                assert(gcd(M_start + mi, D) == 1);
-                m_reindex[mi] = valid_mi.size();
-                valid_mi.push_back(mi);
-            }
+        for (uint32_t mii = 0; mii < valid_mi.size(); mii++) {
+            uint32_t mi = valid_mi[mii];
+            m_reindex[mi] = mii;
         }
     }
 
@@ -1450,7 +1439,7 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
                           const mpz_t &K,
                           uint32_t thread_i,
                           const Cached &caches,
-                          const vector<int32_t> &valid_mi,
+                          const vector<uint32_t> &valid_mi,
                           const uint64_t SMALL_THRESHOLD,
                           vector<bool> *composite) {
 
@@ -2064,7 +2053,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
 // Would be nice to pass const but CTRL+C handler changes max_prime
 void prime_gap_parallel(struct Config& config) {
     // Method2
-    const uint32_t M_start = config.mstart;
+    const uint64_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
 
     const uint32_t P = config.p;
@@ -2124,8 +2113,7 @@ void prime_gap_parallel(struct Config& config) {
     assert( MEDIUM_THRESHOLD <= config.max_prime );
 
 #if defined GMP_VALIDATE_LARGE_FACTORS && !defined GMP_VALIDATE_FACTORS
-    // No overflow from gap_common.cpp checks
-    const uint32_t M_end = M_start + M_inc;
+    const uint64_t M_end = M_start + M_inc;
     const uint64_t LARGE_PRIME_THRESHOLD = (1LL << 55) / M_end;
     if (LARGE_PRIME_THRESHOLD < LAST_PRIME && config.verbose >= 1) {
         printf("validating factors from primes > %ld\n", LARGE_PRIME_THRESHOLD);
@@ -2216,7 +2204,7 @@ void prime_gap_parallel(struct Config& config) {
          * It does make printing slightly harder (see awkward inner loop)
          */
 
-        vector<int32_t> valid_mi_split[THREADS];
+        vector<uint32_t> valid_mi_split[THREADS];
         for (size_t i = 0; i < valid_ms; i++) {
             valid_mi_split[i * THREADS / valid_ms].push_back(caches.valid_mi[i]);
         }

@@ -390,7 +390,7 @@ void store_stats(
         vector<float>& prob_gap_prev,
         vector<float>& prob_gap_next,
         /* Per m value */
-        vector<uint64_t>& valid_m,
+        vector<uint32_t>& valid_mi,
         unordered_map<uint64_t,ProbM> &M_stats) {
 
     assert( !is_range_already_processed(config) );
@@ -525,7 +525,7 @@ void store_stats(
     }
 
     size_t row_i = 0;
-    for (uint64_t mi : valid_m) {
+    for (uint64_t mi : valid_mi) {
         uint64_t m = config.mstart + mi;
         ProbM &stats = M_stats[mi];
 
@@ -1385,7 +1385,7 @@ void run_gap_file(
         const uint32_t min_record_gap,
         const uint32_t min_gap_min_merit,
         const ProbNth &gap_probs,
-        vector<uint64_t>& valid_m,
+        vector<uint32_t>& valid_mi,
         std::ifstream& unknown_file,
         /* output */
         vector<float>& prob_gap_norm,
@@ -1413,9 +1413,9 @@ void run_gap_file(
     max_r.record = max_r.highmerit = max_r.is_missing_gap= 1e-10;
 
     if (config.verbose >= 1) {
-        printf("\n%ld tests M_start(%ld) + mi(%ld to %ld)\n\n",
-                valid_m.size(), config.mstart,
-                valid_m.front(), valid_m.back());
+        printf("\n%ld tests M_start(%ld) + mi(%d to %d)\n\n",
+                valid_mi.size(), config.mstart,
+                valid_mi.front(), valid_mi.back());
     }
 
     BitArrayHelper helper(config, K);
@@ -1428,7 +1428,7 @@ void run_gap_file(
         vector<float> local_p_gap_next(SIEVE_INTERVAL, 0);
 
         #pragma omp for ordered schedule(static, 1)
-        for (uint64_t mi : valid_m) {
+        for (uint64_t mi : valid_mi) {
             uint64_t m;
 
             vector <uint32_t> unknown_prev, unknown_next;
@@ -1510,18 +1510,18 @@ void run_gap_file(
 
     /**
      * Workaround the openmp ordered limitations.
-     * Double check that every valid_m was stored once.
+     * Double check that every valid_mi was stored once.
      */
-    assert(valid_m.size() == M_stats.size());
-    for (uint64_t mi : valid_m) {
+    assert(valid_mi.size() == M_stats.size());
+    for (uint64_t mi : valid_mi) {
         assert(M_stats.count(mi) == 1);
     }
 
         // Normalize the probability of gap (across all m) to per m
     for (size_t i = 0; i < prob_gap_norm.size(); i++) {
-        prob_gap_norm[i] /= valid_m.size();
-        prob_gap_prev[i]  /= valid_m.size();
-        prob_gap_next[i] /= valid_m.size();
+        prob_gap_norm[i] /= valid_mi.size();
+        prob_gap_prev[i]  /= valid_mi.size();
+        prob_gap_next[i] /= valid_mi.size();
     }
 
     if (config.verbose >= 0) {
@@ -1715,12 +1715,7 @@ void prime_gap_stats(struct Config config) {
     ProbNth gap_probs;
     setup_prob_nth(config, records, poss_record_gaps, gap_probs);
 
-    vector<uint64_t> valid_m;
-    for (uint64_t mi = 0; mi < config.minc; mi++) {
-        if (gcd(config.mstart + mi, config.d) == 1) {
-            valid_m.push_back(mi);
-        }
-    }
+    vector<uint32_t> valid_mi = is_coprime_and_valid_m(config).second;
 
     /* Over all m values */
     vector<float> prob_gap_norm;
@@ -1736,7 +1731,7 @@ void prime_gap_stats(struct Config config) {
         config, K, K_log,
         records, poss_record_gaps.front(), min_gap_min_merit,
         gap_probs,
-        valid_m,
+        valid_mi,
         /* sieve input */
         unknown_file,
         /* output */
@@ -1797,11 +1792,11 @@ void prime_gap_stats(struct Config config) {
             config,
             secs,
             prob_gap_norm, prob_gap_prev, prob_gap_next,
-            valid_m, M_stats
+            valid_mi, M_stats
         );
     }
 
     if (config.verbose >= 1) {
-        calculate_prp_top_percent(config, valid_m.size(), N_log, probs_record);
+        calculate_prp_top_percent(config, valid_mi.size(), N_log, probs_record);
     }
 }
