@@ -20,9 +20,11 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <istream>
 #include <limits>
 #include <map>
 #include <numeric>
+#include <sstream>
 #include <vector>
 #include <unordered_map>
 
@@ -150,8 +152,13 @@ class BitArrayHelper {
          * values are storted [0, 2*SL] by adding +SL
          */
         vector<int32_t> coprime_X;
+
         /** is_offset_coprime[x] = ((K, x) == 1) */
         vector<char> is_offset_coprime;
+
+        // When D % 2 == 0 =>  m % 2 == 1 => X % 2 == 0
+        vector<int32_t> coprime_X_even;
+        vector<char> is_offset_coprime_even;
 
         /**
          * (-K) % d, used to find first multiple of prime in: m * K + [-SL, SL]
@@ -192,14 +199,30 @@ class BitArrayHelper {
                 }
             }
 
+            // assume m % 2 == 1 => X % 2 == 0
+            is_offset_coprime_even = is_offset_coprime;
+            {
+                for (size_t x = (SL + 1) % 2; x < SIEVE_INTERVAL; x += 2) {
+                    is_offset_coprime_even[x] = 0;
+                }
+            }
+
             for (int x = -SL; x <= (signed) SL; x++) {
                 bool test = (mpz_gcd_ui(nullptr, K, abs(x)) == 1);
                 bool test_array = is_offset_coprime[x + SL];
                 assert(test == test_array);
                 if (test) {
                     coprime_X.push_back(SL + x);
+                    if (D % 2 == 0 && x % 2 == 0) {
+                        coprime_X_even.push_back(SL + x);
+                    }
                 }
             }
+
+            assert(coprime_X.size() == (unsigned) std::count(
+                is_offset_coprime.begin(), is_offset_coprime.end(), 1));
+            assert(coprime_X_even.size() == (unsigned) std::count(
+                is_offset_coprime_even.begin(), is_offset_coprime_even.end(), 1));
         };
 };
 
@@ -250,7 +273,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (config.save_unknowns == 0) {
+    if (!config.save_unknowns && !config.testing) {
         printf("Not saving unknowns (--save-unknowns=0)\n");
     } else if (is_range_already_processed(config)) {
         cout << "Range already processed!" << endl;
@@ -974,11 +997,11 @@ void setup_prob_nth(
 }
 
 /** Parse line (potentially with rle) to two positive lists */
-int64_t read_unknown_line(
+int64_t parse_unknown_line(
         const struct Config& config,
         const BitArrayHelper& helper,
         uint64_t m_expected,
-        std::ifstream& unknown_file,
+        std::istream& input_line,
         vector<uint32_t>& unknown_prev,
         vector<uint32_t>& unknown_next) {
     int unknown_l = 0;
@@ -987,7 +1010,7 @@ int64_t read_unknown_line(
     // Read a line from the file
     {
         int64_t m_test = -1;
-        unknown_file >> m_test;
+        input_line >> m_test;
         assert( m_test >= 0 );
 
         if (config.threads == 1) {
@@ -996,17 +1019,21 @@ int64_t read_unknown_line(
 
         std::string delim = "ERROR";
         char delim_char;
-        unknown_file >> delim;
+        input_line >> delim;
         assert( delim == ":" );
 
         if (config.compression == 2) {
             const unsigned int SL = config.sieve_length;
             const unsigned int SIEVE_INTERVAL = 2 * SL + 1;
 
-            vector<char> is_offset_fully_coprime(helper.is_offset_coprime);
+            const bool d_even = config.d % 2 == 0;
+            vector<char> is_offset_fully_coprime(
+                d_even ? helper.is_offset_coprime_even : helper.is_offset_coprime);
 
-            int num_coprimes = helper.coprime_X.size();
+            int num_coprimes = (d_even ? helper.coprime_X_even : helper.coprime_X).size();
             for (uint32_t d : helper.D_primes) {
+                if (d == 2) continue;  // Handled by is_offset_coprime_even / coprime_X_even
+
                 // First multiple = -(m * K - SL) % d = (m * -K + SL) % d
                 uint64_t first = (m_test * helper.neg_K_mod_d + SL) % d;
                 for (uint64_t mult = first; mult < SIEVE_INTERVAL; mult += d) {
@@ -1018,27 +1045,30 @@ int64_t read_unknown_line(
             }
 
             int unknown_total = -1;
-            unknown_file >> unknown_total;
+            input_line >> unknown_total;
             assert(unknown_total > 0);
 
             int bytes_check = -1;
-            unknown_file >> bytes_check;
+            input_line >> bytes_check;
             assert(bytes_check > 0);
 
             int bytes_needed = (num_coprimes + 6) / 7;
             assert(bytes_check == bytes_needed);
 
-            unknown_file >> delim;
+            input_line >> delim;
             assert( delim == "||" );
-            delim_char = unknown_file.get(); // get space character
+            delim_char = input_line.get(); // get space character
             assert( delim_char == ' ');
+
+            char buffer[bytes_needed];
+            input_line.read(buffer, bytes_needed);
 
             unsigned char b = 0;
             int reads = 0;
-            for (int32_t x : helper.coprime_X) {
+            for (int32_t x : d_even ? helper.coprime_X_even : helper.coprime_X) {
                 if (is_offset_fully_coprime[x]) {
                     if (reads % 7 == 0) {
-                        b = unknown_file.get();
+                        b = buffer[reads / 7];
                     }
                     if ((b & 1) == 0) {
                         if (x <= (signed) SL) {
@@ -1055,20 +1085,20 @@ int64_t read_unknown_line(
             size_t unknowns_found = unknown_prev.size() + unknown_next.size();
 
             assert((unsigned) unknown_total == unknowns_found);
-            assert(unknown_file.peek() == '\n' || unknown_file.peek() == EOF);
+            assert(input_line.peek() == '\n' || input_line.peek() == EOF);
 
             // Reverse unknown_prev
             std::reverse(unknown_prev.begin(), unknown_prev.end());
             return m_test;
         }
 
-        unknown_file >> unknown_l;
+        input_line >> unknown_l;
         unknown_l *= -1;
-        unknown_file >> unknown_u;
+        input_line >> unknown_u;
 
-        unknown_file >> delim;
+        input_line >> delim;
         assert( delim == "|" );
-        delim_char = unknown_file.get(); // get space character
+        delim_char = input_line.get(); // get space character
         assert( delim_char == ' ');
 
         unsigned char a, b;
@@ -1076,29 +1106,29 @@ int64_t read_unknown_line(
         for (int k = 0; k < unknown_l; k++) {
             if (config.compression == 1) {
                 // Read bits in pairs (see save_unknowns_method2)
-                a = unknown_file.get();
-                b = unknown_file.get();
+                a = input_line.get();
+                b = input_line.get();
                 c += (a - 48) * 128 + (b - 48);
             } else {
-                unknown_file >> c;
+                input_line >> c;
                 c *= -1;
             }
             unknown_prev.push_back((unsigned) c);
         }
 
-        unknown_file >> delim;
+        input_line >> delim;
         assert( delim == "|" );
-        delim_char = unknown_file.get(); // get space character
+        delim_char = input_line.get(); // get space character
         assert( delim_char == ' ');
 
         c = 0;
         for (int k = 0; k < unknown_u; k++) {
             if (config.compression) {
-                a = unknown_file.get();
-                b = unknown_file.get();
+                a = input_line.get();
+                b = input_line.get();
                 c += (a - 48) * 128 + (b - 48);
             } else {
-                unknown_file >> c;
+                input_line >> c;
             }
             unknown_next.push_back((unsigned) c);
         }
@@ -1436,16 +1466,27 @@ void run_gap_file(
             /**
              * Note: it would be nice to use ordered here but omp doesn't end
              * the ordered section, omp critical could be used with
-             * read_unknown_line returning mi but still not optimal.
+             * parse_unknown_line returning <m> but still not optimal.
              * https://stackoverflow.com/questions/43540605/must-ordered
              */
+
+            std::string line;
             #pragma omp critical
             {
-                uint64_t mtest = config.mstart + mi;
-                m = read_unknown_line(
-                    config, helper,
-                    mtest, unknown_file, unknown_prev, unknown_next);
+                std::getline(unknown_file, line);
             }
+            std::istringstream iss_line(line);
+
+            /**
+             * XXX: For P=1511 With compression == 2, >50% of runtime is reading unknown_line
+             * Already optimized:
+             *      unbundled file read from parsing
+             *      special cased D % 2
+             */
+            uint64_t mtest = config.mstart + mi;
+            m = parse_unknown_line(
+                config, helper,
+                mtest, iss_line, unknown_prev, unknown_next);
 
             ProbM probm;
             { // This section in parallel
@@ -1460,6 +1501,8 @@ void run_gap_file(
                 sum.record_inner += probm.record_inner;
                 sum.record_extended += probm.record_extended;
                 sum.record_extended2 += probm.record_extended2;
+
+                sum.record_extended2 += line.size();
             }
 
             #pragma omp critical
@@ -1782,7 +1825,7 @@ void prime_gap_stats(struct Config config) {
         printf("\n");
     }
 
-    if (config.save_unknowns) {
+    if (config.save_unknowns && !config.testing) {
         auto s_stop_t = high_resolution_clock::now();
         double   secs = duration<double>(s_stop_t - s_start_t).count();
         // Account for use of multiple threads
