@@ -75,15 +75,6 @@ rm unknowns/907_2190_1_200_s11000_l100M.txt
 ./combined_sieve           -qqq --save -u $FN1 --search-db $TEST_DB -t 4
 md5sum -c <(echo "15a5cbff7301262caf047028c05f0525  unknowns/907_2190_1_200_s11000_l100M.txt")
 
-# Test --bitcompress
-./misc/convert_rle.py -u $FN1M1 --bitcompress
-md5sum -c <(echo "6edd5f50c4f588890a168461a7240c47  unknowns/907_2190_1_200_s11000_l100M.m1.txt2")
-rm unknowns/907_2190_1_200_s11000_l100M.m1.txt2
-
-rm "unknowns/$FN1"
-./combined_sieve           -qqq --save -u $FN1 --search-db $TEST_DB --bitcompress
-md5sum -c <(echo "6edd5f50c4f588890a168461a7240c47  unknowns/907_2190_1_200_s11000_l100M.txt")
-
 # Test --rle
 ./misc/convert_rle.py -u $FN1M1
 md5sum -c <(echo "2ed7b0b9621dab602f204865360a3c56  unknowns/907_2190_1_200_s11000_l100M.m1.txt2")
@@ -92,6 +83,15 @@ rm unknowns/907_2190_1_200_s11000_l100M.m1.txt2
 rm "unknowns/$FN1"
 ./combined_sieve           -qqq --save -u $FN1 --search-db $TEST_DB --rle
 md5sum -c <(echo "2ed7b0b9621dab602f204865360a3c56  unknowns/907_2190_1_200_s11000_l100M.txt")
+
+# Test --bitcompress
+./misc/convert_rle.py -u $FN1M1 --bitcompress
+md5sum -c <(echo "6edd5f50c4f588890a168461a7240c47  unknowns/907_2190_1_200_s11000_l100M.m1.txt2")
+rm unknowns/907_2190_1_200_s11000_l100M.m1.txt2
+
+rm "unknowns/$FN1"
+./combined_sieve           -qqq --save -u $FN1 --search-db $TEST_DB --bitcompress
+md5sum -c <(echo "6edd5f50c4f588890a168461a7240c47  unknowns/907_2190_1_200_s11000_l100M.txt")
 
 
 #### GAP STATS ####
@@ -114,9 +114,10 @@ grep -q 'RECORD : top 100% (    53) sum(prob) = 2.15e-05 (avg: 4.06e-07)' temp_t
 
 #### GAP_TEST ####
 
-./gap_test_simple  -u $FN1 --min-merit 8 -q | tee temp_tests.log
+./gap_test_simple  -u $FN1M1 --min-merit 8 -q | tee temp_tests.log
 # erase (XX.YY/sec)  Z seconds elapsed
-sed -E -i -e 's#[0-9.]+( ?)(tests)?/sec\)#XX.YY\1\2/sec)#' -e 's#[0-9]+ sec#Z sec#' temp_tests.log
+sed -E -i -e 's#[0-9.]+( ?)(tests)?/sec\)#XX.YY\1\2/sec)#' \
+          -e 's#[0-9]+ sec#Z sec#' -e 's#\.m1.txt#.txt#' temp_tests.log
 
 md5sum -c <(echo "42b30c4e7850aa9dbdda509df20a9e92  temp_tests.log")
 
