@@ -1071,8 +1071,8 @@ class Cached {
 
         // Note: Larger wheel eliminates more numbers but takes more space.
         // 6 (saves 2/3 memory), 30 (saves 11/15 memory)
-        uint32_t x_reindex_m_wheel;
-        vector<uint32_t> x_reindex_wheel[METHOD2_WHEEL_MAX];
+        uint32_t x_reindex_wheel_size;
+        vector<uint16_t> x_reindex_wheel[METHOD2_WHEEL_MAX];
         vector<size_t> x_reindex_wheel_count;
 
 
@@ -1084,7 +1084,7 @@ class Cached {
 };
 
 
-
+// TODO make a constructor
 Cached setup_caches(const struct Config& config,
                     const mpz_t &K) {
     const uint64_t M_inc = config.minc;
@@ -1137,16 +1137,15 @@ Cached setup_caches(const struct Config& config,
             wheel /= 5;
         }
     }
-    const uint32_t x_reindex_m_wheel = wheel;
-    assert(x_reindex_m_wheel <= METHOD2_WHEEL_MAX); // Static size in Caches will break;
-    // XXX dynamic use uint16_t when less than 65536 coprimes?
-    vector<uint32_t> x_reindex_wheel[x_reindex_m_wheel];
+    const uint32_t x_reindex_wheel_size = wheel;
+    assert(x_reindex_wheel_size <= METHOD2_WHEEL_MAX); // Static size in Caches will break;
+    vector<uint16_t> x_reindex_wheel[x_reindex_wheel_size];
 #else
-    const uint32_t x_reindex_m_wheel = 1;
-    vector<uint32_t> x_reindex_wheel[1];
+    const uint32_t x_reindex_wheel_size = 1;
+    vector<uint16_t> x_reindex_wheel[1];
 #endif  // METHOD2_WHEEL
 
-    vector<size_t> x_reindex_wheel_count(x_reindex_m_wheel, 0);
+    vector<size_t> x_reindex_wheel_count(x_reindex_wheel_size, 0);
 
     for (uint32_t prime : P_primes) {
         if (D % prime != 0) {
@@ -1175,26 +1174,33 @@ Cached setup_caches(const struct Config& config,
     }
 
     // Start at m_wheel == 0 so that re_index_m_wheel == 1 (D=1) works.
-    uint32_t mod_neg_SL = x_reindex_m_wheel - (SL % x_reindex_m_wheel);
+    uint32_t mod_neg_SL = x_reindex_wheel_size - (SL % x_reindex_wheel_size);
 
-    for (size_t m_wheel = 0; m_wheel < x_reindex_m_wheel; m_wheel++) {
-        if (gcd(x_reindex_m_wheel, m_wheel) > 1) continue;
+    for (size_t m_wheel = 0; m_wheel < x_reindex_wheel_size; m_wheel++) {
+        if (gcd(x_reindex_wheel_size, m_wheel) > 1) continue;
         x_reindex_wheel[m_wheel].resize(SIEVE_INTERVAL, 0);
 
         // (m * K - SL) % wheel => (m_wheel - SL) % wheel
-        uint32_t mod_center = m_wheel * mpz_fdiv_ui(K, x_reindex_m_wheel);
-        uint32_t mod_bottom = (mod_center + mod_neg_SL) % x_reindex_m_wheel;
+        uint32_t mod_center = m_wheel * mpz_fdiv_ui(K, x_reindex_wheel_size);
+        uint32_t mod_bottom = (mod_center + mod_neg_SL) % x_reindex_wheel_size;
 
         size_t coprime_count_wheel = 0;
         for (size_t i = 0; i < SIEVE_INTERVAL; i++) {
             if (is_offset_coprime[i] > 0) {
-                if (gcd(mod_bottom + i, x_reindex_m_wheel) == 1) {
+                if (gcd(mod_bottom + i, x_reindex_wheel_size) == 1) {
                     coprime_count_wheel += 1;
                     x_reindex_wheel[m_wheel][i] = coprime_count_wheel;
                 }
             }
         }
         x_reindex_wheel_count[m_wheel] = coprime_count_wheel;
+
+        #if METHOD2_WHEEL
+            // Only happens when P very large (100K)
+            // Fix by changing x_reindex_wheel type to int32_t
+            //assert(coprime_count_wheel <
+            //       std::numeric_limits<x_reindex_wheel_count[0]::type>::max()); // See comment above.
+        #endif
     }
     // TODO print largest x_reindex_wheel_count for uint16_t work.
 
@@ -1213,7 +1219,7 @@ Cached setup_caches(const struct Config& config,
                 is_m_coprime2310[i] = 0;
 
     assert(count(is_coprime210.begin(), is_coprime210.end(), 1) == 48);
-    assert(210 % x_reindex_m_wheel == 0);   // 210 is a multiple of wheel
+    assert(210 % x_reindex_wheel_size == 0);   // 210 is a multiple of wheel
 
     Cached cache;
 
@@ -1228,12 +1234,12 @@ Cached setup_caches(const struct Config& config,
     cache.x_reindex = x_reindex;
     cache.is_offset_coprime = is_offset_coprime;
 
-    cache.x_reindex_m_wheel = x_reindex_m_wheel;
+    cache.x_reindex_wheel_size = x_reindex_wheel_size;
     cache.x_reindex_wheel_count = x_reindex_wheel_count;
 
     // XXX: because of caches.x_reindex_wheel not being declared here this gets
     // ugly. Some better C++ programer could comment on what to do.
-    for(size_t i = 0; i < x_reindex_m_wheel; i++) {
+    for(size_t i = 0; i < x_reindex_wheel_size; i++) {
         cache.x_reindex_wheel[i].swap(x_reindex_wheel[i]);
     }
 
@@ -1308,7 +1314,7 @@ void save_unknowns_method2(
         assert((signed)mii == caches.m_reindex[mi]);
 
         const auto &comp = composite[mii];
-        const auto &x_reindex_m = caches.x_reindex_wheel[m % caches.x_reindex_m_wheel];
+        const auto &x_reindex_m = caches.x_reindex_wheel[m % caches.x_reindex_wheel_size];
         assert(x_reindex_m.size() == (size_t) 2 * SL + 1);
 
         if (config.compression == 2) {
@@ -1452,7 +1458,7 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     const uint32_t SIEVE_INTERVAL = 2 * SIEVE_LENGTH + 1;
 
-    const uint32_t x_reindex_m_wheel = caches.x_reindex_m_wheel;
+    const uint32_t x_reindex_wheel_size = caches.x_reindex_wheel_size;
 
     assert(P < SMALL_THRESHOLD);
     assert(SMALL_THRESHOLD < (size_t) std::numeric_limits<uint32_t>::max());
@@ -1473,9 +1479,9 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
         for (prime = iter.next_prime(); ; prime = iter.next_prime()) {
             temp_stats.pi_interval += 1;
 
-            if (x_reindex_m_wheel % prime == 0) {
+            if (x_reindex_wheel_size % prime == 0) {
                 if (thread_i == 0 && config.verbose >= 2) {
-                    printf("\t%ld handled by coprime wheel(%d)\n", prime, x_reindex_m_wheel);
+                    printf("\t%ld handled by coprime wheel(%d)\n", prime, x_reindex_wheel_size);
                 }
                 continue;
             }
@@ -1498,9 +1504,9 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
             assert(mii >= 0);
 
             uint64_t m = config.mstart + mi;
-            const std::vector<uint32_t> &x_reindex_m =
+            const auto &x_reindex_m =
 #if METHOD2_WHEEL
-                caches.x_reindex_wheel[m % x_reindex_m_wheel];
+                caches.x_reindex_wheel[m % x_reindex_wheel_size];
 #else
                 caches.x_reindex;
 #endif  // METHOD2_WHEEL
@@ -1603,7 +1609,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
      * composite[m,X] would become composite[X,m]
      * Then reverse the loops (for prime, for X) to (for X, for prime)
      * This would make printing harder (like small primes) and means
-     * x_reindex_m_wheel wouldn't help.
+     * x_reindex_wheel_size wouldn't help.
      * After transpose composite[x, ?] would fit in cache instead of RAM read.
      * This was tried in commit 03e0f6d1 but failed for a number of reasons
      * 1. Takes a long time to invert composite
@@ -1621,7 +1627,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
     assert(config.minc <= (size_t) std::numeric_limits<int32_t>::max());
 
 #if METHOD2_WHEEL
-    const uint32_t x_reindex_m_wheel = caches.x_reindex_m_wheel;
+    const uint32_t x_reindex_wheel_size = caches.x_reindex_wheel_size;
 #endif  // METHOD2_WHEEL
 
     mpz_t test, test2;
@@ -1733,7 +1739,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                 small_factors += 1;
 
 #if METHOD2_WHEEL
-                uint32_t xii = caches.x_reindex_wheel[m % x_reindex_m_wheel][X];
+                uint32_t xii = caches.x_reindex_wheel[m % x_reindex_wheel_size][X];
 #else
                 uint32_t xii = caches.x_reindex[X];
 #endif  // METHOD2_WHEEL
@@ -1781,7 +1787,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
 
     const uint64_t LAST_PRIME = stats.last_prime;
 
-    const uint32_t x_reindex_m_wheel = caches.x_reindex_m_wheel;
+    const uint32_t x_reindex_wheel_size = caches.x_reindex_wheel_size;
 
     // This is a LOT of mutexes (given 1-16 threads) might be better to >> 8
     // If that could keep in memory...
@@ -1804,7 +1810,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
         return temp;
     }();
     assert(count(is_coprime210.begin(), is_coprime210.end(), 1) == 48);
-    assert(210 % x_reindex_m_wheel == 0);   // wheel divides 210
+    assert(210 % x_reindex_wheel_size == 0);   // wheel divides 210
 
     const vector<bool> is_m_coprime2310 = [&]() {
         vector<bool> temp(2310, 1);
@@ -1945,7 +1951,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                  * Filters ~80% (assuming 3 and 5 divide D)
                  * Requires a wide memory read (SL * 8 ~ 1/2 to 3 MB)
                  */
-                uint32_t xii = caches.x_reindex_wheel[m % x_reindex_m_wheel][x];
+                uint32_t xii = caches.x_reindex_wheel[m % x_reindex_wheel_size][x];
 #else
                 uint32_t xii = caches.x_reindex[x];
 #endif
@@ -2091,7 +2097,7 @@ void prime_gap_parallel(struct Config& config) {
     // Various pre-calculated arrays of is_coprime arrays
     const Cached caches = setup_caches(config, K);
     const size_t valid_ms = caches.valid_ms;
-    const uint32_t x_reindex_m_wheel = caches.x_reindex_m_wheel;
+    const uint32_t x_reindex_wheel_size = caches.x_reindex_wheel_size;
 
     const size_t count_coprime_sieve = caches.coprime_X.size();
     assert( count_coprime_sieve % 2 == 0 );
@@ -2153,7 +2159,7 @@ void prime_gap_parallel(struct Config& config) {
                 count_coprime_sieve / 2, SIEVE_LENGTH, guess);
         }
 
-        if (x_reindex_m_wheel > 1) {
+        if (x_reindex_wheel_size > 1) {
             // Update guess with first wheel count for OOM prevention check
             guess = valid_ms * (caches.x_reindex_wheel_count[1] + 1) / MB;
         }
@@ -2169,15 +2175,15 @@ void prime_gap_parallel(struct Config& config) {
 
         size_t allocated = 0;
         for (size_t i = 0; i < valid_ms; i++) {
-            int m_wheel = (M_start + caches.valid_mi[i]) % x_reindex_m_wheel;
-            assert(gcd(m_wheel, x_reindex_m_wheel) == 1);
+            int m_wheel = (M_start + caches.valid_mi[i]) % x_reindex_wheel_size;
+            assert(gcd(m_wheel, x_reindex_wheel_size) == 1);
 
             // +1 reserves extra 0th entry for x_reindex[x] = 0
             composite[i].resize(caches.x_reindex_wheel_count[m_wheel] + 1, false);
             composite[i][0] = true;
             allocated += composite[i].size();
         }
-        if (config.verbose >= 1 && x_reindex_m_wheel > 1) {
+        if (config.verbose >= 1 && x_reindex_wheel_size > 1) {
             printf("%*s", align_print, "");
             printf("coprime wheel %ld/%d, ~%'ldMB\n",
                 allocated / (2 * valid_ms), SIEVE_LENGTH,
