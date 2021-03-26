@@ -100,7 +100,7 @@ trace_off
 DBS="--search-db $TEST_DB --prime-gaps-db $TEST_GAPS_DB"
 trace_on
 
-./gap_stats --save -u $FN1 $DBS --min-merit 8 | tee temp_tests.log
+./gap_stats --save -u $FN1 $DBS --min-merit 8 > temp_tests.log
 
 grep -q 'avg missing prob : 0.0000000' temp_tests.log
 grep -q 'RECORD : top  50% (    26) sum(prob) = 1.50e-05 (avg: 5.77e-07)' temp_tests.log
@@ -114,7 +114,7 @@ grep -q 'RECORD : top 100% (    53) sum(prob) = 2.15e-05 (avg: 4.06e-07)' temp_t
 
 #### GAP_TEST ####
 
-./gap_test_simple  -u $FN1M1 --min-merit 8 -q | tee temp_tests.log
+./gap_test_simple  -u $FN1M1 --min-merit 8 -q > temp_tests.log
 # erase (XX.YY/sec)  Z seconds elapsed
 sed -E -i -e 's#[0-9.]+( ?)(tests)?/sec\)#XX.YY\1\2/sec)#' \
           -e 's#[0-9]+ sec#Z sec#' -e 's#\.m1.txt#.txt#' temp_tests.log
@@ -125,8 +125,16 @@ python gap_test.py -u $FN1 $DBS
 diff <(echo "2") <(sqlite3 $TEST_DB 'SELECT COUNT(*) FROM result WHERE merit > 8')
 diff <(echo "1215") <(sqlite3 $TEST_DB 'SELECT SUM(prp_next+prp_prev) FROM m_stats')
 
+# Plotting
+# FLONG=907_2190_1_20000_s11000_l100M.txt
+# rm -f "unknowns/$FLONG"
+# ./combined_sieve -qqq --save -u $FLONG $DBS
+# ./gap_stats -qqq --save -u $FLONG $DBS
+# python gap_test.py -u $FLONG $DBS --no-one-side-skip --num-plots 3 -t 4
+# rm "unknowns/$FLONG"
+
+
 # TODO
-#  - num-plots
 #  - save-logs
 #  - verify one sided skips
 

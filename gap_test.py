@@ -563,24 +563,24 @@ def prime_gap_test(args):
             if len(valid_mi) > 100000:
                 print("Using first three m vs best/worst/average")
                 # First three lines is easy.
-                unk_mi_of_interest = valid_mi[:3]
+                probs = dict(zip(unk_mi_of_interest, data_db.prob_record_gap))
             else:
                 # Requires reading more of the file,
                 # generates more interesting result (best, worst, average)
                 pi = sorted(zip(data_db.prob_record_gap, valid_mi), reverse=True)
-                unk_mi_of_interest = [pi[0][1], pi[-1][1], pi[len(pi)//2][1]]
+                probs = {mi: pi for pi, mi in (pi[0], pi[-1], pi[len(pi)//2])}
 
             for mi in valid_mi:
                 line = unknown_file_repeat.readline()
                 assert line, mi
-                if mi in unk_mi_of_interest:
+                if mi in probs:
                     m, _, _, unknowns = gap_utils.parse_unknown_line(line)
-                    prob = data_db.prob_record_gap[mi]
+                    prob = probs[mi]
                     assert m == M_start + mi, (m, config.mstart, mi)
 
-                    misc_db.test_unknowns[mi] = (m, prob, unknowns)
+                    misc_db.test_unknowns[m] = (prob, unknowns)
 
-                    if mi == max(unk_mi_of_interest):
+                    if mi == max(probs):
                         break
 
         gap_test_plotting.plot_stuff(

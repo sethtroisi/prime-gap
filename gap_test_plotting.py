@@ -175,8 +175,8 @@ def stats_plots(
             # prob_prev, prev_next for individual m
             # See Prob_nth in gap_stats
             colors = plt.cm.tab10
-            for i, (m, prob, (u_p, u_n)) in enumerate(misc.test_unknowns.items()):
-                label = f"m={args.mstart + mi} prob={prob:.2e}"
+            for i, (m, (prob, (u_p, u_n))) in enumerate(misc.test_unknowns.items()):
+                label = f"m={m} prob={prob:.2e}"
                 color = colors(i)
                 plot_prob_nth(axis_prev, u_p, color, label)
                 plot_prob_nth(axis_next, u_n, color, label)
