@@ -316,7 +316,7 @@ pair<uint64_t, uint64_t> calculate_thresholds_method2(
     uint64_t MEDIUM_CROSSOVER_SEARCH = MEDIUM_MULT * M_PER_P_CROSSOVER;
 
     // XXX: What would it look like to do this more dynamically?
-    // XXX: Everytime prime >= next_mult run a couple through both MEDIUM & LARGE prime and choose faster.
+    // Everytime prime >= next_mult run a couple through both MEDIUM & LARGE prime and choose faster.
 
     uint64_t SMALL_THRESHOLD = std::min((uint64_t) SMALL_MULT * sieve_interval, MEDIUM_CROSSOVER_SMALL);
     if (SMALL_THRESHOLD < sieve_interval) {
@@ -340,8 +340,8 @@ double combined_sieve_method2_time_estimate(
     const double MODULE_SEARCH_SECS = 125e-9;
     // much less important to correctly set.
     const double COUNT_VECTOR_BOOL_PER_SEC = 6871000500;
-    // ~ `primesieve -t1 1e9`
-    const double PRIME_RANGE_SEC = 0.3 / 1e9;
+    // ~ `primesieve -t1 500e9 --dist 1e9'
+    const double PRIME_RANGE_SEC = 0.26 / 1e9;
 
 	const size_t coprimes = 2 * count_coprime_sieve(config);
 	const auto THRESHOLDS = calculate_thresholds_method2(config, coprimes, valid_ms);
@@ -365,9 +365,6 @@ double combined_sieve_method2_time_estimate(
 	const size_t solves = (expected_m_stops + (expected_primes - m_threshold_primes));
     const double m_search_time = solves * MODULE_SEARCH_SECS;
 
-    // TODO: Tune inverse_time and INVERSES_SECS
-	// cout << inverse_time << " " << m_search_time << endl;
-
     const size_t count_prints = 5 * (log10(config.max_prime) - 4);
     const double extra_time =
         // PrimePi takes ~0.3s / billion
@@ -378,7 +375,6 @@ double combined_sieve_method2_time_estimate(
 
     // Estimate still needs to account for:
     //      small primes
-    //      middle primes
     //      marking off factors (small and large)
 
     if (config.verbose >= 2 && config.show_timing) {
@@ -393,7 +389,6 @@ double combined_sieve_method2_time_estimate(
         printf("Estimated K mod/s: %'.0f, estimated time for all mods: %.0f (%.1f%% total)\n",
             1 / mod_time_est, k_mod_time, 100.0 * k_mod_time / total_estimate);
 
-        // XXX: pull from benchmark somehow.
         printf("Estimated modulo_searches(million): %ld, time: %.0f (%.1f%% total)\n",
                 (expected_m_stops + expected_primes) / 1'000'000,
                 m_search_time, 100.0 * m_search_time / total_estimate);

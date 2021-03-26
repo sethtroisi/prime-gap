@@ -1050,8 +1050,11 @@ class Cached {
         vector<int32_t> m_reindex;
         // if gcd(ms + mi, D) = 1
         vector<bool> is_m_coprime;
-        // if (i, D) == 1 (first 2310 values)
-        // XXX: Can I just do is_m_coprime[i] and that will live in cache?
+        /**
+         * is_m_coprime2310[i] = (i, D') == 1
+         * D' has only factors <= 11
+         * first 2310 values
+         */
         vector<bool> is_m_coprime2310;
 
 
@@ -1080,6 +1083,7 @@ class Cached {
 
         /** is_comprime210[i] = (i % 2) &&(i % 3) && (i % 5) && (i % 7) */
         vector<char> is_coprime210;
+
 
     Cached(const struct Config& config, const mpz_t &K) {
         const uint64_t M_inc = config.minc;
@@ -1309,7 +1313,7 @@ void save_unknowns_method2(
             int bit = 0; // index into byte
             unsigned char b = 1 << 7; // current byte
 
-            // XXX: could potentially improve performance by 2x by using wheel of size two
+            // XXX: could use coprime_X_wheel to improve performance a bit
             for (int32_t x : caches.coprime_X) {
                 if (is_offset_fully_coprime[x] == 1) {
                     unsigned char is_composite = comp[x_reindex_m[x]];
@@ -1396,10 +1400,9 @@ void save_unknowns_method2(
         }
     }
     if (config.verbose >= 2) {
-        // TODO compression=2 message
-
-        printf("\tsaving %ld/%ld (%.1f%%) from sieve array\n",
-                count_a, count_b, 100.0f * count_a / count_b);
+        printf("\tsaving %ld/%ld (%.1f%%) %s\n",
+                count_a, count_b, 100.0f * count_a / count_b,
+                config.compression == 2 ? "as bitarray" : "from sieve");
     }
 }
 
@@ -1566,7 +1569,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                            const mpz_t &K,
                            uint32_t thread_i,
                            const Cached &caches,
-                           vector<uint32_t> &coprime_X, // TODO rename to coprime_X_thread
+                           vector<uint32_t> &coprime_X_thread,
                            const uint64_t SMALL_THRESHOLD, const uint64_t MEDIUM_THRESHOLD,
                            vector<bool> *composite) {
     /**
@@ -1673,7 +1676,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
         size_t small_factors = 0;
         // Find m*K = X, X in [L, R]
-        for (int64_t X : coprime_X) {
+        for (int64_t X : coprime_X_thread) {
             // Safe from overflow as SL * prime < int64
             int64_t mi_0 = (X * neg_inv_K + mi_0_shift) % prime;
 
@@ -1690,6 +1693,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                 if (!caches.is_m_coprime2310[m_mod2310])
                     continue;
 
+                // TODO expand and benchmark at mod2310
                 uint32_t n_mod210 = ((caches.K_mod210 * m_mod2310) + X + caches.neg_SL_mod210) % 210;
                 if (!caches.is_coprime210[n_mod210])
                     continue;
@@ -1758,24 +1762,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
     // If that could keep in memory...
     vector<mutex> mutex_mi(caches.valid_ms);
 
-    /**
-     * 7# = 2*3*5*7 = 210
-     * (1/2) * (2/3) * (4/5) * (6/7) = 23%
-     * 77% of numbers have a small factor
-     * Helps avoid wide reads to x_reindex_wheel, m_not_coprime ...
-     */
-    const int32_t K_mod210 = mpz_fdiv_ui(K, 210);
-    const int32_t neg_SL_mod210 = (210 - (SL % 210)) % 210;
-
-    const vector<char> is_coprime210 = []() {
-        vector<char> temp(210, 1);
-        for (int p : {2, 3, 5, 7})
-            for (int i = 0; i < 210; i += p)
-                temp[i] = 0;
-        return temp;
-    }();
-    assert(count(is_coprime210.begin(), is_coprime210.end(), 1) == 48);
-    assert(210 % x_reindex_wheel_size == 0);   // wheel divides 210
+    assert(count(caches.is_coprime210.begin(), caches.is_coprime210.end(), 1) == 48);
 
     const vector<bool> is_m_coprime2310 = [&]() {
         vector<bool> temp(2310, 1);
@@ -1889,14 +1876,12 @@ void method2_large_primes(Config &config, method2_stats &stats,
                  * Check if (m * K + x) has any small factors
                  * Filters 77.2%, Leaves 22.8%
                  *
-                 * want positive mod so correct x - SL to x + ...
+                 * Want positive mod so correct (x - SL) to (x + ...)
                  *
-                 * XXX: Benchmark
-                 * 2x int32 modulo should be faster than 1x int64 modulo
                  * Could save one addition by shifting is_coprime210 table by neg_SL_mod210
                  */
-                uint32_t n_mod210 = ((K_mod210 * m_mod2310) + x + neg_SL_mod210) % 210;
-                if (!is_coprime210[n_mod210])
+                uint32_t n_mod210 = ((caches.K_mod210 * m_mod2310) + x + caches.neg_SL_mod210) % 210;
+                if (!caches.is_coprime210[n_mod210])
                     return;
 
                 // Filters ~75% more (coprime to P#) (requires ~10-200kb)
@@ -2219,7 +2204,10 @@ void prime_gap_parallel(struct Config& config) {
          * To avoid possible synchronization issues round coprime_X_split to a
          * multiples of 8 so vector<bool>[i]  never overlaps between threads
          *
-         * TODO does this actually work (with wheel reindexing per m)
+         * XXX: With wheel reindexing this doesn't work!
+         * only breaks when coprime_X_split[{0,1,2}] and coprime_X_split[{n-2,n-1,n}]
+         * both modify the same composite[m][reindexed] at the sametime
+         * could lock/unlock when using boundy elements but would be lots of code.
          */
         for (size_t t = 0; t < THREADS; t++) {
             bool is_final = (t+1) >= THREADS;
@@ -2286,8 +2274,6 @@ void prime_gap_parallel(struct Config& config) {
     { // Verify some computation.
         // Likely zeroed in the last interval, but needed if no printing
         stats.m_stops += stats.m_stops_interval;
-
-        // TODO move into print method
 
         // See Merten's Third Theorem
         float expected_m_stops = (log(log(LAST_PRIME)) - log(log(MEDIUM_THRESHOLD))) * 2*SL * M_inc;

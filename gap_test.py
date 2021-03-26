@@ -211,7 +211,6 @@ def process_line(
 
             if test_next:
                 # Save partial before starting next_prime
-                # XXX: consider updating prob_record to new_prob_record
                 results_q.put((
                     m, log_n,
                     unknown_l, unknown_u,
@@ -425,14 +424,14 @@ def prime_gap_test(args):
     P = args.p
     D = args.d
 
-    M = args.mstart
+    M_start = args.mstart
     M_inc = args.minc
 
     SL = args.sieve_length
     max_prime = args.max_prime
 
     K, K_digits, K_bits, K_log = K_and_stats(args)
-    M_log = K_log + math.log(M)
+    M_log = K_log + math.log(M_start)
     print("K = {} bits, {} digits, log(K) = {:.2f}".format(K_bits, K_digits, K_log))
 
     # ----- Check if pfgw64 is present for large P
@@ -492,7 +491,7 @@ def prime_gap_test(args):
         args.unknown_filename = fn_with_unk
     unknown_file = open(args.unknown_filename, "rb")
 
-    count_m = misc_utils.count_num_m(M, M_inc, D)
+    count_m = misc_utils.count_num_m(M_start, M_inc, D)
 
     # ----- Load data from prime-gap-search.db
     t0 = time.time()
@@ -511,16 +510,16 @@ def prime_gap_test(args):
     # ----- Sieve stats
     prob_prime = 1 / M_log - 1 / (M_log * M_log)
     prob_prime_after_sieve = gap_test_stats.prob_prime_sieve_length(
-        M, K, D, P, prob_prime, K_digits, SL, max_prime)
+        M_start, K, D, P, prob_prime, K_digits, SL, max_prime)
 
     # ----- Main sieve loop.
 
-    valid_mi = misc_utils.calc_valid_mi(M, M_inc, D)
+    valid_mi = misc_utils.calc_valid_mi(M_start, M_inc, D)
 
     data = gap_test_stats.GapData()
 
-    data.first_m = M + valid_mi[0]
-    data.last_m = M + valid_mi[-1]
+    data.first_m = M_start + valid_mi[0]
+    data.last_m = M_start + valid_mi[-1]
     data.valid_mi = valid_mi
 
     print(f"\nStarting m({len(valid_mi):,}) {data.first_m:,} to {data.last_m:,}")
@@ -560,9 +559,9 @@ def prime_gap_test(args):
             gap_test_stats.validate_prob_record_merit(
                     args, data_db, K_log, prob_prime_after_sieve)
 
-        # XXX: move inside plot_stuff
         with open(args.unknown_filename, "rb") as unknown_file_repeat:
-            if False:
+            if len(valid_mi) > 100000:
+                print("Using first three m vs best/worst/average")
                 # First three lines is easy.
                 unk_mi_of_interest = valid_mi[:3]
             else:
@@ -570,17 +569,16 @@ def prime_gap_test(args):
                 # generates more interesting result (best, worst, average)
                 pi = sorted(zip(data_db.prob_record_gap, valid_mi), reverse=True)
                 unk_mi_of_interest = [pi[0][1], pi[-1][1], pi[len(pi)//2][1]]
-                print("Best, Worst, Avg m:", [M + mi for mi in unk_mi_of_interest])
 
             for mi in valid_mi:
                 line = unknown_file_repeat.readline()
                 assert line, mi
                 if mi in unk_mi_of_interest:
                     m, _, _, unknowns = gap_utils.parse_unknown_line(line)
-                    assert m == config.mstart + mi, (m, config.mstart, mi)
+                    prob = data_db.prob_record_gap[mi]
+                    assert m == M_start + mi, (m, config.mstart, mi)
 
-                    # TODO append valid_mi[k] and prob
-                    misc_db.test_unknowns[mi] = unknowns
+                    misc_db.test_unknowns[mi] = (m, prob, unknowns)
 
                     if mi == max(unk_mi_of_interest):
                         break

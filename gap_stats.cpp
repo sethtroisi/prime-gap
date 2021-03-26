@@ -333,12 +333,12 @@ void load_possible_records(
         const double N_log,
         const vector<float> &records,
         vector<uint32_t> &poss_record_gaps) {
-    // XXX: Records only have 5 sig figs so this method can easily counts records
+    // XXX: Records only have 5 sig figs so this method could possible counts records
     //      from same K but smaller m as possible.
 
     cdouble max_merit_region = N_log < 1400 ? 32 : 28;
     for (size_t g = 2; g < records.size(); g += 2) {
-        // All records > X merit are high likely records, See MAX_RECORD and max_e_c_i
+        // All records > max_merit_region are high likely records, See MAX_RECORD and max_e_c_i
         if (g / N_log > max_merit_region) {
             break;
         }
@@ -996,6 +996,7 @@ void setup_prob_nth(
     }
 }
 
+// TODO: debup with load_and_verify_unknowns in gap_test_simple
 /** Parse line (potentially with rle) to two positive lists */
 int64_t parse_unknown_line(
         const struct Config& config,

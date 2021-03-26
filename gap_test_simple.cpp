@@ -311,7 +311,7 @@ void prime_gap_test(const struct Config config) {
         float merit = gap / (K_log + log(m));
 
         if (merit > min_merit)  {
-            // XXX: write to file or database
+            // TODO: write to file or database
             printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
                 gap, merit, m, P, D, prev_p, next_p);
         }
@@ -328,6 +328,8 @@ void prime_gap_test(const struct Config config) {
               s_tests == 1000 || s_tests == 3000) ) {
             auto s_stop_t = high_resolution_clock::now();
             double   secs = duration<double>(s_stop_t - s_start_t).count();
+
+            // TODO: Record finished mi in log file / db.
 
             if ((config.verbose + is_last) >= 1) {
                 printf("\tm=%ld %4ld <- unknowns -> %-4ld\t%4d <- gap -> %-4d\n",

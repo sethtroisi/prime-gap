@@ -141,11 +141,7 @@ def parse_compressed_line(SL, K, d, m, is_offset_coprime, coprime_X, D_primes, l
     m_verify, num_unknowns, byte_count = map(int, match.groups())
     assert m == m_verify, (m, m_verify)
 
-    # Check if rle or raw
     K_mod_d = K % d
-
-    # TODO array.array
-    unknowns = [[], []]
 
     is_fully_coprime = is_offset_coprime[:]
     for d in D_primes:
@@ -153,9 +149,11 @@ def parse_compressed_line(SL, K, d, m, is_offset_coprime, coprime_X, D_primes, l
         for mult in range(first, len(is_fully_coprime), d):
             is_fully_coprime[mult] = 0
 
+    unknowns = [array.array('l'), array.array('l')]
+
     i = 0
     for x in coprime_X:
-        #assert (math.gcd(m * K_mod_d + x, d) == 1) == is_fully_coprime[mult]
+        # assert (math.gcd(m * K_mod_d + x, d) == 1) == is_fully_coprime[mult]
 
         if not is_fully_coprime[SL + x]:
             continue
