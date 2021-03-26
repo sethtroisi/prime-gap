@@ -642,6 +642,9 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] ncurse or similiar status line with all large_prime intervals & eta
     * Idea that made sense was to printf then reset position to start of status (so that future prints override them)
 * gap\_stats.cpp
+* gap\_test\_simple
+  * [ ] Do in process for very small P
+  * [ ] records to DB what range was tested
 * gap\_test.py
   * [ ] Save prp-percentage finalized for faster skipping of complete files
   * [ ] Validate the unknown-file matches expectations (unknowns / line, ...)
@@ -655,8 +658,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 ### Low Priority TODOs
 
 * Project
-  * [ ] convert unknown to start with m, not mi
-  * [ ] Combined sieve in memory is 2x smaller than disk representation. Can I reuse that representation?
+  * [ ] --rle could be 1/2 the size if I used not distance (X2 - X1) but index in coprime_x
   * [ ] Figure out how to load (in c & python) and set config occasionally
   * [ ] Records / day in status.py or record_check.py
     * [ ] Test if sum(prob_record) matches with --no-one-side-skip
@@ -665,13 +667,11 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Set rid if null (but reasonable range exists)
   * [ ] Check if range_stats needs cleanup after deleting range?
 * combined\_sieve.cpp
-  * [ ] Possible to squeeze maybe 10% out of large P by not contining the search if m is "close" to the end
-    * [ ] Math is probably like prime * m-total > max-prime * m-remaining then stop
+  * [ ] Record final PRP/thread-second rate
   * [ ] Improve optimize D helper
     * [ ] Document D helper
   * [ ] Benchmark GMP_VALIDATE_LARGE_FACTORS
 * gap\_stats.cpp
-  * [ ] Check that records from m < mstart aren't being counted as improvable
   * [ ] Produce P(record) / day / core estimate
   * [ ] Check if higher prob is related to unique (mi % d)
 * gap\_test.py
@@ -701,6 +701,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Fill out gap test section
   * [x] Split out some benchmarking
 * Project level
+  * [x] convert unknown to start with m, not mi
   * [x] Change min-merit to 15, 18, or 20
   * [x] Run length encoding to reduce filesize
   * [x] Move UNKNOWN.txt to unknowns/

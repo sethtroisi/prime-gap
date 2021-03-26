@@ -22,7 +22,7 @@ def calc_valid_mi(ms, mi, d):
     '''
     Equivilant to [mi for mi in range(M_inc) if math.gcd(ms + mi, D) == 1]
     '''
-    valid_mi = array.array('q')
+    valid_mi = array.array('q')  # signed long long AKA int64_t
 
     # Avoids allocating 100M+ byte array for valid
     interval_size = 1000000

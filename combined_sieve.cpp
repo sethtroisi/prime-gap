@@ -100,7 +100,7 @@ int main(int argc, char* argv[]) {
             int sl_max = ((config.p * 20 - 1) / 500 + 1) * 500;
             printf("--sieve_length(%d) should be between [%d, %d]\n",
                 config.sieve_length, sl_min, sl_max);
-            //exit(1); TODO REENABLE
+            exit(1);
         }
 
         if (config.valid == 0) {
@@ -822,7 +822,6 @@ class method2_stats {
         double prob_prime = 0;
         uint64_t last_prime = 0;
 
-        // TODO Figure out how to set this.
         size_t count_coprime_p = 0;
 };
 
@@ -959,7 +958,7 @@ void method2_increment_print(
                     100.0 * new_composites / (SIEVE_INTERVAL * valid_ms),
                     new_composites);
 
-                if (prime > 100000 && prime > config.p) {
+                if (stats.count_coprime_p && prime > 100000 && prime > config.p) {
                     // verify total unknowns & interval unknowns
                     const double prob_prime_coprime_P = prob_prime_coprime(config);
 
@@ -971,7 +970,6 @@ void method2_increment_print(
                     float error = 100.0 * fabs(e_unknowns - t_total_unknowns) / e_unknowns;
                     float interval_error = 100.0 * fabs(e_new_composites - new_composites) / e_new_composites;
 
-                    // TODO: store max error and print at the end.
                     if (config.verbose >= 3 || error > 0.1 ) {
                         printf("\tEstimated %.3g unknowns found %.3g (%.2f%% error)\n",
                             e_unknowns, 1.0f * t_total_unknowns, error);
@@ -1197,7 +1195,6 @@ class Cached {
             }
             #endif
         }
-        // TODO print largest x_reindex_wheel_count for uint16_t work.
 
         K_mod210 = mpz_fdiv_ui(K, 210);
         neg_SL_mod210 = (210 - (SL % 210)) % 210;
@@ -2221,6 +2218,8 @@ void prime_gap_parallel(struct Config& config) {
         /**
          * To avoid possible synchronization issues round coprime_X_split to a
          * multiples of 8 so vector<bool>[i]  never overlaps between threads
+         *
+         * TODO does this actually work (with wheel reindexing per m)
          */
         for (size_t t = 0; t < THREADS; t++) {
             bool is_final = (t+1) >= THREADS;
@@ -2238,6 +2237,11 @@ void prime_gap_parallel(struct Config& config) {
          * 1. If THREADS is CORES+1 would wait 2x as long
          * 2. Most threads finish before stats thread
          *    Then sit idle waiting for final thread to finish.
+         *
+         * Theoretically can do same transform as large_primes
+         * split into intervals <prime range, coprime_X range>
+         * try to keep multiple threads from executing similiar coprime ranges
+         * at the same time...
          */
         #pragma omp parallel for num_threads(THREADS)
         for (size_t thread_i = 0; thread_i < THREADS; thread_i++) {
