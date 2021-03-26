@@ -1078,11 +1078,11 @@ class Cached {
         vector<size_t> x_reindex_wheel_count;
 
 
-        int32_t K_mod210;
-        int32_t neg_SL_mod210;
+        int32_t K_mod2310;
+        int32_t neg_SL_mod2310;
 
-        /** is_comprime210[i] = (i % 2) &&(i % 3) && (i % 5) && (i % 7) */
-        vector<char> is_coprime210;
+        /** is_comprime2310[i] = (i % 2) && (i % 3) && (i % 5) && (i % 7) && (i % 11)*/
+        vector<char> is_coprime2310;
 
 
     Cached(const struct Config& config, const mpz_t &K) {
@@ -1200,13 +1200,13 @@ class Cached {
             #endif
         }
 
-        K_mod210 = mpz_fdiv_ui(K, 210);
-        neg_SL_mod210 = (210 - (SL % 210)) % 210;
+        K_mod2310 = mpz_fdiv_ui(K, 2310);
+        neg_SL_mod2310 = (2310 - (SL % 2310)) % 2310;
 
-        is_coprime210.resize(210, 1);
-        for (int p : {2, 3, 5, 7})
-            for (int i = 0; i < 210; i += p)
-                is_coprime210[i] = 0;
+        is_coprime2310.resize(2*3*5*7*11, 1);
+        for (int p : {2, 3, 5, 7, 11})
+            for (size_t i = 0; i < is_coprime2310.size(); i += p)
+                is_coprime2310[i] = 0;
 
         is_m_coprime2310.resize(2310, 1);
         for (int p : {2, 3, 5, 7, 11})
@@ -1214,8 +1214,12 @@ class Cached {
                 for (int i = 0; i < 2310; i += p)
                     is_m_coprime2310[i] = 0;
 
-        assert(count(is_coprime210.begin(), is_coprime210.end(), 1) == 48);
-        assert(210 % x_reindex_wheel_size == 0);   // 210 is a multiple of wheel
+        assert(count(is_coprime2310.begin(), is_coprime2310.end(), 1) == 480);
+        /**
+         * Because 2310 is a multiple of x_reindex_wheel_size,
+         * x_reindex_wheel will always be true if prefiltered by is_coprime2310[n % 310]
+         */
+        assert(2310 % x_reindex_wheel_size == 0);
     }
 };
 
@@ -1694,8 +1698,8 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                     continue;
 
                 // TODO expand and benchmark at mod2310
-                uint32_t n_mod210 = ((caches.K_mod210 * m_mod2310) + X + caches.neg_SL_mod210) % 210;
-                if (!caches.is_coprime210[n_mod210])
+                uint32_t n_mod2310 = ((caches.K_mod2310 * m_mod2310) + X + caches.neg_SL_mod2310) % 2310;
+                if (!caches.is_coprime2310[n_mod2310])
                     continue;
 
                 // Wide memory read
@@ -1761,18 +1765,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
     // This is a LOT of mutexes (given 1-16 threads) might be better to >> 8
     // If that could keep in memory...
     vector<mutex> mutex_mi(caches.valid_ms);
-
-    assert(count(caches.is_coprime210.begin(), caches.is_coprime210.end(), 1) == 48);
-
-    const vector<bool> is_m_coprime2310 = [&]() {
-        vector<bool> temp(2310, 1);
-        for (int p : {2, 3, 5, 7})
-            if (config.d % p == 0)
-                for (int i = 0; i < 2310; i += p)
-                    temp[i] = 0;
-        return temp;
-    }();
-
 
     // Setup CTRL+C catcher
     signal(SIGINT, signal_callback_handler);
@@ -1869,7 +1861,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 // Filters ~80% more (coprime to D)
                 uint32_t m = (M_start + mi);
                 uint32_t m_mod2310 = m % 2310;
-                if (!is_m_coprime2310[m_mod2310])
+                if (!caches.is_m_coprime2310[m_mod2310])
                     return;
 
                 /**
@@ -1878,10 +1870,10 @@ void method2_large_primes(Config &config, method2_stats &stats,
                  *
                  * Want positive mod so correct (x - SL) to (x + ...)
                  *
-                 * Could save one addition by shifting is_coprime210 table by neg_SL_mod210
+                 * Could save one addition by shifting is_coprime2310 table by neg_SL_mod2310
                  */
-                uint32_t n_mod210 = ((caches.K_mod210 * m_mod2310) + x + caches.neg_SL_mod210) % 210;
-                if (!caches.is_coprime210[n_mod210])
+                uint32_t n_mod2310 = ((caches.K_mod2310 * m_mod2310) + x + caches.neg_SL_mod2310) % 2310;
+                if (!caches.is_coprime2310[n_mod2310])
                     return;
 
                 // Filters ~75% more (coprime to P#) (requires ~10-200kb)
@@ -1905,7 +1897,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
 #else
                 uint32_t xii = caches.x_reindex[x];
 #endif
-                assert(xii > 0); // something wrong with n_mod210 calculation?
+                assert(xii > 0); // something wrong with n_mod2310 calculation?
 
                 // if coprime with K, try to toggle off factor.
                 test_stats.large_prime_factors_interval += 1;

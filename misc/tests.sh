@@ -137,6 +137,7 @@ diff <(echo "1215") <(sqlite3 $TEST_DB 'SELECT SUM(prp_next+prp_prev) FROM m_sta
 # TODO
 #  - save-logs
 #  - verify one sided skips
+#  - verify D=1, D=997
 
 
 #### FINALIZE ####
