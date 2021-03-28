@@ -485,10 +485,15 @@ def should_print_stats(
     stop_t = time.time()
     print_secs = stop_t - sc.last_print_t
 
+    print_small = (1, 10, 30, 100, 300, 1000, 3000, 5000, 10000, 30000, 100000, 300000)
+    # <1000 => 1e6, <2000 => 1e5, <
+    print_every = 10 ** max(0, 16 - int(math.log2(args.p)))
+    assert 1 < print_every <= 10 ** 7, args.p
+
     # Print a little bit if we resume but mostly as we test.
     if ((args.megagap and sc.tested % 10 == 0)
-            or sc.tested in (1, 10, 30, 100, 300, 1000, 3000, 5000, 10000, 30000)
-            or (sc.tested and sc.tested % 100000 == 0)
+            or sc.tested in print_small
+            or (sc.tested and sc.tested % print_every == 0)
             or m == data.last_m or print_secs > 3600): # 24/day
         secs = stop_t - sc.start_t
 

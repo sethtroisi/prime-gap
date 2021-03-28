@@ -989,7 +989,7 @@ void method2_increment_print(
                 printf("\t~ 2x %.2f PRP/m\t\t"
                        "(~ %4.1f skipped PRP => %.1f PRP/%s)\n",
                     1 / stats.current_prob_prime, skipped_prp,
-                    skipped_prp / int_secs,
+                    prp_rate,
                     config.threads > 1 ? "thread-seconds" : "seconds");
             }
             if (stats.validated_factors) {
@@ -1589,6 +1589,23 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
      * 3. REINDEX_WHEEL doesn't work (would require a different reindex)
      */
 
+    /**
+     * Similiar to large primes I want to break this up into a long list of
+     * <Prime Range, comprime_X_range> then parallel over that list so all
+     * work finishes at the same time.
+     *
+     * This suffers from the same stats tracking problem as small/large primes
+     * Here (and for small_primes) it's possible unknowns can be correctly calculated
+     * by having each range calculate count unknowns and summing to the main_stats obj.
+     *
+     * Only tricky bit is either
+     * 1. mutex_mi + locking is needed OR
+     *      ~1/2 of all "factors" are found at 10-1000x rate of below so locking
+     *      much more needed to avoid collision
+     * 2. only one thread can execute per coprime_X_thread_chunk
+     *      still have issue at edges
+     */
+
     const uint32_t SIEVE_LENGTH = config.sieve_length;
     assert(MEDIUM_THRESHOLD <= (size_t)std::numeric_limits<int64_t>::max());
     // Prime can be larger than int32, prime * SIEVE_LENGTH must not overflow int64
@@ -1637,46 +1654,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
         const bool M_parity = M_start & 1;
 
-        /* Unoptimized expressive code
-
-        - // (m + M_start) * K = (X - SIEVE_LENGTH)
-        - // m = (-X*K^-1 - M_start) % p = (X * -(K^-1) - M_start) % p
-          int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
-        - assert( (base_r * (mi_0 + M_start) + dist) % prime == 0 );
-
-        - int64_t mi_0 = ((prime - dist) * inv_K + m_start_shift) % prime;
-        + int64_t mi_0 = (-X * inv_K + SIEVE_LENGTH * inv_K + m_start_shift)
-
-        // Check if X parity == m parity
-        - // (X & 1) == X_odd_test <-> ((X + SIEVE_LENGTH) % 2 == 1)
-        - const bool X_odd_test = (SIEVE_LENGTH & 1) == 0;
-        - const bool M_X_parity = (M_start & 1) ^ (SIEVE_LENGTH & 1);
-        - int32_t dist = X - SIEVE_LENGTH;
-        - if (((dist ^ mi_0) & 1) == M_X_parity)
-        + const bool M_parity = M_start & 1;
-        + if (((X ^ mi_0) & 1) == (M_start & 1))
-
-        - / **
-        -  * When K is odd
-        -  * m parity (even/odd) must not match X parity
-        -  * odd m * odd K + odd X   -> even
-        -  * even m * odd K + even X -> even
-        -  * /
-        - size_t m_odd = (M_start + mi_0) & 1;
-        - if (((X & 1) == X_odd_test) == m_odd)
-        + if (((X^mi_0) & M_start_X_odd_not_same_parity))
-
-            stats.small_prime_factors_interval += 1;
-        -    / *
-        -    // Doesn't seem to help, slightly tested.
-        -    if (D_mod3 && ((dist + K_mod3 * m) % 3 == 0))
-        -        continue;
-        -    if (D_mod5 && ((dist + K_mod5 * m) % 5 == 0))
-        -        continue;
-        -    if (D_mod7 && ((dist + K_mod7 * m) % 7 == 0))
-        -        continue;
-        -    // * /
-        */
+        // Unoptimized expressive code removed after df2054c5
 
         size_t small_factors = 0;
         // Find m*K = X, X in [L, R]
@@ -1697,7 +1675,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                 if (!caches.is_m_coprime2310[m_mod2310])
                     continue;
 
-                // TODO expand and benchmark at mod2310
+                // After initial value this increases by (shift * K_mod2310) % 2310
                 uint32_t n_mod2310 = ((caches.K_mod2310 * m_mod2310) + X + caches.neg_SL_mod2310) % 2310;
                 if (!caches.is_coprime2310[n_mod2310])
                     continue;
@@ -1740,7 +1718,6 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
             thread_i, tm->tm_hour, tm->tm_min, tm->tm_sec);
     }
 
-
     mpz_clear(test);
     mpz_clear(test2);
 }
@@ -1752,6 +1729,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                           const Cached &caches,
                           const uint64_t MEDIUM_THRESHOLD,
                           vector<bool> *composite) {
+    // TODO|XXX: fix for int64 (and in module_search)
     const uint32_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
 
@@ -1795,7 +1773,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
         }
 
         if (config.verbose >= 2) {
-            printf("\tmethod2_large_primes %ld intervals\n", intervals.size());
+            printf("\tmethod2_large_primes %ld intervals\n\n", intervals.size());
         }
     }
 
@@ -1803,6 +1781,20 @@ void method2_large_primes(Config &config, method2_stats &stats,
 
     uint64_t last_processed = 0;
     map<uint64_t, method2_stats> stats_to_process;
+
+    /**
+     * TODO: benchmark firstprivate(cache)
+     * "If a SHARED variable in a parallel region is read by the threads executing the region,
+     * but not written to by any of the threads, then specify that variable to be FIRSTPRIVATE
+     * instead of SHARED. This avoids accessing the variable by dereferencing a pointer, and
+     * avoids cache conflicts." -- https://docs.oracle.com/cd/E19059-01/stud.10/819-0501/7_tuning.html
+     *
+     * But then
+     *
+     * https://stackoverflow.com/questions/7865555/openmp-shared-vs-firstprivate-performancewise
+     * "False sharing does not occur when only reading the variable, that's my understanding on
+     * modern processors at least."
+     */
 
     // Better as "for (const auto &interval : intervals) ..." but not supportted by gcc8
     #pragma omp parallel for schedule(dynamic, 1) num_threads(THREADS)
@@ -1859,7 +1851,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 int32_t x = 2*SL - temp_mod;
 
                 // Filters ~80% more (coprime to D)
-                uint32_t m = (M_start + mi);
+                uint64_t m = (M_start + mi);
                 uint32_t m_mod2310 = m % 2310;
                 if (!caches.is_m_coprime2310[m_mod2310])
                     return;
@@ -1887,12 +1879,9 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 if (!caches.is_m_coprime[mi])
                     return;
 
+                // ~99% of factors have been skipped at this point (1 in 80-90 will mark a factor)
 
 #if METHOD2_WHEEL
-                /**
-                 * Filters ~80% (assuming 3 and 5 divide D)
-                 * Requires a wide memory read (SL * 8 ~ 1/2 to 3 MB)
-                 */
                 uint32_t xii = caches.x_reindex_wheel[m % x_reindex_wheel_size][x];
 #else
                 uint32_t xii = caches.x_reindex[x];
@@ -2183,6 +2172,8 @@ void prime_gap_parallel(struct Config& config) {
     } else {
         // Have to do this to make method2_increment_print happy
         method2_increment_print(config.p, valid_ms, composite, stats, config);
+
+        // XXX: write a random fraction of composite false (and same below).
     }
 
 

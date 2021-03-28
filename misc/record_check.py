@@ -172,12 +172,16 @@ def print_record_gaps(args, gaps):
             if args.sort:
                 record_lines.sort()
 
+            seen = set()
             for line in record_lines:
                 print(line)
+                seen.add(line.split()[0])
+                if len(seen) % 50 == 0:
+                    print()
+
             print()
             print("Records {} unique {} {}".format(
-                len(record_lines),
-                len(set(line.split()[0] for line in record_lines)),
+                len(record_lines), len(seen),
                 f"({len(own_records)} already submitted)" if own_records else ""))
             print("Smallst:", min(record_lines))
             print("Largest:", max(record_lines))

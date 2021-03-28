@@ -634,6 +634,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
       * [ ] Sum and set test-time in finalize? (IGNORE very large values which are likely pause)
       * [ ] Finalize script should update ranges being finalized
     * [ ] Faster finalize.py
+  * [ ] can modulo_search (equation 2/3) be modified so that it only returns odd multiples?
   * [ ] Check that correct indexes exist in sql db
   * [ ] Consider new names for prp-top-percent, no-one-side-skip, sieve-length
 * combined\_sieve.cpp
@@ -658,7 +659,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
 ### Low Priority TODOs
 
 * Project
-  * [ ] --rle could be 1/2 the size if I used not distance (X2 - X1) but index in coprime_x
+  * [ ] --rle could be 1/2 the size if I used coprime_x index instead of x
   * [ ] Figure out how to load (in c & python) and set config occasionally
   * [ ] Records / day in status.py or record_check.py
     * [ ] Test if sum(prob_record) matches with --no-one-side-skip
