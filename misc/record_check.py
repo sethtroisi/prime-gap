@@ -100,6 +100,7 @@ def print_record_gaps(args, gaps):
         small_merit = 0
         own_records = []
         record_lines = []
+        improvements = defaultdict(float)
         for gap in gaps:
             # gapsize, merit, raw_data, startprime, "line"
             size = gap[0]
@@ -161,6 +162,7 @@ def print_record_gaps(args, gaps):
                     if not special:
                         continue
                 else:
+                    improvements[gap[0]] = max(improvements[gap[0]], improvement)
                     record_lines.append(raw_data)
 
                 print("\tRecord {:5} | {:70s} | Gap={:<6} (old: {:.2f}{} +{:.2f})".format(
@@ -183,6 +185,8 @@ def print_record_gaps(args, gaps):
             print("Records {} unique {} {}".format(
                 len(record_lines), len(seen),
                 f"({len(own_records)} already submitted)" if own_records else ""))
+            print("Merit  : +{:.2f} total, +{:.2f} for {}".format(
+                sum(improvements.values()), *max((v, k) for k, v in improvements.items())))
             print("Smallst:", min(record_lines))
             print("Largest:", max(record_lines))
             if small_merit:
