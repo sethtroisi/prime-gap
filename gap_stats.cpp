@@ -1459,8 +1459,9 @@ void run_gap_file(
         vector<float> local_p_gap_next(SIEVE_INTERVAL, 0);
 
         #pragma omp for ordered schedule(static, 1)
-        for (uint64_t mi : valid_mi) {
-            uint64_t m;
+        //for (uint32_t mi : valid_m) {
+        for (size_t i = 0; i < valid_mi.size(); i++) {
+            uint32_t mi = valid_mi[i];
 
             vector <uint32_t> unknown_prev, unknown_next;
 
@@ -1485,7 +1486,7 @@ void run_gap_file(
              *      special cased D % 2
              */
             uint64_t mtest = config.mstart + mi;
-            m = parse_unknown_line(
+            uint64_t m = parse_unknown_line(
                 config, helper,
                 mtest, iss_line, unknown_prev, unknown_next);
 
