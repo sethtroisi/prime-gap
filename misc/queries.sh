@@ -18,21 +18,21 @@ set -eu
 
 echo
 
-sqlite3 gaps.db 'SELECT merit,year,discoverer,startprime FROM gaps ORDER BY merit desc LIMIT 10'
+sqlite3 gaps.db -separator $'\t' 'SELECT merit,year,discoverer,startprime FROM gaps ORDER BY merit desc LIMIT 10'
 
 echo -e "\n\n\n"
 
-sqlite3 gaps.db 'SELECT year,COUNT(*) FROM gaps WHERE year > 2010 GROUP BY 1'
+sqlite3 gaps.db -separator $'\t' 'SELECT year,COUNT(*) FROM gaps WHERE year > 2010 GROUP BY 1'
 
 echo -e "\n\n\n"
 
-sqlite3 gaps.db 'SELECT * FROM gaps WHERE gapsize in (15122, 19246, 19352, 38162, 42752, 49646, 78542, 95278, 96638, 98002, 98122, 98818, 99418) ORDER by year DESC LIMIT 5'
+sqlite3 gaps.db 'SELECT * FROM gaps WHERE gapsize in (19246, 19352, 38162, 42752, 49646, 78542, 96638, 98002, 98122, 98818, 99418) ORDER by year DESC LIMIT 5'
 echo "..."
-sqlite3 gaps.db 'SELECT COUNT(*)||" Remaining" FROM gaps WHERE gapsize in (15122, 19246, 19352, 38162, 42752, 49646, 78542, 95278, 96638, 98002, 98122, 98818, 99418) AND year < 2020'
+sqlite3 gaps.db 'SELECT COUNT(*)||" Remaining" FROM gaps WHERE gapsize in (19246, 19352, 38162, 42752, 49646, 78542, 96638, 98002, 98122, 98818, 99418) AND year < 2020'
 
 echo -e "\n\n\n"
 
-MANY="$(sqlite3 gaps.db 'SELECT startprime FROM gaps' | sed -n 's!^[^/]*[^0-9/]\([0-9]\+#\).*!\1!p' | sort | uniq -c | sort -nr | awk '$1 > 200')"
+MANY="$(sqlite3 gaps.db 'SELECT startprime FROM gaps' | sed -n 's!^[^/]*[^0-9/]\([0-9]\+#\).*!\1!p' | sort | uniq -c | sort -nr | awk '$1 > 200' | sed 's/#//')"
 
 echo "$MANY" | awk '{ ("sqlite3 gaps.db \"SELECT discoverer,count(*),round(max(merit),2),round(avg(merit),2),min(gapsize),max(gapsize) FROM gaps WHERE startprime GLOB \\\"*[ *]" $2 "*\\\" GROUP BY 1 ORDER BY 2 DESC LIMIT 1\"") | getline freq; print($0 "\t" freq); }'
 
@@ -43,5 +43,5 @@ echo -e "\n\n\n"
 #
 
 for P in $(echo "$MANY" | head -n 5 | awk '{print $2}'); do
-        sqlite3 gaps.db "SELECT \"$P\",*,fifth_missing-min_gap FROM (SELECT *,(SELECT gapsize FROM gaps WHERE (merit+0.25)/gapsize<(min_merit/min_gap) LIMIT 1,5) as fifth_missing FROM (SELECT discoverer,count(*),round(max(merit),2),round(avg(merit),2),min(merit) as min_merit,min(gapsize) as min_gap,max(gapsize) FROM gaps WHERE startprime GLOB \"*[ *]$P*\" GROUP BY 1 ORDER BY 2 DESC LIMIT 1))"
+        sqlite3 -separator $'\t' gaps.db "SELECT \"$P#\",*,fifth_missing-min_gap,ROUND(1.0*(fifth_missing-min_gap)/$P,2) FROM (SELECT *,(SELECT gapsize FROM gaps WHERE (gapsize/merit-15)>(min_gap/min_merit) LIMIT 1,5) as fifth_missing FROM (SELECT discoverer,count(*),round(max(merit),2),round(avg(merit),2),min(merit) as min_merit,min(gapsize) as min_gap,max(gapsize) FROM gaps WHERE startprime GLOB \"*[ *]$P#*\" GROUP BY 1 ORDER BY 2 DESC LIMIT 1))"
 done
