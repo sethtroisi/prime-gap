@@ -949,9 +949,9 @@ Config Args::argparse(int argc, char* argv[]) {
     }
 
     int64_t last_m = config.mstart + config.minc;
-    if (last_m <= 0 || last_m > 4'000'000'001 ) {
+    if (last_m <= 0 || last_m > 10'000'000'001 ) {
         config.valid = 0;
-        cout << "mstart + minc must be <= 4e9" << endl;
+        cout << "mstart + minc must be <= 10e9" << endl;
     }
 
     if (config.minc <= 0) {
@@ -974,7 +974,7 @@ Config Args::argparse(int argc, char* argv[]) {
     }
 
     /**
-     * Overflow happens when base_r * mi > int64.
+     * Overflow happens when base_r * (M + mi) > int64.
      * Given base_r < p, mi < max_m this happens rarely when log2(...) = 65
      * But more and more frequently after.
      * For 1-2% performance modulo_search_euclid_all_large handles these safely.

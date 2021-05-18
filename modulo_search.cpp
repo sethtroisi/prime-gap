@@ -195,12 +195,12 @@ uint64_t _modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_
  * find (base_r * (M + mi) + SL) <= 2 * SL
  * Skips solutions where gcd((M + mi), D) > 1
  * returns:
- *      0 <= mi < max_m (valid solution)
- *      max_m (no more solutions)
+ *      0 <= mi < max_mi (valid solution)
+ *      max_mi (no more solutions)
  */
 /* Only used by Benchmark */
 uint64_t modulo_search_euclid_gcd2(
-        uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
+        uint64_t M, uint64_t D, uint64_t max_mi, uint64_t SL,
         uint64_t prime, uint64_t base_r) {
 
     uint64_t modulo = ((__int128) base_r * M + SL) % prime;
@@ -212,8 +212,8 @@ uint64_t modulo_search_euclid_gcd2(
         if ( modulo <= two_SL ) {
             if (gcd(D, (M + mi) % D) > 1) {
                 mi += 1;
-                if (mi >= max_m)
-                    return max_m;
+                if (mi >= max_mi)
+                    return max_mi;
 
                 modulo += base_r;
                 if (modulo >= prime) modulo -= prime;
@@ -228,8 +228,8 @@ uint64_t modulo_search_euclid_gcd2(
         //assert( 0 <= low && high < prime );
 
         mi += _modulo_search_euclid(prime, base_r, low, high);
-        if (mi >= max_m)
-            return max_m;
+        if (mi >= max_mi)
+            return max_mi;
 
         // 0 < base_r, mi < prime.
 
@@ -249,12 +249,12 @@ uint64_t modulo_search_euclid_gcd2(
 }
 
 uint64_t modulo_search_euclid_gcd(
-        uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
+        uint64_t M, uint64_t D, uint64_t max_mi, uint64_t SL,
         uint64_t prime, uint64_t base_r) {
     uint64_t mi = 0;
 
     uint64_t modulo = ((__int128) base_r * M) % prime;
-    while (mi < max_m) {
+    while (mi < max_mi) {
         if ( (modulo <= SL) || (modulo + SL) >= prime) {
             if (gcd(M + mi, D) > 1) {
                 mi += 1;
@@ -273,25 +273,25 @@ uint64_t modulo_search_euclid_gcd(
 
         uint64_t mi2 = _modulo_search_euclid(prime, base_r, low, high);
         mi += mi2;
-        if (mi >= max_m)
-            return max_m;
+        if (mi >= max_mi)
+            return max_mi;
 
         __int128 mult = (__int128) base_r * (M + mi);
         modulo = mult % prime;
 
         assert( (modulo <= SL) || (modulo + SL) >= prime );
     }
-    return max_m;
+    return max_mi;
 }
 
 
-/* Used when (M + max_m) * p fits in uint64 */
+/* Used when (M + max_mi) * p fits in uint64 */
 void modulo_search_euclid_all_small(
-        uint32_t M, uint32_t max_m, uint32_t SL,
+        uint32_t M, uint32_t max_mi, uint32_t SL,
         uint64_t prime, uint64_t base_r,
         std::function<void (uint32_t, uint64_t)> lambda) {
 
-    // (M + max_m) * p fits in uint64 (see gap_common.cpp)
+    // (M + max_mi) * p fits in uint64 (see gap_common.cpp)
 
     uint64_t mi = 0; // mi can be incremented by value up to prime.
     uint64_t modulo = (base_r * M + SL) % prime;
@@ -300,14 +300,14 @@ void modulo_search_euclid_all_small(
 
     while (true) {
         if ( modulo <= two_SL ) {
-            if (mi >= max_m) return;
+            if (mi >= max_mi) return;
 
             // Note: combined sieve computes first = (base_r * (M_start + mi) + SL) % prime;
             // this is modulo.
             lambda(mi, modulo);
             mi += 1;
 
-            if (mi >= max_m) return;
+            if (mi >= max_mi) return;
 
             modulo += base_r;
             if (modulo >= prime) modulo -= prime;
@@ -319,12 +319,12 @@ void modulo_search_euclid_all_small(
         uint64_t high = low + two_SL;
 
         mi += _modulo_search_euclid(prime, base_r, low, high);
-        if (mi >= max_m) return;
+        if (mi >= max_mi) return;
 
         /**
          * Guaranteed not to overflow.
-         * base_r < P, mi < max_m
-         * P * max_m < uint64_t
+         * base_r < P, mi < max_mi
+         * P * max_mi < uint64_t
          */
         modulo = base_r * mi + initial_modulo;
         modulo %= prime;
@@ -334,9 +334,9 @@ void modulo_search_euclid_all_small(
 }
 
 
-/* Used when (M + max_m) * p greater than uint64 */
+/* Used when (M + max_mi) * p greater than uint64 */
 void modulo_search_euclid_all_large(
-        uint32_t M, uint32_t max_m, uint64_t SL,
+        uint64_t M, uint32_t max_mi, uint64_t SL,
         uint64_t prime, uint64_t base_r,
         std::function<void (uint32_t, uint64_t)> lambda) {
 
@@ -346,13 +346,14 @@ void modulo_search_euclid_all_large(
     uint32_t two_SL = SL << 1;
     while (true) {
         if ( modulo <= two_SL ) {
-            if (mi >= max_m)
+            if (mi >= max_mi)
                 return;
 
             lambda(mi, modulo);
             mi += 1;
 
-            if (mi >= max_m) return;
+            // TODO: test removing this, should be faster
+            if (mi >= max_mi) return;
 
             modulo += base_r;
             if (modulo >= prime) modulo -= prime;
@@ -363,7 +364,7 @@ void modulo_search_euclid_all_large(
         uint64_t high = low + two_SL;
 
         mi += _modulo_search_euclid_stack(prime, base_r, low, high);
-        if (mi >= max_m) return;
+        if (mi >= max_mi) return;
 
         __int128 mult = (__int128) base_r * mi + initial_modulo;
         modulo = mult % prime;

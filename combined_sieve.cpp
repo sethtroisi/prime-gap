@@ -259,7 +259,7 @@ void set_defaults(struct Config& config) {
                 for (uint64_t mi = 0; mi < config.minc; mi++) {
                     uint64_t m = config.mstart + mi;
                     if (gcd(m, config.d) == 1) {
-                        uint32_t center = (m * base) % config.d;
+                        uint32_t center = ((__int128) m * base) % config.d;
                         uint32_t center_down = (config.d - center) % config.d;
 
                         // distance heading up
@@ -705,8 +705,7 @@ void prime_gap_search(const struct Config& config) {
             double   secs = duration<double>(s_stop_t - s_start_t).count();
             double t_secs = duration<double>(s_stop_t - s_setup_t).count();
 
-            printf("\t%ld %4d <- unknowns -> %-4d\n",
-                    m, unknown_p, unknown_n);
+            printf("\t%ld %4d <- unknowns -> %-4d\n", m, unknown_p, unknown_n);
 
             if (config.verbose + is_last >= 1) {
                 // Stats!
@@ -772,7 +771,7 @@ class method2_stats {
         method2_stats() {};
 
         method2_stats(
-                uint32_t thread_i,
+                int thread_i,
                 const struct Config& config,
                 size_t valid_ms,
                 uint64_t threshold,
@@ -792,7 +791,7 @@ class method2_stats {
         }
 
         // Some prints only happen if thread == 0
-        int32_t thread = 0;
+        int thread = 0;
         uint64_t next_print = 0;
         uint64_t next_mult = 100000;
 
@@ -1086,8 +1085,6 @@ class Cached {
 
 
     Cached(const struct Config& config, const mpz_t &K) {
-        const uint64_t M_inc = config.minc;
-
         const uint32_t P = config.p;
         const uint32_t D = config.d;
 
@@ -1098,7 +1095,7 @@ class Cached {
         assert( P_primes.back() == P);
 
         // Allocate temp vectors
-        m_reindex.resize(M_inc, -1);
+        m_reindex.resize(config.minc, -1);
         {
             auto temp = is_coprime_and_valid_m(config);
             is_m_coprime = temp.first;
@@ -1356,7 +1353,7 @@ void save_unknowns_method2(
 
         for (int d = 0; d <= 1; d++) {
             int64_t found = 0;
-            int32_t sign = d == 0 ? -1 : 1;
+            int sign = d == 0 ? -1 : 1;
             line << "|";
 
             if (config.compression == 1) {
@@ -1364,7 +1361,7 @@ void save_unknowns_method2(
                 line << " ";
                 int last = SL;
 
-                for (int32_t x : (d == 0 ? coprime_prev : coprime_next)) {
+                for (int x : (d == 0 ? coprime_prev : coprime_next)) {
                     if (!comp[x_reindex_m[x]]) {
                         found += 1;
 
@@ -1382,7 +1379,7 @@ void save_unknowns_method2(
                 }
             } else {
                 char prefix = "-+"[d];
-                for (int32_t x : (d == 0 ? coprime_prev : coprime_next)) {
+                for (int x : (d == 0 ? coprime_prev : coprime_next)) {
                     if (!comp[x_reindex_m[x]]) {
                         line << " " << prefix << sign * (x - SL);
                         found += 1;
@@ -1415,7 +1412,7 @@ void save_unknowns_method2(
 
 method2_stats method2_small_primes(const Config &config, method2_stats &stats,
                           const mpz_t &K,
-                          uint32_t thread_i,
+                          int thread_i,
                           const Cached &caches,
                           const vector<uint32_t> &valid_mi,
                           const uint64_t SMALL_THRESHOLD,
@@ -1571,7 +1568,7 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
 
 void method2_medium_primes(const Config &config, method2_stats &stats,
                            const mpz_t &K,
-                           uint32_t thread_i,
+                           int thread_i,
                            const Cached &caches,
                            vector<uint32_t> &coprime_X_thread,
                            const uint64_t SMALL_THRESHOLD, const uint64_t MEDIUM_THRESHOLD,
@@ -1725,12 +1722,12 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
 void method2_large_primes(Config &config, method2_stats &stats,
                           const mpz_t &K,
-                          uint32_t THREADS,
+                          int THREADS,
                           const Cached &caches,
                           const uint64_t MEDIUM_THRESHOLD,
                           vector<bool> *composite) {
     // TODO|XXX: fix for int64 (and in module_search)
-    const uint32_t M_start = config.mstart;
+    const uint64_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
 
     const uint32_t SIEVE_LENGTH = config.sieve_length;
@@ -1851,7 +1848,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 int32_t x = 2*SL - temp_mod;
 
                 // Filters ~80% more (coprime to D)
-                uint64_t m = (M_start + mi);
+                uint64_t m = M_start + mi;
                 uint32_t m_mod2310 = m % 2310;
                 if (!caches.is_m_coprime2310[m_mod2310])
                     return;

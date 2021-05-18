@@ -42,19 +42,19 @@ uint64_t _modulo_search_euclid(uint64_t p, uint64_t a, uint64_t l, uint64_t r);
 uint64_t _modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_t r);
 
 uint64_t modulo_search_euclid_gcd(
-        uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
+        uint64_t M, uint64_t D, uint64_t max_mi, uint64_t SL,
         uint64_t prime, uint64_t base_r);
 
 uint64_t modulo_search_euclid_gcd2(
-        uint64_t M, uint64_t D, uint64_t max_m, uint64_t SL,
+        uint64_t M, uint64_t D, uint64_t max_mi, uint64_t SL,
         uint64_t prime, uint64_t base_r);
 
 void modulo_search_euclid_all_small(
-        uint32_t M, uint32_t max_m, uint32_t SL,
+        uint32_t M, uint32_t max_mi, uint32_t SL,
         uint64_t prime, uint64_t base_r,
         std::function<void (uint32_t, uint64_t)> lambda);
 
 void modulo_search_euclid_all_large(
-        uint32_t M, uint32_t max_m, uint64_t SL,
+        uint64_t M, uint32_t max_mi, uint64_t SL,
         uint64_t prime, uint64_t base_r,
         std::function<void (uint32_t, uint64_t)> lambda);
