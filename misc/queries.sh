@@ -26,9 +26,13 @@ sqlite3 gaps.db -separator $'\t' 'SELECT year,COUNT(*) FROM gaps WHERE year > 20
 
 echo -e "\n\n\n"
 
-sqlite3 gaps.db 'SELECT * FROM gaps WHERE gapsize in (19246, 19352, 38162, 42752, 49646, 78542, 96638, 98002, 98122, 98818, 99418) ORDER by year DESC LIMIT 5'
+sqlite3 gaps.db 'SELECT (125000/2 - COUNT(*)) ||" Remaining Below 125,000" FROM gaps WHERE gapsize <= 125000'
+
+echo -e "\n\n\n"
+
+sqlite3 gaps.db 'SELECT * FROM gaps WHERE gapsize in (42752, 78542, 96638, 98002, 98122, 98818, 99418) ORDER by year DESC LIMIT 5'
 echo "..."
-sqlite3 gaps.db 'SELECT COUNT(*)||" Remaining" FROM gaps WHERE gapsize in (19246, 19352, 38162, 42752, 49646, 78542, 96638, 98002, 98122, 98818, 99418) AND year < 2020'
+sqlite3 gaps.db 'SELECT COUNT(*)||" Remaining" FROM gaps WHERE gapsize in (42752, 78542, 96638, 98002, 98122, 98818, 99418) AND year < 2020'
 
 echo -e "\n\n\n"
 
@@ -42,6 +46,6 @@ echo -e "\n\n\n"
 # Any gap WHERE merit + 0.03 < 20.6852/44582 * gap
 #
 
-for P in $(echo "$MANY" | head -n 5 | awk '{print $2}'); do
-        sqlite3 -separator $'\t' gaps.db "SELECT \"$P#\",*,fifth_missing-min_gap,ROUND(1.0*(fifth_missing-min_gap)/$P,2) FROM (SELECT *,(SELECT gapsize FROM gaps WHERE (gapsize/merit-15)>(min_gap/min_merit) LIMIT 1,5) as fifth_missing FROM (SELECT discoverer,count(*),round(max(merit),2),round(avg(merit),2),min(merit) as min_merit,min(gapsize) as min_gap,max(gapsize) FROM gaps WHERE startprime GLOB \"*[ *]$P#*\" GROUP BY 1 ORDER BY 2 DESC LIMIT 1))"
+for P in $(echo "$MANY" | head -n 8 | awk '{print $2}'); do
+        sqlite3 -separator $'\t' gaps.db "SELECT \"$P#\",*,min_gap,fifth_missing-min_gap,ROUND(1.0*(fifth_missing-min_gap)/$P,2) FROM (SELECT *,(SELECT gapsize FROM gaps WHERE (gapsize/merit-15)>(min_gap/min_merit) LIMIT 1 OFFSET 4) as fifth_missing FROM (SELECT discoverer,count(*),round(max(merit),2),round(avg(merit),2),min(merit) as min_merit,min(gapsize) as min_gap,max(gapsize) FROM gaps WHERE startprime GLOB \"*[ *]$P#*\" GROUP BY 1 ORDER BY 2 DESC LIMIT 1))"
 done

@@ -107,13 +107,15 @@ def print_record_gaps(args, gaps):
             new_merit = gap[1]
             raw_data = gap[2]
             startprime = gap[3]
-            # These filters generated with
-            # sqlite3 gaps.db  "select min(merit) from gaps where gapsize BETWEEN 1500 AND 50000;"
+
+            # See https://primegap-list-project.github.io/lists/prime-gaps-low-watermarks/
             if size <= 30000 and new_merit < 21.9:
                 continue
-            if size <= 50000 and new_merit < 18:
+            if size <= 50000 and new_merit < 19.8:
                 continue
-            if size <= 100000 and new_merit < 10.4:
+            if size <= 75000 and new_merit < 15:
+                continue
+            if size <= 100000 and new_merit < 10.7:
                 continue
 
             existing = conn.execute(
@@ -185,8 +187,9 @@ def print_record_gaps(args, gaps):
             print("Records {} unique {} {}".format(
                 len(record_lines), len(seen),
                 f"({len(own_records)} already submitted)" if own_records else ""))
-            print("Merit  : +{:.2f} total, +{:.2f} for {}".format(
-                sum(improvements.values()), *max((v, k) for k, v in improvements.items())))
+            if improvements:
+                print("Merit  : +{:.2f} total, +{:.2f} for {}".format(
+                    sum(improvements.values()), *max((v, k) for k, v in improvements.items())))
             print("Smallst:", min(record_lines))
             print("Largest:", max(record_lines))
             if small_merit:
