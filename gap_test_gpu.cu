@@ -35,8 +35,8 @@ using std::vector;
 using namespace std::chrono;
 
 // TODO accept from makefile
-#define BITS 1024
-#define WINDOW_BITS 5
+#define BITS 2048
+#define WINDOW_BITS 6
 
 void prime_gap_test(const struct Config config);
 
@@ -107,12 +107,27 @@ void test_interval_gpu(
     mpz_init(center);
     mpz_mul_ui(center, K, m);
 
-    s_total_prp_tests += unknowns[0].size() + unknowns[1].size();
+    //printf("%ld | %ld %ld\n", m, unknowns[0].size(), unknowns[1].size());
 
-    int ROUNDS = 1;
-    typedef mr_params_t<8, BITS, WINDOW_BITS> params;
-    prev_p = run_test<params>(center, -1, unknowns[0], ROUNDS);
-    next_p = run_test<params>(center, +1, unknowns[1], ROUNDS);
+    /**
+     * Originally 8 which has highest throuput but only if we have LOTS of instances
+     * this helps reduce the number of parallel instances needed
+     */
+    const int THREADS_PER_INSTANCE = 32;
+    const int ROUNDS = 1;
+
+    typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
+    int prev_p_i = run_test<params>(center, -1, unknowns[0], ROUNDS);
+    int next_p_i = run_test<params>(center, +1, unknowns[1], ROUNDS);
+    assert(prev_p_i >= 0);
+    assert(next_p_i >= 0);
+    prev_p = unknowns[0][prev_p_i];
+    next_p = unknowns[1][next_p_i];
+
+//    printf("    | %d %d\t%d %d\n", prev_p_i, next_p_i, prev_p, next_p);
+    // 0-indexed
+    s_total_prp_tests += prev_p_i + next_p_i + 2;
+
     // */
 }
 

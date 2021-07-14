@@ -367,8 +367,8 @@ int32_t run_test(mpz_t &center, int sign, std::vector<int32_t> offsets, uint32_t
   instance_t          *gpuInstances;
   cgbn_error_report_t *report;
   uint32_t            *primes, *gpuPrimes;
-  int32_t              TPB=(params::TPB==0) ? 128 : params::TPB;
-  int32_t              TPI=params::TPI, IPB=TPB/TPI;
+  uint32_t              TPB=(params::TPB==0) ? 128 : params::TPB;
+  uint32_t              TPI=params::TPI, IPB=TPB/TPI;
 
   primes=generate_primes(prime_count);
 
@@ -404,22 +404,39 @@ int32_t run_test(mpz_t &center, int sign, std::vector<int32_t> offsets, uint32_t
 
   //printf("Running GPU kernel ...\n");
 
-  // launch kernel with blocks=ceil(instance_count/IPB) and threads=TPB
-  kernel_miller_rabin<params><<<(instance_count+IPB-1)/IPB, TPB>>>(report, gpuInstances, instance_count, gpuPrimes, prime_count);
+  size_t BLOCKS_PER_CALL = 16;
 
-  // error report uses managed memory, so we sync the device (or stream) and check for cgbn errors
-  CUDA_CHECK(cudaDeviceSynchronize());
-  CGBN_CHECK(report);
+  size_t offset = 0;
+  int32_t result = 0;
+  while (true) {
+      //    total_blocks = ceil(instance_count / IPB) and threads = TPB
+      if (offset >= instance_count) {
+          // Didn't find result
+          result = -1;
+          break;
+      }
 
-  // copy the instances back from gpuMemory
-  //printf("Copying results back to CPU ...\n");
-  CUDA_CHECK(cudaMemcpy(instances, gpuInstances, sizeof(instance_t)*instance_count, cudaMemcpyDeviceToHost));
+      size_t blocks = min(BLOCKS_PER_CALL, (instance_count - offset + IPB - 1) / IPB);
+      kernel_miller_rabin<params><<<blocks, TPB>>>(report, gpuInstances + offset, instance_count - offset, gpuPrimes, prime_count);
 
-  //printf("Verifying the results ...\n");
-  //miller_rabin_t<params>::verify_results(instances, instance_count, primes, prime_count);
+      // error report uses managed memory, so we sync the device (or stream) and check for cgbn errors
+      CUDA_CHECK(cudaDeviceSynchronize());
+      CGBN_CHECK(report);
 
-  int32_t result = miller_rabin_t<params>::verify_first(instances, instance_count, primes, prime_count);
-  assert(result >= 0);
+      // copy the instances back from gpuMemory
+      size_t num_to_copy = min(blocks * IPB, (instance_count - offset));
+      CUDA_CHECK(cudaMemcpy(instances + offset, gpuInstances + offset, sizeof(instance_t)* num_to_copy, cudaMemcpyDeviceToHost));
+
+      result = miller_rabin_t<params>::verify_first(instances + offset, num_to_copy, primes, prime_count);
+      if (result >= 0) {
+          result += offset;
+          //printf("  found %d | %d => %d\n", sign, result, offsets[result]);
+          break;
+      }
+
+      offset += num_to_copy;
+      //printf("  >%ld (%d)\n", offset, offsets[offset]);
+  }
 
   // clean up
   free(primes);
@@ -428,17 +445,5 @@ int32_t run_test(mpz_t &center, int sign, std::vector<int32_t> offsets, uint32_t
   CUDA_CHECK(cudaFree(gpuInstances));
   CUDA_CHECK(cgbn_error_report_free(report));
 
-  return offsets[result];
+  return result;
 }
-
-
-/*
-#define INSTANCES 100000
-#define PRIMES 10
-
-int main() {
-  typedef mr_params_t<8, 1536, 5> params;
-
-  run_test<params>(INSTANCES, PRIMES);
-}
-*/
