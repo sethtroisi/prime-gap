@@ -13,7 +13,7 @@
 # limitations under the License.
 
 
-OBJS	= gap_common.o modulo_search.o
+OBJS	= gap_common.o modulo_search.o gap_test_common.o
 OUT	= combined_sieve gap_stats gap_test_simple benchmark benchmark_google
 CC	= g++
 CFLAGS	= -Wall -Werror -O3
@@ -44,9 +44,12 @@ combined_sieve: combined_sieve.cpp $(OBJS)
 gap_stats: gap_stats.cpp gap_common.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
-gap_test_simple: gap_test_simple.cpp gap_common.o
+gap_test_simple: gap_test_simple.cpp gap_common.o gap_test_common.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
+gap_test_gpu: gap_test_gpu.cpp gap_common.o gap_test_common.o
+	#$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
+	nvcc -I../CGBN/include -arch=sm_61 miller_rabin.cu -o mr -lgmp
 
 benchmark: misc/benchmark.cpp modulo_search.o
 	$(CC) -o $@ $^ $(CFLAGS) -lprimesieve $(LDFLAGS) -I.

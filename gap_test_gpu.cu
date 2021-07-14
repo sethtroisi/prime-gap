@@ -1,4 +1,4 @@
-// Copyright 2020 Seth Troisi
+// Copyright 2021 Seth Troisi
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,12 +27,16 @@
 
 #include "gap_common.h"
 #include "gap_test_common.h"
+#include "miller_rabin.h"
 
 using std::cout;
 using std::endl;
 using std::vector;
 using namespace std::chrono;
 
+// TODO accept from makefile
+#define BITS 1024
+#define WINDOW_BITS 5
 
 void prime_gap_test(const struct Config config);
 
@@ -47,6 +51,11 @@ int main(int argc, char* argv[]) {
     if (config.verbose >= 2) {
         printf("Compiled with GMP %d.%d.%d\n",
             __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
+    }
+
+    if (BITS > (1 << (2 * WINDOW_BITS))) {
+        printf("Not enought WINDOW_BITS(%d) for BITS(%d)\n", WINDOW_BITS, BITS);
+        return 1;
     }
 
     if( !has_prev_prime_gmp() ) {
@@ -78,6 +87,34 @@ int main(int argc, char* argv[]) {
     prime_gap_test(config);
 }
 
+
+void test_interval_gpu(
+        const uint64_t m, const mpz_t &K, const size_t SIEVE_LENGTH,
+        size_t &s_total_prp_tests,
+        size_t &s_gap_out_of_sieve_prev, size_t &s_gap_out_of_sieve_next,
+        vector<int32_t> (&unknowns)[2],
+        int &prev_p, int &next_p) {
+    /*
+    test_interval_cpu(
+            m, K, SIEVE_LENGTH,
+            s_total_prp_tests, s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next,
+            unknowns,
+            prev_p, next_p);
+    // */
+    // /*
+
+    mpz_t center;
+    mpz_init(center);
+    mpz_mul_ui(center, K, m);
+
+    s_total_prp_tests += unknowns[0].size() + unknowns[1].size();
+
+    int ROUNDS = 1;
+    typedef mr_params_t<8, BITS, WINDOW_BITS> params;
+    prev_p = run_test<params>(center, -1, unknowns[0], ROUNDS);
+    next_p = run_test<params>(center, +1, unknowns[1], ROUNDS);
+    // */
+}
 
 void prime_gap_test(const struct Config config) {
     const uint64_t M_start = config.mstart;
@@ -124,7 +161,7 @@ void prime_gap_test(const struct Config config) {
 
     uint64_t first_mi = 0;
     for (; first_mi > 0 && gcd(M_start + first_mi, D) > 1; first_mi++);
-    assert(first_mi >= 0 && first_mi < M_inc);
+    assert(first_mi < M_inc);
 
     uint64_t last_mi = M_inc - 1;
     for (; last_mi > 0 && gcd(M_start + last_mi, D) > 1; last_mi--);
@@ -168,7 +205,7 @@ void prime_gap_test(const struct Config config) {
 
         int prev_p = 0;
         int next_p = 0;
-        test_interval_cpu(
+        test_interval_gpu(
             m, K, SIEVE_LENGTH,
             s_total_prp_tests,
             s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next,

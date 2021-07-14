@@ -4,12 +4,14 @@ combined_sieve
 gap_stats
 gap_stats_missing
 gap_test_simple
+gap_test_gpu
 benchmark
 benchmark_google
 *.o
 
 # data
 *.db
+*.db-journal
 logs/
 data/
 backup/
