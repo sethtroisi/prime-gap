@@ -471,11 +471,19 @@ def determine_test_threshold(args, data):
     prob_threshold = best_probs[round(len(best_probs) * percent / 100)]
     del best_probs
 
-    return prob_threshold, {
+    # XXX: Could be array of (m, prob, prob) which would be MUCH smaller
+    # Would make run_in_parallel loop slightly harder
+    m_probs = {
         m: (p_merit, p_record) for m, p_merit, p_record in zip(
             valid_m, data.prob_merit_gap, data.prob_record_gap)
         if p_record >= prob_threshold
     }
+
+    # No longer needed
+    del data.prob_merit_gap[:]
+    del data.prob_record_gap[:]
+
+    return prob_threshold, m_probs
 
 
 def should_print_stats(

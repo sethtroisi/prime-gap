@@ -153,10 +153,10 @@ CREATE TABLE IF NOT EXISTS result (
         PRIMARY KEY(P, D, m)
 );
 
-CREATE INDEX IF NOT EXISTS    r_p_d_m ON   result(P,D,m);
+CREATE INDEX IF NOT EXISTS    r_p_d_m ON   result(P,D,m); /* Is this needed? Does it affect performance */
 CREATE INDEX IF NOT EXISTS    r_p_d ON     result(P,D);
-CREATE INDEX IF NOT EXISTS    r_p ON       result(P);
+CREATE INDEX IF NOT EXISTS    r_p ON       result(P); /* TODO drop this */
 
-CREATE INDEX IF NOT EXISTS   ms_p_d_m ON   m_stats(P,D,m);
+CREATE INDEX IF NOT EXISTS   ms_p_d_m ON   m_stats(P,D,m); /* Same as above */
 CREATE INDEX IF NOT EXISTS   ms_p_d ON     m_stats(P,D);
-CREATE INDEX IF NOT EXISTS   ms_p ON       m_stats(P);
+CREATE INDEX IF NOT EXISTS   ms_p ON       m_stats(P); /* Same as above */

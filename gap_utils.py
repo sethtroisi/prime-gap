@@ -107,8 +107,6 @@ def verify_args(args):
          args.sieve_length, args.max_prime, m1) = match
         args.method1 = (m1 == ".m1")
 
-    args.max_prime *= 10 ** 6
-
     if 'search_db' in args and args.search_db:
         assert os.path.exists(args.search_db), (
             "Prime Search Database ('{}') doesn't exist".format(args.search_db))
@@ -117,6 +115,8 @@ def verify_args(args):
         if arg not in args or args.__dict__[arg] in (None, 0):
             print("Missing required argument", arg)
             exit(1)
+
+    args.max_prime *= 10 ** 6
 
     fn = generate_unknown_filename(
         args.p, args.d,

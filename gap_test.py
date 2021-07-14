@@ -135,7 +135,7 @@ def process_line(
     while True:
         # timeout should never happen, but might happen if iterating the file
         # without queuing anything on large file (or slow filesystem)
-        work = work_q.get(timeout=600) # See note above
+        work = work_q.get(timeout=2400) # See note above
 
         # Always mark the item as done, progress is tracked with sc.will_test
         work_q.task_done()
@@ -256,8 +256,8 @@ def run_in_parallel(
         print("Testing {} m where prob(record) >= {:.3g}".format(
             len(m_probs), prob_threshold))
 
-    # Are there any non-processed (or partial) m_probs.
-    if all(m in existing and existing[m][1] >= 0 for m in m_probs):
+    # Skip if all m_probs are processed (or not partial).
+    if len(existing) >= len(m_probs) and all(m in existing and existing[m][1] >= 0 for m in m_probs):
         print(f"All prp-top-percent({len(m_probs)}) already processed!")
         print()
         return

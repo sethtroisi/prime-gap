@@ -634,14 +634,21 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
       * [ ] Sum and set test-time in finalize? (IGNORE very large values which are likely pause)
       * [ ] Finalize script should update ranges being finalized
     * [ ] Faster finalize.py
+  * [ ] `--save-best-only` and `processed_range` table
   * [ ] can modulo_search (equation 2/3) be modified so that it only returns odd multiples?
   * [ ] Check that correct indexes exist in sql db
   * [ ] Consider new names for prp-top-percent, no-one-side-skip, sieve-length
+  * [ ] Can I sieve only the low side? and sieve high side on demand or in a 2nd pass (after gap_test)?
 * combined\_sieve.cpp
   * [ ] Better sharing work for medium_primes (or skip unknown counting)
     * [ ] Unknown counting could be faster with boost or `bit_vector`
   * [ ] ncurse or similiar status line with all large_prime intervals & eta
     * Idea that made sense was to printf then reset position to start of status (so that future prints override them)
+  * [ ] Check there wasn't a memory regression, 1511_234570_2600000000_800000000_s16000_l25000000M.txt takes 42GB vs max mem 23GB
+  * [ ] Error with error estimate, looking at only final invernal vs all intervals?
+        * Estimated 3.74e+09 unknowns found 4.11e+10 (999.99% error)
+        * Estimated 1.32e+07 new composites found 3.33e+11 (2518520.50% error)
+
 * gap\_stats.cpp
 * gap\_test\_simple
   * [ ] Do in process for very small P
@@ -650,6 +657,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Save prp-percentage finalized for faster skipping of complete files
   * [ ] Validate the unknown-file matches expectations (unknowns / line, ...)
   * [ ] Ctrl+C sometimes hangs waiting for one more result
+  * [ ] Slow for P# < 977, file read? db?
 * gap\_test\_simple.cpp
 * schema.sql
 * benchmarking

@@ -842,8 +842,8 @@ void method2_increment_print(
             // Other threads don't print details
 
             if (config.threads > 1 && config.verbose) {
-                printf("WARNING stats aren't synchronized when "
-                       "running with multiple threads(%d)\n", config.threads);
+                printf("\nWARNING stats aren't synchronized when "
+                       "running with multiple threads(%d)\n\n", config.threads);
             }
 
             // This sligtly duplicates work below, but we don't care.
