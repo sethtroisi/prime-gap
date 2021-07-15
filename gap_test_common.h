@@ -18,12 +18,46 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include "gap_common.h"
 
 using std::cout;
 using std::endl;
 using std::vector;
+
+/** See gap_test_stats.py */
+class StatsCounters {
+    public:
+        StatsCounters(std::chrono::high_resolution_clock::time_point now) : s_start_t(now) {}
+
+        std::chrono::high_resolution_clock::time_point s_start_t const;
+
+        uint32_t  s_tests     = 0;
+        size_t    s_total_unknown = 0;
+        size_t    s_t_unk_prev = 0;
+        size_t    s_t_unk_next = 0;
+        size_t    s_total_prp_tests = 0;
+        size_t    s_gap_out_of_sieve_prev = 0;
+        size_t    s_gap_out_of_sieve_next = 0;
+        float     s_best_merit_interval = 0;
+        size_t    s_best_merit_interval_m = 0;
+
+        /** Return if stats were printed */
+        void process_results(
+            const Config &config,
+            long m, bool is_last,
+            size_t unknown_l, size_t unknown_u,
+            int prev_p, int next_p,
+            int p_tests, int n_tests,
+            float merit);
+
+        bool possible_print_stats(
+            const Config &config,
+            long m, bool is_last,
+            size_t unknown_l, size_t unknown_u,
+            int prev_p, int next_p) const;
+};
 
 
 void load_and_verify_unknowns(

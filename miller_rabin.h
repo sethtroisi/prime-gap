@@ -273,11 +273,10 @@ class miller_rabin_t {
   */
 
   __host__ static int32_t verify_first(instance_t *instances, uint32_t instance_count, uint32_t *primes, uint32_t prime_count) {
-    int   index;
     mpz_t candidate;
     mpz_init(candidate);
 
-    for(index=0;index<instance_count;index++) {
+    for(uint32_t index = 0; index < instance_count; index++) {
       if (instances[index].passed==prime_count) {
         to_mpz(candidate, instances[index].candidate._limbs, params::BITS/32);
         if (mpz_probab_prime_p(candidate, prime_count) == 0) {
@@ -343,7 +342,7 @@ __global__ void kernel_miller_rabin(cgbn_error_report_t *report, typename miller
 
 uint32_t *generate_primes(uint32_t count) {
   uint32_t *list=(uint32_t *)malloc(sizeof(uint32_t)*count);
-  int       test, current, index;
+  uint32_t  test, current, index;
 
   // generate a list of primes
   list[0]=2;
