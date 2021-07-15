@@ -36,7 +36,8 @@ using std::vector;
 using namespace std::chrono;
 
 // TODO accept from makefile
-#define BITS 2048
+// 1024, 1536, 2048
+#define BITS 1536 //2048
 #define WINDOW_BITS 6
 
 void prime_gap_test(const struct Config config);
@@ -117,11 +118,15 @@ class BatchedM {
         mpz_t center;
         vector<int32_t> unknowns[2];
 
-        int p_i = 0, n_i = 0;
         bool p_found = false, n_found = false;
+        int prev_p = 0, next_p = 0;
 
-        int p_tests = 0; // Should equal p_i + 1 with zero overheard
+        // if this entry needs to be handled manually
+        bool overflow = false;
+
+        int p_tests = 0;
         int n_tests = 0;
+
 };
 
 
@@ -160,13 +165,14 @@ void prime_gap_test(const struct Config config) {
         compression = Args::guess_compression(config, unknown_file);
     }
 
+    // TODO this is kinda slow (and blocks program start) for very large numbers
     uint64_t valid_ms = 0;
     for (uint64_t mi = 0; mi < M_inc; mi++) {
         if (gcd(M_start + mi, D) == 1) {
             valid_ms++;
         }
     }
-    assert(valid_ms > 0);
+    assert(valid_ms > 0 && valid_ms <= M_inc);
 
     uint64_t first_mi = 0;
     for (; first_mi > 0 && gcd(M_start + first_mi, D) > 1; first_mi++);
@@ -189,8 +195,8 @@ void prime_gap_test(const struct Config config) {
     // Load unknowns for {2,4,8,16,32,64} m's
     // Keep track of {p_i, n_i} for each m
 
-    const size_t BATCHED_M = 32;
-    const size_t BATCH_GPU = 128;
+    const size_t BATCHED_M = 256;
+    const size_t BATCH_GPU = 1024;
 
     /**
      * Originally 8 which has highest throughput but only if we have LOTS of instances
@@ -223,6 +229,9 @@ void prime_gap_test(const struct Config config) {
         gpu_batch.open_off_i.resize(BATCH_GPU, -1);
     }
 
+    mpz_t test_z;
+    mpz_init(test_z);
+
     // Main loop
     uint32_t mi = 0;
     while (mi < M_inc || open_count > 0) {
@@ -243,10 +252,10 @@ void prime_gap_test(const struct Config config) {
             mpz_mul_ui(test->center, K, test->m);
 
             // First first unassigned slot
-            open_count++;
             for (size_t i = 0; i < BATCHED_M; i++) {
                 if (!open[i]) {
                     open[i].reset(test);
+                    open_count++;
                     //cout << "open[" << i << "] = " << open[i]->m << endl;
                     break;
                 }
@@ -267,30 +276,43 @@ void prime_gap_test(const struct Config config) {
                 }
                 BatchedM &test = *open[i];
 
-
                 for (size_t j = 0; j < INSTANCES_PER_M; j++) {
                     assert(! (test.p_found && test.n_found) );
 
-                    int gpu_i = gpu_batch.i++; // Increment after we get value (now points at next value)
+                    int gpu_i = gpu_batch.i;
                     gpu_batch.open_i[gpu_i] = i;
-                    gpu_batch.active[gpu_i] = true;
                     gpu_batch.result[gpu_i] = -1;
 
                     if (!test.p_found) {
-                        gpu_batch.open_pn[gpu_i] = 0;
-                        mpz_sub_ui(*gpu_batch.z[gpu_i], test.center, test.unknowns[0][test.p_tests]);
-                        gpu_batch.open_off_i[gpu_i] = test.p_tests++;
-                        if ((size_t) test.p_tests == test.unknowns[0].size()) break;
-                        // TODO handle overflow of unknowns[0]
-                    } else {
-                        assert(!test.n_found);
-                        gpu_batch.open_pn[gpu_i] = 1;
-                        mpz_add_ui(*gpu_batch.z[gpu_i], test.center, test.unknowns[1][test.n_tests]);
-                        gpu_batch.open_off_i[gpu_i] = test.n_tests++;
-                        if ((size_t)test.n_tests == test.unknowns[1].size()) break;
-                        // TODO handle overflow of unknowns[1]
+                        if ((size_t) test.p_tests < test.unknowns[0].size()) {
+                            gpu_batch.open_pn[gpu_i] = 0;
+                            mpz_sub_ui(*gpu_batch.z[gpu_i], test.center, test.unknowns[0][test.p_tests]);
+                            gpu_batch.open_off_i[gpu_i] = test.p_tests++;
+                        } else {
+                            // Haven't found previous prime, but run out of unknowns to test
+                            test.prev_p = -1;
+                            test.overflow = 1; // Indicates prev side has overflowed and should be processed out of band.
+                            break;
+                        }
                     }
-        //            gmp_printf("batch[%d] = %d,%d = %d | %Zd\n", gpu_i, i, j, test.m, *gpu_batch.z[gpu_i]);
+
+                    if (test.p_found) {
+                        if ((size_t)test.n_tests < test.unknowns[1].size()) {
+                            assert(!test.n_found);
+                            gpu_batch.open_pn[gpu_i] = 1;
+                            mpz_add_ui(*gpu_batch.z[gpu_i], test.center, test.unknowns[1][test.n_tests]);
+                            gpu_batch.open_off_i[gpu_i] = test.n_tests++;
+                        } else {
+                            // Haven't found next prime, but run out of unknowns to test
+                            test.next_p = -1;
+                            test.overflow = 1; // Indicates next side has overflowed and should be processed out of band.
+                            break;
+                        }
+                    }
+
+                    //gmp_printf("batch[%d] = %d,%d = %d | %Zd\n", gpu_i, i, j, test.m, *gpu_batch.z[gpu_i]);
+                    gpu_batch.active[gpu_i] = true;
+                    gpu_batch.i++;
                 }
             }
         }
@@ -309,67 +331,120 @@ void prime_gap_test(const struct Config config) {
                 }
                 assert (gpu_batch.result[i] == 0 || gpu_batch.result[i] == 1);
 
-                /*
                 size_t open_i = gpu_batch.open_i[i];
-                if (open[open_i]) {
+                /*
+                if (open[open_i] && open[open_i]->m == 2141) {
                     const BatchedM &test = *open[open_i];
                     bool n_side = gpu_batch.open_pn[i];
                     int offset = test.unknowns[n_side][gpu_batch.open_off_i[i]];
                     char sgn = "+-"[n_side];
-                    cout << "m=" << test.m << " " << sgn << offset << " | " << gpu_batch.result[i] << endl;
+                    cout << "m=" << test.m << " " << sgn << offset
+                         << " | " << test.p_found << " " << test.n_found
+                         << " | " << test.prev_p << " " << test.next_p
+                         << " | " << gpu_batch.result[i] << endl;
                 }  // */
 
                 if (gpu_batch.result[i]) {
-                    size_t open_i = gpu_batch.open_i[i];
-                    if (!open[open_i]) {
+                    BatchedM *test = open[open_i].get();
+                    if (test == nullptr) {
                         //cout << "Found two primes for open[" << open_i << "] from batch of " << INSTANCES_PER_M << endl;
                         continue;
                     }
 
+
+                    int offset_i = gpu_batch.open_off_i[i];
                     if (gpu_batch.open_pn[i] == 0) {
-                        if (open[open_i]->p_found) {
+                        if (test->p_found) {
                             /*
-                            cout << "Found two previous primes for m=" << open[open_i]->m << endl;
-                            cout << "\t" << open[open_i]->p_i << " " << gpu_batch.open_off_i[i] << endl;
-                            cout << "\t" << open[open_i]->unknowns[0][open[open_i]->p_i] <<
-                                    " "  << open[open_i]->unknowns[0][gpu_batch.open_off_i[i]] << endl;
+                            cout << "Found two previous primes for m=" << test->m << endl;
+                            cout << "\t" << test->prev_p << " vs "
+                                 << test->unknowns[0][offset_i] << "(" << offset_i << ")" << endl;
                             */
                             continue;
                         }
 
                         // prev_prime found
-                        assert(open[open_i]->p_tests > 0 );
-                        open[open_i]->p_found = true;
-                        open[open_i]->p_i = gpu_batch.open_off_i[i];
+                        assert(test->p_tests > 0 );
+                        test->p_found = true;
+                        test->prev_p = test->unknowns[0][offset_i];
                     } else {
-                        // next_prime found (and done)
-                        BatchedM *test = open[open_i].release();
-                        open_count--;
+                        if (test->n_found) {
+                            /*
+                             *
+                            cout << "Found two next primes for m=" << test->m << endl;
+                            cout << "\t" << test->next_p << " vs "
+                                 << test->unknowns[1][offset_i] << "(" << offset_i << ")" << endl;
+                            */
+                            continue;
+                        }
 
+                        // next_prime found (and done)
                         assert(test->p_found );
                         assert(test->n_tests > 0 );
                         test->n_found = true;
-                        test->n_i = gpu_batch.open_off_i[i];
-
-                        int prev_p = test->unknowns[0][test->p_i];
-                        int next_p = test->unknowns[1][test->n_i];
-                        assert( prev_p > 0 && next_p > 0 );
-
-                        float merit = (next_p + prev_p) / (K_log + log(test->m));
-                        if (merit > min_merit)  {
-                            // TODO: write to file or database
-                            printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
-                                (next_p + prev_p), merit, test->m, P, D, prev_p, next_p);
-                            // TODO: Record finished mi in log file / db.
-                        }
-
-                        bool is_last = (mi >= M_inc) && open_count == 0;
-                        stats.process_results(config, test->m, is_last,
-                            test->unknowns[0].size(), test->unknowns[1].size(),
-                            prev_p, next_p,
-                            test->p_tests, test->n_tests, merit);
+                        //cout << "Setting " << test->m << " as " << test->unknowns[1][gpu_batch.open_off_i[i]] << endl;;
+                        test->next_p = test->unknowns[1][offset_i];
                     }
                 }
+            }
+        }
+
+        // Finalize any finished (or overflowed open)
+        {
+            for (size_t i = 0; i < BATCHED_M; i++) {
+                if (!open[i])
+                    continue;
+
+                BatchedM &test = *open[i];
+
+                int prev_p = test.prev_p;
+                int next_p = test.next_p;
+
+                if (test.overflow) {
+                    if (prev_p == -1) {
+                        assert(test.p_tests > 0);
+                        //cout << "gap_out_of_sieve_prev m=" << test.m << endl;
+                        mpz_sub_ui(test_z, test.center, SIEVE_LENGTH);
+                        mpz_prevprime(test_z, test_z);
+                        mpz_sub(test_z, test.center, test_z);
+                        prev_p = test.prev_p = mpz_get_ui(test_z);
+                        test.p_found = true;
+                        test.overflow = 0;
+                        continue;
+                    }
+                    if (next_p == -1) {
+                        assert(test.p_tests > 0);
+                        //cout << "gap_out_of_sieve_next m=" << test.m << endl;
+                        mpz_add_ui(test_z, test.center, SIEVE_LENGTH);
+                        mpz_nextprime(test_z, test_z);
+                        mpz_sub(test_z, test_z, test.center);
+                        next_p = test.next_p = mpz_get_ui(test_z);
+                        test.n_found = true;
+                        test.overflow = 0;
+                    }
+                }
+
+                if (!test.p_found || !test.n_found) {
+                    continue;
+                }
+
+                assert( prev_p > 0 && next_p > 0 );
+
+                float merit = (next_p + prev_p) / (K_log + log(test.m));
+                if (merit > min_merit)  {
+                    // TODO: Record finished mi in log file / db.
+                    printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
+                        (next_p + prev_p), merit, test.m, P, D, prev_p, next_p);
+                }
+
+                bool is_last = (mi >= M_inc) && open_count == 0;
+                stats.process_results(config, test.m, is_last,
+                    test.unknowns[0].size(), test.unknowns[1].size(),
+                    prev_p, next_p,
+                    test.p_tests, test.n_tests, merit);
+
+                open[i].reset();  // Delete open[i]
+                open_count--;
             }
         }
     }
@@ -377,6 +452,7 @@ void prime_gap_test(const struct Config config) {
     // ----- cleanup
     {
         mpz_clear(K);
+        mpz_clear(test_z);
         for (size_t i = 0; i < BATCH_GPU; i++)
             mpz_clear(*gpu_batch.z[i]);
     }

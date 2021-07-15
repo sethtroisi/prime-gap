@@ -62,10 +62,11 @@ bool StatsCounters::possible_print_stats(
         size_t unknown_l, size_t unknown_u,
         int prev_p, int next_p) const {
 
-    if ( is_last || (s_tests % 5000 == 0) || (
-          s_tests == 1    || s_tests == 10 || s_tests == 30  ||
-          s_tests == 100  || s_tests == 300 || s_tests == 500 ||
-          s_tests == 1000 || s_tests == 3000) ) {
+    if ( is_last || (s_tests % 100000 == 0) || (
+          s_tests == 1    || s_tests == 10   || s_tests == 30  ||
+          s_tests == 100  || s_tests == 300  || s_tests == 500 ||
+          s_tests == 1000 || s_tests == 3000 || s_tests == 5000 ||
+          s_tests == 10000|| s_tests == 30000|| s_tests == 50000)) {
         auto s_stop_t = std::chrono::high_resolution_clock::now();
         double   secs = std::chrono::duration<double>(s_stop_t - s_start_t).count();
 
@@ -137,6 +138,7 @@ void load_and_verify_unknowns(
         assert( delim == "|" );
 
         if (compression) {
+            // TODO which type of compression?
             for (int group = 0; group <= 1; group++) {
                 unsigned char c1 = 0, c2 = 0;
                 int accum = 0;
@@ -155,6 +157,7 @@ void load_and_verify_unknowns(
                 }
             }
         } else {
+            // is this raw?
             int c = 0;
             for (int k = 0; k < unknown_l; k++) {
                 unknown_file >> c;
