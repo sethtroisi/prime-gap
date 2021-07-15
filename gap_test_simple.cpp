@@ -157,6 +157,8 @@ void prime_gap_test(const struct Config config) {
 
         int prev_p = 0;
         int next_p = 0;
+        size_t s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next;
+
         test_interval_cpu(
             m, K, SIEVE_LENGTH,
             p_tests,
@@ -164,7 +166,8 @@ void prime_gap_test(const struct Config config) {
             unknowns, prev_p, next_p);
         assert( prev_p > 0 && next_p > 0 );
 
-        float merit = (next_p + prev_p) / (K_log + log(m));
+        int gap  = next_p + prev_p;
+        float merit = gap / (K_log + log(m));
 
         if (merit > min_merit)  {
             // TODO: write to file or database

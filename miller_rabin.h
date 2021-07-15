@@ -272,51 +272,6 @@ class miller_rabin_t {
   }
   */
 
-  __host__ static int32_t verify_first(instance_t *instances, uint32_t instance_count, uint32_t *primes, uint32_t prime_count) {
-    mpz_t candidate;
-    mpz_init(candidate);
-
-    for(uint32_t index = 0; index < instance_count; index++) {
-      if (instances[index].passed==prime_count) {
-        to_mpz(candidate, instances[index].candidate._limbs, params::BITS/32);
-        if (mpz_probab_prime_p(candidate, prime_count) == 0) {
-          printf("MISMATCH AT INDEX: %d\n", index);
-          printf("prime count=%d\n", instances[index].passed);
-        }
-        return index;
-      }
-    }
-    return -1;
-  }
-
-  __host__ static void verify_results(instance_t *instances, uint32_t instance_count, uint32_t *primes, uint32_t prime_count) {
-    int   index, total=0;
-    mpz_t candidate;
-    bool  gmp_prime, xmp_prime, match=true;
-
-    mpz_init(candidate);
-
-    for(index=0;index<instance_count;index++) {
-      to_mpz(candidate, instances[index].candidate._limbs, params::BITS/32);
-      xmp_prime=(instances[index].passed==prime_count);
-      if (xmp_prime) {
-        total++;
-
-        gmp_prime=(mpz_probab_prime_p(candidate, prime_count)!=0);
-        printf("N + %d\n", index);
-
-        if(gmp_prime!=xmp_prime) {
-          printf("MISMATCH AT INDEX: %d\n", index);
-          printf("prime count=%d\n", instances[index].passed);
-          match=false;
-        }
-      }
-    }
-    if(match)
-      printf("All results matched\n");
-    printf("%d probable primes found in %d random numbers\n", total, instance_count);
-    printf("Based on an approximation of the prime gap, we would expect %0.1f primes\n", ((float)instance_count)*2/(0.69315f*params::BITS));
-  }
 };
 
 
@@ -359,8 +314,10 @@ uint32_t *generate_primes(uint32_t count) {
   return list;
 }
 
+// TODO avoid reallocating eachtime
+// TODO with globals at first
 template<class params>
-int32_t run_test(mpz_t &center, int sign, std::vector<int32_t> offsets, uint32_t prime_count, size_t &tested) {
+void run_test(const std::vector<mpz_t*> &tests, std::vector<int> &results, uint32_t prime_count) {
   typedef typename miller_rabin_t<params>::instance_t instance_t;
 
   instance_t          *gpuInstances;
@@ -371,73 +328,48 @@ int32_t run_test(mpz_t &center, int sign, std::vector<int32_t> offsets, uint32_t
 
   primes=generate_primes(prime_count);
 
-  size_t instance_count = offsets.size();
-  if (instance_count == 0)
-    return -1;
+  if (tests.size() == 0)
+    return;
 
-  instance_t *instances = (instance_t *) malloc(sizeof(instance_t)*instance_count);
+  instance_t *instances = (instance_t *) malloc(sizeof(instance_t) * tests.size());
 
-  mpz_t prime_test;
-  mpz_init(prime_test);
-  for (size_t i = 0; i < instance_count; i++) {
-     auto off = offsets[i];
-     assert(off > 0);
-     if (sign == 1) {
-        mpz_add_ui(prime_test, center, off);
-     } else {
-        mpz_sub_ui(prime_test, center, off);
-     }
-     from_mpz(prime_test, instances[i].candidate._limbs, params::BITS/32);
+  // TODO handle when there are zeros more gracefully
+
+  for (size_t i = 0; i < tests.size(); i++) {
+     from_mpz(*tests[i], instances[i].candidate._limbs, params::BITS/32);
   }
-  mpz_clear(prime_test);
 
   //printf("Copying primes and instances to the GPU ...\n");
   CUDA_CHECK(cudaSetDevice(0));
   CUDA_CHECK(cudaMalloc((void **)&gpuPrimes, sizeof(uint32_t)*prime_count));
   CUDA_CHECK(cudaMemcpy(gpuPrimes, primes, sizeof(uint32_t)*prime_count, cudaMemcpyHostToDevice));
-  CUDA_CHECK(cudaMalloc((void **)&gpuInstances, sizeof(instance_t)*instance_count));
-  CUDA_CHECK(cudaMemcpy(gpuInstances, instances, sizeof(instance_t)*instance_count, cudaMemcpyHostToDevice));
+  CUDA_CHECK(cudaMalloc((void **)&gpuInstances, sizeof(instance_t) * tests.size()));
+  CUDA_CHECK(cudaMemcpy(gpuInstances, instances, sizeof(instance_t) * tests.size(), cudaMemcpyHostToDevice));
 
   // create a cgbn_error_report for CGBN to report back errors
   CUDA_CHECK(cgbn_error_report_alloc(&report));
 
   //printf("Running GPU kernel ...\n");
 
-  size_t BLOCKS_PER_CALL = 16;
+  size_t blocks = (tests.size() + IPB - 1) / IPB;
+  //printf("Hi %ld = %ld x %d\n", tests.size(), blocks, TPB);
+  kernel_miller_rabin<params><<<blocks, TPB>>>(report, gpuInstances, tests.size(), gpuPrimes, prime_count);
+  //printf("Bye %ld\n", blocks);
 
-  size_t offset = 0;
-  int32_t result = 0;
-  while (true) {
-      //    total_blocks = ceil(instance_count / IPB) and threads = TPB
-      if (offset >= instance_count) {
-          // Didn't find result
-          result = -1;
-          break;
-      }
+  // error report uses managed memory, so we sync the device (or stream) and check for cgbn errors
+  CUDA_CHECK(cudaDeviceSynchronize());
+  CGBN_CHECK(report);
 
-      size_t blocks = min(BLOCKS_PER_CALL, (instance_count - offset + IPB - 1) / IPB);
-      size_t num_testing = min(blocks * IPB, (instance_count - offset));
-      kernel_miller_rabin<params><<<blocks, TPB>>>(report, gpuInstances + offset, instance_count - offset, gpuPrimes, prime_count);
-      tested += num_testing;
+  // copy the instances back from gpuMemory
+  CUDA_CHECK(cudaMemcpy(instances, gpuInstances, sizeof(instance_t) * tests.size(), cudaMemcpyDeviceToHost));
 
-      // error report uses managed memory, so we sync the device (or stream) and check for cgbn errors
-      CUDA_CHECK(cudaDeviceSynchronize());
-      CGBN_CHECK(report);
+  //printf("Bye2 %ld\n", blocks);
 
-      // copy the instances back from gpuMemory
-      CUDA_CHECK(cudaMemcpy(instances + offset, gpuInstances + offset, sizeof(instance_t)* num_testing, cudaMemcpyDeviceToHost));
-
-
-      result = miller_rabin_t<params>::verify_first(instances + offset, num_testing, primes, prime_count);
-      if (result >= 0) {
-          result += offset;
-          //printf("  found %d | %d => %d\n", sign, result, offsets[result]);
-          break;
-      }
-
-      offset += num_testing;
-      //printf("  >%ld (%d)\n", offset, offsets[offset]);
+  for (size_t i = 0; i < tests.size(); i++) {
+      results[i] = instances[i].passed == prime_count;
   }
+
+  //printf("Bye2 %ld\n", blocks);
 
   // clean up
   free(primes);
@@ -445,6 +377,4 @@ int32_t run_test(mpz_t &center, int sign, std::vector<int32_t> offsets, uint32_t
   CUDA_CHECK(cudaFree(gpuPrimes));
   CUDA_CHECK(cudaFree(gpuInstances));
   CUDA_CHECK(cgbn_error_report_free(report));
-
-  return result;
 }

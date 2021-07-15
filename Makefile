@@ -67,4 +67,4 @@ benchmark_google: misc/benchmark_google.cpp modulo_search.o
 
 
 clean:
-	rm -f $(OBJS) $(OUT)
+	rm -f $(OBJS) $(OUT) gap_test_gpu gap_common_cuda.o gap_test_common_cuda.o

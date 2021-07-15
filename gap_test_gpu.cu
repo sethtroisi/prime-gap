@@ -14,12 +14,13 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cmath>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -88,45 +89,41 @@ int main(int argc, char* argv[]) {
 }
 
 
-void test_interval_gpu(
-        const uint64_t m, const mpz_t &K, const size_t SIEVE_LENGTH,
-        vector<int32_t> (&unknowns)[2],
-        size_t &p_tests, size_t &n_tests,
-        int &prev_p, int &next_p) {
-    /*
-    size_t gap_out_of_sieve_count;
-    test_interval_cpu(
-            m, K, SIEVE_LENGTH,
-            p_tests, gap_out_of_sieve_count, gap_out_of_sieve_count,
-            unknowns,
-            prev_p, next_p);
-    // */
-    // /*
+class GPUBatched {
+    public:
+        // current index;
+        int i;
 
-    mpz_t center;
-    mpz_init(center);
-    mpz_mul_ui(center, K, m);
+        // If z[i] should be tested
+        vector<bool>  active;
+        // Result from GPU
+        vector<int>  result;
 
-    //printf("%ld | %ld %ld\n", m, unknowns[0].size(), unknowns[1].size());
+        // number to check if prime
+        vector<mpz_t*> z;
 
-    /**
-     * Originally 8 which has highest throuput but only if we have LOTS of instances
-     * this helps reduce the number of parallel instances needed
-     */
-    const int THREADS_PER_INSTANCE = 32;
-    const int ROUNDS = 1;
+        // index into 'open' (BatchedM)
+        vector<int> open_i;
 
-    typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
-    int prev_p_i = run_test<params>(center, -1, unknowns[0], ROUNDS, p_tests);
-    int next_p_i = run_test<params>(center, +1, unknowns[1], ROUNDS, n_tests);
-    assert(prev_p_i >= 0);
-    assert(next_p_i >= 0);
-    prev_p = unknowns[0][prev_p_i];
-    next_p = unknowns[1][next_p_i];
+        // if this is p_i or n_i
+        vector<int> open_pn;
+        // offset
+        vector<int> open_off_i;
+};
 
-//    printf("    | %d %d\t%d %d\n", prev_p_i, next_p_i, prev_p, next_p);
-    // */
-}
+class BatchedM {
+    public:
+        long m;
+        mpz_t center;
+        vector<int32_t> unknowns[2];
+
+        int p_i = 0, n_i = 0;
+        bool p_found = false, n_found = false;
+
+        int p_tests = 0; // Should equal p_i + 1 with zero overheard
+        int n_tests = 0;
+};
+
 
 void prime_gap_test(const struct Config config) {
     const uint64_t M_start = config.mstart;
@@ -188,45 +185,200 @@ void prime_gap_test(const struct Config config) {
     // Used for various stats
     StatsCounters stats(high_resolution_clock::now());
 
-    for (uint32_t mi = 0; mi < M_inc; mi++) {
-        long m = M_start + mi;
-        if (gcd(m, D) > 1) {
-            continue;
+    // High throughput, low overheard (wasted PRP) method
+    // Load unknowns for {2,4,8,16,32,64} m's
+    // Keep track of {p_i, n_i} for each m
+
+    const size_t BATCHED_M = 32;
+    const size_t BATCH_GPU = 128;
+
+    /**
+     * Originally 8 which has highest throughput but only if we have LOTS of instances
+     * this helps reduce the number of parallel instances needed
+     */
+    const int THREADS_PER_INSTANCE = 16;
+    const int ROUNDS = 1;
+
+    assert( BATCH_GPU % BATCHED_M == 0);
+    const size_t INSTANCES_PER_M = BATCH_GPU / BATCHED_M;
+
+    std::unique_ptr<BatchedM> open[BATCHED_M];
+    size_t open_count = 0;
+
+    GPUBatched gpu_batch;
+    // XXX: This is ugly hack because you can't create mpz_t vector easily
+    mpz_t z_array[BATCH_GPU];
+
+    { // Initialize gpu_batch variables
+        gpu_batch.active.resize(BATCH_GPU, 0);
+        gpu_batch.result.resize(BATCH_GPU, -1);
+
+        for (size_t i = 0; i < BATCH_GPU; i++) {
+            mpz_init(z_array[i]);
+            gpu_batch.z.push_back(&z_array[i]);
         }
 
-        vector<int32_t> unknowns[2];
+        gpu_batch.open_i.resize(BATCH_GPU, -1);
+        gpu_batch.open_pn.resize(BATCH_GPU, -1);
+        gpu_batch.open_off_i.resize(BATCH_GPU, -1);
+    }
 
-        load_and_verify_unknowns(
-            compression, M_start + mi, SIEVE_LENGTH, unknown_file, unknowns);
+    // Main loop
+    uint32_t mi = 0;
+    while (mi < M_inc || open_count > 0) {
+        // Add a new M if space
+        while (open_count < BATCHED_M && mi < M_inc) {
+            int m = M_start + mi;
+            if (gcd(m, D) > 1) {
+                mi++;
+                continue;
+            }
+            BatchedM *test = new BatchedM;
+            test->m = m;
 
-        size_t unknown_l = unknowns[0].size();
-        size_t unknown_u = unknowns[1].size();
+            load_and_verify_unknowns(
+                compression, M_start + mi, SIEVE_LENGTH, unknown_file, test->unknowns);
 
-        size_t p_tests = 0, n_tests = 0;
-        int prev_p, next_p;
+            mpz_init(test->center);
+            mpz_mul_ui(test->center, K, test->m);
 
-        test_interval_gpu(
-            m, K, SIEVE_LENGTH,
-            unknowns,
-            p_tests, n_tests,
-            prev_p, next_p);
-        assert( prev_p > 0 && next_p > 0 );
-
-        float merit = (next_p + prev_p) / (K_log + log(m));
-
-        if (merit > min_merit)  {
-            // TODO: write to file or database
-            printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
-                (next_p + prev_p), merit, m, P, D, prev_p, next_p);
-            // TODO: Record finished mi in log file / db.
+            // First first unassigned slot
+            open_count++;
+            for (size_t i = 0; i < BATCHED_M; i++) {
+                if (!open[i]) {
+                    open[i].reset(test);
+                    //cout << "open[" << i << "] = " << open[i]->m << endl;
+                    break;
+                }
+            }
+            mi++;
         }
 
-        bool is_last = (mi == last_mi);
-        stats.process_results(config, m, is_last, unknown_l, unknown_u, prev_p, next_p, p_tests, n_tests, merit);
+        // Grap some entries from each item in M
+        {
+            gpu_batch.i = 0;
+            // Turn off all entries in gpu_batch
+            std::fill_n(gpu_batch.active.begin(), BATCH_GPU, false);
+
+            for (size_t i = 0; i < BATCHED_M; i++) {
+                if (!open[i]) {
+                    assert(mi >= M_inc); // we are out of M to add to open
+                    continue;
+                }
+                BatchedM &test = *open[i];
+
+
+                for (size_t j = 0; j < INSTANCES_PER_M; j++) {
+                    assert(! (test.p_found && test.n_found) );
+
+                    int gpu_i = gpu_batch.i++; // Increment after we get value (now points at next value)
+                    gpu_batch.open_i[gpu_i] = i;
+                    gpu_batch.active[gpu_i] = true;
+                    gpu_batch.result[gpu_i] = -1;
+
+                    if (!test.p_found) {
+                        gpu_batch.open_pn[gpu_i] = 0;
+                        mpz_sub_ui(*gpu_batch.z[gpu_i], test.center, test.unknowns[0][test.p_tests]);
+                        gpu_batch.open_off_i[gpu_i] = test.p_tests++;
+                        if ((size_t) test.p_tests == test.unknowns[0].size()) break;
+                        // TODO handle overflow of unknowns[0]
+                    } else {
+                        assert(!test.n_found);
+                        gpu_batch.open_pn[gpu_i] = 1;
+                        mpz_add_ui(*gpu_batch.z[gpu_i], test.center, test.unknowns[1][test.n_tests]);
+                        gpu_batch.open_off_i[gpu_i] = test.n_tests++;
+                        if ((size_t)test.n_tests == test.unknowns[1].size()) break;
+                        // TODO handle overflow of unknowns[1]
+                    }
+        //            gmp_printf("batch[%d] = %d,%d = %d | %Zd\n", gpu_i, i, j, test.m, *gpu_batch.z[gpu_i]);
+                }
+            }
+        }
+
+        // Run this large batch
+        {
+            typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
+            run_test<params>(gpu_batch.z, gpu_batch.result, ROUNDS);
+        }
+
+        // Decode and possible finalize M
+        {
+            for (size_t i = 0; i < BATCH_GPU; i++) {
+                if (!gpu_batch.active[i]) {
+                    continue;
+                }
+                assert (gpu_batch.result[i] == 0 || gpu_batch.result[i] == 1);
+
+                /*
+                size_t open_i = gpu_batch.open_i[i];
+                if (open[open_i]) {
+                    const BatchedM &test = *open[open_i];
+                    bool n_side = gpu_batch.open_pn[i];
+                    int offset = test.unknowns[n_side][gpu_batch.open_off_i[i]];
+                    char sgn = "+-"[n_side];
+                    cout << "m=" << test.m << " " << sgn << offset << " | " << gpu_batch.result[i] << endl;
+                }  // */
+
+                if (gpu_batch.result[i]) {
+                    size_t open_i = gpu_batch.open_i[i];
+                    if (!open[open_i]) {
+                        //cout << "Found two primes for open[" << open_i << "] from batch of " << INSTANCES_PER_M << endl;
+                        continue;
+                    }
+
+                    if (gpu_batch.open_pn[i] == 0) {
+                        if (open[open_i]->p_found) {
+                            /*
+                            cout << "Found two previous primes for m=" << open[open_i]->m << endl;
+                            cout << "\t" << open[open_i]->p_i << " " << gpu_batch.open_off_i[i] << endl;
+                            cout << "\t" << open[open_i]->unknowns[0][open[open_i]->p_i] <<
+                                    " "  << open[open_i]->unknowns[0][gpu_batch.open_off_i[i]] << endl;
+                            */
+                            continue;
+                        }
+
+                        // prev_prime found
+                        assert(open[open_i]->p_tests > 0 );
+                        open[open_i]->p_found = true;
+                        open[open_i]->p_i = gpu_batch.open_off_i[i];
+                    } else {
+                        // next_prime found (and done)
+                        BatchedM *test = open[open_i].release();
+                        open_count--;
+
+                        assert(test->p_found );
+                        assert(test->n_tests > 0 );
+                        test->n_found = true;
+                        test->n_i = gpu_batch.open_off_i[i];
+
+                        int prev_p = test->unknowns[0][test->p_i];
+                        int next_p = test->unknowns[1][test->n_i];
+                        assert( prev_p > 0 && next_p > 0 );
+
+                        float merit = (next_p + prev_p) / (K_log + log(test->m));
+                        if (merit > min_merit)  {
+                            // TODO: write to file or database
+                            printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
+                                (next_p + prev_p), merit, test->m, P, D, prev_p, next_p);
+                            // TODO: Record finished mi in log file / db.
+                        }
+
+                        bool is_last = (mi >= M_inc) && open_count == 0;
+                        stats.process_results(config, test->m, is_last,
+                            test->unknowns[0].size(), test->unknowns[1].size(),
+                            prev_p, next_p,
+                            test->p_tests, test->n_tests, merit);
+                    }
+                }
+            }
+        }
     }
 
     // ----- cleanup
-
-    mpz_clear(K);
+    {
+        mpz_clear(K);
+        for (size_t i = 0; i < BATCH_GPU; i++)
+            mpz_clear(*gpu_batch.z[i]);
+    }
 }
 
