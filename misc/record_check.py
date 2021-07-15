@@ -207,8 +207,11 @@ def search_logs(args):
     assert os.path.exists(args.logs_directory), (
         "Logs directory ({}) doesn't exist".format(args.logs_directory))
 
+    log_files = glob.glob(args.logs_directory + "/*.log*") if os.path.isdir(args.logs_directory) \
+            else [args.logs_directory]
+
     gaps = []
-    for log_fn in glob.glob(args.logs_directory + "/*.log"):
+    for log_fn in log_files:
         with open(log_fn, "r") as f:
             lines = f.readlines()
 
