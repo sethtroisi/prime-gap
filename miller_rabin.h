@@ -361,7 +361,7 @@ uint32_t *generate_primes(uint32_t count) {
 }
 
 template<class params>
-int32_t run_test(mpz_t &center, int sign, std::vector<int32_t> offsets, uint32_t prime_count) {
+int32_t run_test(mpz_t &center, int sign, std::vector<int32_t> offsets, uint32_t prime_count, size_t &tested) {
   typedef typename miller_rabin_t<params>::instance_t instance_t;
 
   instance_t          *gpuInstances;
@@ -417,24 +417,26 @@ int32_t run_test(mpz_t &center, int sign, std::vector<int32_t> offsets, uint32_t
       }
 
       size_t blocks = min(BLOCKS_PER_CALL, (instance_count - offset + IPB - 1) / IPB);
+      size_t num_testing = min(blocks * IPB, (instance_count - offset));
       kernel_miller_rabin<params><<<blocks, TPB>>>(report, gpuInstances + offset, instance_count - offset, gpuPrimes, prime_count);
+      tested += num_testing;
 
       // error report uses managed memory, so we sync the device (or stream) and check for cgbn errors
       CUDA_CHECK(cudaDeviceSynchronize());
       CGBN_CHECK(report);
 
       // copy the instances back from gpuMemory
-      size_t num_to_copy = min(blocks * IPB, (instance_count - offset));
-      CUDA_CHECK(cudaMemcpy(instances + offset, gpuInstances + offset, sizeof(instance_t)* num_to_copy, cudaMemcpyDeviceToHost));
+      CUDA_CHECK(cudaMemcpy(instances + offset, gpuInstances + offset, sizeof(instance_t)* num_testing, cudaMemcpyDeviceToHost));
 
-      result = miller_rabin_t<params>::verify_first(instances + offset, num_to_copy, primes, prime_count);
+
+      result = miller_rabin_t<params>::verify_first(instances + offset, num_testing, primes, prime_count);
       if (result >= 0) {
           result += offset;
           //printf("  found %d | %d => %d\n", sign, result, offsets[result]);
           break;
       }
 
-      offset += num_to_copy;
+      offset += num_testing;
       //printf("  >%ld (%d)\n", offset, offsets[offset]);
   }
 

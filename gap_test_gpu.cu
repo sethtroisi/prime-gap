@@ -117,17 +117,14 @@ void test_interval_gpu(
     const int ROUNDS = 1;
 
     typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
-    int prev_p_i = run_test<params>(center, -1, unknowns[0], ROUNDS);
-    int next_p_i = run_test<params>(center, +1, unknowns[1], ROUNDS);
+    int prev_p_i = run_test<params>(center, -1, unknowns[0], ROUNDS, s_total_prp_tests);
+    int next_p_i = run_test<params>(center, +1, unknowns[1], ROUNDS, s_total_prp_tests);
     assert(prev_p_i >= 0);
     assert(next_p_i >= 0);
     prev_p = unknowns[0][prev_p_i];
     next_p = unknowns[1][next_p_i];
 
 //    printf("    | %d %d\t%d %d\n", prev_p_i, next_p_i, prev_p, next_p);
-    // 0-indexed
-    s_total_prp_tests += prev_p_i + next_p_i + 2;
-
     // */
 }
 
