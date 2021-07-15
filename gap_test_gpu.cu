@@ -37,7 +37,7 @@ using namespace std::chrono;
 
 // TODO accept from makefile
 // 1024, 1536, 2048
-#define BITS 1536 //2048
+#define BITS 2048
 #define WINDOW_BITS 6
 
 void prime_gap_test(const struct Config config);
@@ -205,6 +205,11 @@ void prime_gap_test(const struct Config config) {
     const int THREADS_PER_INSTANCE = 16;
     const int ROUNDS = 1;
 
+    // Setup test runner
+    typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
+    test_runner_t<params> runner(BATCH_GPU, ROUNDS);
+
+
     assert( BATCH_GPU % BATCHED_M == 0);
     const size_t INSTANCES_PER_M = BATCH_GPU / BATCHED_M;
 
@@ -319,8 +324,7 @@ void prime_gap_test(const struct Config config) {
 
         // Run this large batch
         {
-            typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
-            run_test<params>(gpu_batch.z, gpu_batch.result, ROUNDS);
+            runner.run_test(gpu_batch.z, gpu_batch.result);
         }
 
         // Decode and possible finalize M

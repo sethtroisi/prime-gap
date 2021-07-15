@@ -243,35 +243,6 @@ class miller_rabin_t {
     }
     return prime_count;
   }
-
-  /*
-  __host__ static instance_t *generate_instances(uint32_t count) {
-    instance_t *instances=(instance_t *)malloc(sizeof(instance_t)*count);
-    int         index;
-
-    mpz_t n;
-    mpz_init(n);
-    mpz_set_str(n,
-        "0x13e0ab623eecd3771fc8f7306d00dc2475262f183746"
-        "b69447ac48f39c61f3f097f6a4060fc2708e7a43a0ee2f"
-        "29ab3908fd7426fc40b3485eb71ae3bee43aa60fe3d6dc"
-        "b79fd846bfd03232de416fad5a576015ec3c75787cc907"
-        "35a65feef58500ee3e85d331bde59f1a693cf11c219ae7"
-        "82fe06d1f66b2936f139f8c23019a304c9545d6a4e9dfb"
-        "6ad477b7c1a5a7e67ac0c4605ba7a7539dd43f09b67c70"
-        "4b88d30eb6b6257d65f695", 0);
-
-    for(index=0;index<count;index++) {
-      //random_words(instances[index].candidate._limbs, params::BITS/32);
-      from_mpz(n, instances[index].candidate._limbs, params::BITS/32);
-      mpz_add_ui(n, n, 2);
-      instances[index].candidate._limbs[0] |= 1;
-      instances[index].passed=0;
-    }
-    return instances;
-  }
-  */
-
 };
 
 
@@ -316,65 +287,94 @@ uint32_t *generate_primes(uint32_t count) {
 
 // TODO avoid reallocating eachtime
 // TODO with globals at first
+
 template<class params>
-void run_test(const std::vector<mpz_t*> &tests, std::vector<int> &results, uint32_t prime_count) {
-  typedef typename miller_rabin_t<params>::instance_t instance_t;
+class test_runner_t {
+  public:
+      typedef typename miller_rabin_t<params>::instance_t instance_t;
 
-  instance_t          *gpuInstances;
-  cgbn_error_report_t *report;
-  uint32_t            *primes, *gpuPrimes;
-  uint32_t              TPB=(params::TPB==0) ? 128 : params::TPB;
-  uint32_t              TPI=params::TPI, IPB=TPB/TPI;
+      /**
+       * Max number of simultaious tests
+       * Performance is maximized by setting this to be large (e.g. 1024 - 8192)
+       */
+      const size_t n;
+      /**
+       * Number of primes to test in miller rabin
+       * 1 = Fermat-test, more is slower but more certain
+       */
+      const size_t rounds;
 
-  primes=generate_primes(prime_count);
+      instance_t *instances, *gpuInstances;
+      const size_t instance_size;
 
-  if (tests.size() == 0)
-    return;
+      cgbn_error_report_t *report;
+      uint32_t *primes, *gpuPrimes;
 
-  instance_t *instances = (instance_t *) malloc(sizeof(instance_t) * tests.size());
+      uint32_t TPB=(params::TPB==0) ? 128 : params::TPB;
+      uint32_t TPI=params::TPI, IPB=TPB/TPI;
 
-  // TODO handle when there are zeros more gracefully
 
-  for (size_t i = 0; i < tests.size(); i++) {
-     from_mpz(*tests[i], instances[i].candidate._limbs, params::BITS/32);
-  }
+      test_runner_t(size_t n, size_t rounds) :
+              n(n), rounds(rounds), instance_size(sizeof(instance_t) * n) {
+          primes = generate_primes(rounds);
 
-  //printf("Copying primes and instances to the GPU ...\n");
-  CUDA_CHECK(cudaSetDevice(0));
-  CUDA_CHECK(cudaMalloc((void **)&gpuPrimes, sizeof(uint32_t)*prime_count));
-  CUDA_CHECK(cudaMemcpy(gpuPrimes, primes, sizeof(uint32_t)*prime_count, cudaMemcpyHostToDevice));
-  CUDA_CHECK(cudaMalloc((void **)&gpuInstances, sizeof(instance_t) * tests.size()));
-  CUDA_CHECK(cudaMemcpy(gpuInstances, instances, sizeof(instance_t) * tests.size(), cudaMemcpyHostToDevice));
+          instances = (instance_t *) malloc(sizeof(instance_t) * n);
+          if (instances == NULL) {
+            printf("malloc(%ld) failed\n", instance_size);
+          }
 
-  // create a cgbn_error_report for CGBN to report back errors
-  CUDA_CHECK(cgbn_error_report_alloc(&report));
+          CUDA_CHECK(cudaSetDevice(0));
+          CUDA_CHECK(cudaMalloc((void **)&gpuInstances, instance_size));
 
-  //printf("Running GPU kernel ...\n");
+          CUDA_CHECK(cudaMalloc((void **)&gpuPrimes, sizeof(uint32_t) * rounds));
+          CUDA_CHECK(cudaMemcpy(gpuPrimes, primes, sizeof(uint32_t) * rounds, cudaMemcpyHostToDevice));
+      }
 
-  size_t blocks = (tests.size() + IPB - 1) / IPB;
-  //printf("Hi %ld = %ld x %d\n", tests.size(), blocks, TPB);
-  kernel_miller_rabin<params><<<blocks, TPB>>>(report, gpuInstances, tests.size(), gpuPrimes, prime_count);
-  //printf("Bye %ld\n", blocks);
+      ~test_runner_t() {
+          free(primes);
+          free(instances);
+          CUDA_CHECK(cudaFree(gpuPrimes));
+          CUDA_CHECK(cudaFree(gpuInstances));
+          CUDA_CHECK(cgbn_error_report_free(report));
+      }
 
-  // error report uses managed memory, so we sync the device (or stream) and check for cgbn errors
-  CUDA_CHECK(cudaDeviceSynchronize());
-  CGBN_CHECK(report);
+      void run_test(const std::vector<mpz_t*> &tests, std::vector<int> &results) {
+          if (tests.size() == 0)
+            return;
 
-  // copy the instances back from gpuMemory
-  CUDA_CHECK(cudaMemcpy(instances, gpuInstances, sizeof(instance_t) * tests.size(), cudaMemcpyDeviceToHost));
+          if (tests.size() > n) {
+            printf("tests(%ld) > n(%ld)\n", tests.size(), n);
+            exit(1);
+          }
 
-  //printf("Bye2 %ld\n", blocks);
+          // TODO handle when there are zeros in results more gracefully
 
-  for (size_t i = 0; i < tests.size(); i++) {
-      results[i] = instances[i].passed == prime_count;
-  }
+          for (size_t i = 0; i < tests.size(); i++) {
+             from_mpz(*tests[i], instances[i].candidate._limbs, params::BITS/32);
+          }
 
-  //printf("Bye2 %ld\n", blocks);
+          //printf("Copying primes and instances to the GPU ...\n");
+          CUDA_CHECK(cudaMemcpy(gpuInstances, instances, sizeof(instance_t) * tests.size(), cudaMemcpyHostToDevice));
 
-  // clean up
-  free(primes);
-  free(instances);
-  CUDA_CHECK(cudaFree(gpuPrimes));
-  CUDA_CHECK(cudaFree(gpuInstances));
-  CUDA_CHECK(cgbn_error_report_free(report));
-}
+          // create a cgbn_error_report for CGBN to report back errors
+          CUDA_CHECK(cgbn_error_report_alloc(&report));
+
+          //printf("Running GPU kernel ...\n");
+
+          size_t blocks = (tests.size() + IPB - 1) / IPB;
+          //printf("Hi %ld = %ld x %d\n", tests.size(), blocks, TPB);
+          kernel_miller_rabin<params><<<blocks, TPB>>>(report, gpuInstances, tests.size(), gpuPrimes, rounds);
+          //printf("Bye %ld\n", blocks);
+
+          // error report uses managed memory, so we sync the device (or stream) and check for cgbn errors
+          CUDA_CHECK(cudaDeviceSynchronize());
+          CGBN_CHECK(report);
+
+          // copy the instances back from gpuMemory
+          CUDA_CHECK(cudaMemcpy(instances, gpuInstances, sizeof(instance_t) * tests.size(), cudaMemcpyDeviceToHost));
+
+          for (size_t i = 0; i < tests.size(); i++) {
+              results[i] = instances[i].passed == rounds;
+          }
+      }
+};
