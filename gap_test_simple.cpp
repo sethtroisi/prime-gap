@@ -137,16 +137,7 @@ void prime_gap_test(const struct Config config) {
     }
 
     // Used for various stats
-    auto  s_start_t = high_resolution_clock::now();
-    uint32_t  s_tests     = 0;
-    size_t    s_total_unknown = 0;
-    size_t    s_t_unk_prev = 0;
-    size_t    s_t_unk_next = 0;
-    size_t    s_total_prp_tests = 0;
-    size_t    s_gap_out_of_sieve_prev = 0;
-    size_t    s_gap_out_of_sieve_next = 0;
-    float     s_best_merit_interval = 0;
-    size_t    s_best_merit_interval_m = 0;
+    StatsCounters stats(high_resolution_clock::now());
 
     for (uint32_t mi = 0; mi < M_inc; mi++) {
         long m = M_start + mi;
@@ -162,82 +153,27 @@ void prime_gap_test(const struct Config config) {
         size_t unknown_l = unknowns[0].size();
         size_t unknown_u = unknowns[1].size();
 
-        s_total_unknown += unknown_l + unknown_u;
-        s_t_unk_prev += unknown_l;
-        s_t_unk_next += unknown_u;
+        size_t p_tests = 0, n_tests = 0;
 
         int prev_p = 0;
         int next_p = 0;
         test_interval_cpu(
             m, K, SIEVE_LENGTH,
-            s_total_prp_tests,
+            p_tests,
             s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next,
             unknowns, prev_p, next_p);
         assert( prev_p > 0 && next_p > 0 );
 
-        int gap = next_p + prev_p;
-        float merit = gap / (K_log + log(m));
+        float merit = (next_p + prev_p) / (K_log + log(m));
 
         if (merit > min_merit)  {
             // TODO: write to file or database
             printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
                 gap, merit, m, P, D, prev_p, next_p);
         }
-        if (merit > s_best_merit_interval) {
-            s_best_merit_interval = merit;
-            s_best_merit_interval_m = m;
-        }
 
-        s_tests += 1;
         bool is_last = (mi == last_mi);
-        if ( is_last || (s_tests % 5000 == 0) || (
-              s_tests == 1    || s_tests == 10 || s_tests == 30  ||
-              s_tests == 100  || s_tests == 300 || s_tests == 500 ||
-              s_tests == 1000 || s_tests == 3000) ) {
-            auto s_stop_t = high_resolution_clock::now();
-            double   secs = duration<double>(s_stop_t - s_start_t).count();
-
-            // TODO: Record finished mi in log file / db.
-
-            if ((config.verbose + is_last) >= 1) {
-                printf("\tm=%ld %4ld <- unknowns -> %-4ld\t%4d <- gap -> %-4d\n",
-                    m,
-                    unknown_l, unknown_u,
-                    prev_p, next_p);
-
-                // Stats!
-                if (s_tests > secs) {
-                    printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
-                        s_tests, s_tests / secs, secs);
-                } else {
-                    printf("\t    tests     %-10d (%.2f secs/test)  %.0f seconds elapsed\n",
-                        s_tests, secs / s_tests, secs);
-                }
-
-                printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f%% <- %% -> %.2f%%\n",
-                    s_total_unknown, s_total_unknown / ((double) s_tests),
-                    100.0 * (1 - s_total_unknown / ((2.0 * SIEVE_LENGTH + 1) * s_tests)),
-                    100.0 * s_t_unk_prev / s_total_unknown,
-                    100.0 * s_t_unk_next / s_total_unknown);
-                printf("\t    prp tests %-10ld (avg: %.2f) (%.1f tests/sec)\n",
-                    s_total_prp_tests,
-                    s_total_prp_tests / (float) s_tests,
-                    s_total_prp_tests / secs);
-
-                if (config.verbose >= 2) {
-                    if (s_gap_out_of_sieve_prev + s_gap_out_of_sieve_next > 0) {
-                        printf("\t    fallback prev_gap %ld (%.1f%%), next_gap %ld (%.1f%%)\n",
-                            s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / s_tests,
-                            s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / s_tests);
-                    }
-                    printf("\t    best merit this interval: %.3f (at m=%ld)\n",
-                        s_best_merit_interval, s_best_merit_interval_m);
-                }
-
-                s_best_merit_interval = 0;
-                s_best_merit_interval_m = 0;
-            }
-        }
+        stats.process_results(config, m, is_last, unknown_l, unknown_u, prev_p, next_p, p_tests, n_tests, merit);
     }
 
     // ----- cleanup
