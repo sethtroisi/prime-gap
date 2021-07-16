@@ -76,7 +76,6 @@ bool StatsCounters::possible_print_stats(
         auto s_stop_t = std::chrono::high_resolution_clock::now();
         double   secs = std::chrono::duration<double>(s_stop_t - s_start_t).count();
         s_tests_per_second = s_tests / secs;
-        cout << print_interval << endl;
 
         if ((config.verbose + is_last) >= 1) {
             printf("\tm=%ld %4ld <- unknowns -> %-4ld\t%4d <- gap -> %-4d\n",

@@ -372,7 +372,6 @@ void prime_gap_test(const struct Config config) {
                         continue;
                     }
 
-
                     int offset_i = gpu_batch.open_off_i[i];
                     if (gpu_batch.open_pn[i] == 0) {
                         if (test->p_found) {
@@ -388,6 +387,23 @@ void prime_gap_test(const struct Config config) {
                         assert(test->p_tests > 0 );
                         test->p_found = true;
                         test->prev_p = test->unknowns[0][offset_i];
+
+                        // Potentially do Side-Skip if prev_p is not very large.
+                        // TODO improve this with constant and logging
+                        if (test->p_found && !test->n_found) {
+                            float prev_merit = test->prev_p / (K_log + log(test->m));
+                            float MIN_MERIT_TO_CONTINUE = (min_merit - 2) / 2;
+                            if (prev_merit < MIN_MERIT_TO_CONTINUE) {
+                                bool is_last = (mi >= M_inc) && open_count == 0;
+                                stats.process_results(config, test->m, is_last,
+                                    test->unknowns[0].size(), test->unknowns[1].size(),
+                                    test->prev_p, test->next_p,
+                                    test->p_tests, test->n_tests, prev_merit);
+
+                                open[open_i].reset();  // Delete open[i]
+                                open_count--;
+                            }
+                        }
                     } else {
                         if (test->n_found) {
                             /*
