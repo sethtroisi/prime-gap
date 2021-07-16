@@ -43,6 +43,9 @@ class StatsCounters {
         float     s_best_merit_interval = 0;
         size_t    s_best_merit_interval_m = 0;
 
+        // This can change in const possible_print_stats
+        mutable float     s_tests_per_second = 0;
+
         /** Return if stats were printed */
         void process_results(
             const Config &config,
