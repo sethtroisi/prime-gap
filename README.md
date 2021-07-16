@@ -648,11 +648,15 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] Error with error estimate, looking at only final invernal vs all intervals?
         * Estimated 3.74e+09 unknowns found 4.11e+10 (999.99% error)
         * Estimated 1.32e+07 new composites found 3.33e+11 (2518520.50% error)
-
 * gap\_stats.cpp
 * gap\_test\_simple
   * [ ] Do in process for very small P
   * [ ] records to DB what range was tested
+* gap\_test\_gpu
+  * [ ] auto optimize BATCH_SIZE, TPI, ...
+  * [ ] one_sided
+  * [ ] checkpoint/resume logic
+  * [ ] autolog to file
 * gap\_test.py
   * [ ] Save prp-percentage finalized for faster skipping of complete files
   * [ ] Validate the unknown-file matches expectations (unknowns / line, ...)
@@ -791,6 +795,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Autoscale printing to every X seconds
   * [x] Describe distribution
   * [x] Generate expected length
+* gap\_test\_gpu
+  * [x] auto select BITS, TPI
 * benchmarking
   * [x] Experimentally compute `prime_time_estimate`
   * [x] Redo prime-time with user time (gmp better)

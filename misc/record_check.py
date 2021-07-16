@@ -129,7 +129,7 @@ def print_record_gaps(args, gaps):
 
                 record_lines.append(raw_data)
                 print("\tRecord {:5} | {:70s} | Gap={:<6} (New!)".format(
-                    len(record_lines), raw_data, size))
+                    len(record_lines), raw_data.strip(), size))
                 continue
 
             # Works most of the time, could have false positives
@@ -240,7 +240,7 @@ def search_logs(args):
                     # number
                     " ".join(match.groups()[2:]),
                     # line
-                    line,
+                    line.strip(),
                 ])
 
     if gaps:

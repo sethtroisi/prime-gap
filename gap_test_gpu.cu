@@ -35,10 +35,14 @@ using std::endl;
 using std::vector;
 using namespace std::chrono;
 
-// TODO accept from makefile
-// 1024, 1536, 2048
-#define BITS 2048
-#define WINDOW_BITS 6
+#ifdef GPU_BITS
+#define BITS GPU_BITS
+#else
+#define BITS 1024
+#endif
+
+
+#define WINDOW_BITS ((BITS <= 1024) ? 5 : 6)
 
 void prime_gap_test(const struct Config config);
 
@@ -53,11 +57,6 @@ int main(int argc, char* argv[]) {
     if (config.verbose >= 2) {
         printf("Compiled with GMP %d.%d.%d\n",
             __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
-    }
-
-    if (BITS > (1 << (2 * WINDOW_BITS))) {
-        printf("Not enought WINDOW_BITS(%d) for BITS(%d)\n", WINDOW_BITS, BITS);
-        return 1;
     }
 
     if( !has_prev_prime_gmp() ) {
@@ -197,6 +196,8 @@ void prime_gap_test(const struct Config config) {
 
     const size_t BATCHED_M = 256;
     const size_t BATCH_GPU = 1024;
+    assert( BATCH_GPU % BATCHED_M == 0);
+    const size_t CANDIDATES_PER_M = BATCH_GPU / BATCHED_M;
 
     /**
      * Originally 8 which has highest throughput but only if we have LOTS of instances
@@ -206,12 +207,28 @@ void prime_gap_test(const struct Config config) {
     const int ROUNDS = 1;
 
     // Setup test runner
+    printf("BITS=%d\tWINDOW_BITS=%d\n", BITS, WINDOW_BITS);
+    printf("PRP/BATCH=%ld\tM/BATCH=%ld (candidates/M=%ld)\n",
+            BATCH_GPU, BATCHED_M, CANDIDATES_PER_M);
+    printf("THREADS/PRP=%d\n", THREADS_PER_INSTANCE);
+
+    {
+        size_t N_bits = mpz_sizeinbase(K, 2) + log2(M_start + last_mi);
+        for (size_t bits : {512, 1024, 1536, 2048, 3036, 4096}) {
+            if (N_bits <= bits) {
+                if (bits < BITS) {
+                    printf("\nFASTER WITH `make gap_test_gpu BITS=%ld` (may require `make clean`)\n\n", bits);
+                }
+                break;
+            }
+        }
+        assert( N_bits < BITS ); // See last debug line.
+        assert( BITS <= (1 << (2 * WINDOW_BITS)) );
+    }
+
+    // XXX: params1024, params2048 with *runner1024, *runner2048 and only new one of them.
     typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
     test_runner_t<params> runner(BATCH_GPU, ROUNDS);
-
-
-    assert( BATCH_GPU % BATCHED_M == 0);
-    const size_t INSTANCES_PER_M = BATCH_GPU / BATCHED_M;
 
     std::unique_ptr<BatchedM> open[BATCHED_M];
     size_t open_count = 0;
@@ -281,7 +298,7 @@ void prime_gap_test(const struct Config config) {
                 }
                 BatchedM &test = *open[i];
 
-                for (size_t j = 0; j < INSTANCES_PER_M; j++) {
+                for (size_t j = 0; j < CANDIDATES_PER_M; j++) {
                     assert(! (test.p_found && test.n_found) );
 
                     int gpu_i = gpu_batch.i;
@@ -351,7 +368,7 @@ void prime_gap_test(const struct Config config) {
                 if (gpu_batch.result[i]) {
                     BatchedM *test = open[open_i].get();
                     if (test == nullptr) {
-                        //cout << "Found two primes for open[" << open_i << "] from batch of " << INSTANCES_PER_M << endl;
+                        //cout << "Found two primes for open[" << open_i << "] from batch of " << CANDIDATES_PER_M << endl;
                         continue;
                     }
 

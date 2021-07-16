@@ -19,6 +19,7 @@ CC	= g++
 CFLAGS	= -Wall -Werror -O3
 NVCC	= nvcc
 CUDA_FLAGS	= -Xcompiler -Wall -Xcompiler -Werror -O3
+BITS    = 1024
 
 LDFLAGS	= -lgmp -lsqlite3 -fopenmp
 # Need for local gmp / primesieve
@@ -54,7 +55,11 @@ gap_test_simple: gap_test_simple.cpp gap_common.o gap_test_common.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 gap_test_gpu: gap_test_gpu.cu miller_rabin.h gap_common_cuda.o gap_test_common_cuda.o
-	nvcc -I../CGBN/include -o $@ $(filter-out miller_rabin.h, $^) -arch=sm_61 $(CUDA_FLAGS) $(filter-out -fopenmp, $(LDFLAGS))
+	nvcc -o $@ -I../CGBN/include \
+		-DGPU_BITS=$(BITS) \
+		$(filter-out miller_rabin.h, $^) \
+		-arch=sm_61 $(CUDA_FLAGS) \
+		$(filter-out -fopenmp, $(LDFLAGS))
 
 benchmark: misc/benchmark.cpp modulo_search.o
 	$(CC) -o $@ $^ $(CFLAGS) -lprimesieve $(LDFLAGS) -I.
