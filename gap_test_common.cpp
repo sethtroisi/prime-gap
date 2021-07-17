@@ -42,7 +42,6 @@ void StatsCounters::process_results(
     // TODO break out s_p_tests, s_n_tests;
     s_total_prp_tests += p_tests + n_tests;
 
-    // TODO update s_gap_out_of_sieve_prev, s_gap_out_of_sieve_next
     // TODO s_side_skips
 
     if (merit > s_best_merit_interval) {

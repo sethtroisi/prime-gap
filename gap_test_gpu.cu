@@ -438,8 +438,13 @@ void prime_gap_test(const struct Config config) {
                 int next_p = test.next_p;
 
                 if (test.overflow) {
+                    // NOTE: Overhead to doing this while GPU waits seems small (<1% of candidates)
+                    // But is actually A LOT because 40x slower. Becomes ~20-40% overhead quickly.
+
                     if (prev_p == -1) {
                         assert(test.p_tests > 0);
+                        stats.s_gap_out_of_sieve_prev += 1;
+
                         //cout << "gap_out_of_sieve_prev m=" << test.m << endl;
                         mpz_sub_ui(test_z, test.center, SIEVE_LENGTH);
                         mpz_prevprime(test_z, test_z);
@@ -451,6 +456,8 @@ void prime_gap_test(const struct Config config) {
                     }
                     if (next_p == -1) {
                         assert(test.p_tests > 0);
+                        stats.s_gap_out_of_sieve_next += 1;
+
                         //cout << "gap_out_of_sieve_next m=" << test.m << endl;
                         mpz_add_ui(test_z, test.center, SIEVE_LENGTH);
                         mpz_nextprime(test_z, test_z);
