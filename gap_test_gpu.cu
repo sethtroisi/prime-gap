@@ -566,7 +566,14 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                         if (interval.p_found && interval.n_tests == 0 && !interval.n_found) {
                             // TODO improve this with constant and logging
                             float prev_merit = prev_p / (K_log + log(interval.m));
-                            float MIN_MERIT_TO_CONTINUE = (min_merit - 2) / 2;
+                            /**
+                             * With Y = 24
+                             * 50% of gaps with merit > 24 merit have prev > 12 merit
+                             *      only test 1/2^(12-3) = 1/512 gaps
+                             * 75% of gaps with merit > 24 merit have prev > 6 merit
+                             *      test 1/2^(6-3) = 1/8 gaps
+                             */
+                            float MIN_MERIT_TO_CONTINUE = min_merit / 2 - 2;
 
                             if (prev_merit < MIN_MERIT_TO_CONTINUE) {
                                 bool is_last = (mi >= M_inc) && processing.size() == 1;
