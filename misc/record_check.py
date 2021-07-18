@@ -211,6 +211,7 @@ def search_logs(args):
             else [args.logs_directory]
 
     gaps = []
+    seen = set()
     for log_fn in log_files:
         with open(log_fn, "r") as f:
             lines = f.readlines()
@@ -222,6 +223,11 @@ def search_logs(args):
         for li, line in enumerate(lines):
             if ' ' not in line:
                 continue
+
+            if line in seen:
+                # Ignore completely duplicate lines
+                continue
+
             match = record_format.search(line)
             if match:
                 file_match += 1
@@ -229,6 +235,8 @@ def search_logs(args):
                     partial_line = line.split(':')[-1].strip()
                     print("    Match {} at line {}: {}".format(
                         file_match, li, partial_line))
+
+                seen.add(line)
 
                 gaps.append([
                     # gap

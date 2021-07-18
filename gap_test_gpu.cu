@@ -61,16 +61,22 @@ using namespace std::chrono;
  *      4 => 1.5 extra PRP/M
  *
  * BATCHED_M is number of M loaded at the same time
+ * ------------------
+ * Try:
+ *  1024,   16384,  1,  8,  1
+ *  ???2048,    4096,  2,  8,  1
+ *  ???4096,    2048,  4,  16, 1
+ *
  */
-const size_t BATCH_GPU = 1024;
-const size_t SEQUENTIAL_IN_BATCH = 4;
+const size_t BATCH_GPU = 2*8192;
+const size_t SEQUENTIAL_IN_BATCH = 1;
 const size_t BATCHED_M = 2 * BATCH_GPU * 120 / 100 / SEQUENTIAL_IN_BATCH;  // 10% extra
 
 /**
  * Originally 8 which has highest throughput but only if we have LOTS of instances
  * this helps reduce the number of parallel instances needed
  */
-const int THREADS_PER_INSTANCE = 16;
+const int THREADS_PER_INSTANCE = 8;
 const int ROUNDS = 1;
 
 //************************************************************************
@@ -630,7 +636,8 @@ void prime_gap_test(const struct Config config) {
             BATCH_GPU, BATCH_GPU/SEQUENTIAL_IN_BATCH);
     printf("THREADS/PRP=%d\n", THREADS_PER_INSTANCE);
 
-    assert( BATCH_GPU == 1024 || BATCH_GPU == 2048 || BATCH_GPU == 4096 || BATCH_GPU == 9192 );
+    assert( BATCH_GPU == 1024 || BATCH_GPU == 2048 || BATCH_GPU == 4096 ||
+            BATCH_GPU == 8192 || BATCH_GPU ==16384 || BATCH_GPU ==32768 );
     assert( SEQUENTIAL_IN_BATCH == 1 || SEQUENTIAL_IN_BATCH == 2 || SEQUENTIAL_IN_BATCH == 4 );
 
     {
