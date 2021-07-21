@@ -36,13 +36,18 @@ def get_arg_parser():
 
     parser.add_argument(
         '--logs-directory', type=str,
-        default="logs",
+        default=None,
         help="directory of logs")
+
+    parser.add_argument(
+        '--log-files', type=str, nargs='*',
+        default=[],
+        help="individual log files (e.g. logs/2221*)")
 
     parser.add_argument(
         '--search-db', type=str,
         default="prime-gap-search.db",
-        help="Prime database from gap_test")
+        help="Prime database from gap_test (or \"ignore\" to skip)")
 
     parser.add_argument(
         '--prime-gaps-db', type=str,
@@ -197,18 +202,14 @@ def print_record_gaps(args, gaps):
             print()
 
 
-def search_logs(args):
+def search_logs(log_files):
     # 32280  10.9749  5641 * 3001#/2310 -18514 to +13766
     record_format = re.compile(
         r"(\d+)\s+(\d+\.\d+)\s+"
         r"(\d+)\s*(\*)\s*(\d+#)(/\d+#?)\s+"
         r"(-\d+)")
 
-    assert os.path.exists(args.logs_directory), (
-        "Logs directory ({}) doesn't exist".format(args.logs_directory))
-
-    log_files = glob.glob(args.logs_directory + "/*.log*") if os.path.isdir(args.logs_directory) \
-            else [args.logs_directory]
+    assert any(map(os.path.isfile, log_files)), "Log files not present: " + ",".join(log_files)
 
     gaps = []
     seen = set()
@@ -255,8 +256,8 @@ def search_logs(args):
         describe_found_gaps(gaps)
         print_record_gaps(args, gaps)
     else:
-        print("Didn't find any gaps in logs directory({})".format(
-            args.logs_directory))
+        print("Didn't find any gaps in logs files: %s".format(
+            ", ".join(log_files)))
 
 
 def search_db(args):
@@ -307,14 +308,18 @@ if __name__ == "__main__":
         f"Prime gaps database ({args.prime_gaps_db!r}) doesn't exist")
 
     neither = True
-    if os.path.exists(args.logs_directory):
+    if args.logs_directory and os.path.isdir(args.logs_directory):
         neither = False
-        search_logs(args)
+        args.log_files.extend(glob.glob(args.logs_directory + "/*.log*"))
 
-    if os.path.exists(args.search_db):
+    if any(map(os.path.isfile, args.log_files)):
+        neither = False
+        search_logs(args.log_files)
+
+    if os.path.isfile(args.search_db):
         neither = False
         search_db(args)
 
     if neither:
-        print("Must pass --logs-directory or --search-db 'gaps.db'")
+        print("Must pass --log-files, --logs-directory, or --search-db 'gaps.db'")
         sys.exit(1)
