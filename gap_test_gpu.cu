@@ -354,17 +354,6 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
             assert( unknown_file.good() );    // Can't open save_unknowns file
         }
 
-        // TODO this is kinda slow (and blocks program start) for very large numbers
-        uint64_t valid_ms = 0;
-        /*
-        for (uint64_t mi = 0; mi < M_inc; mi++) {
-            if (gcd(M_start + mi, D) == 1) {
-                valid_ms++;
-            }
-        }
-        assert(valid_ms > 0 && valid_ms <= M_inc);
-        */
-
         uint64_t first_mi = 0;
         for (; first_mi > 0 && gcd(M_start + first_mi, D) > 1; first_mi++);
         assert(first_mi < M_inc);
@@ -375,6 +364,9 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
 
         // ----- Main sieve loop.
         if (config.verbose >= 1) {
+            uint64_t valid_ms = count_num_m(M_start, M_inc, D);
+            assert(valid_ms > 0 && valid_ms <= M_inc);
+
             printf("\n%ld tests M_start(%ld) + mi(%ld to %ld)\n\n",
                 valid_ms, M_start, first_mi, last_mi);
         }

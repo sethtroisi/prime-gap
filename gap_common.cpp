@@ -257,6 +257,50 @@ size_t count_coprime_sieve(const struct Config& config) {
 
 
 /**
+ * Count of numbers coprime to d less than end; sum( gcd(m, d) == 1 for m in range(n, n+i) )
+ * Uses inclusion exclusion on prime factorization of d
+ */
+static
+uint64_t _r_count_num_m(uint64_t n, const vector<int> &factors_d, int i) {
+    if (n == 0) return 0;
+    if (i < 0) return n;
+
+    return _r_count_num_m(n, factors_d, i-1) - _r_count_num_m(n / factors_d[i], factors_d, i-1);
+}
+
+/**
+ * Count number of m [ms, ms + mi) coprime to d
+ */
+size_t count_num_m(long ms, long mi, uint64_t d) {
+    if (d == 1)
+        return mi;
+
+    if (ms + mi < 10000) {
+        size_t count = 0;
+        for (long m = ms; m < ms + mi; m++)
+            count += (gcd(m, d) == 1);
+        return count;
+    }
+
+    vector<int> D_factors;
+    {
+        uint64_t temp = d;
+        for (long p = 2; p*p <= temp; p++) {
+            while (temp % p == 0) {
+                D_factors.push_back(p);
+                temp /= p;
+            }
+        }
+        if (temp > 1)
+            D_factors.push_back(temp);
+    }
+
+    return _r_count_num_m(ms + mi - 1, D_factors, D_factors.size()-1) -
+           _r_count_num_m(ms - 1,      D_factors, D_factors.size()-1);
+}
+
+
+/**
  * Vector of mi, such that gcd(config.mstart + mi, config.d)
  * Returns a copy, but copy is "fast" compared to cost of computing vector
  */
