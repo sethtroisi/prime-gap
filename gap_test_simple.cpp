@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -34,7 +35,9 @@ using std::vector;
 using namespace std::chrono;
 
 
-void prime_gap_test(const struct Config config);
+void prime_gap_test(
+        const struct Config config,
+        std::ifstream &unknown_file);
 
 
 int main(int argc, char* argv[]) {
@@ -75,11 +78,29 @@ int main(int argc, char* argv[]) {
     }
     setlocale(LC_NUMERIC, "C");
 
-    prime_gap_test(config);
+    // ----- Open unknown input file
+    std::ifstream unknown_file;
+    {
+        std::string fn = Args::gen_unknown_fn(config, ".txt");
+        if (config.verbose >= 1) {
+            printf("\nReading unknowns from '%s'\n", fn.c_str());
+        }
+        unknown_file.open(fn, std::ios::in);
+        assert( unknown_file.is_open() ); // Can't open save_unknowns file
+        assert( unknown_file.good() );    // Can't open save_unknowns file
+
+        // Ruins ability to make config const
+        config.compression = Args::guess_compression(config, unknown_file);
+    }
+
+    prime_gap_test(config, unknown_file);
 }
 
 
-void prime_gap_test(const struct Config config) {
+void prime_gap_test(
+        const struct Config config,
+        std::ifstream &unknown_file) {
+
     const uint64_t M_start = config.mstart;
     const uint64_t M_inc = config.minc;
     const uint64_t P = config.p;
@@ -99,20 +120,8 @@ void prime_gap_test(const struct Config config) {
         }
     }
 
-    // ----- Open unknown input file
-    int compression;
-    std::ifstream unknown_file;
-    {
-        std::string fn = Args::gen_unknown_fn(config, ".txt");
-        if (config.verbose >= 1) {
-            printf("\nReading unknowns from '%s'\n", fn.c_str());
-        }
-        unknown_file.open(fn, std::ios::in);
-        assert( unknown_file.is_open() ); // Can't open save_unknowns file
-        assert( unknown_file.good() );    // Can't open save_unknowns file
-
-        compression = Args::guess_compression(config, unknown_file);
-    }
+    // For compressed lines
+    BitArrayHelper helper(config, K);
 
     uint64_t valid_ms = 0;
     for (uint64_t mi = 0; mi < M_inc; mi++) {
@@ -147,8 +156,15 @@ void prime_gap_test(const struct Config config) {
 
         vector<int32_t> unknowns[2];
 
-        load_and_verify_unknowns(
-            compression, M_start + mi, SIEVE_LENGTH, unknown_file, unknowns);
+        std::string line;
+        // Loop can be pragma omp parallel if this is placed in critical section
+        std::getline(unknown_file, line);
+
+        std::istringstream iss_line(line);
+
+        uint64_t m_parsed = parse_unknown_line(
+            config, helper, m, iss_line, unknowns[0], unknowns[1]);
+        assert(m_parsed == (uint64_t) m);
 
         size_t unknown_l = unknowns[0].size();
         size_t unknown_u = unknowns[1].size();

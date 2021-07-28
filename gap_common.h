@@ -103,6 +103,7 @@ class Args
 };
 
 
+// TODO hide this behind NEEDS_DB define
 class DB
 {
     public:
@@ -115,6 +116,43 @@ class DB
     private:
         sqlite3 *db = nullptr;
 };
+
+
+class BitArrayHelper {
+    public:
+        BitArrayHelper(const struct Config& config, const mpz_t &K);
+
+        /** Helper method for handling config.compression == 2 */
+        vector<uint32_t> P_primes;
+        vector<uint32_t> D_primes;
+
+        /**
+         * vector of x (in interval [-SL, SL]) with (K, x) == 1
+         * values are storted [0, 2*SL] by adding +SL
+         */
+        vector<int32_t> coprime_X;
+
+        /** is_offset_coprime[x] = ((K, x) == 1) */
+        vector<char> is_offset_coprime;
+
+        // When D % 2 == 0 =>  m % 2 == 1 => X % 2 == 0
+        vector<int32_t> coprime_X_even;
+        vector<char> is_offset_coprime_even;
+
+        /**
+         * (-K) % d, used to find first multiple of prime in: m * K + [-SL, SL]
+         */
+        uint32_t neg_K_mod_d;
+        uint32_t SL_mod_d;
+};
+
+int64_t parse_unknown_line(
+        const struct Config& config,
+        const BitArrayHelper& helper,
+        uint64_t m_expected,
+        std::istream& input_line,
+        vector<int32_t>& unknown_prev,
+        vector<int32_t>& unknown_next);
 
 
 /* Random Utils */

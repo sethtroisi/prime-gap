@@ -258,7 +258,7 @@ size_t count_coprime_sieve(const struct Config& config) {
 
 /**
  * Vector of mi, such that gcd(config.mstart + mi, config.d)
- * Returns a copy, but that "fast" compared to computation
+ * Returns a copy, but copy is "fast" compared to cost of computing vector
  */
 pair<vector<bool>, vector<uint32_t>> is_coprime_and_valid_m(const struct Config& config) {
     const uint64_t M_start = config.mstart;
@@ -296,6 +296,7 @@ pair<vector<bool>, vector<uint32_t>> is_coprime_and_valid_m(const struct Config&
 
     return {is_m_coprime, valid_mi};
 }
+
 
 pair<uint64_t, uint64_t> calculate_thresholds_method2(
         const struct Config config,
@@ -1056,3 +1057,206 @@ uint64_t DB::config_hash(const struct Config& config) {
     return hash;
 }
 
+
+BitArrayHelper::BitArrayHelper(const struct Config& config, const mpz_t &K) {
+    const unsigned int SL = config.sieve_length;
+    const unsigned int SIEVE_INTERVAL = 2 * SL + 1;
+    const unsigned int D = config.d;
+
+    SL_mod_d = SL % D;
+    neg_K_mod_d = mpz_cdiv_ui(K, D);
+    if (D > 1) {
+        assert(neg_K_mod_d != 0);
+    }
+
+    is_offset_coprime.resize(SIEVE_INTERVAL);
+    std::fill(is_offset_coprime.begin(), is_offset_coprime.end(), 1);
+
+    for (auto prime : get_sieve_primes(config.p)) {
+        if (config.d % prime == 0) {
+            D_primes.push_back(prime);
+        } else {
+            P_primes.push_back(prime);
+        }
+    }
+    assert(D_primes.size() <= 9);  // 23# > 2^32
+    assert( (config.d == 1) || (!D_primes.empty() && D_primes.front() >= 2) );
+
+    for (uint32_t prime : P_primes) {
+        uint32_t first = SL % prime;
+        assert( 0 <= first && first < prime );
+        assert( (SL - first) % prime == 0 );
+        for (size_t x = first; x < SIEVE_INTERVAL; x += prime) {
+            is_offset_coprime[x] = 0;
+        }
+    }
+
+    // assume m % 2 == 1 => X % 2 == 0
+    is_offset_coprime_even = is_offset_coprime;
+    {
+        for (size_t x = (SL + 1) % 2; x < SIEVE_INTERVAL; x += 2) {
+            is_offset_coprime_even[x] = 0;
+        }
+    }
+
+    for (int x = -SL; x <= (signed) SL; x++) {
+        bool test = (mpz_gcd_ui(nullptr, K, abs(x)) == 1);
+        bool test_array = is_offset_coprime[x + SL];
+        assert(test == test_array);
+        if (test) {
+            coprime_X.push_back(SL + x);
+            if (D % 2 == 0 && x % 2 == 0) {
+                coprime_X_even.push_back(SL + x);
+            }
+        }
+    }
+
+    assert(coprime_X.size() == (unsigned) std::count(
+        is_offset_coprime.begin(), is_offset_coprime.end(), 1));
+    assert(coprime_X_even.size() == (unsigned) std::count(
+        is_offset_coprime_even.begin(), is_offset_coprime_even.end(), 1));
+};
+
+
+// TODO: debup with load_and_verify_unknowns in gap_test_simple
+/** Parse line (potentially with rle) to two positive lists */
+int64_t parse_unknown_line(
+        const struct Config& config,
+        const BitArrayHelper& helper,
+        uint64_t m_expected,
+        std::istream& input_line,
+        vector<int32_t>& unknown_prev,
+        vector<int32_t>& unknown_next) {
+
+    int unknown_l = 0;
+    int unknown_u = 0;
+
+    // Read a line from the file
+    {
+        int64_t m_test = -1;
+        input_line >> m_test;
+        assert( m_test >= 0 );
+
+        if (config.threads == 1) {
+            assert( (size_t) m_test == m_expected );
+        }
+
+        std::string delim = "ERROR";
+        char delim_char;
+        input_line >> delim;
+        assert( delim == ":" );
+
+        if (config.compression == 2) {
+            const unsigned int SL = config.sieve_length;
+            const unsigned int SIEVE_INTERVAL = 2 * SL + 1;
+
+            const bool d_even = config.d % 2 == 0;
+            vector<char> is_offset_fully_coprime(
+                d_even ? helper.is_offset_coprime_even : helper.is_offset_coprime);
+
+            int num_coprimes = (d_even ? helper.coprime_X_even : helper.coprime_X).size();
+            for (uint32_t d : helper.D_primes) {
+                if (d == 2) continue;  // Handled by is_offset_coprime_even / coprime_X_even
+
+                // First multiple = -(m * K - SL) % d = (m * -K + SL) % d
+                uint64_t first = (m_test * helper.neg_K_mod_d + SL) % d;
+                for (uint64_t mult = first; mult < SIEVE_INTERVAL; mult += d) {
+                    if (is_offset_fully_coprime[mult]) {
+                        is_offset_fully_coprime[mult] = 0;
+                        num_coprimes -= 1;
+                    }
+                }
+            }
+
+            int unknown_total = -1;
+            input_line >> unknown_total;
+            assert(unknown_total > 0);
+
+            int bytes_check = -1;
+            input_line >> bytes_check;
+            assert(bytes_check > 0);
+
+            int bytes_needed = (num_coprimes + 6) / 7;
+            assert(bytes_check == bytes_needed);
+
+            input_line >> delim;
+            assert( delim == "||" );
+            delim_char = input_line.get(); // get space character
+            assert( delim_char == ' ');
+
+            char buffer[bytes_needed];
+            input_line.read(buffer, bytes_needed);
+
+            unsigned char b = 0;
+            int reads = 0;
+            for (int32_t x : d_even ? helper.coprime_X_even : helper.coprime_X) {
+                if (is_offset_fully_coprime[x]) {
+                    if (reads % 7 == 0) {
+                        b = buffer[reads / 7];
+                    }
+                    if ((b & 1) == 0) {
+                        if (x <= (signed) SL) {
+                            unknown_prev.push_back(-x + SL);
+                        } else {
+                            unknown_next.push_back(x - SL);
+                        }
+                    }
+                    b >>= 1;
+                    reads += 1;
+                }
+            }
+
+            size_t unknowns_found = unknown_prev.size() + unknown_next.size();
+
+            assert((unsigned) unknown_total == unknowns_found);
+            assert(input_line.peek() == '\n' || input_line.peek() == EOF);
+
+            // Reverse unknown_prev
+            std::reverse(unknown_prev.begin(), unknown_prev.end());
+            return m_test;
+        }
+
+        input_line >> unknown_l;
+        unknown_l *= -1;
+        input_line >> unknown_u;
+
+        input_line >> delim;
+        assert( delim == "|" );
+        delim_char = input_line.get(); // get space character
+        assert( delim_char == ' ');
+
+        unsigned char a, b;
+        int c = 0;
+        for (int k = 0; k < unknown_l; k++) {
+            if (config.compression == 1) {
+                // Read bits in pairs (see save_unknowns_method2)
+                a = input_line.get();
+                b = input_line.get();
+                c += (a - 48) * 128 + (b - 48);
+            } else {
+                input_line >> c;
+                c *= -1;
+            }
+            unknown_prev.push_back((unsigned) c);
+        }
+
+        input_line >> delim;
+        assert( delim == "|" );
+        delim_char = input_line.get(); // get space character
+        assert( delim_char == ' ');
+
+        c = 0;
+        for (int k = 0; k < unknown_u; k++) {
+            if (config.compression) {
+                a = input_line.get();
+                b = input_line.get();
+                c += (a - 48) * 128 + (b - 48);
+            } else {
+                input_line >> c;
+            }
+            unknown_next.push_back((unsigned) c);
+        }
+
+        return m_test;
+    }
+}

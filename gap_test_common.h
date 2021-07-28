@@ -62,7 +62,6 @@ class StatsCounters {
             int prev_p, int next_p) const;
 };
 
-
 void load_and_verify_unknowns(
         const int compression,
         const uint64_t m,

@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdio>
+#include <sstream>
 
 #include "gap_common.h"
 
@@ -67,11 +68,12 @@ bool StatsCounters::possible_print_stats(
         print_interval -= (print_interval % 10000);
 
     if ( is_last || (print_interval > 0 && s_tests % print_interval == 0) || (
-          s_tests == 1     || s_tests == 10    || s_tests == 30   ||
-          s_tests == 100   || s_tests == 300   || s_tests == 500   ||
-          s_tests == 1000  || s_tests == 3000  || s_tests == 5000  ||
-          s_tests == 10000 || s_tests == 30000 || s_tests == 50000 ||
-          s_tests == 100000|| s_tests == 300000|| s_tests == 500000)) {
+          s_tests == 1      || s_tests == 10    || s_tests == 30   ||
+          s_tests == 100    || s_tests == 300   || s_tests == 500   ||
+          s_tests == 1000   || s_tests == 3000  || s_tests == 5000  ||
+          s_tests == 10000  || s_tests == 30000 || s_tests == 50000 ||
+          s_tests == 100000 || s_tests == 300000|| s_tests == 500000 ||
+          s_tests == 1000000|| s_tests == 3000000)) {
         auto s_stop_t = std::chrono::high_resolution_clock::now();
         double   secs = std::chrono::duration<double>(s_stop_t - s_start_t).count();
         s_tests_per_second = s_tests / secs;
@@ -116,6 +118,9 @@ bool StatsCounters::possible_print_stats(
     return false;
 }
 
+
+/**
+// Dedupe with gap_common parse_unknown_line
 void load_and_verify_unknowns(
         const int compression,
         const uint64_t m,
@@ -188,6 +193,8 @@ void load_and_verify_unknowns(
     assert( is_sorted(unknowns[0].begin(), unknowns[0].begin()) );
     assert( is_sorted(unknowns[1].begin(), unknowns[1].begin()) );
 }
+*/
+
 
 void test_interval_cpu(
         const uint64_t m, const mpz_t &K, const size_t SIEVE_LENGTH,
