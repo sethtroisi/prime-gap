@@ -366,6 +366,10 @@ class test_runner_t {
           kernel_miller_rabin<params><<<blocks, TPB>>>(report, gpuInstances, tests.size(), gpuPrimes, rounds);
           //printf("Bye %ld\n", blocks);
 
+          // TODO: only use this if batch takes > 100ms
+          // Reduces GPU_THREAD cpu from 100% while waiting
+          CUDA_CHECK(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
+
           // error report uses managed memory, so we sync the device (or stream) and check for cgbn errors
           CUDA_CHECK(cudaDeviceSynchronize());
           CGBN_CHECK(report);

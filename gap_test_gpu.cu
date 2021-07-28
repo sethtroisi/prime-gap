@@ -16,8 +16,8 @@
 #include <atomic>
 #include <cassert>
 #include <chrono>
-#include <condition_variable>
 #include <cmath>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
@@ -26,12 +26,12 @@
 #include <mutex>
 #include <string>
 #include <thread>
-#include <vector>
-#include <unordered_map>
-
-// DO NOT SUBMIT temp for usleep
 #include <unistd.h>
+#include <unordered_map>
+#include <vector>
 
+// pthread_setname_np
+#include <pthread.h>
 
 #include <gmp.h>
 
@@ -217,6 +217,8 @@ std::condition_variable overflow_cv;
 vector<DataM*> overflowed;
 
 void run_gpu_thread(const struct Config config) {
+    pthread_setname_np(pthread_self(), "RUN_GPU_THREAD");
+
     // XXX: params1024, params2048 with *runner1024, *runner2048 and only new one of them.
     typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
     test_runner_t<params> runner(BATCH_GPU, ROUNDS);
@@ -375,7 +377,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
     // Main loop
     uint32_t mi = 0;
     while (mi < M_inc || !processing.empty()) {
-        usleep(100); // 0.1ms
+        usleep(500); // 0.5ms
         for (GPUBatch& batch : batches) {
             // If batch is ready to have new data loaded
             if (batch.state == GPUBatch::State::EMPTY) {
@@ -388,13 +390,13 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     DataM test;
                     test.m = m;
 
+                    // TODO port what ever compression logic happens here to gap_test_simple
                     load_and_verify_unknowns(
                         compression, M_start + mi, SIEVE_LENGTH, unknown_file, test.unknowns);
 
                     mpz_init(test.center);
                     mpz_mul_ui(test.center, K, test.m);
 
-                    // XXX: TODO: determine how to std::move(test) here
                     processing[test.m] = std::move(test);
                 }
 
