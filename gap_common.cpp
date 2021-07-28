@@ -1198,13 +1198,26 @@ int64_t parse_unknown_line(
             vector<char> is_offset_fully_coprime(
                 d_even ? helper.is_offset_coprime_even : helper.is_offset_coprime);
 
+            // Logic borrowed from combined_sieve
+            bool centerOdd = d_even && (m_test & 1);
+            bool lowIsEven = centerOdd == (SL & 1);
+
             int num_coprimes = (d_even ? helper.coprime_X_even : helper.coprime_X).size();
             for (uint32_t d : helper.D_primes) {
                 if (d == 2) continue;  // Handled by is_offset_coprime_even / coprime_X_even
 
                 // First multiple = -(m * K - SL) % d = (m * -K + SL) % d
                 uint64_t first = (m_test * helper.neg_K_mod_d + SL) % d;
-                for (uint64_t mult = first; mult < SIEVE_INTERVAL; mult += d) {
+
+                bool evenFromLow = (first & 1) == 0;
+                bool firstIsEven = lowIsEven == evenFromLow;
+                if (firstIsEven) {
+                    assert( (first >= SIEVE_INTERVAL) || is_offset_fully_coprime[first] == 0 );
+                    first += d;
+                }
+                uint32_t shift = 2 * d;
+
+                for (uint64_t mult = first; mult < SIEVE_INTERVAL; mult += shift) {
                     if (is_offset_fully_coprime[mult]) {
                         is_offset_fully_coprime[mult] = 0;
                         num_coprimes -= 1;
@@ -1220,6 +1233,7 @@ int64_t parse_unknown_line(
             input_line >> bytes_check;
             assert(bytes_check > 0);
 
+            // This helps verify that num_coprimes calculation was correct
             int bytes_needed = (num_coprimes + 6) / 7;
             assert(bytes_check == bytes_needed);
 
@@ -1231,12 +1245,22 @@ int64_t parse_unknown_line(
             char buffer[bytes_needed];
             input_line.read(buffer, bytes_needed);
 
-            unsigned char b = 0;
-            int reads = 0;
+            // NOTE: on average these will be 50% full, 60% tries to avoid a final resize.
+            unknown_prev.reserve(unknown_total * 6 / 10);
+            unknown_next.reserve(unknown_total * 6 / 10);
+
+            // Note: I tried a clever double for loop to avoid the if (bit == 7)
+            // and it hurt performance as is_offset_fully_coprime[x] is called
+            // the same number of times
+
+            unsigned char b = buffer[0];
+            uint8_t bits = 0;
+            uint16_t index = 0;
             for (int32_t x : d_even ? helper.coprime_X_even : helper.coprime_X) {
                 if (is_offset_fully_coprime[x]) {
-                    if (reads % 7 == 0) {
-                        b = buffer[reads / 7];
+                    if (bits == 7) {
+                        b = buffer[++index];
+                        bits = 0;
                     }
                     if ((b & 1) == 0) {
                         if (x <= (signed) SL) {
@@ -1246,7 +1270,7 @@ int64_t parse_unknown_line(
                         }
                     }
                     b >>= 1;
-                    reads += 1;
+                    bits += 1;
                 }
             }
 
