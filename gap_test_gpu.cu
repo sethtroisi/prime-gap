@@ -155,7 +155,7 @@ class GPUBatch {
         vector<int>  result;
 
         // index into 'processing' (DataM)
-        vector<int> data_i;
+        vector<int64_t> data_i;
 
         // if this is p_i or n_i
         vector<int> p_or_n;
@@ -247,10 +247,10 @@ void run_gpu_thread(const struct Config config) {
             }
         }
         if (no_batch) {
-            no_batch_count_ms += 10;
+            no_batch_count_ms += 100;
             printf("Waiting on batch%ld => %.1f seconds\n",
                     no_batch_count_ms / 10, no_batch_count_ms / 1000.0);
-            usleep(10000); // 10ms
+            usleep(100000); // 100ms
         }
     }
 }
@@ -376,7 +376,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
     BitArrayHelper helper(config, K);
 
     // Main loop
-    uint32_t mi = 0;
+    uint64_t mi = 0;
     while (mi < M_inc || !processing.empty()) {
         usleep(500); // 0.5ms
         for (GPUBatch& batch : batches) {
@@ -384,7 +384,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
             if (batch.state == GPUBatch::State::EMPTY) {
                 // Add new DataM if free space
                 for (; processing.size() < QUEUE_SIZE && mi < M_inc; mi++) {
-                    int m = M_start + mi;
+                    uint64_t m = M_start + mi;
                     if (gcd(m, D) > 1) {
                         continue;
                     }
@@ -396,6 +396,8 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     std::getline(unknown_file, line);
 
                     std::istringstream iss_line(line);
+
+                    // Can skip if m < M_RESUME without parsing line here
 
                     uint64_t m_parsed = parse_unknown_line(
                         config, helper, m, iss_line, test.unknowns[0], test.unknowns[1]);
