@@ -1214,49 +1214,60 @@ int64_t parse_unknown_line(
             // Reverse unknown_prev
             std::reverse(unknown_prev.begin(), unknown_prev.end());
             return m_test;
-        }
 
-        input_line >> unknown_l;
-        unknown_l *= -1;
-        input_line >> unknown_u;
+        } else if (config.compression == 0 || config.compression == 1) {
+            input_line >> unknown_l;
+            unknown_l *= -1;
+            input_line >> unknown_u;
 
-        input_line >> delim;
-        assert( delim == "|" );
-        delim_char = input_line.get(); // get space character
-        assert( delim_char == ' ');
+            input_line >> delim;
+            assert( delim == "|" );
+            delim_char = input_line.get(); // get space character
+            assert( delim_char == ' ');
 
-        unsigned char a, b;
-        int c = 0;
-        for (int k = 0; k < unknown_l; k++) {
-            if (config.compression == 1) {
-                // Read bits in pairs (see save_unknowns_method2)
-                a = input_line.get();
-                b = input_line.get();
-                c += (a - 48) * 128 + (b - 48);
-            } else {
-                input_line >> c;
-                c *= -1;
+            unsigned char a, b;
+            int c = 0;
+            for (int k = 0; k < unknown_l; k++) {
+                if (config.compression == 1) {
+                    // Read bits in pairs (see save_unknowns_method2)
+                    a = input_line.get();
+                    b = input_line.get();
+                    c += (a - 48) * 128 + (b - 48);
+                } else {
+                    input_line >> c;
+                    c *= -1;
+                }
+                unknown_prev.push_back((unsigned) c);
             }
-            unknown_prev.push_back((unsigned) c);
-        }
 
-        input_line >> delim;
-        assert( delim == "|" );
-        delim_char = input_line.get(); // get space character
-        assert( delim_char == ' ');
+            input_line >> delim;
+            assert( delim == "|" );
+            delim_char = input_line.get(); // get space character
+            assert( delim_char == ' ');
 
-        c = 0;
-        for (int k = 0; k < unknown_u; k++) {
-            if (config.compression) {
-                a = input_line.get();
-                b = input_line.get();
-                c += (a - 48) * 128 + (b - 48);
-            } else {
-                input_line >> c;
+            c = 0;
+            for (int k = 0; k < unknown_u; k++) {
+                if (config.compression) {
+                    a = input_line.get();
+                    b = input_line.get();
+                    c += (a - 48) * 128 + (b - 48);
+                } else {
+                    input_line >> c;
+                }
+                unknown_next.push_back((unsigned) c);
             }
-            unknown_next.push_back((unsigned) c);
+
+            assert( unknown_l >= 0 && unknown_u >= 0 );
+            assert( (size_t) unknown_l == unknown_prev.size() );
+            assert( (size_t) unknown_u == unknown_next.size() );
+
+            //assert( is_sorted(unknowns_prev.begin(), unknowns_prev.end()) );
+            //assert( is_sorted(unknowns_next.begin(), unknowns_next.end()) );
+
+            return m_test;
         }
 
-        return m_test;
+        cout << "Unsupported config.compression(" << config.compression << ")" << endl;
+        assert(false); // bad config.compression
     }
 }

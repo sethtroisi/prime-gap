@@ -24,6 +24,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -121,6 +122,15 @@ int main(int argc, char* argv[]) {
         printf("\n");
     }
     setlocale(LC_NUMERIC, "C");
+
+    // Determine compression
+    {
+        std::string fn = Args::gen_unknown_fn(config, ".txt");
+        std::ifstream unknown_file(fn, std::ios::in);
+        assert( unknown_file.is_open() ); // Can't open save_unknowns file
+        assert( unknown_file.good() );    // Can't open save_unknowns file
+        config.compression = Args::guess_compression(config, unknown_file);
+    }
 
     prime_gap_test(config);
 }
@@ -306,7 +316,6 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
 
     mpz_t K;
     double K_log;
-    int compression;
     std::ifstream unknown_file;
 
     // Used for various stats
@@ -318,7 +327,6 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
     const uint64_t D = config.d;
     const uint64_t M_start = config.mstart;
     const uint64_t M_inc = config.minc;
-    const unsigned int SIEVE_LENGTH = config.sieve_length;
 
     const float min_merit = config.min_merit;
 
@@ -344,8 +352,6 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
             unknown_file.open(fn, std::ios::in);
             assert( unknown_file.is_open() ); // Can't open save_unknowns file
             assert( unknown_file.good() );    // Can't open save_unknowns file
-
-            compression = Args::guess_compression(config, unknown_file);
         }
 
         // TODO this is kinda slow (and blocks program start) for very large numbers
@@ -374,6 +380,9 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
         }
     }
 
+    // For compressed lines
+    BitArrayHelper helper(config, K);
+
     // Main loop
     uint32_t mi = 0;
     while (mi < M_inc || !processing.empty()) {
@@ -390,9 +399,15 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     DataM test;
                     test.m = m;
 
-                    // TODO port what ever compression logic happens here to gap_test_simple
-                    load_and_verify_unknowns(
-                        compression, M_start + mi, SIEVE_LENGTH, unknown_file, test.unknowns);
+                    std::string line;
+                    // Loop can be pragma omp parallel if this is placed in critical section
+                    std::getline(unknown_file, line);
+
+                    std::istringstream iss_line(line);
+
+                    uint64_t m_parsed = parse_unknown_line(
+                        config, helper, m, iss_line, test.unknowns[0], test.unknowns[1]);
+                    assert(m_parsed == (uint64_t) m);
 
                     mpz_init(test.center);
                     mpz_mul_ui(test.center, K, test.m);
@@ -631,7 +646,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
 }
 
 
-void prime_gap_test(const struct Config config) {
+void prime_gap_test(struct Config config) {
     // Setup test runner
     printf("BITS=%d\tWINDOW_BITS=%d\n", BITS, WINDOW_BITS);
     printf("PRP/BATCH=%ld\tM/BATCH=%ld\n",

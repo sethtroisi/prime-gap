@@ -62,13 +62,6 @@ class StatsCounters {
             int prev_p, int next_p) const;
 };
 
-void load_and_verify_unknowns(
-        const int compression,
-        const uint64_t m,
-        const int SIEVE_LENGTH,
-        std::ifstream &unknown_file,
-        vector<int32_t> (&unknowns)[2]);
-
 void test_interval_cpu(
         const uint64_t m, const mpz_t &K, const size_t SIEVE_LENGTH,
         size_t &s_total_prp_tests,
