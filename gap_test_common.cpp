@@ -67,13 +67,13 @@ bool StatsCounters::possible_print_stats(
     if (print_interval > 10000)
         print_interval -= (print_interval % 10000);
 
-    if ( is_last || (print_interval > 0 && s_tests % print_interval == 0) || (
-          s_tests == 1      || s_tests == 10    || s_tests == 30   ||
-          s_tests == 100    || s_tests == 300   || s_tests == 500   ||
-          s_tests == 1000   || s_tests == 3000  || s_tests == 5000  ||
-          s_tests == 10000  || s_tests == 30000 || s_tests == 50000 ||
-          s_tests == 100000 || s_tests == 300000|| s_tests == 500000 ||
-          s_tests == 1000000|| s_tests == 3000000)) {
+    // if s_tests = {1,3,5} * 10 ^ x
+    bool is_power_print = (s_tests == 1);
+    for (long p = 10; p < s_tests; p *= 10) {
+        is_power_print |= (s_tests == p) || (s_tests == 3*p) || (s_tests == 5*p);
+    }
+
+    if ( is_last || is_power_print || (print_interval > 0 && s_tests % print_interval == 0) ) {
         auto s_stop_t = std::chrono::high_resolution_clock::now();
         double   secs = std::chrono::duration<double>(s_stop_t - s_start_t).count();
         s_tests_per_second = s_tests / secs;

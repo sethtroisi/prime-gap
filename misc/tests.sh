@@ -119,7 +119,7 @@ grep -q 'RECORD : top 100% (    53) sum(prob) = 2.15e-05 (avg: 4.06e-07)' temp_t
 sed -E -i -e 's#[0-9.]+( ?)(tests)?/sec\)#XX.YY\1\2/sec)#' \
           -e 's#[0-9]+ sec#Z sec#' -e 's#\.m1.txt#.txt#' temp_tests.log
 
-md5sum -c <(echo "701719a73e4c8ab5d127fe984bf956d6  temp_tests.log")
+md5sum -c <(echo "c29c54dcdab290119f7b2a0f273441ec  temp_tests.log")
 
 python gap_test.py -u $FN1 $DBS
 diff <(echo "2") <(sqlite3 $TEST_DB 'SELECT COUNT(*) FROM result WHERE merit > 8')

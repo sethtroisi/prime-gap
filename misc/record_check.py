@@ -133,8 +133,8 @@ def print_record_gaps(args, gaps):
                     continue
 
                 record_lines.append(raw_data)
-                print("\tRecord {:5} | {:70s} | Gap={:<6} (New!)".format(
-                    len(record_lines), raw_data.strip(), size))
+                #print("\tRecord {:5} | {:70s} | Gap={:<6} (New!)".format(
+                #    len(record_lines), raw_data.strip(), size))
                 continue
 
             # Works most of the time, could have false positives
@@ -172,9 +172,9 @@ def print_record_gaps(args, gaps):
                     improvements[gap[0]] = max(improvements[gap[0]], improvement)
                     record_lines.append(raw_data)
 
-                print("\tRecord {:5} | {:70s} | Gap={:<6} (old: {:.2f}{} +{:.2f})".format(
-                    str(len(own_records)) + "*" if is_same else len(record_lines), gap[4], size,
-                    existing[0], " by you" * is_own_record, new_merit - existing[0]))
+                #print("\tRecord {:5} | {:70s} | Gap={:<6} (old: {:.2f}{} +{:.2f})".format(
+                #    str(len(own_records)) + "*" if is_same else len(record_lines), gap[4], size,
+                #    existing[0], " by you" * is_own_record, new_merit - existing[0]))
 
         if record_lines:
             print()
@@ -213,6 +213,7 @@ def search_logs(log_files):
 
     gaps = []
     seen = set()
+    match_print = ""
     for log_fn in log_files:
         with open(log_fn, "r") as f:
             lines = f.readlines()
@@ -232,10 +233,10 @@ def search_logs(log_files):
             match = record_format.search(line)
             if match:
                 file_match += 1
+                partial_line = line.split(':')[-1].strip()
+                match_print = f"    Match {file_match} at line {li}: {partial_line}"
                 if file_match < 6:
-                    partial_line = line.split(':')[-1].strip()
-                    print("    Match {} at line {}: {}".format(
-                        file_match, li, partial_line))
+                    print (match_print)
 
                 seen.add(line)
 
@@ -251,6 +252,10 @@ def search_logs(log_files):
                     # line
                     line.strip(),
                 ])
+
+        if file_match > 5:
+            # Also print last match
+            print (match_print)
 
     if gaps:
         describe_found_gaps(gaps)
