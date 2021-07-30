@@ -2094,6 +2094,8 @@ void prime_gap_parallel(struct Config& config) {
 
         // Try to prevent OOM, check composite < 10GB allocation,
         // combined_sieve uses ~5-20% extra space for x_reindex_wheel + extra
+        // TODO guess seems low by 2x (55gb real vs 20 guess)
+        // audit calculations quickly
         if (guess > (size_t) config.max_mem * 1024) {
             printf("combined_sieve expects to use %'ld MB which is greater than %d GB limit\n",
                     guess, config.max_mem);

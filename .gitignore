@@ -8,6 +8,7 @@ gap_test_gpu
 benchmark
 benchmark_google
 *.o
+a.out
 
 # data
 *.db
