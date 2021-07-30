@@ -2079,27 +2079,55 @@ void prime_gap_parallel(struct Config& config) {
     vector<bool> *composite = new vector<bool>[valid_ms];
     {
         int align_print = 0;
+        /**
+         * Per m_inc
+         *      4 bytes in m_reindex
+         *      1 bit   in is_m_coprime
+         * Per valid_ms
+         *      4  bytes in caches.valid_mi
+         *      40 bytes for vector<bool> instance
+         *      40 bytes for mutex instance     // in stage2
+         *      count_coprime_sieve + 1 bits
+         */
+
         size_t MB = 8 * 1024 * 1024;
-        size_t guess = valid_ms * (count_coprime_sieve + 1) / MB;
+        size_t overhead_bits = M_inc * (8 * sizeof(uint32_t) + 1) +
+                               valid_ms * 8 * (sizeof(uint32_t) + sizeof(composite[0]) + sizeof(mutex));
+
+        // Per valid_ms
+        size_t guess = overhead_bits + valid_ms * (count_coprime_sieve + 1);
         if (config.verbose >= 1) {
-            align_print = printf("coprime m    %ld/%d,  ", valid_ms, M_inc);
-            printf("coprime i     %ld/%d, ~%'ldMB\n",
-                count_coprime_sieve / 2, SIEVE_LENGTH, guess);
+            // Using strings instead of printf so sizes can be aligned.
+            std::string s_coprime_m = "coprime m    " +
+                std::to_string(valid_ms) + "/" + std::to_string(M_inc) + " ";
+            std::string s_coprime_i = "coprime i    " +
+                std::to_string(count_coprime_sieve / 2) + "/" + std::to_string(SIEVE_LENGTH);
+            align_print = s_coprime_m.size();
+
+            printf("%*s", align_print + (int) s_coprime_i.size(), "");
+            printf("  ~%'ld MB overhead\n", overhead_bits / MB);
+            printf("%s%s, ~%'ld MB\n", s_coprime_m.c_str(), s_coprime_i.c_str(), guess / MB);
         }
 
         if (x_reindex_wheel_size > 1) {
             // Update guess with first wheel count for OOM prevention check
-            guess = valid_ms * (caches.x_reindex_wheel_count[1] + 1) / MB;
+            size_t guess_avg_count_coprime = caches.x_reindex_wheel_count[1];
+            guess = overhead_bits + valid_ms * (guess_avg_count_coprime + 1);
         }
 
         // Try to prevent OOM, check composite < 10GB allocation,
-        // combined_sieve uses ~5-20% extra space for x_reindex_wheel + extra
-        // TODO guess seems low by 2x (55gb real vs 20 guess)
-        // audit calculations quickly
-        if (guess > (size_t) config.max_mem * 1024) {
-            printf("combined_sieve expects to use %'ld MB which is greater than %d GB limit\n",
-                    guess, config.max_mem);
-            printf("\tAdd `--max-mem %ld` to skip this warning\n", (guess / 1024) + 1);
+        if (guess > (size_t) config.max_mem * 1024 * MB) {
+            if (config.verbose >= 1 && x_reindex_wheel_size > 1) {
+                size_t allocated = guess - overhead_bits;
+                printf("%*s", align_print, "");
+                printf("coprime wheel %ld/%d,\t~%'ldMB\n",
+                    allocated / (2 * valid_ms), SIEVE_LENGTH,
+                    allocated / 8 / 1024 / 1024);
+            }
+            printf("\ncombined_sieve expects to use %'ld MB which is greater than %d GB limit\n",
+                    guess / MB, config.max_mem);
+            printf("\nAdd `--max-mem %ld` to skip this warning\n", (guess / 1024 / MB) + 1);
+            std::this_thread::sleep_for(std::chrono::seconds(10));
             exit(1);
         }
 
@@ -2115,7 +2143,7 @@ void prime_gap_parallel(struct Config& config) {
         }
         if (config.verbose >= 1 && x_reindex_wheel_size > 1) {
             printf("%*s", align_print, "");
-            printf("coprime wheel %ld/%d, ~%'ldMB\n",
+            printf("coprime wheel %ld/%d,\t~%'ld MB\n",
                 allocated / (2 * valid_ms), SIEVE_LENGTH,
                 allocated / 8 / 1024 / 1024);
         }

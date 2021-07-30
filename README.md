@@ -644,7 +644,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
     * [ ] Unknown counting could be faster with boost or `bit_vector`
   * [ ] ncurse or similiar status line with all large_prime intervals & eta
     * Idea that made sense was to printf then reset position to start of status (so that future prints override them)
-  * [ ] Check there wasn't a memory regression, 1511_234570_2600000000_800000000_s16000_l25000000M.txt takes 42GB vs max mem 23GB
   * [ ] Error with error estimate, looking at only final invernal vs all intervals?
         * Estimated 3.74e+09 unknowns found 4.11e+10 (999.99% error)
         * Estimated 1.32e+07 new composites found 3.33e+11 (2518520.50% error)
