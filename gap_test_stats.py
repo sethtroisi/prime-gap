@@ -350,7 +350,7 @@ def validate_prob_record_merit(
     data = GapData()
     with open(args.unknown_filename, "rb") as unknown_file_repeat:
         for line in unknown_file_repeat.readlines():
-            m, _, _, unknowns = gap_utils.parse_unknown_line(line)
+            m, _, _, unknowns = gap_utils._parse_unknown_line(line)
             log_n = K_log + math.log(m)
             min_merit_gap = int(args.min_merit * log_n)
 

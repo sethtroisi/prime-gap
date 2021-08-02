@@ -110,7 +110,7 @@ def K_and_stats(args):
 def process_line(
         early_stop_flag, work_q, results_q, prob_side_threshold, sides_tested,
         prob_prime, prob_prime_after_sieve, record_gaps, side_skip_enabled,
-        thread_i, SL, K, P, D, megagap,
+        thread_i, args,
         primes, remainder):
     def cleanup(*_):
         work_q.close()
@@ -120,11 +120,16 @@ def process_line(
         print(f"\tThread {thread_i} stopped")
         exit(0)
 
+    SL, P, D, megagap = args.sieve_length, args.p, args.d, args.megagap
+    K = K_and_stats(args)[0]
+
     # Calculate extended gap (see gap_stats)
     prob_prime_coprime, coprime_extended = gap_test_stats.setup_extended_gap(SL, P, D, prob_prime)
     K_mod_d = K % D
 
+    # Stores bitarrays for parse_compressed_line
     D_primes, is_offset_coprime, coprime_X = gap_test_stats.setup_bitarray(SL, P, D)
+    line_parse_helper = [SL, K, D, is_offset_coprime, coprime_X, D_primes]
 
     # Ignore KeyboardInterrupt (Manager catches first and sets early_stop_flag)
     # Normal flow is receive sentinel (None) stop
@@ -148,14 +153,7 @@ def process_line(
 
         m, mi, prev_p, next_p, prob_record, log_n, line = work
 
-        if b' || ' in line[:30]:
-            m_test, unknown_l, unknown_u, unknowns = gap_utils.parse_compressed_line(
-                SL, K, D, m,
-                is_offset_coprime, coprime_X, D_primes,
-                line)
-        else:
-            m_test, unknown_l, unknown_u, unknowns = gap_utils.parse_unknown_line(line)
-
+        m_test, unknown_l, unknown_u, unknowns = gap_utils.parse_line(line_parse_helper, line)
         assert m == m_test
 
         # Used for openPFGW
@@ -300,8 +298,7 @@ def run_in_parallel(
             args=(
                 *shared_args,
                 *one_sided_args,
-                i, args.sieve_length, K, args.p, args.d,
-                args.megagap,
+                i, args,
                 primes, remainder
             )
         )
@@ -574,7 +571,7 @@ def prime_gap_test(args):
                 line = unknown_file_repeat.readline()
                 assert line, mi
                 if mi in probs:
-                    m, _, _, unknowns = gap_utils.parse_unknown_line(line)
+                    m, _, _, unknowns = gap_utils._parse_unknown_line(line)
                     prob = probs[mi]
                     assert m == M_start + mi, (m, config.mstart, mi)
 

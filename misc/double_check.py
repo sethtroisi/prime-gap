@@ -29,6 +29,7 @@ import sys
 sys.path.append(".")
 
 import gap_utils
+from gap_test_stats import setup_bitarray
 
 
 def get_arg_parser():
@@ -124,6 +125,11 @@ def double_check(args):
     print()
     unknown_file = open(args.unknown_filename, "rb")
 
+    # Stores bitarrays for parse_compressed_line
+    D_primes, is_offset_coprime, coprime_X = setup_bitarray(SL, P, D)
+    line_parse_helper = [SL, K, D, is_offset_coprime, coprime_X, D_primes]
+
+
     # share a factor with K
     boring_composites = {i for i in range(0, SL) if gmpy2.gcd(K, i) > 1}
     boring_composites.update({-i for i in boring_composites})
@@ -165,8 +171,8 @@ def double_check(args):
 
         # Read a line from the file
         line = unknown_file.readline()
-        m_test, _,_, (low, high) = gap_utils.parse_unknown_line(line)
-        assert m_test == mi
+        m_test, _,_, (low, high) = gap_utils.parse_line(line_parse_helper, line)
+        assert m_test == m, (m_test, m)
 
         unknowns = {i for i in low + high}
 

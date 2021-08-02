@@ -131,7 +131,20 @@ def verify_args(args):
         args.unknown_filename = fn
 
 
-def parse_compressed_line(SL, K, d, m, is_offset_coprime, coprime_X, D_primes, line):
+
+def parse_line(helper, line):
+    # 12 digits for m + 3 (' : ') + 2x7 for unknowns + 1 (space) + 5 (' || ')
+    if (b' || ' in line[:35]):
+        assert len(helper) == 6
+        m = int(line.split(b' ', 1)[0])
+        return _parse_compressed_line(*helper, m, line)
+
+    else:
+        return _parse_unknown_line(line)
+
+
+
+def _parse_compressed_line(SL, K, d, is_offset_coprime, coprime_X, D_primes, m, line):
     # line might contain newlines as rawbytes
 
     # XXX: measure cost of this split vs just smarter indexing
@@ -181,7 +194,7 @@ def parse_compressed_line(SL, K, d, m, is_offset_coprime, coprime_X, D_primes, l
 
 
 
-def parse_unknown_line(line):
+def _parse_unknown_line(line):
     unknowns = [[], []]
 
     start, c_l, c_h = line.split(b" | ")

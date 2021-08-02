@@ -77,7 +77,7 @@ def convert_plaintext_to_encoding(args):
         # go back to start of file
         read_file.seek(0, 0)
 
-        converted_first = converter(gap_utils.parse_unknown_line(first_line))
+        converted_first = converter(gap_utils._parse_unknown_line(first_line))
         if converted_first == first_line:
             print(converted_first)
             print("\nFile is already RLE!\n")
@@ -87,7 +87,7 @@ def convert_plaintext_to_encoding(args):
         print(converted_first[:80])
 
         for line in tqdm.tqdm(read_file, total=num_m):
-            parts = gap_utils.parse_unknown_line(line)
+            parts = gap_utils._parse_unknown_line(line)
             write_file.write(converter(parts))
             write_file.write(b"\n")
 
