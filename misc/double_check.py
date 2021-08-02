@@ -153,12 +153,14 @@ def double_check(args):
 
         print("                         | ecm no factor | ecm factor |")
         print("-------------------------------------------------------")
-        print("| combined_sieve unknown | {:6d}        | {:6d}**   |".format(*cross_found[0]))
+        ast = "**" if missing_factor else "  "
+        print("| combined_sieve unknown | {:6d}        | {:6d}{}   |".format(*cross_found[0], ast))
         print("|              composite | {:6d}*       | {:6d}     |".format(*cross_found[1]))
         print("-------------------------------------------------------")
         print("* factor could always be missed by ecm, but possible error")
 
         if missing_factor:
+            assert cross_found[0][1]
             print("** ERRORS combined_sieve failed to mark combosite with small factor")
             for n, f in missing_factor.items():
                 print("\t", n, "divisble by", ", ".join(map(str, f)))
