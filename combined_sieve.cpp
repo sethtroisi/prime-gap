@@ -1649,25 +1649,28 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         const int64_t SL_shift = (SIEVE_LENGTH * inv_K) % prime;
         const int64_t mi_0_shift = (m_start_shift + SL_shift) % prime;
 
-        const bool M_parity = M_start & 1;
+        // Lots of expressive (unoptimized) comments and code removed in 9cf1cf40
 
-        // Unoptimized expressive code removed after df2054c5
+        // (mi_0 + X) % 2 == (ms + Sl) % 2
+        const bool X_M_parity_check = (M_start + SIEVE_LENGTH) & 1;
 
         size_t small_factors = 0;
         // Find m*K = X, X in [L, R]
+        // NOTE: X has SIEVE_LENGTH added so x is positive [0, 2*SL]
         for (int64_t X : coprime_X_thread) {
-            // Safe from overflow as SL * prime < int64
+            // Safe from overflow as 2 * SL * prime < int64
             int64_t mi_0 = (X * neg_inv_K + mi_0_shift) % prime;
 
             uint64_t shift = prime << K_odd; // (1 + K_odd) * prime;
             // Check if X parity == m parity
-            if (K_odd && ((X ^ mi_0) & 1) == M_parity) {
+            if (K_odd && ((X ^ mi_0) & 1) == X_M_parity_check) {
                 mi_0 += prime;
             }
 
             // Separate loop when shift > M_inc not significantly faster
             for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
                 uint64_t m = M_start + mi;
+
                 uint32_t m_mod2310 = m % 2310;
                 if (!caches.is_m_coprime2310[m_mod2310])
                     continue;
