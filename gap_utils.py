@@ -175,7 +175,7 @@ def parse_compressed_line(SL, K, d, m, is_offset_coprime, coprime_X, D_primes, l
     assert (u_l + u_h) == num_unknowns, (u_l, u_h, num_unknowns)
     assert (i + 6) // 7 == byte_count
 
-    unknowns[0] = list(reversed(unknowns[0]))
+    unknowns[0].reverse()
 
     return m, u_l, u_h, unknowns
 
