@@ -398,6 +398,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     std::istringstream iss_line(line);
 
                     // Can skip if m < M_RESUME without parsing line here
+                    // TODO add m_skip param
 
                     uint64_t m_parsed = parse_unknown_line(
                         config, helper, m, iss_line, test.unknowns[0], test.unknowns[1]);
@@ -584,6 +585,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                             // TODO improve this with constant and logging
                             float prev_merit = prev_p / (K_log + log(interval.m));
                             /**
+                             * TODO better math
                              * With Y = 24
                              * 50% of gaps with merit > 24 merit have prev > 12 merit
                              *      only test 1/2^(12-3) = 1/512 gaps
@@ -593,6 +595,8 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                             float MIN_MERIT_TO_CONTINUE = min_merit / 2 - 2;
 
                             if (prev_merit < MIN_MERIT_TO_CONTINUE) {
+                                stats.s_skips_after_one_side += 1;
+
                                 bool is_last = (mi >= M_inc) && processing.size() == 1;
                                 stats.process_results(config, interval.m, is_last,
                                     interval.unknowns[0].size(), interval.unknowns[1].size(),
