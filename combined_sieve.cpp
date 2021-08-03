@@ -66,6 +66,11 @@ using namespace std::chrono;
 // WHEEL should divide config.d
 #define METHOD2_WHEEL_MAX (2*3*5*7)
 
+// For Method2 Medium Primes
+// composite[mii] is locked with a mutex
+// this controls how many mii (1 << SHIFT) share a mutex
+#define METHOD2_MUTEX_SHIFT 8
+
 
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config& config);
@@ -1740,9 +1745,19 @@ void method2_large_primes(Config &config, method2_stats &stats,
 
     const uint32_t x_reindex_wheel_size = caches.x_reindex_wheel_size;
 
-    // This is a LOT of mutexes (given 1-16 threads) might be better to >> 8
-    // If that could keep in memory...
-    vector<mutex> mutex_mi(caches.valid_ms);
+    const bool use_lock = config.threads > 1;
+    /**
+     * This is a LOT of mutexes (given 1-16 threads)
+     * Each is 320 bits! so 27M => 1 GB!!!
+     * Each mutex is only locked by 1 thread so sharing with a pool
+     * helps reduce size of this vector while likely not impact hitrate
+     */
+    {
+        // Want low collision rate
+        size_t min_valid_ms_for_shift = THREADS * 1'000'000;
+        assert(!use_lock || (caches.valid_ms > min_valid_ms_for_shift));
+    }
+    vector<mutex> mutex_mi((caches.valid_ms >> METHOD2_MUTEX_SHIFT) + 1);
 
     // Setup CTRL+C catcher
     signal(SIGINT, signal_callback_handler);
@@ -1776,8 +1791,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
             printf("\tmethod2_large_primes %ld intervals\n\n", intervals.size());
         }
     }
-
-    const bool use_lock = config.threads > 1;
 
     uint64_t last_processed = 0;
     map<uint64_t, method2_stats> stats_to_process;
@@ -1895,9 +1908,9 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 assert( mii >= 0 );
 
                 if (use_lock) {
-                    mutex_mi[mii].lock();
+                    mutex_mi[mii >> METHOD2_MUTEX_SHIFT].lock();
                     composite[mii][xii] = true;
-                    mutex_mi[mii].unlock();
+                    mutex_mi[mii >> METHOD2_MUTEX_SHIFT].unlock();
                 } else {
                     composite[mii][xii] = true;
                 }
@@ -2089,13 +2102,16 @@ void prime_gap_parallel(struct Config& config) {
          * Per valid_ms
          *      4  bytes in caches.valid_mi
          *      40 bytes for vector<bool> instance
-         *      40 bytes for mutex instance     // in stage2
+         *      40>>8 bytes for mutex instance     // in stage2
          *      count_coprime_sieve + 1 bits
          */
 
         size_t MB = 8 * 1024 * 1024;
         size_t overhead_bits = M_inc * (8 * sizeof(uint32_t) + 1) +
-                               valid_ms * 8 * (sizeof(uint32_t) + sizeof(composite[0]) + sizeof(mutex));
+                               valid_ms * 8 * (sizeof(uint32_t) + sizeof(composite[0]));
+        if (config.threads > 1) {
+            overhead_bits += valid_ms * 8 * sizeof(mutex) >> METHOD2_MUTEX_SHIFT;
+        }
 
         // Per valid_ms
         size_t guess = overhead_bits + valid_ms * (count_coprime_sieve + 1);
@@ -2123,7 +2139,7 @@ void prime_gap_parallel(struct Config& config) {
             if (config.verbose >= 1 && x_reindex_wheel_size > 1) {
                 size_t allocated = guess - overhead_bits;
                 printf("%*s", align_print, "");
-                printf("coprime wheel %ld/%d,\t~%'ldMB\n",
+                printf("coprime wheel %ld/%d, ~%'ldMB\n",
                     allocated / (2 * valid_ms), SIEVE_LENGTH,
                     allocated / 8 / 1024 / 1024);
             }
@@ -2146,7 +2162,7 @@ void prime_gap_parallel(struct Config& config) {
         }
         if (config.verbose >= 1 && x_reindex_wheel_size > 1) {
             printf("%*s", align_print, "");
-            printf("coprime wheel %ld/%d,\t~%'ld MB\n",
+            printf("coprime wheel %ld/%d, ~%'ld MB\n",
                 allocated / (2 * valid_ms), SIEVE_LENGTH,
                 allocated / 8 / 1024 / 1024);
         }
