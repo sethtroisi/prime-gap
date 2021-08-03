@@ -572,8 +572,8 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     }
 
                     // Ugly code that allows for remove during iteration
-                    auto it = processing.cbegin();
-                    while (it != processing.cend()) {
+                    auto it = processing.begin();
+                    while (it != processing.end()) {
                         auto& interval = it->second;
 
                         int prev_p = interval.prev_p;
@@ -603,6 +603,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                                     prev_p, next_p,
                                     interval.p_tests, interval.n_tests, prev_merit);
 
+                                mpz_clear(interval.center);
                                 it = processing.erase(it);  // Erase this element
                                 continue;
                             }
@@ -627,6 +628,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                             prev_p, next_p,
                             interval.p_tests, interval.n_tests, merit);
 
+                        mpz_clear(interval.center);
                         it = processing.erase(it);  // Erase this element
                     }
                 }
