@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
     // Display %'d with commas i.e. 12,345
     setlocale(LC_NUMERIC, "");
 
-    Config config = Args::argparse(argc, argv);
+    Config config = Args::argparse(argc, argv, Args::Pr::SIEVE);
 
     if (config.verbose >= 2) {
         printf("\tCompiled with GMP %d.%d.%d\n\n",
@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (config.valid == 0) {
-            Args::show_usage(argv[0]);
+            Args::show_usage(argv[0], Args::Pr::SIEVE);
             exit(1);
         }
 

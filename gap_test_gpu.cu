@@ -86,9 +86,9 @@ void prime_gap_test(const struct Config config);
 
 
 int main(int argc, char* argv[]) {
-    Config config = Args::argparse(argc, argv);
+    Config config = Args::argparse(argc, argv, Args::Pr::TEST_GPU);
     if (config.valid == 0) {
-        Args::show_usage(argv[0]);
+        Args::show_usage(argv[0], Args::Pr::TEST_GPU);
         return 1;
     }
 
@@ -104,7 +104,7 @@ int main(int argc, char* argv[]) {
 
     if (config.sieve_length == 0) {
         cout << "Must set sieve-length for " << argv[0] << endl;
-        Args::show_usage(argv[0]);
+        Args::show_usage(argv[0], Args::Pr::TEST_GPU);
         return 1;
     }
 
@@ -115,12 +115,6 @@ int main(int argc, char* argv[]) {
             config.p, config.d, config.mstart, config.minc);
     }
 
-    if (config.verbose >= 2) {
-        printf("\n");
-        printf("sieve_length: 2x %'d\n", config.sieve_length);
-        printf("max_prime:       %'ld\n", config.max_prime);
-        printf("\n");
-    }
     setlocale(LC_NUMERIC, "C");
 
     // Determine compression

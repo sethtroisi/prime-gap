@@ -672,7 +672,7 @@ size_t primepi_estimate(uint64_t max_prime) {
 
 
 
-void Args::show_usage(char* name) {
+void Args::show_usage(char* name, Pr program) {
     Config defaults;
 
     cout << "Usage: " << name << endl;
@@ -684,17 +684,20 @@ void Args::show_usage(char* name) {
     cout << "OR" << endl;
     cout << "  -u, --unknown-filename <filename>" << endl;
     cout << "    parse p, d, mstart, minc, sieve-length, max-prime from filename" << endl;
-    cout  << endl;
+    cout << endl;
     cout << "[OPTIONALLY]" << endl;
+if (program == Pr::SIEVE || program == Pr::STATS) {
     cout << "  -t, --threads N" << endl;
     cout << "    Use N threads (OpenMP)" << endl;
+}
     cout << "  --min-merit <min_merit>" << endl;
     cout << "    only display prime gaps with merit >= min_merit" << endl;
+if (program == Pr::SIEVE) {
     cout << "  --sieve-length" << endl;
     cout << "    how large the positive/negative sieve arrays should be" << endl;
     cout << "  --max-prime" << endl;
     cout << "    use primes <= max-prime (in millions) for checking composite" << endl;
-    cout  << endl;
+    cout << endl;
     cout << "  --save-unknowns" << endl;
     cout << "    save unknowns to a temp file where they are processed in a 2nd pass." << endl;
     cout << "  --rle" << endl;
@@ -703,12 +706,15 @@ void Args::show_usage(char* name) {
     cout << "    save in new bitcompressed format" << endl;
     cout << "  --maxmem <max memory in GB>" << endl;
     cout << "    Combined sieve will print a warning if it's likely to use more memory." << endl;
+}
     cout << endl;
     cout << "[OPTIONAL]" << endl;
+if (program == Pr::SIEVE || program == Pr::STATS) {
     cout << "  --search-db" << endl;
     cout << "    Database for this project (Default: '" << defaults.search_db << "')" << endl;
     cout << "  --prime-gaps-db" << endl;
     cout << "    Prime gap prime gap search db (Default: '" << defaults.gaps_db << "')" << endl;
+}
     cout << endl;
     cout << "  -q, --quiet" << endl;
     cout << "    suppress some status output (twice for more suppression)" << endl;
@@ -792,7 +798,7 @@ int Args::guess_compression(const struct Config& config, std::ifstream& unknown_
 }
 
 
-Config Args::argparse(int argc, char* argv[]) {
+Config Args::argparse(int argc, char* argv[], Pr program) {
     // NOTE: Remember to add to getopt_long(argc, argv, OPTIONS_STRING, ...) below
     static struct option long_options[] = {
         {"p",                required_argument, 0,  'p' },
@@ -838,7 +844,7 @@ Config Args::argparse(int argc, char* argv[]) {
     while ((c = getopt_long(argc, argv, "qhp:d:u:t:", long_options, &option_index)) >= 0) {
         switch (c) {
             case 'h':
-                show_usage(argv[0]);
+                show_usage(argv[0], program);
                 exit(0);
 
             case 'q':

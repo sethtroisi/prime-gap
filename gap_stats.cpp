@@ -175,7 +175,7 @@ static void prob_stats(char const *name, vector<float> &probs) {
 
 int main(int argc, char* argv[]) {
 
-    Config config = Args::argparse(argc, argv);
+    Config config = Args::argparse(argc, argv, Args::Pr::STATS);
 
     if (config.verbose >= 3) {
         printf("\tCompiled with GMP %d.%d.%d\n\n",
@@ -183,7 +183,7 @@ int main(int argc, char* argv[]) {
     }
 
     if (config.valid == 0) {
-        Args::show_usage(argv[0]);
+        Args::show_usage(argv[0], Args::Pr::STATS);
         return 1;
     }
 

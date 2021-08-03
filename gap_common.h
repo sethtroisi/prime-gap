@@ -90,8 +90,10 @@ struct Config {
 class Args
 {
     public:
-        static void show_usage(char* name);
-        static Config argparse(int argc, char* argv[]);
+        enum Pr { SIEVE, STATS, TEST_SIMPLE, TEST_GPU };
+
+        static void show_usage(char* name, Pr program);
+        static Config argparse(int argc, char* argv[], Pr program);
         static std::string gen_unknown_fn(const struct Config& config, std::string suffix);
         static int guess_compression(
             const struct Config& config,

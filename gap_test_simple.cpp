@@ -41,9 +41,9 @@ void prime_gap_test(
 
 
 int main(int argc, char* argv[]) {
-    Config config = Args::argparse(argc, argv);
+    Config config = Args::argparse(argc, argv, Args::Pr::TEST_SIMPLE);
     if (config.valid == 0) {
-        Args::show_usage(argv[0]);
+        Args::show_usage(argv[0], Args::Pr::TEST_SIMPLE);
         return 1;
     }
 
@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
 
     if (config.sieve_length == 0) {
         cout << "Must set sieve-length for " << argv[0] << endl;
-        Args::show_usage(argv[0]);
+        Args::show_usage(argv[0], Args::Pr::TEST_SIMPLE);
         return 1;
     }
 
