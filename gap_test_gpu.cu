@@ -236,6 +236,7 @@ void run_gpu_thread(const struct Config config) {
     typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
     test_runner_t<params> runner(BATCH_GPU, ROUNDS);
 
+    size_t processed_batches = 0;
     size_t no_batch_count_ms = 0;
     while (is_running) {
         bool no_batch = true;
@@ -247,14 +248,22 @@ void run_gpu_thread(const struct Config config) {
                 runner.run_test(batch.z, batch.result);
                 batch.state = GPUBatch::State::RESULT_WRITTEN;
                 no_batch = false;
+                processed_batches++;
             }
         }
         if (no_batch) {
-            no_batch_count_ms += 100;
-            printf("Waiting on batch%ld => %.1f seconds\n",
-                    no_batch_count_ms / 10, no_batch_count_ms / 1000.0);
-            usleep(100000); // 100ms
+            // Waiting doesn't count till 1st batch is ready
+            if (config.verbose >= 0 && processed_batches > 0) {
+                no_batch_count_ms += 100;
+                printf("Waiting on batch%ld => %.1f seconds\n",
+                        no_batch_count_ms / 100, no_batch_count_ms / 1000.0);
+            }
+            usleep(250000); // 250ms
         }
+    }
+
+    if (config.verbose >= 1) {
+        printf("Processed %'ld batches\n", processed_batches);
     }
 }
 

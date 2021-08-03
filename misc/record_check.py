@@ -177,16 +177,16 @@ def print_record_gaps(args, gaps):
                 #    existing[0], " by you" * is_own_record, new_merit - existing[0]))
 
         if record_lines:
-            print()
             if args.sort:
                 record_lines.sort()
 
             seen = set()
             for line in record_lines:
-                print(line)
                 seen.add(line.split()[0])
-                if len(seen) % 50 == 0:
+                if len(seen) % 50 == 1:
+                    # Seperator *after* 50 unique items, before the 51st
                     print()
+                print(line)
 
             print()
             print("Records {} unique {} {}".format(
