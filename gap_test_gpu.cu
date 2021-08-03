@@ -115,6 +115,12 @@ int main(int argc, char* argv[]) {
             config.p, config.d, config.mstart, config.minc);
     }
 
+    if (config.mskip > 0) {
+        printf("\tskipping m < %'ld\n", config.mskip);
+        assert(config.mskip >= config.mstart);
+        assert(config.mskip < (config.mstart + config.minc));
+    }
+
     setlocale(LC_NUMERIC, "C");
 
     // Determine compression
@@ -188,6 +194,9 @@ class DataM {
          * Elements in READY state can ONLY be modified by load_thread
          * Elements in RUNNING are either part of a GPU batch in overflowed queue
          */
+        DataM() {};
+        DataM(long m): m(m) {};
+
         enum State { READY, RUNNING, OVERFLOW_DONE };
         State state = READY;
 
@@ -379,11 +388,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                 // Add new DataM if free space
                 for (; processing.size() < QUEUE_SIZE && mi < M_inc; mi++) {
                     uint64_t m = M_start + mi;
-                    if (gcd(m, D) > 1) {
-                        continue;
-                    }
-                    DataM test;
-                    test.m = m;
+                    if (gcd(m, D) > 1) continue;
 
                     std::string line;
                     // Loop can be pragma omp parallel if this is placed in critical section
@@ -392,7 +397,9 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     std::istringstream iss_line(line);
 
                     // Can skip if m < M_RESUME without parsing line here
-                    // TODO add m_skip param
+                    if (m < config.mskip) continue;
+
+                    DataM test(m);
 
                     uint64_t m_parsed = parse_unknown_line(
                         config, helper, m, iss_line, test.unknowns[0], test.unknowns[1]);
@@ -461,8 +468,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
 
                     // Every batch should be full unless we are almost done
                     // technically if many overflowed results this could not be true.
-                    // TODO reenable
-                    //assert( (mi >= M_inc) || (batch.i == BATCH_GPU) );
+                    assert( (mi >= M_inc) || (batch.i == BATCH_GPU) );
                 }
 
                 // Mark batch as ready for GPU processing

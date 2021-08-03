@@ -653,8 +653,6 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] records to DB what range was tested
 * gap\_test\_gpu
   * [ ] auto optimize BATCH_SIZE, TPI, ...
-  * [ ] one_sided
-  * [ ] checkpoint/resume logic
   * [ ] autolog to file
 * gap\_test.py
   * [ ] Save prp-percentage finalized for faster skipping of complete files
@@ -796,6 +794,8 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [x] Generate expected length
 * gap\_test\_gpu
   * [x] auto select BITS, TPI
+  * [x] prev side only (side skip)
+  * [x] checkpoint/resume logic
 * benchmarking
   * [x] Experimentally compute `prime_time_estimate`
   * [x] Redo prime-time with user time (gmp better)

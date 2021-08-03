@@ -1753,9 +1753,11 @@ void method2_large_primes(Config &config, method2_stats &stats,
      * helps reduce size of this vector while likely not impact hitrate
      */
     {
-        // Want low collision rate
-        size_t min_valid_ms_for_shift = THREADS * 1'000'000;
-        assert(!use_lock || (caches.valid_ms > min_valid_ms_for_shift));
+        // Want low collision rate (ignore testing)
+        if (M_inc >= 1000) {
+            size_t min_valid_ms_for_shift = THREADS * 1'000'000;
+            assert(!use_lock || (caches.valid_ms > min_valid_ms_for_shift));
+        }
     }
     vector<mutex> mutex_mi((caches.valid_ms >> METHOD2_MUTEX_SHIFT) + 1);
 

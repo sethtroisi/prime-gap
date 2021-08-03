@@ -70,12 +70,12 @@ int main(int argc, char* argv[]) {
             config.p, config.d, config.mstart, config.minc);
     }
 
-    if (config.verbose >= 2) {
-        printf("\n");
-        printf("sieve_length: 2x %'d\n", config.sieve_length);
-        printf("max_prime:       %'ld\n", config.max_prime);
-        printf("\n");
+    if (config.mskip > 0) {
+        printf("\tskipping m < %'ld\n", config.mskip);
+        assert(config.mskip >= config.mstart);
+        assert(config.mskip < (config.mstart + config.minc));
     }
+
     setlocale(LC_NUMERIC, "C");
 
     // ----- Open unknown input file
@@ -150,18 +150,16 @@ void prime_gap_test(
 
     for (uint32_t mi = 0; mi < M_inc; mi++) {
         long m = M_start + mi;
-        if (gcd(m, D) > 1) {
-            continue;
-        }
-
-        vector<int32_t> unknowns[2];
+        if (gcd(m, D) > 1) continue;
 
         std::string line;
         // Loop can be pragma omp parallel if this is placed in critical section
         std::getline(unknown_file, line);
-
         std::istringstream iss_line(line);
 
+        if ((size_t) m < config.mskip) continue;
+
+        vector<int32_t> unknowns[2];
         uint64_t m_parsed = parse_unknown_line(
             config, helper, m, iss_line, unknowns[0], unknowns[1]);
         assert(m_parsed == (uint64_t) m);

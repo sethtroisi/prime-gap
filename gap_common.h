@@ -43,6 +43,8 @@ struct Config {
 
     uint64_t mstart  = 0;
     uint64_t minc    = 0;
+    // Only for testers, skip m < mskip
+    uint64_t mskip   = 0;
 
     float min_merit = 18;
 

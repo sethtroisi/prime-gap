@@ -692,6 +692,10 @@ if (program == Pr::SIEVE || program == Pr::STATS) {
 }
     cout << "  --min-merit <min_merit>" << endl;
     cout << "    only display prime gaps with merit >= min_merit" << endl;
+if (program == Pr::TEST_GPU) {
+    cout << "  --mskip <start at this m>" << endl;
+    cout << "    allows for partial resume of a unknown-file" << endl;
+}
 if (program == Pr::SIEVE) {
     cout << "  --sieve-length" << endl;
     cout << "    how large the positive/negative sieve arrays should be" << endl;
@@ -806,6 +810,7 @@ Config Args::argparse(int argc, char* argv[], Pr program) {
 
         {"mstart",           required_argument, 0,   1  },
         {"minc",             required_argument, 0,   2  },
+        {"mskip",            required_argument, 0,  16  },
 
         {"unknown-filename", required_argument, 0,  'u' },
 
@@ -862,6 +867,10 @@ Config Args::argparse(int argc, char* argv[], Pr program) {
                 break;
             case 2:
                 config.minc = atoll(optarg);
+                break;
+
+            case 16:
+                config.mskip = atoll(optarg);
                 break;
 
             case 'u':
