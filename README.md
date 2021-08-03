@@ -26,19 +26,21 @@ A fast prime gap searching suite.
 
 ## Overview
 
-This is a suite of tools (`combined_sieve`, `gap_stats`, and `gap_test.py`) which are useful for searching for prime gaps
+This is a suite of tools (`combined_sieve`, `gap_stats`, `gap_test.py` and `gap_test_gpu`) which are useful for searching for prime gaps
 centered around `m * P#/d`.
 
-The flow is to sieve many intervals with `combined_sieve --save -u <P>_<D>_<MSTART>_<MINC>_s<SIEVE_LENGTH>_l<MAX_PRIME>.txt`
-Then calculate statistics about these intervals with `gap_stats --save -u <SAME_FILENAME>.txt`
-Then test some portion of these intervals with `gap_test.py -u <SAME_FILENAME>.txt --prp-top-percent 25`
+The flow is to sieve many intervals with `combined_sieve --save -u <filename>`
 
-A known 30 merit prime gap can be easily found with (After [Setup](#setup) has been complete)
+Then calculate statistics about these intervals with `gap_stats --save -u <filename>`
+
+Then test some portion of these intervals with `gap_test.py -u <filename>.txt --prp-top-percent 25`
+
+To quickly test a known 30 merit prime gap ([Setup](#setup) must already be complete)
 
 ```bash
 $ make
 $ sqlite3 test.db < schema.sql
-$ FN=809_1841070_11244000_1000_s27000_l200M.txt
+$ FN=809_1841070_11244000_1000_s15000_l200M.txt
 $ ./combined_sieve --save --search-db test.db -u $FN
 $ ./gap_stats --save --search-db test.db -u $FN --min-merit 20
 $ ./gap_test.py --search-db test.db -u $FN
@@ -495,6 +497,8 @@ $ sqlite3 prime-gap-search.db < schema.sql
 
 ## Notes
 
+* `gap_test_gpu` is experimental using https://github.com/NVlabs/CGBN
+  * It's **much** faster for <2,048 bits.
 * Clang (`CC=clang++-12`) might speed up `combined_sieve` slightly.
 * There is some support for using OpenPFGW [PrimeWiki](https://www.rieselprime.de/ziki/PFGW) [SourceForge](https://sourceforge.net/projects/openpfgw/)
   * Unpack somewhere and link binary as `pfgw64`

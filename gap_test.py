@@ -442,6 +442,13 @@ def prime_gap_test(args):
             print()
             exit(1)
 
+    if K_bits < 900 and M_inc > 10000:
+        print()
+        print("gap_test.py has substantial overhead for small P")
+        print("consider gap_test_simple / gap_test_gpu")
+        print()
+        exit(1)
+
     # ----- Open prime-gap-search.db
     # Longer timeout so that record_checking doesn't break when saving
     conn = sqlite3.connect(args.search_db, timeout=60)
