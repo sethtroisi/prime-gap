@@ -66,12 +66,6 @@ using namespace std::chrono;
 // WHEEL should divide config.d
 #define METHOD2_WHEEL_MAX (2*3*5*7)
 
-// For Method2 Medium Primes
-// composite[mii] is locked with a mutex
-// this controls how many mii (1 << SHIFT) share a mutex
-#define METHOD2_MUTEX_SHIFT 8
-
-
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config& config);
 void prime_gap_parallel(struct Config& config);
@@ -1088,6 +1082,14 @@ class Cached {
         /** is_comprime2310[i] = (i % 2) && (i % 3) && (i % 5) && (i % 7) && (i % 11)*/
         vector<char> is_coprime2310;
 
+        /**
+         * TODO: benchmark adding is_coprime96577 = 13*17*19*23
+         * 1 - 2/3 * 4/5 * 6/7 * 10/11 = 58% chance of sharing a factor of 3, 5, 7, or 11
+         * 1 - 12/13 * 16/17 * 18/19 * 22/23 = 21% chance of sharing a factor of 13, 17, 19, or 23
+         *
+         * Could reduce memory contention (is this the slowness on DDR3?)
+         */
+
 
     Cached(const struct Config& config, const mpz_t &K) {
         const uint32_t P = config.p;
@@ -1225,6 +1227,33 @@ class Cached {
     }
 };
 
+
+std::vector<std::pair<uint64_t, uint64_t>> split_prime_range_to_intervals(
+        uint64_t percent, uint64_t start_prime, uint64_t end_prime) {
+    assert(percent == 1 || percent == 100);
+    /**
+     * first ones need to be small enough to print most mults.
+     * later larger enough to reduce overhead in prime iterator
+     */
+    std::vector<std::pair<uint64_t, uint64_t>> intervals;
+
+    // interval_inc, interval_start
+    uint64_t i_inc = 10'000;
+    uint64_t i_start = 0;
+    while(i_start < end_prime) {
+        // Next multiple of ten that keeps interval < percent * start
+        while (i_inc * 10 * 100 <= i_start * percent) {
+            i_inc *= 10;
+        }
+        uint64_t i_end = std::min(i_start + i_inc, end_prime);
+        if (i_end > start_prime) {
+            uint64_t first = std::max(i_start, start_prime) + 1;
+            intervals.emplace_back(first, i_end);
+        }
+        i_start = i_end;
+    }
+    return intervals;
+}
 
 void save_unknowns_method2(
         const struct Config& config,
@@ -1573,10 +1602,10 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
 
 void method2_medium_primes(const Config &config, method2_stats &stats,
                            const mpz_t &K,
-                           int thread_i,
+                           int split_i,
                            const Cached &caches,
                            vector<uint32_t> &coprime_X_thread,
-                           const uint64_t SMALL_THRESHOLD, const uint64_t MEDIUM_THRESHOLD,
+                           const uint64_t prime_start, const uint64_t prime_end,
                            vector<bool> *composite) {
     /**
      * NOTE: Theoretically memory access would be better if composite was transposed
@@ -1609,9 +1638,9 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
      */
 
     const uint32_t SIEVE_LENGTH = config.sieve_length;
-    assert(MEDIUM_THRESHOLD <= (size_t)std::numeric_limits<int64_t>::max());
+    assert(prime_end <= (size_t)std::numeric_limits<int64_t>::max());
     // Prime can be larger than int32, prime * SIEVE_LENGTH must not overflow int64
-    assert(!__builtin_mul_overflow_p(SIEVE_LENGTH, 4 * MEDIUM_THRESHOLD, (int64_t) 0));
+    assert(!__builtin_mul_overflow_p(SIEVE_LENGTH, 4 * prime_end, (int64_t) 0));
 
     const uint64_t M_start = config.mstart;
     const uint64_t M_inc = config.minc;
@@ -1627,15 +1656,15 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
     const int K_odd = mpz_odd_p(K);
 
-    primesieve::iterator iter(SMALL_THRESHOLD+1);
+    primesieve::iterator iter(prime_start);
     uint64_t prime = iter.prev_prime();
-    assert(prime <= SMALL_THRESHOLD);
+    assert(prime <= prime_start);
     prime = iter.next_prime();
-    assert(prime > SMALL_THRESHOLD);
+    assert(prime >= prime_start);
     assert(prime > (2 * SIEVE_LENGTH + 1));
-    for (; prime <= MEDIUM_THRESHOLD; prime = iter.next_prime()) {
-        // Only the first thread should
-        if (thread_i == 0) {
+    for (; prime <= prime_end; prime = iter.next_prime()) {
+        // Only the first split count primes
+        if (split_i == 0) {
             stats.pi_interval += 1;
         }
 
@@ -1666,17 +1695,19 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
             // Safe from overflow as 2 * SL * prime < int64
             int64_t mi_0 = (X * neg_inv_K + mi_0_shift) % prime;
 
-            uint64_t shift = prime << K_odd; // (1 + K_odd) * prime;
             // Check if X parity == m parity
             if (K_odd && ((X ^ mi_0) & 1) == X_M_parity_check) {
                 mi_0 += prime;
             }
+
+            uint64_t shift = prime << K_odd; // (1 + K_odd) * prime;
 
             // Separate loop when shift > M_inc not significantly faster
             for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
                 uint64_t m = M_start + mi;
 
                 uint32_t m_mod2310 = m % 2310;
+                // Filters ~80% or more of m where (m, D) != 1
                 if (!caches.is_m_coprime2310[m_mod2310])
                     continue;
 
@@ -1685,7 +1716,6 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                 if (!caches.is_coprime2310[n_mod2310])
                     continue;
 
-                // Wide memory read
                 if (!caches.is_m_coprime[mi])
                     continue;
 
@@ -1701,6 +1731,11 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 #endif  // METHOD2_WHEEL
 
                 assert(xii > 0);
+
+                /**
+                 * Note: Risk of race condition / contention is reduced by having
+                 * each thread handling a different ranche of xii
+                 */
                 composite[mii][xii] = true;
 
 #ifdef GMP_VALIDATE_FACTORS
@@ -1711,18 +1746,12 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         }
         stats.small_prime_factors_interval += small_factors;
 
-        if (thread_i == 0 && prime >= stats.next_print && prime != stats.last_prime) {
+        // Should this be moved out of the loop?
+        if (split_i == 0 && prime >= stats.next_print && prime != stats.last_prime) {
             // Print counters & stats.
             method2_increment_print(prime, caches.valid_ms, composite, stats, config);
         }
     }
-    if (config.verbose >= 2) {
-        time_t rawtime = std::time(nullptr);
-        struct tm *tm = localtime( &rawtime );
-        printf("\tmethod2_medium_primes(thread %d) done @ %d:%02d:%02d\n",
-            thread_i, tm->tm_hour, tm->tm_min, tm->tm_sec);
-    }
-
     mpz_clear(test);
     mpz_clear(test2);
 }
@@ -1731,6 +1760,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 void method2_large_primes(Config &config, method2_stats &stats,
                           const mpz_t &K,
                           int THREADS,
+                          const uint8_t METHOD2_MUTEX_SHIFT,
                           const Cached &caches,
                           const uint64_t MEDIUM_THRESHOLD,
                           vector<bool> *composite) {
@@ -1746,53 +1776,29 @@ void method2_large_primes(Config &config, method2_stats &stats,
     const uint32_t x_reindex_wheel_size = caches.x_reindex_wheel_size;
 
     const bool use_lock = config.threads > 1;
+
     /**
      * This is a LOT of mutexes (given 1-16 threads)
-     * Each is 320 bits! so 27M => 1 GB!!!
+     * Each is 320 bits! so 27 million mi => 1 GB of mutexes.
      * Each mutex is only locked by 1 thread so sharing with a pool
-     * helps reduce size of this vector while likely not impact hitrate
+     * reduce size of the vector withouth substantially impacting contention
      */
-    {
-        // Want low collision rate (ignore testing)
-        if (M_inc >= 1000) {
-            size_t min_valid_ms_for_shift = THREADS * 1'000'000;
-            assert(!use_lock || (caches.valid_ms > min_valid_ms_for_shift));
-        }
-    }
+    assert(METHOD2_MUTEX_SHIFT >= 0 && METHOD2_MUTEX_SHIFT < 10);
     vector<mutex> mutex_mi((caches.valid_ms >> METHOD2_MUTEX_SHIFT) + 1);
+
+    const auto intervals = split_prime_range_to_intervals(1, MEDIUM_THRESHOLD, LAST_PRIME);
+    if (config.verbose >= 2) {
+        printf("\tmethod2_large_primes %ld intervals\n\n", intervals.size());
+    }
+    if (intervals.size() && intervals.size() < (size_t) THREADS) {
+        printf("\n\nCan you ping the thread with your -u <filename>? something is wonky\n");
+        printf("\t-u '%s'\n\n", config.unknown_filename.c_str());
+    }
+
 
     // Setup CTRL+C catcher
     signal(SIGINT, signal_callback_handler);
 
-
-    /**
-     * Use un-even intervals
-     * first ones need to be small enough to print most mults.
-     * later larger to reduce overhead in prime iterator
-     */
-    std::vector<std::pair<uint64_t, uint64_t>> intervals;
-    {
-        uint64_t start = 0;
-        while(start < LAST_PRIME) {
-            const uint64_t interval_inc =
-                start >= 2'000'000'000'000 ? 10'000'000'000 :
-                    (start >= 200'000'000'000 ? 1'000'000'000 :
-                    (start >= 20'000'000'000 ? 100'000'000 :
-                    (start >= 2'000'000'000 ? 10'000'000 :
-                    (start >= 100'000'000 ? 1'000'000 : 100'000))));
-            uint64_t end = std::min(start + interval_inc, LAST_PRIME);
-
-            if (end > MEDIUM_THRESHOLD) {
-                uint64_t first = std::max(start, MEDIUM_THRESHOLD) + 1;
-                intervals.emplace_back(first, end);
-            }
-            start = end;
-        }
-
-        if (config.verbose >= 2) {
-            printf("\tmethod2_large_primes %ld intervals\n\n", intervals.size());
-        }
-    }
 
     uint64_t last_processed = 0;
     map<uint64_t, method2_stats> stats_to_process;
@@ -1865,7 +1871,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 assert( temp_mod <= 2*SL );
                 int32_t x = 2*SL - temp_mod;
 
-                // Filters ~80% more (coprime to D)
+                // Filters ~80% or more of m where (m, D) != 1
                 uint64_t m = M_start + mi;
                 uint32_t m_mod2310 = m % 2310;
                 if (!caches.is_m_coprime2310[m_mod2310])
@@ -2017,14 +2023,20 @@ void prime_gap_parallel(struct Config& config) {
 
     const uint64_t MAX_PRIME = config.max_prime;
 
-    mpz_t test, test2;
-    mpz_init(test);
-    mpz_init(test2);
+    const size_t THREADS = config.threads;
 
-    mpz_set_ui(test, MAX_PRIME);
-    mpz_prevprime(test, test);
+    uint64_t LAST_PRIME = [&] {
+        mpz_t test;
+        mpz_init(test);
 
-    uint64_t LAST_PRIME = mpz_get_ui(test);
+        mpz_set_ui(test, MAX_PRIME);
+        mpz_prevprime(test, test);
+
+        uint64_t temp = mpz_get_ui(test);
+        mpz_clear(test);
+        return temp;
+    }();
+
     assert( LAST_PRIME <= MAX_PRIME && LAST_PRIME + 500 > MAX_PRIME);
 
     // ----- Generate primes for P
@@ -2072,6 +2084,10 @@ void prime_gap_parallel(struct Config& config) {
     }
 #endif
 
+    // this controls how many mii (1 << SHIFT) share a mutex
+    const uint8_t METHOD2_MUTEX_SHIFT = (THREADS * 1'000'000ul) < valid_ms ? 8 : 1;
+
+
     // ----- Timing
     if (config.verbose >= 2) {
         printf("\n");
@@ -2111,7 +2127,7 @@ void prime_gap_parallel(struct Config& config) {
         size_t MB = 8 * 1024 * 1024;
         size_t overhead_bits = M_inc * (8 * sizeof(uint32_t) + 1) +
                                valid_ms * 8 * (sizeof(uint32_t) + sizeof(composite[0]));
-        if (config.threads > 1) {
+        if (THREADS > 1) {
             overhead_bits += valid_ms * 8 * sizeof(mutex) >> METHOD2_MUTEX_SHIFT;
         }
 
@@ -2180,8 +2196,6 @@ void prime_gap_parallel(struct Config& config) {
     stats.last_prime = LAST_PRIME;
     stats.prp_time_estimate = prp_time_est;
 
-    const size_t THREADS = config.threads;
-
     if (1) { // Small Primes
         /**
          * NOTE: For primes <= SMALL_THRESHOLD, handle per m (with better memory locality)
@@ -2226,66 +2240,156 @@ void prime_gap_parallel(struct Config& config) {
 
 
     if (1) { // Medium Primes
-        vector<uint32_t> coprime_X_split[THREADS];
-        size_t coprime_X_count = caches.coprime_X.size();
-        size_t per_thread = coprime_X_count / THREADS;
-        per_thread -= per_thread % 8;
+        /**
+         * Old (5e782547) parallelization was:
+         * each THREADS gets an equal share of work (coprime_X_split)
+         *      handles all mediums primes for those comprime_X.
+         * Pros:
+         *      no locking of composite needed (minus trying to round to multiples of 8)
+         * Cons:
+         *      stats aren't easier to compute
+         *      THREADS = CORES + 1, and last THREAD might take 2x as long
+         *          (this really happens that longer threads take 1+ hour longer)
+         *
+         *
+         * New parallelization involves breaking up many extra coprime_X_split
+         *      and also breaking up primes into ranges (like large_primes)
+         * Pros:
+         *      distributes evenly
+         *      starts partially works
+         * Cons:
+         *      more code
+         *      still can't do counting in stats (because of wheel)
+         *      slowest thread probably unlocks then reclaims least complete range.
+         */
+
+        const auto intervals = split_prime_range_to_intervals(100, SMALL_THRESHOLD, MEDIUM_THRESHOLD);
+        if (config.verbose >= 1) {
+            printf("\tmethod2_medium_primes %ld intervals x %ld THREADS\n\n",
+                    intervals.size(), THREADS);
+        }
 
         /**
-         * To avoid possible synchronization issues round coprime_X_split to a
-         * multiples of 8 so vector<bool>[i]  never overlaps between threads
+         * Note: Each extra split means another call to mpz_invert for all primes.
+         * This is fast, ~5 minutes for 300M inverts (limit = 7e9) so ~1% overheard
+         */
+        const size_t NUM_SPLITS = THREADS + 3;
+        vector<uint32_t> coprime_X_split[NUM_SPLITS];
+        size_t coprime_X_count = caches.coprime_X.size();
+
+        /**
+         * To reduce synchronization issues round coprime_X_split to a
+         * multiples of 8 so vector<bool>[i] doesn't overlaps between threads
          *
          * XXX: With wheel reindexing this doesn't work!
          * only breaks when coprime_X_split[{0,1,2}] and coprime_X_split[{n-2,n-1,n}]
          * both modify the same composite[m][reindexed] at the sametime
          * could lock/unlock when using boundy elements but would be lots of code.
          */
-        for (size_t t = 0; t < THREADS; t++) {
-            bool is_final = (t+1) >= THREADS;
-            size_t xi_start = t * per_thread;
-            size_t xi_end = is_final ? coprime_X_count : xi_start + per_thread;
-            assert( xi_start % 8 == 0);
-            assert( (xi_end - xi_start) % 8 == 0 || is_final );
-            for (size_t xi = xi_start; xi < xi_end; xi++) {
-                coprime_X_split[t].push_back(caches.coprime_X[xi]);
+        {
+            size_t xi_start = 0;
+            for (size_t t = 0; t < NUM_SPLITS; t++) {
+                bool is_final = (t+1) >= NUM_SPLITS;
+                size_t xi_end = is_final ?
+                    coprime_X_count : ((t+1) * coprime_X_count / NUM_SPLITS);
+
+                // round end down to multiples of 8;
+                if (!is_final) {
+                    xi_end -= (xi_end % 8);
+                }
+                assert( xi_start % 8 == 0);
+                assert( (xi_end % 8 == 0) || is_final );
+
+                for (; xi_start < xi_end; xi_start++) {
+                    coprime_X_split[t].push_back(caches.coprime_X[xi_start]);
+                }
+            }
+
+            if (config.verbose + (THREADS > 1) >= 2) {
+                for (size_t i = 0; i < NUM_SPLITS; i++) {
+                    const auto split = coprime_X_split[i];
+                    printf("\tSplit %ld method2_medium_primes(%'ld/%'ld) [%d, %d]\n",
+                            i, split.size(), coprime_X_count, split.front(), split.back());
+                }
             }
         }
 
-        /**
-         * Using this parallelization has two side effects
-         * 1. If THREADS is CORES+1 would wait 2x as long
-         * 2. Most threads finish before stats thread
-         *    Then sit idle waiting for final thread to finish.
-         *
-         * Theoretically can do same transform as large_primes
-         * split into intervals <prime range, coprime_X range>
-         * try to keep multiple threads from executing similiar coprime ranges
-         * at the same time...
-         */
-        #pragma omp parallel for num_threads(THREADS)
-        for (size_t thread_i = 0; thread_i < THREADS; thread_i++) {
-            // Helps keep printing in order
-            std::this_thread::sleep_for(milliseconds(50 * thread_i));
+        // Can only work on one coprime_X_split interval at a time.
+        mutex state_lock;
+        vector<int>    split_locked(NUM_SPLITS, 0);
+        vector<size_t> split_progress(NUM_SPLITS, 0);
 
-            if (config.verbose + (THREADS > 1) >= 3) {
-                printf("\tThread %ld method2_medium_primes(%'ld/%'ld)\n",
-                        thread_i, coprime_X_split[thread_i].size(), coprime_X_count);
+        #pragma omp parallel for ordered schedule(dynamic, 1) num_threads(THREADS)
+        for (size_t work_i = 0; work_i < intervals.size() * NUM_SPLITS; work_i++) {
+            // Find least finished split (not currently being processed)
+            size_t min_p = intervals.size(), max_p = 0, min_index = 0;
+            {
+                state_lock.lock();
+                for (size_t i = 0; i < NUM_SPLITS; i++) {
+                    if (split_locked[i] == 0) {
+                        max_p = std::max(max_p, split_progress[i]);
+                        if (split_progress[i] < min_p) {
+                            min_p = split_progress[i];
+                            min_index = i;
+                        }
+                    }
+                }
+
+                // There should be some item to work on
+                assert(min_p < intervals.size());
+
+                // lock work item (min_p, min_index)
+                split_locked[min_index] = 1;
+
+                if ((max_p - min_p) > 2 && config.verbose >= 1) {
+                    printf("\tsplit %ld(%ld) falling behind(%ld) @ work item %ld\n",
+                        min_index, min_p, max_p, work_i);
+                }
+                if (config.verbose >= 3) {
+                    printf("\twork item %ld, %ld(%ld) | p: [%ld, %ld] X: [%d, %d]\n",
+                        work_i, min_index, min_p,
+                        intervals[min_p].first, intervals[min_p].second,
+                        coprime_X_split[min_index].front(), coprime_X_split[min_index].back());
+
+                }
+
+                state_lock.unlock();
             }
 
+            // Do work item
             method2_medium_primes(config, stats, K,
-                                  thread_i,
+                                  min_index,
                                   caches,
-                                  coprime_X_split[thread_i],
-                                  SMALL_THRESHOLD, MEDIUM_THRESHOLD,
+                                  coprime_X_split[min_index],
+                                  intervals[min_p].first, intervals[min_p].second,
                                   composite);
+
+            // Update progress and lock
+            {
+                state_lock.lock();
+
+                split_progress[min_index]++;
+                split_locked[min_index] = 0;
+
+                bool is_final = split_progress[min_index] == intervals.size();
+                if (is_final && config.verbose >= 1) {
+                    time_t rawtime = std::time(nullptr);
+                    struct tm *tm = localtime( &rawtime );
+                    printf("\tmethod2_medium_primes(split %ld) done @ %d:%02d:%02d\n",
+                        min_index, tm->tm_hour, tm->tm_min, tm->tm_sec);
+                }
+
+                state_lock.unlock();
+            }
         }
+
         if (MEDIUM_THRESHOLD >= stats.last_prime) {
             // Handle final print (if no large_prime will be run)
             method2_increment_print(
                 stats.last_prime, valid_ms, composite, stats, config);
         }
-        if (config.verbose >= 2) {
-            printf("\tmethod2_medium_primes done\n");
+        if (config.verbose >= 1) {
+            printf("\tmethod2_medium_primes all done\n");
         }
     }
 
@@ -2295,7 +2399,7 @@ void prime_gap_parallel(struct Config& config) {
         method2_large_primes(
             config, stats,
             K,
-            THREADS,
+            THREADS, METHOD2_MUTEX_SHIFT,
             caches,
             MEDIUM_THRESHOLD,
             composite);
@@ -2338,6 +2442,4 @@ void prime_gap_parallel(struct Config& config) {
     delete[] composite;
 
     mpz_clear(K);
-    mpz_clear(test);
-    mpz_clear(test2);
 }
