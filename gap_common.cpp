@@ -825,6 +825,7 @@ Config Args::argparse(int argc, char* argv[], Pr program) {
         {"save-unknowns",    no_argument,       0,   7  },
         {"rle",              no_argument,       0,  13  },
         {"bitcompressed",    no_argument,       0,  15  },
+        {"uncompressed",     no_argument,       0,  17  },
         {"max-mem",          required_argument, 0,  14  },
 
         {"search-db",        required_argument, 0,   9  },
@@ -966,6 +967,9 @@ Config Args::argparse(int argc, char* argv[], Pr program) {
                 break;
             case 15:
                 config.compression = 2;
+                break;
+            case 17:
+                config.compression = 3;
                 break;
 
             case 14:

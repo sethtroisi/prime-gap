@@ -2319,7 +2319,7 @@ void prime_gap_parallel(struct Config& config) {
         vector<int>    split_locked(NUM_SPLITS, 0);
         vector<size_t> split_progress(NUM_SPLITS, 0);
 
-        #pragma omp parallel for ordered schedule(dynamic, 1) num_threads(THREADS)
+        #pragma omp parallel for num_threads(THREADS)
         for (size_t work_i = 0; work_i < intervals.size() * NUM_SPLITS; work_i++) {
             // Find least finished split (not currently being processed)
             size_t min_p = intervals.size(), max_p = 0, min_index = 0;
