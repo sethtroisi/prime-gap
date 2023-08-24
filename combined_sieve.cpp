@@ -21,6 +21,7 @@
 #include <cstdio>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <sstream>
@@ -66,6 +67,8 @@ using namespace std::chrono;
 // WHEEL should divide config.d
 #define METHOD2_WHEEL_MAX (2*3*5*7)
 
+// Pre-filter m's with many factors after MEDIUM_FACTORS
+#define METHOD2_PRP_TOP_PERCENT 1
 
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config& config);
@@ -98,7 +101,7 @@ int main(int argc, char* argv[]) {
         if (config.sieve_length < 6 * config.p || config.sieve_length > 22 * config.p) {
             int sl_min = ((config.p * 8 - 1) / 500 + 1) * 500;
             int sl_max = ((config.p * 20 - 1) / 500 + 1) * 500;
-            printf("--sieve_length(%d) should be between [%d, %d]\n",
+            printf("--sieve-length(%d) should be between [%d, %d]\n",
                 config.sieve_length, sl_min, sl_max);
             exit(1);
         }
@@ -123,6 +126,11 @@ int main(int argc, char* argv[]) {
                 printf("\nOutput file '%s' already exists\n", fn.c_str());
                 exit(1);
             }
+        }
+
+        if (METHOD2_PRP_TOP_PERCENT <= 0 || METHOD2_PRP_TOP_PERCENT > 100) {
+          printf("\nBAD METHOD2_PRP_TOP_PERCENT=%d\n", METHOD2_PRP_TOP_PERCENT);
+          exit(1);
         }
 
         if (!config.compression && (config.minc * config.sieve_length) > 100'000'000'000L) {
@@ -244,7 +252,7 @@ void set_defaults(struct Config& config) {
         // factors of d are hard because they depend on m*K
         //      some of these m are worse than others so use worst m
 
-        assert( config.p >= 503 );
+        assert( config.p >= 97 ); // Overhead is too high, use a different program
 
         // Search till chance of shorter gap is small.
         {
@@ -821,6 +829,9 @@ class method2_stats {
         double prob_prime = 0;
         uint64_t last_prime = 0;
 
+        // Count over all valid_m intervals of numbers coprime to P=p#.
+        // The theoretical # factors found use this as a base point to help elimates the bias of
+        // of more small factors near multiples of P.
         size_t count_coprime_p = 0;
 };
 
@@ -830,33 +841,6 @@ void method2_increment_print(
         vector<bool> *composite,
         method2_stats &stats,
         const struct Config& config) {
-
-    /**
-     * verification requires count_coprime_to_P#
-     * Require that first call (next_print = 0) processes all primes up to P
-     */
-    if (stats.next_print == 0 && stats.count_coprime_p == 0) {
-        assert(prime == config.p);
-
-        if (stats.thread == 0) {
-            // Other threads don't print details
-
-            if (config.threads > 1 && config.verbose) {
-                printf("WARNING stats aren't synchronized when "
-                       "running with multiple threads(%d)\n", config.threads);
-            }
-
-            // This sligtly duplicates work below, but we don't care.
-            auto   temp = high_resolution_clock::now();
-            for (size_t i = 0; i < valid_ms; i++) {
-                stats.count_coprime_p += std::count(composite[i].begin(), composite[i].end(), false);
-            }
-            double interval_count_time = duration<double>(high_resolution_clock::now() - temp).count();
-            if (config.verbose >= 2) {
-                printf("\t\t counting unknowns takes ~%.1f seconds\n", interval_count_time);
-            }
-        }
-    }
 
     while (prime >= stats.next_print && stats.next_print < stats.last_prime) {
         //printf("\t\tmethod2_increment_print %'ld >= %'ld\n", prime, stats.next_print);
@@ -958,7 +942,7 @@ void method2_increment_print(
                     new_composites);
 
                 if (stats.count_coprime_p && prime > 100000 && prime > config.p) {
-                    // verify total unknowns & interval unknowns
+                    // Heuristically verify total unknowns & interval unknowns
                     const double prob_prime_coprime_P = prob_prime_coprime(config);
 
                     float e_unknowns = stats.count_coprime_p * (prob_prime_coprime_P / prob_prime_after_sieve);
@@ -969,12 +953,12 @@ void method2_increment_print(
                     float error = 100.0 * fabs(e_unknowns - t_total_unknowns) / e_unknowns;
                     float interval_error = 100.0 * fabs(e_new_composites - new_composites) / e_new_composites;
 
-                    if (config.verbose >= 3 || error > 0.1 ) {
-                        printf("\tEstimated %.3g unknowns found %.3g (%.2f%% error)\n",
+                    if (config.verbose >= 3 || error > 0.5 ) {
+                        printf("\tEstimated %.3g unknowns, found %.3g (%.2f%% error)\n",
                             e_unknowns, 1.0f * t_total_unknowns, error);
                     }
-                    if (config.verbose >= 3 || interval_error > 0.3 ) {
-                        printf("\tEstimated %.3g new composites found %.3g (%.2f%% error)\n",
+                    if (config.verbose >= 3 || interval_error > 1 ) {
+                        printf("\tEstimated %.3g new composites, found %.3g (%.2f%% error)\n",
                             e_new_composites, 1.0f * new_composites, interval_error);
                     }
                 }
@@ -1043,12 +1027,12 @@ class Cached {
          * m_reindex[mi] = composite[mii] if coprime
          * -1 if gcd(ms + i, D) > 1
          *
-         * This is potentially very large use is_m_coprime and is_m_coprime2310
+         * This is potentially very large use is_recorded_m and is_m_coprime2310
          * to pre check it's a coprime mi before doing the L3/RAM lookup.
          */
         vector<int32_t> m_reindex;
-        // if gcd(ms + mi, D) = 1
-        vector<bool> is_m_coprime;
+        // if gcd(ms + mi, D) = 1  AND not filtered by PRP_TOP_PERCENT
+        vector<bool> is_recorded_m;
         /**
          * is_m_coprime2310[i] = (i, D') == 1
          * D' has only factors <= 11
@@ -1083,6 +1067,10 @@ class Cached {
         /** is_comprime2310[i] = (i % 2) && (i % 3) && (i % 5) && (i % 7) && (i % 11)*/
         vector<char> is_coprime2310;
 
+        // TODO this will move eventually move into the online small prime routine.
+        // Awkwardly need to store this for stats till after filtered for PRP_TOP_PERCENT.
+        vector<uint16_t> stats_count_coprime_p;
+
 
     Cached(const struct Config& config, const mpz_t &K) {
         const uint32_t P = config.p;
@@ -1098,7 +1086,7 @@ class Cached {
         m_reindex.resize(config.minc, -1);
         {
             auto temp = is_coprime_and_valid_m(config);
-            is_m_coprime = temp.first;
+            is_recorded_m = temp.first;
             valid_mi = temp.second;
 
             for (uint32_t mii = 0; mii < valid_mi.size(); mii++) {
@@ -1107,6 +1095,8 @@ class Cached {
             }
         }
         valid_ms = valid_mi.size();
+
+        stats_count_coprime_p.resize(valid_ms, 0);
 
         is_offset_coprime.resize(SIEVE_INTERVAL, 1);
         x_reindex.resize(SIEVE_INTERVAL, 0);
@@ -1413,7 +1403,7 @@ void save_unknowns_method2(
 method2_stats method2_small_primes(const Config &config, method2_stats &stats,
                           const mpz_t &K,
                           int thread_i,
-                          const Cached &caches,
+                          Cached &caches,
                           const vector<uint32_t> &valid_mi,
                           const uint64_t SMALL_THRESHOLD,
                           vector<bool> *composite) {
@@ -1442,6 +1432,8 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
         // Handle primes up to (and 1 past) stats.next_mult
         std::vector<std::pair<uint32_t, uint32_t>> p_and_r;
 
+        size_t prime_at_start = prime;
+        // NOTE: First interval is [2, next_prime(P)]
         size_t stop = std::min((prime == 0) ? P : temp_stats.next_print, SMALL_THRESHOLD);
         // Verify this interval contains non-zero numbers (requires all threads call method2_print)
         assert(stop >= prime);
@@ -1463,9 +1455,14 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
 
             if (prime >= stop) break;
         }
-        if (!p_and_r.empty() && config.verbose >= 3 && thread_i == 0) {
-            printf("\tmethod2_small_primes | %ld primes [%d, %d] stop: %ld\n\n",
-                p_and_r.size(), p_and_r.front().first, p_and_r.back().first, prime);
+
+        if (thread_i == 0) {
+          if (p_and_r.empty())
+              // Don't continue (even if p_and_r is empty) so that method2_increment_print can run.
+              printf("\tmethod2_small_primes | skipping [%lu, %lu] no coprimes\n", prime_at_start, stop);
+          else if (config.verbose >= 3)
+              printf("\tmethod2_small_primes | %ld primes [%d, %d] stop: %ld\n\n",
+                  p_and_r.size(), p_and_r.front().first, p_and_r.back().first, prime);
         }
 
         for (uint32_t mi : valid_mi) {
@@ -1479,7 +1476,7 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
 #else
                 caches.x_reindex;
 #endif  // METHOD2_WHEEL
-            vector<bool> &composite_mii = composite[mii];
+            auto &composite_mii = composite[mii];
 
             bool centerOdd = ((D & 1) == 0) && (m & 1);
             bool lowIsEven = centerOdd == (SIEVE_LENGTH & 1);
@@ -1538,6 +1535,34 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
             }
         }
 
+
+        /**
+         * verification requires count_coprime_to_P#
+         * Require that first call (next_print = 0) processes all primes up to P
+         */
+        // Handle some prework when prime = P
+        if (stop == P) {
+            assert(stats.next_print == 0);
+
+            uint64_t total_unknowns = 0;
+            auto temp = high_resolution_clock::now();
+            for (uint32_t mi : valid_mi) {
+                int32_t mii = caches.m_reindex[mi];
+                assert(mii >= 0 && (unsigned)mii < caches.valid_ms);
+                uint64_t coprime_p_in_mii = std::count(composite[mii].begin(), composite[mii].end(), false);
+                assert(coprime_p_in_mii <=
+                  std::numeric_limits<decltype(Cached::stats_count_coprime_p)::value_type>::max());
+                caches.stats_count_coprime_p.at(mii) = coprime_p_in_mii;
+                total_unknowns += coprime_p_in_mii;
+                //cout << "[" << mii << "]: " << mi << " " << coprime_p_in_mii << endl;
+            }
+            double interval_count_time = duration<double>(high_resolution_clock::now() - temp).count();
+            if (config.verbose >= 2 && interval_count_time > 1.0) {
+                printf("\t\t counting unknowns took ~%.1f seconds\n\n", interval_count_time);
+            }
+            temp_stats.count_coprime_p += total_unknowns;
+        }
+
         // Don't print final partial interval
         if (prime >= temp_stats.next_print) {
             method2_increment_print(prime, valid_mi.size(), composite, temp_stats, config);
@@ -1550,12 +1575,12 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
         if (thread_i == 0) {
             stats.pi          = temp_stats.pi;
             stats.pi_interval = temp_stats.pi_interval;
-            stats.count_coprime_p = temp_stats.count_coprime_p;
 
             stats.next_print = temp_stats.next_print;
             stats.next_mult = temp_stats.next_mult;
         }
 
+        stats.count_coprime_p += temp_stats.count_coprime_p;
         stats.prime_factors += temp_stats.prime_factors;
         stats.small_prime_factors_interval += temp_stats.small_prime_factors_interval;
         stats.validated_factors += temp_stats.validated_factors;
@@ -1622,14 +1647,14 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
     const int K_odd = mpz_odd_p(K);
 
-    primesieve::iterator iter(SMALL_THRESHOLD+1);
+    primesieve::iterator iter(SMALL_THRESHOLD);
     uint64_t prime = iter.prev_prime();
     assert(prime <= SMALL_THRESHOLD);
     prime = iter.next_prime();
     assert(prime > SMALL_THRESHOLD);
     assert(prime > (2 * SIEVE_LENGTH + 1));
     for (; prime <= MEDIUM_THRESHOLD; prime = iter.next_prime()) {
-        // Only the first thread should
+        // Only the first thread should count primes.
         if (thread_i == 0) {
             stats.pi_interval += 1;
         }
@@ -1678,7 +1703,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                     continue;
 
                 // Wide memory read
-                if (!caches.is_m_coprime[mi])
+                if (!caches.is_recorded_m[mi])
                     continue;
 
                 int32_t mii = caches.m_reindex[mi];
@@ -1873,7 +1898,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                  * Would Filters ~60-80%, only ~10-20% after is_m_coprime2310
                  * Requires a M_inc/8 (a few MB) cache so more likely to spill to L3/RAM
                  */
-                if (!caches.is_m_coprime[mi])
+                if (!caches.is_recorded_m[mi])
                     return;
 
                 // ~99% of factors have been skipped at this point (1 in 80-90 will mark a factor)
@@ -1889,14 +1914,15 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 test_stats.large_prime_factors_interval += 1;
 
                 int32_t mii = caches.m_reindex[mi];
-                assert( mii >= 0 );
-
-                if (use_lock) {
-                    mutex_mi[mii].lock();
-                    composite[mii][xii] = true;
-                    mutex_mi[mii].unlock();
-                } else {
-                    composite[mii][xii] = true;
+                assert( METHOD2_PRP_TOP_PERCENT < 100 || mii >= 0 );
+                if (mii > 0) {
+                  if (use_lock) {
+                      mutex_mi[mii].lock();
+                      composite[mii][xii] = true;
+                      mutex_mi[mii].unlock();
+                  } else {
+                      composite[mii][xii] = true;
+                  }
                 }
 
                 #ifdef GMP_VALIDATE_FACTORS
@@ -1984,6 +2010,73 @@ void method2_large_primes(Config &config, method2_stats &stats,
     }
 }
 
+void method2_filter_m(
+        struct Config& config,
+        method2_stats &stats,
+        Cached &caches,
+        vector<bool> *composite) {
+
+    // TODO this needs to be moved into method2_small_primes
+    // and be done in an online fashion (possibly with memcopy and moving
+    // composites around) so that composites can be allocated to goal_m size but
+    // "represent" the whole valid_ms range.:w
+
+    const size_t valid_ms = caches.valid_ms;
+    size_t goal_m = valid_ms * METHOD2_PRP_TOP_PERCENT / 100;
+    printf("Trimming %'lu m's to around %'lu\n", valid_ms, goal_m);
+    assert(0 <= goal_m && goal_m <= valid_ms);
+
+    // v1 code - Brute force
+    if (1) {
+      vector<uint32_t> per_interval(valid_ms, 0);
+      for (size_t i = 0; i < valid_ms; i++) {
+          per_interval[i] = std::count(composite[i].begin(), composite[i].end(), false);
+      }
+
+      vector<uint32_t> percentile(per_interval);
+      std::sort(percentile.begin(), percentile.end());
+
+      uint32_t breakpoint = percentile[goal_m];
+      if (config.verbose >= 2) {
+          uint32_t median = percentile[valid_ms / 2];
+          printf("With small primes remaining unknowns [%u, %u] median: %u threshold: %u\n",
+            percentile.front(), percentile.back(), median, breakpoint);
+      }
+
+      uint32_t j = 0;
+      for (size_t mii = 0; mii < valid_ms; mii++) {
+          uint32_t mi = caches.valid_mi[mii];
+          uint32_t unknowns = per_interval[mii];
+          if (unknowns <= breakpoint && j < goal_m) {
+            caches.valid_mi[j] = mi;
+            composite[j] = composite[mii];
+            caches.m_reindex[mi] = j;
+            if (config.verbose >= 3) {
+              printf("[%u] for mi[%lu]=%u (%u unknowns)\n", j, mii, mi, per_interval[mii]);
+            }
+            j++;
+          } else {
+            caches.is_recorded_m[mi] = false;
+            caches.m_reindex[mi] = -1;
+            stats.total_unknowns -= unknowns;
+            stats.count_coprime_p -= caches.stats_count_coprime_p[mii];
+          }
+
+          //printf("mi[%lu] = %u | %d -> %d\n", mii, mi, (signed)caches.is_recorded_m[mi], caches.m_reindex[mi]);
+      }
+
+      caches.stats_count_coprime_p.clear();
+
+      // Trim down some arrays (NOTE: this doesn't actually release any buffer)
+      caches.valid_mi.resize(j);
+      caches.valid_ms = caches.valid_mi.size();
+      if (config.verbose >= 1) {
+        printf("Trimmed to %'lu m values to %'u with %'u or fewer unknowns\n\n",
+            valid_ms, j, breakpoint);
+      }
+  }
+}
+
 // Would be nice to pass const but CTRL+C handler changes max_prime
 void prime_gap_parallel(struct Config& config) {
     // Method2
@@ -2023,7 +2116,7 @@ void prime_gap_parallel(struct Config& config) {
     // ----- Allocate memory
 
     // Various pre-calculated arrays of is_coprime arrays
-    const Cached caches(config, K);
+    Cached caches(config, K);
     const size_t valid_ms = caches.valid_ms;
     const uint32_t x_reindex_wheel_size = caches.x_reindex_wheel_size;
 
@@ -2166,13 +2259,16 @@ void prime_gap_parallel(struct Config& config) {
                 stats.current_prob_prime = temp_stats.current_prob_prime;
             }
         }
+
+        if (METHOD2_PRP_TOP_PERCENT < 100) {
+            method2_filter_m(config, stats, caches, composite);
+        }
     } else {
         // Have to do this to make method2_increment_print happy
         method2_increment_print(config.p, valid_ms, composite, stats, config);
 
         // XXX: write a random fraction of composite false (and same below).
     }
-
 
     if (1) { // Medium Primes
         vector<uint32_t> coprime_X_split[THREADS];

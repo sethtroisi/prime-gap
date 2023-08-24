@@ -70,7 +70,7 @@ struct Config {
      *  0: results & final stats
      *  1: stats
      *  2: stats, probs, debug
-     *  3: ???
+     *  3: ??? (require modifying here and recompiling)
      */
     int verbose = 2;
 

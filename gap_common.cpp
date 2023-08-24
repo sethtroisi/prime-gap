@@ -157,6 +157,12 @@ double prp_time_estimate_composite(double K_log, int verbose) {
         + -1.9582e-18 * K_log_2 * K_log_2;
     float t_estimate = std::max(1e-3f, t_estimate_poly);
 
+    // TODO revert
+    if (1) {
+      printf("Skipping prp time estimate\n");
+      return t_estimate;
+    }
+
     if (verbose >= 2) {
         if (t_estimate > 0.3) {
             printf("Estimated secs/PRP: %.1f\n", t_estimate);
@@ -257,7 +263,7 @@ size_t count_coprime_sieve(const struct Config& config) {
 
 
 /**
- * Vector of mi, such that gcd(config.mstart + mi, config.d)
+ * Vector of mi, such that gcd(config.mstart + mi, config.d) == 1
  * Returns a copy, but that "fast" compared to computation
  */
 pair<vector<bool>, vector<uint32_t>> is_coprime_and_valid_m(const struct Config& config) {
