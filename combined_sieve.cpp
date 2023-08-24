@@ -67,9 +67,6 @@ using namespace std::chrono;
 // WHEEL should divide config.d
 #define METHOD2_WHEEL_MAX (2*3*5*7)
 
-// Pre-filter m's with many factors after MEDIUM_FACTORS
-#define METHOD2_PRP_TOP_PERCENT 1
-
 void set_defaults(struct Config& config);
 void prime_gap_search(const struct Config& config);
 void prime_gap_parallel(struct Config& config);
@@ -128,8 +125,8 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        if (METHOD2_PRP_TOP_PERCENT <= 0 || METHOD2_PRP_TOP_PERCENT > 100) {
-          printf("\nBAD METHOD2_PRP_TOP_PERCENT=%d\n", METHOD2_PRP_TOP_PERCENT);
+        if (config.save_percent <= 0 || config.save_percent > 100) {
+          printf("\nsave-percent=%lu out of range [1, 100]\n", config.save_percent);
           exit(1);
         }
 
@@ -1702,10 +1699,11 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                 if (!caches.is_coprime2310[n_mod2310])
                     continue;
 
-                // Wide memory read
+                // Wide memory read O(X000 KB)
                 if (!caches.is_recorded_m[mi])
                     continue;
 
+                // Really wide memory read  O(100 MB)
                 int32_t mii = caches.m_reindex[mi];
                 assert(mii >= 0);
 
@@ -1914,7 +1912,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                 test_stats.large_prime_factors_interval += 1;
 
                 int32_t mii = caches.m_reindex[mi];
-                assert( METHOD2_PRP_TOP_PERCENT < 100 || mii >= 0 );
+                assert( config.save_percent < 100 || mii >= 0 );
                 if (mii > 0) {
                   if (use_lock) {
                       mutex_mi[mii].lock();
@@ -2022,7 +2020,7 @@ void method2_filter_m(
     // "represent" the whole valid_ms range.:w
 
     const size_t valid_ms = caches.valid_ms;
-    size_t goal_m = valid_ms * METHOD2_PRP_TOP_PERCENT / 100;
+    size_t goal_m = valid_ms * config.save_percent / 100;
     printf("Trimming %'lu m's to around %'lu\n", valid_ms, goal_m);
     assert(0 <= goal_m && goal_m <= valid_ms);
 
@@ -2260,7 +2258,7 @@ void prime_gap_parallel(struct Config& config) {
             }
         }
 
-        if (METHOD2_PRP_TOP_PERCENT < 100) {
+        if (config.save_percent < 100) {
             method2_filter_m(config, stats, caches, composite);
         }
     } else {

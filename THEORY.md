@@ -127,6 +127,40 @@ def ExpectedTests(m, K, old_limit, new_limit):
     return 1 / (prob_p * math.exp(GAMMA)) * (1/math.log(old_limit) - 1/math.log(new_limit))
 ```
 
+### Save Percent
+
+m's with a fewer factored numbers tend to continue to have a fewer number of
+factored numbers.
+
+After some point (generally small primes ~ 4 * sieve length) we can filter out
+the worst performing m's. Code is fairly simple (even threaded)
+
+1. Break `m` internal [20k, 50k] into small intervals [20k, 22k), [22k, 24k), [24k, 26k) ...
+2. Do normal one by one small prime work for each interval (using `temp_composite[m][]` space)
+3. Count number of composite (and the inverse unknowns) per `m` interval
+4. Sort by number of composites and save the top X% (1-25%) into `composite[m][]`
+    * NOTE: this is the "local" top X% not the global top X% but in practice it's very similiar
+    * Also store which `m` values are active (`is_m_active`)
+5. Do normal medium and large prime handling (with few m's marked as active)
+    * NOTE: for medium primes we have to check more values (because `m` range is larger)
+    * NOTE: for very large primes still an average of 1 call to `modulo_search`
+
+Talking about 90% filter
+Cons:
+    * 10x more work for small primes
+    * 2-10x more work for medium primes (memory bound question)
+    * Even for very large primes (e.g. 1T) still doing some more work
+    * Need larger `is_m_active` array -> heading out of L3 cache size
+        * 33 bits per m (1 for `is_active` 32 for `reindex`)
+            * 1511! work had m_interval = 800M!
+                * coprime m * 2 * coprime_i = 163M * 2 * 4140 = 180GB!
+                * With wheel down to 28MB
+    * Can more of the work be done later?
+Pros:
+    * Lower unknowns per `m` range!
+        * TODO if 2x slower is it lower @ 500M vs 1B
+    * If really memory bandwidth limitted should be pseudo same speed
+        * if `is_m_active` fits in L3 cache
 
 ### One Sided Tests
 

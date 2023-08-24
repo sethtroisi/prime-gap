@@ -319,6 +319,8 @@ pair<uint64_t, uint64_t> calculate_thresholds_method2(
     float M_PER_P_CROSSOVER = 1.0 * config.minc * sieve_interval / count_coprime_sieve;
     // correct for how much work it takes to skip to next m
     float MEDIUM_MULT = std::max(1.9, 0.65 * log2(M_PER_P_CROSSOVER / count_coprime_sieve));
+    // Attempted correction for save_percent
+    
     uint64_t MEDIUM_CROSSOVER_SEARCH = MEDIUM_MULT * M_PER_P_CROSSOVER;
 
     // XXX: What would it look like to do this more dynamically?
@@ -656,18 +658,24 @@ void Args::show_usage(char* name) {
     cout << "  --max-prime" << endl;
     cout << "    use primes <= max-prime (in millions) for checking composite" << endl;
     cout  << endl;
+    if (strcmp(name, "combined_sieve") == 0) {
+    cout << "  --save-percent" << endl;
+    cout << "    save only the best X percent of m's after small prime filtering [method2 only]" << endl;
+    }
+    cout  << endl;
     cout << "  --save-unknowns" << endl;
     cout << "    save unknowns to a temp file where they are processed in a 2nd pass." << endl;
     cout << "  --rle" << endl;
     cout << "    save in run-length encoded format" << endl;
     cout << "  --bitcompress" << endl;
     cout << "    save in new bitcompressed format" << endl;
-    cout << "  --maxmem <max memory in GB>" << endl;
+    cout << "  --max-mem <max memory in GB>" << endl;
     cout << "    Combined sieve will print a warning if it's likely to use more memory." << endl;
     cout << endl;
     cout << "[OPTIONAL]" << endl;
     cout << "  --search-db" << endl;
     cout << "    Database for this project (Default: '" << defaults.search_db << "')" << endl;
+    // Gap stats only
     cout << "  --prime-gaps-db" << endl;
     cout << "    Prime gap prime gap search db (Default: '" << defaults.gaps_db << "')" << endl;
     cout << endl;
@@ -770,6 +778,8 @@ Config Args::argparse(int argc, char* argv[]) {
         {"threads",          required_argument, 0,  't' },
 
         {"min-merit",        required_argument, 0,   3  },
+
+        {"save-percent",     required_argument, 0,  16  },
 
         {"save",             no_argument,       0,   7  },
         {"save-unknowns",    no_argument,       0,   7  },
@@ -881,6 +891,10 @@ Config Args::argparse(int argc, char* argv[]) {
                 break;
             case 5:
                 config.max_prime = atol(optarg) * 1'000'000;
+                break;
+
+            case 16:
+                config.save_percent = atol(optarg);
                 break;
 
             case 7:

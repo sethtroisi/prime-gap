@@ -49,6 +49,8 @@ struct Config {
     uint32_t sieve_length = 0;
     uint64_t max_prime    = 0;
 
+    uint64_t save_percent = 100;
+
     bool save_unknowns = false;
 
     bool method1 = false;
