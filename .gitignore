@@ -17,6 +17,8 @@ logs/
 data/
 backup/
 done/
+*.bit.txt
+*.rle.txt
 *M.txt
 *M.m1.txt
 *M.*missing.txt
