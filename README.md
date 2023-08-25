@@ -642,6 +642,7 @@ $ python gap_test.py --unknown-filename 907_2190_1_200_s11000_l100M.txt --min-me
   * [ ] can modulo_search (equation 2/3) be modified so that it only returns odd multiples?
   * [ ] Check that correct indexes exist in sql db
   * [ ] Consider new names for prp-top-percent, no-one-side-skip, sieve-length
+  * [ ] Option to only top X percent intervals after small / medium processing
   * [ ] Can I sieve only the low side? and sieve high side on demand or in a 2nd pass (after gap_test)?
 * combined\_sieve.cpp
   * [ ] Better sharing work for medium_primes (or skip unknown counting)

@@ -107,7 +107,7 @@ This hides a number of complexity.
 * `--minc` scaling
   * linearly for small primes and sublinear for large primes (>50x sieve-length).
   * larger values suffer from worse cache performance (or fail to allocate)
-  * optimal value seem to be 50,000 - 400,000 based on P#.
+  * larger is generally better (scales with max-prime) optimal value can be as high as 300,000,000.
 * `--sieve-range`
   * Personal preference but 1-50B is reasonable.
   * Look at output to determine optimal (based on time per PRP test)

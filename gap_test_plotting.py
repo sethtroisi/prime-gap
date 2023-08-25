@@ -259,7 +259,7 @@ def stats_plots(
             # P(gap > min_merit_gap) & Count(gap > min_merit_gap)
             # sorted and unsorted order
             axis.set_xlabel(" # of m's tested")
-            axis.set_ylabel(f'Sum(P(gap {label})')
+            axis.set_ylabel(f'Sum(P(gap | {label}))')
 
             # This assumes that experimental_gap is indexed the same as prob_data
             # This is not true unless --prp-top-percent is 100

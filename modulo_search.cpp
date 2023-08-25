@@ -133,6 +133,7 @@ uint64_t _modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_
         return _modulo_search_euclid_small(p, a, l, r);
     }
 
+    // Could try to break to 32 bit version every x loops
     static thread_local uint64_t stack[4 * 64];
 
     uint64_t stack_i = 0;
@@ -164,7 +165,7 @@ uint64_t _modulo_search_euclid_stack(uint64_t p, uint64_t a, uint64_t l, uint64_
         // reduce to simpler problem
         uint64_t div = p / a;
         uint64_t rem = p - div * a; // p % a
-        uint64_t new_a = a - rem; // a - (p % a);
+        uint64_t new_a = a - rem;   // a - (p % a);
 
         stack[stack_i++] = rem;
         stack[stack_i++] = div;

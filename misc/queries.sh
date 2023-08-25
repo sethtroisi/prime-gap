@@ -31,9 +31,9 @@ sqlite3 gaps.db 'SELECT (150000/2 - COUNT(*)) ||" Missing Below 150,000" FROM ga
 
 echo -e "\n\n"
 
-sqlite3 gaps.db 'SELECT * FROM gaps WHERE gapsize in (42752, 78542, 96638, 98002, 98122, 98818, 99418) ORDER by year DESC LIMIT 5'
+sqlite3 gaps.db 'SELECT * FROM gaps WHERE gapsize in (42752, 98002) ORDER by year DESC LIMIT 5'
 echo "..."
-sqlite3 gaps.db 'SELECT COUNT(*)||" Remaining" FROM gaps WHERE gapsize in (42752, 78542, 96638, 98002, 98122, 98818, 99418) AND year < 2020'
+sqlite3 gaps.db 'SELECT COUNT(*)||" Remaining" FROM gaps WHERE gapsize in (42752, 98002) AND year < 2020'
 
 echo -e "\n\n"
 

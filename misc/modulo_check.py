@@ -12,6 +12,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+"""
+It's a goal to make a version that returns only odd results
+
+def modulo_search_odd_only(p, a, l, r):
+    if l == 0:
+        return 0   # 5a
+
+    assert a <= p, "should implement 5b"
+
+    assert l < r, (p, a, l, r)
+    delta = r - l
+
+    l_div, l_mod = divmod(l - 1, a)
+    l_mod += 1
+    r_mod = l_mod + delta
+    if r_mod >= a:
+        return l_div + 1    # 5c
+
+    if 2*a > p:
+        # 5d
+        return modulo_search(p, p - a, p - r, p - l)
+
+    new_a = a - (p % a)
+    assert 0 <= new_a < a, (a, new_a)
+    k = modulo_search_odd_only(a, new_a, l_mod, r_mod)
+
+    tl = k * p + l
+    mult = (tl - 1) // a + 1
+    return mult
+
+k = modulo_search_odd_only(p=10007, a=123, l=1, r=100)
+#print(k)
+#print(k * 123, k * 123 % 10007)
+#exit()
+"""
+
+
 def modulo_search(p, a, l, r):
     if l == 0:
         return 0
@@ -104,7 +142,6 @@ def main():
     print()
     print(s, "vs 780012")
 
-    '''
     import time
     primes = list(sympy.primerange(10 ** 4, 2 * 10 ** 6))
     s = 0
@@ -119,7 +156,6 @@ def main():
     t2 = time.time()
 
     print (f"diff: {s} | {t1 - t0:.3f} vs {t2 - t1:.3f}")
-    '''
 
 
 

@@ -138,7 +138,7 @@ Calculate `new_prob_record` taking into account `prev_prime` result.
 
 Simple math says `prob_record` takes 2 "time" to test, if `new_prob_record < 0.5 * prob_record` then skip.
 
-Better analysis says with skipping test more than `prob_record/2` each "time". Let `prob_processed / one sided test` be the average of (`prob_record - new_prob_record` if skip else `prob_record`/2). This is the rate (including skips) `prob_record` is tested at. If `new_prob_record` is less then skip.
+Better analysis says with skipping test more than `prob_record/2` each "time". Let `prob_processed / one sided test` be the average of (`prob_record - new_prob_record` if skip else `prob_record/2`). This is the rate (including skips) `prob_record` is tested at. If `new_prob_record` is less then skip.
 
 In practice `one side skips` is often as high as 90% and the prob record rate is `0.8 * prob / side` for a `0.8 / 0.5 =` 60% speedup!
 
