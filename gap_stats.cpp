@@ -224,7 +224,7 @@ vector<float> get_record_gaps(const struct Config& config) {
         char *test;
         int64_t gap = strtol(argv[0], &test, 10);
         assert(test != argv[0] && *test == '\0');
-        assert(gap > 0 && gap < 10'000'000);
+        assert(gap > 0 && gap < 30'000'000);
 
         auto *recs_vec = static_cast<vector<float>*>(recs);
         if ((size_t)gap < recs_vec->size()) {
