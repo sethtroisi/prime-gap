@@ -120,8 +120,8 @@ def determine_prev_prime(m, str_n, K, unknowns, SL, primes, remainder):
 def determine_next_prime_large(m, K, SL):
     # XXX: PFGW fallback
 
-    # XXX: parse to version and verify > 6.2.99
-    assert gmpy2.mp_version() == 'GMP 6.2.99', gmpy2.mp_version()
+    # XXX: parse to version and verify >= 6.2.99
+    assert gmpy2.mp_version() >= 'GMP 6.2.99', gmpy2.mp_version()
 
     center = m * K
     # Double checks center + SL.
