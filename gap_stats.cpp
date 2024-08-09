@@ -52,7 +52,7 @@ const float    GAP_INF = std::numeric_limits<float>::max();   // log(starting_pr
 
 // Generated from https://primegap-list-project.github.io/lists/missing-gaps/
 // Range of missing gap to search, values are loaded from gaps_db.
-const uint32_t MISSING_GAPS_MIN  = 113326;
+const uint32_t MISSING_GAPS_MIN  = 122290;
 
 
 class ProbNth {

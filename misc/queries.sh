@@ -26,8 +26,8 @@ sqlite3 gaps.db -header -separator $'\t' 'SELECT year,COUNT(*),SUM(merit > 34),R
 
 echo -e "\n"
 
-sqlite3 gaps.db 'SELECT (125000/2 - COUNT(*)) ||" Missing Below 125,000" FROM gaps WHERE gapsize <= 125000'
-sqlite3 gaps.db 'SELECT (150000/2 - COUNT(*)) ||" Missing Below 150,000" FROM gaps WHERE gapsize <= 150000'
+sqlite3 gaps.db 'SELECT (125000/2 + 1 - COUNT(*)) ||" Missing Below 125,000" FROM gaps WHERE gapsize <= 125000'
+sqlite3 gaps.db 'SELECT (150000/2 + 1 - COUNT(*)) ||" Missing Below 150,000" FROM gaps WHERE gapsize <= 150000'
 
 echo -e "\n\n"
 
