@@ -821,6 +821,9 @@ class method2_stats {
         uint64_t last_prime = 0;
 
         size_t count_coprime_p = 0;
+
+        // Used as a sentinel in method2_large_primes
+        bool interval_finished = 0;
 };
 
 void method2_increment_print(
@@ -1824,8 +1827,6 @@ void method2_large_primes(Config &config, method2_stats &stats,
 
         uint64_t first = interval.first;
         uint64_t end = interval.second;
-        // Else it's possible test_stats.pi_interval == 0 below
-        assert(first + 1000 < end);
 
 
         if (g_control_c) {
@@ -1843,6 +1844,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
 
         // Store sentinal for now
         method2_stats test_stats;
+        test_stats.interval_finished = false;
         #pragma omp critical
         stats_to_process[end] = test_stats;
 
@@ -1937,11 +1939,11 @@ void method2_large_primes(Config &config, method2_stats &stats,
         // Normally this is inside the loop but not anymore
         #pragma omp critical
         {
-            assert(test_stats.pi_interval > 0);  // Would cause infinite loop below.
+            test_stats.interval_finished = true;
             stats_to_process[end] = test_stats;
             if (config.verbose >= 3) {
                 size_t queued = 0;
-                for(auto&& kv : stats_to_process) queued += kv.second.pi_interval > 0;
+                for(auto&& kv : stats_to_process) queued += kv.second.interval_finished;
                 printf("\tmethod2_large_primes(%d) finished [%'ld, %'ld] (%ld in queue)\n",
                         omp_get_thread_num(), first, end, queued);
             }
@@ -1958,7 +1960,7 @@ void method2_large_primes(Config &config, method2_stats &stats,
                             min_end, temp.pi_interval,
                             last_processed, stats.next_print);
                 }
-                if (temp.pi_interval > 0) {
+                if (temp.interval_finished) {
                     // Stats ready, can process them
                     stats_to_process.erase(min_end);
 
