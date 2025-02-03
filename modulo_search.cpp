@@ -375,3 +375,41 @@ void modulo_search_euclid_all_large(
     }
 }
 
+/* Used when (M + max_mi) * p greater than uint64 */
+void modulo_search_euclid_all_large_next_only(
+        uint64_t M, uint32_t max_mi, uint64_t SL,
+        uint64_t prime, uint64_t base_r,
+        std::function<void (uint32_t, uint64_t)> lambda) {
+
+    uint64_t mi = 0;
+    uint64_t modulo = ((__int128) base_r * M + SL) % prime;
+    uint64_t initial_modulo = modulo;
+    while (true) {
+        if ( modulo <= SL ) {
+            if (mi >= max_mi)
+                return;
+
+            lambda(mi, modulo);
+            mi += 1;
+
+            // TODO: test removing this, should be faster
+            if (mi >= max_mi) return;
+
+            modulo += base_r;
+            if (modulo >= prime) modulo -= prime;
+            continue;
+        }
+
+        uint64_t low  = prime - modulo;
+        uint64_t high = low + SL;
+
+        mi += _modulo_search_euclid_stack(prime, base_r, low, high);
+        if (mi >= max_mi) return;
+
+        __int128 mult = (__int128) base_r * mi + initial_modulo;
+        modulo = mult % prime;
+
+        assert( modulo <= SL );
+    }
+}
+

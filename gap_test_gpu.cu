@@ -69,8 +69,8 @@ using namespace std::chrono;
  *  ???4096,    2048,  4,  16, 1
  *
  */
-const size_t BATCH_GPU = 2*8192;
-const size_t SEQUENTIAL_IN_BATCH = 1;
+const size_t BATCH_GPU = 4096 ; //2*8192;
+const size_t SEQUENTIAL_IN_BATCH = 2;
 const size_t BATCHED_M = 2 * BATCH_GPU * 120 / 100 / SEQUENTIAL_IN_BATCH;  // 10% extra
 
 /**

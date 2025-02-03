@@ -58,3 +58,8 @@ void modulo_search_euclid_all_large(
         uint64_t M, uint32_t max_mi, uint64_t SL,
         uint64_t prime, uint64_t base_r,
         std::function<void (uint32_t, uint64_t)> lambda);
+
+void modulo_search_euclid_all_large_next_only(
+        uint64_t M, uint32_t max_mi, uint64_t SL,
+        uint64_t prime, uint64_t base_r,
+        std::function<void (uint32_t, uint64_t)> lambda);
