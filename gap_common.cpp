@@ -85,7 +85,7 @@ static void assert_file_exists(string path) {
 bool has_prev_prime_gmp() {
     return (
         (__GNU_MP_VERSION > 6) ||
-        (__GNU_MP_VERSION == 6 && __GNU_MP_VERSION_MINOR > 3) ||
+        (__GNU_MP_VERSION == 6 && __GNU_MP_VERSION_MINOR >= 3) ||
         (__GNU_MP_VERSION == 6 && __GNU_MP_VERSION_MINOR == 2 && __GNU_MP_VERSION_PATCHLEVEL == 99)
     );
 }

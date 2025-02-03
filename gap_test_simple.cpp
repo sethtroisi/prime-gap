@@ -53,6 +53,7 @@ int main(int argc, char* argv[]) {
     }
 
     if( !has_prev_prime_gmp() ) {
+        cout << "Error: no mpz_prevprime!" << endl;
         cout << "See Notes in README.md for instructions on using dev GMPlib" << endl;
         return 1;
     }
