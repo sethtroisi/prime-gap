@@ -69,7 +69,7 @@ using namespace std::chrono;
  *  ???4096,    2048,  4,  16, 1
  *
  */
-const size_t BATCH_GPU = 4096 ; //2*8192;
+const size_t BATCH_GPU = 1024; //2*8192;
 const size_t SEQUENTIAL_IN_BATCH = 2;
 const size_t BATCHED_M = 2 * BATCH_GPU * 120 / 100 / SEQUENTIAL_IN_BATCH;  // 10% extra
 
@@ -77,7 +77,7 @@ const size_t BATCHED_M = 2 * BATCH_GPU * 120 / 100 / SEQUENTIAL_IN_BATCH;  // 10
  * Originally 8 which has highest throughput but only if we have LOTS of instances
  * this helps reduce the number of parallel instances needed
  */
-const int THREADS_PER_INSTANCE = 8;
+const int THREADS_PER_INSTANCE = 16;
 const int ROUNDS = 1;
 
 //************************************************************************
@@ -157,8 +157,6 @@ class GPUBatch {
         // index into 'processing' (DataM)
         vector<int64_t> data_i;
 
-        // if this is p_i or n_i
-        vector<int> p_or_n;
         vector<int> unknown_i;
 
         GPUBatch(size_t n) {
@@ -166,6 +164,7 @@ class GPUBatch {
 
             z_array = (mpz_t *) malloc(n * sizeof(mpz_t));
             for (size_t i = 0; i < n; i++) {
+                // MAYBE FIXES MY STALL ISSUE?
                 mpz_init(z_array[i]);
                 z.push_back(&z_array[i]);
             }
@@ -174,7 +173,6 @@ class GPUBatch {
             result.resize(n, -1);
 
             data_i.resize(n, -1);
-            p_or_n.resize(n, -1);
             unknown_i.resize(n, -1);
         }
 
@@ -227,7 +225,7 @@ vector<GPUBatch> batches = {{BATCH_GPU}, {BATCH_GPU}};
 
 std::mutex overflow_mtx;
 std::condition_variable overflow_cv;
-vector<DataM*> overflowed;
+vector<std::shared_ptr<DataM>> overflowed;
 
 void run_gpu_thread(const struct Config config) {
     pthread_setname_np(pthread_self(), "RUN_GPU_THREAD");
@@ -242,8 +240,17 @@ void run_gpu_thread(const struct Config config) {
         bool no_batch = true;
         for (GPUBatch& batch : batches) {
             if (batch.state == GPUBatch::State::READY) {
-                if (batch.i != BATCH_GPU)
-                    printf("Partial batch %d/%ld\n", batch.i, BATCH_GPU);
+                if (batch.i != BATCH_GPU) {
+                    size_t test_active = 0;
+                    for (size_t gpu_i = 0; gpu_i < BATCH_GPU; gpu_i++) {
+                        test_active += batch.active[gpu_i];
+                        if (!batch.active[gpu_i]) {
+                            // This prevents the GPU from stalling if z was never initalized.
+                            mpz_set_ui(*batch.z[gpu_i], 7);
+                        }
+                    }
+                    printf("Partial batch %d/%ld actual: %lu\n", batch.i, BATCH_GPU, test_active);
+                }
                 // Run batch on GPU and wait for results to be set
                 runner.run_test(batch.z, batch.result);
                 batch.state = GPUBatch::State::RESULT_WRITTEN;
@@ -285,18 +292,6 @@ void run_overflow_thread(const struct Config config) {
             // NOTE: Overhead to doing this while GPU waits seems small (<1% of candidates)
             // But is actually A LOT because 40x slower. Becomes ~20-40% overhead quickly.
 
-            if (interval.prev_p == -1) {
-                assert(interval.p_tests > 0);
-
-                //cout << "gap_out_of_sieve_prev m=" << interval.m << endl;
-                mpz_sub_ui(prime_test, interval.center, config.sieve_length);
-                mpz_prevprime(prime_test, prime_test);
-                mpz_sub(prime_test, interval.center, prime_test);
-
-                interval.prev_p = mpz_get_ui(prime_test);
-                interval.p_found = true;
-                interval.overflow = 0;
-            }
             if (interval.next_p == -1) {
                 assert(interval.n_tests > 0);
 
@@ -306,9 +301,25 @@ void run_overflow_thread(const struct Config config) {
                 mpz_sub(prime_test, prime_test, interval.center);
 
                 interval.next_p = mpz_get_ui(prime_test);
+                //cout << "gap_out_of_sieve_next m=" << interval.m << " -> " << interval.next_p << endl;
                 interval.n_found = true;
                 interval.overflow = 0;
             }
+            if (interval.prev_p == -1) {
+                // It took two years to mpz_prevprime into gmp.
+                // I'm so proud and excited to get to use it here.
+
+                assert(interval.p_tests == 0);
+                //cout << "gap_out_of_sieve_prev m=" << interval.m << endl;
+                mpz_prevprime(prime_test, interval.center);
+                mpz_sub(prime_test, interval.center, prime_test);
+
+                interval.prev_p = mpz_get_ui(prime_test);
+                //cout << "gap_out_of_sieve_prev m=" << interval.m << " -> " << interval.prev_p << endl;
+                interval.p_found = true;
+                interval.overflow = 0;
+            }
+
             // Mark interval as finished processing
             // NOTE: don't mark as READY or race_condition can happen in load
             interval.state = DataM::State::OVERFLOW_DONE;
@@ -333,7 +344,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
     // Used for various stats
     StatsCounters stats(high_resolution_clock::now());
 
-    std::unordered_map<int64_t, DataM> processing;
+    std::unordered_map<int64_t, std::shared_ptr<DataM>> processing;
 
     const uint64_t P = config.p;
     const uint64_t D = config.d;
@@ -408,16 +419,16 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     // Can skip if m < M_RESUME without parsing line here
                     if (m < config.mskip) continue;
 
-                    DataM test(m);
+                    auto test = std::make_shared<DataM>(m);
 
                     uint64_t m_parsed = parse_unknown_line(
-                        config, helper, m, iss_line, test.unknowns[0], test.unknowns[1]);
+                        config, helper, m, iss_line, test->unknowns[0], test->unknowns[1]);
                     assert(m_parsed == (uint64_t) m);
 
-                    mpz_init(test.center);
-                    mpz_mul_ui(test.center, K, test.m);
+                    mpz_init(test->center);
+                    mpz_mul_ui(test->center, K, test->m);
 
-                    processing[test.m] = std::move(test);
+                    processing[test->m] = test;
                 }
 
                 // Grap some entries from each item in M
@@ -429,8 +440,8 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     std::fill_n(batch.result.begin(), BATCH_GPU, -1);
 
                     for (auto& pair : processing) {
-                        auto& interval = pair.second;
-                        if (interval.state != DataM::State::READY) {
+                        auto& interval = *pair.second;
+                        if (interval.state != DataM::State::READY or interval.overflow) {
                             // Already part of some other batch
                             continue;
                         }
@@ -441,29 +452,16 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                             int gpu_i = batch.i;  // [GPU] batch index
                             batch.data_i[gpu_i] = interval.m;  // [Data] index for GPU Batch
 
-                            if (!interval.p_found) {
-                                if (interval.p_tests < interval.unknowns[0].size()) {
-                                    batch.p_or_n[gpu_i] = 0;
-                                    mpz_sub_ui(*batch.z[gpu_i], interval.center, interval.unknowns[0][interval.p_tests]);
-                                    batch.unknown_i[gpu_i] = interval.p_tests++;
-                                } else {
-                                    // Haven't found previous prime, but run out of unknowns to test
-                                    interval.prev_p = -1;
-                                    interval.overflow = 1; // Indicates prev side has overflowed unknowns
-                                    break;
-                                }
+                            // One sided only runs positive side.
+                            assert(!interval.n_found);
+                            if (interval.n_tests < interval.unknowns[1].size()) {
+                                mpz_add_ui(*batch.z[gpu_i], interval.center, interval.unknowns[1][interval.n_tests]);
+                                batch.unknown_i[gpu_i] = interval.n_tests++;
                             } else {
-                                assert(!interval.n_found);
-                                if (interval.n_tests < interval.unknowns[1].size()) {
-                                    batch.p_or_n[gpu_i] = 1;
-                                    mpz_add_ui(*batch.z[gpu_i], interval.center, interval.unknowns[1][interval.n_tests]);
-                                    batch.unknown_i[gpu_i] = interval.n_tests++;
-                                } else {
-                                    // Haven't found next prime, but run out of unknowns to test
-                                    interval.next_p = -1;
-                                    interval.overflow = 1; // Indicates next side has overflowed unknowns
-                                    break;
-                                }
+                                // Haven't found next prime, but run out of unknowns to test
+                                interval.next_p = -1;
+                                interval.overflow = 1; // Indicates next side has overflowed unknowns
+                                break;
                             }
 
                             //gmp_printf("batch[%d] = %d,%d = %d | %Zd\n", gpu_i, i, j, interval.m, *batch.z[gpu_i]);
@@ -495,7 +493,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                         // Verify GPU really did write the result
                         assert (batch.result[i] == 0 || batch.result[i] == 1);
 
-                        DataM &interval = processing.at(batch.data_i[i]);
+                        DataM &interval = *processing.at(batch.data_i[i]);
                         // Mark interval as being ready again
                         interval.state = DataM::State::READY;
 
@@ -504,36 +502,19 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                             interval.overflow = 0;
 
                             int offset_i = batch.unknown_i[i];
-                            if (batch.p_or_n[i] == 0) {
-                                if (interval.p_found) {
-                                    /*
-                                    cout << "Found two previous primes for m=" << interval.m << endl;
-                                    cout << "\t" << interval.prev_p << " vs "
-                                         << interval.unknowns[0][offset_i] << "(" << offset_i << ")" << endl;
-                                    */
-                                    continue;
-                                }
-
-                                // prev_prime found
-                                assert(interval.p_tests > 0 );
-                                interval.p_found = true;
-                                interval.prev_p = interval.unknowns[0][offset_i];
-                            } else {
-                                if (interval.n_found) {
-                                    /*
-                                    cout << "Found two next primes for m=" << interval.m << endl;
-                                    cout << "\t" << interval.next_p << " vs "
-                                         << interval.unknowns[1][offset_i] << "(" << offset_i << ")" << endl;
-                                    */
-                                    continue;
-                                }
-
-                                // next_prime found (and done)
-                                assert(interval.p_found );
-                                assert(interval.n_tests > 0 );
-                                interval.n_found = true;
-                                interval.next_p = interval.unknowns[1][offset_i];
+                            if (interval.n_found) {
+                                /*
+                                cout << "Found two next primes for m=" << interval.m << endl;
+                                cout << "\t" << interval.next_p << " vs "
+                                     << interval.unknowns[1][offset_i] << "(" << offset_i << ")" << endl;
+                                */
+                                continue;
                             }
+
+                            // next_prime found (and done)
+                            assert(interval.n_tests > 0 );
+                            interval.n_found = true;
+                            interval.next_p = interval.unknowns[1][offset_i];
                         }
                     }
                 }
@@ -544,22 +525,26 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     {
                         bool pushed_to_overflow = false;
                         for (auto& pair : processing) {
-                            auto& interval = pair.second;
+                            auto& interval = *pair.second;
                             if (interval.overflow && interval.state == DataM::State::READY) {
-                                if (interval.prev_p == -1) {
-                                    assert(interval.p_tests > 0);
-                                    stats.s_gap_out_of_sieve_prev += 1;
-                                }
                                 if (interval.next_p == -1) {
-                                    assert(interval.p_tests > 0);
+                                    assert(interval.n_tests > 0);
                                     stats.s_gap_out_of_sieve_next += 1;
+                                }
+
+                                if (interval.prev_p == -1) {
+                                    assert(interval.n_found);
+                                    stats.s_gap_out_of_sieve_prev += 1;
                                 }
 
                                 // Push to overflow and wake up that thread
                                 interval.state = DataM::State::RUNNING;
                                 {
                                     std::unique_lock<std::mutex> lock(overflow_mtx);
-                                    overflowed.push_back(&interval);
+                                    // TODO I THINK THERE'S BAD WRITES IF OVERFLOWED CHANGES POINTS AND STUFF
+                                    // MAYBE I CAN MAKE SHARED POINTERS OR SOMETHING
+                                    // OR I CAN PUSH TO A DIFFERENT QUEUE TBD NOT SURE
+                                    overflowed.push_back(pair.second);
                                     pushed_to_overflow = true;
                                 }
                             }
@@ -573,7 +558,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     {
                         // Update any items finished in overflow as ready to be loaded into batches again
                         for (auto& pair : processing) {
-                            auto& interval = pair.second;
+                            auto& interval = *pair.second;
                             if (interval.state == DataM::State::OVERFLOW_DONE) {
                                 interval.state = DataM::State::READY;
                             }
@@ -583,16 +568,16 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     // Ugly code that allows for remove during iteration
                     auto it = processing.begin();
                     while (it != processing.end()) {
-                        auto& interval = it->second;
+                        auto& interval = *it->second;
 
                         int prev_p = interval.prev_p;
                         int next_p = interval.next_p;
 
-                        // Potentially do Side-Skip if prev_p is not very large.
-                        // Only consider if prev_p just found (p_found, n_test == 0)
-                        if (interval.p_found && interval.n_tests == 0 && !interval.n_found) {
+                        // Potentially do Side-Skip if next_p is not very large.
+                        // Only consider if next_p just found.
+                        if (interval.n_found && interval.prev_p == 0 && !interval.p_found) {
                             // TODO improve this with constant and logging
-                            float prev_merit = prev_p / (K_log + log(interval.m));
+                            float next_merit = next_p / (K_log + log(interval.m));
                             /**
                              * TODO better math
                              * With Y = 24
@@ -603,19 +588,27 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                              */
                             float MIN_MERIT_TO_CONTINUE = min_merit / 2 - 2;
 
-                            if (prev_merit < MIN_MERIT_TO_CONTINUE) {
+                            if (next_merit < MIN_MERIT_TO_CONTINUE) {
                                 stats.s_skips_after_one_side += 1;
 
                                 bool is_last = (mi >= M_inc) && processing.size() == 1;
                                 stats.process_results(config, interval.m, is_last,
                                     interval.unknowns[0].size(), interval.unknowns[1].size(),
                                     prev_p, next_p,
-                                    interval.p_tests, interval.n_tests, prev_merit);
+                                    interval.p_tests, interval.n_tests, next_merit);
 
                                 mpz_clear(interval.center);
                                 it = processing.erase(it);  // Erase this element
                                 continue;
                             }
+
+                            //cout << "Queued prev_p for check " << interval.m << endl;
+
+                            // Mark this for overflow
+                            // TODO not clear if it's bad that not pushed to overflow here.
+                            interval.prev_p = -1;
+                            interval.overflow = 1; // Indicates a side has overflowed
+                            continue;
                         }
 
                         if (!interval.p_found || !interval.n_found) {

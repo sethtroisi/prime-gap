@@ -348,6 +348,7 @@ class test_runner_t {
           }
 
           // TODO handle when there are zeros in results more gracefully
+          // TODO handle when there are zeros in tests more gracefully (e.g. DON'T HANG)
 
           for (size_t i = 0; i < tests.size(); i++) {
              from_mpz(*tests[i], instances[i].candidate._limbs, params::BITS/32);
