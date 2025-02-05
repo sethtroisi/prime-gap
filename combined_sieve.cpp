@@ -51,7 +51,8 @@ using namespace std::chrono;
  *
  * GMP_VALIDATE_LARGE_FACTORS only validates the rarer 60+ bit factors
  */
-#define GMP_VALIDATE_FACTORS
+//#define GMP_VALIDATE_FACTORS
+#define GMP_VALIDATE_LARGE_FACTORS
 
 // Compresses composite by 50-80%,
 // Might make large prime faster but never makes sense because
@@ -977,11 +978,7 @@ void save_unknowns_method2(
         // d = 0 yields "|
         for (int d = 0; d <= 1; d++) {
             if (d == 0) {
-                line << "|";
-                if (config.compression == 1) {
-                    line << " ";
-                }
-                line << " ";
+                line << "|  ";
                 header << "-0 ";
                 continue;
             }
@@ -993,7 +990,7 @@ void save_unknowns_method2(
             if (config.compression == 1) {
                 // RLE
                 line << " ";
-                int last = SL;
+                int last = 0;
 
                 for (int x : caches.coprime_X) {
                     if (!comp[x_reindex_m[x]]) {
@@ -1373,6 +1370,14 @@ void method2_large_primes(Config &config, method2_stats &stats,
     assert(METHOD2_MUTEX_SHIFT >= 0 && METHOD2_MUTEX_SHIFT < 10);
     vector<mutex> mutex_mi((caches.valid_ms >> METHOD2_MUTEX_SHIFT) + 1);
 
+#if defined GMP_VALIDATE_LARGE_FACTORS && !defined GMP_VALIDATE_FACTORS
+    const uint64_t M_end = M_start + M_inc;
+    const uint64_t LARGE_PRIME_THRESHOLD = (1LL << 55) / M_end;
+    if (LARGE_PRIME_THRESHOLD < LAST_PRIME && config.verbose >= 1) {
+        printf("validating factors from primes > %ld\n", LARGE_PRIME_THRESHOLD);
+    }
+#endif
+
     const auto intervals = split_prime_range_to_intervals(1, MEDIUM_THRESHOLD, LAST_PRIME);
     if (config.verbose >= 2) {
         printf("\tmethod2_large_primes %ld intervals\n\n", intervals.size());
@@ -1655,14 +1660,6 @@ void prime_gap_parallel(struct Config& config) {
     assert( SMALL_THRESHOLD >= SIEVE_LENGTH );
     assert( MEDIUM_THRESHOLD >= SMALL_THRESHOLD );
     assert( MEDIUM_THRESHOLD <= config.max_prime );
-
-#if defined GMP_VALIDATE_LARGE_FACTORS && !defined GMP_VALIDATE_FACTORS
-    const uint64_t M_end = M_start + M_inc;
-    const uint64_t LARGE_PRIME_THRESHOLD = (1LL << 55) / M_end;
-    if (LARGE_PRIME_THRESHOLD < LAST_PRIME && config.verbose >= 1) {
-        printf("validating factors from primes > %ld\n", LARGE_PRIME_THRESHOLD);
-    }
-#endif
 
     // this controls how many mii (1 << SHIFT) share a mutex
     const uint8_t METHOD2_MUTEX_SHIFT = (THREADS * 1'000'000ul) < valid_ms ? 8 : 1;

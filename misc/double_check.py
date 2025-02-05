@@ -77,7 +77,8 @@ def get_test_offsets(args, m, K, SL, boring_composites, unknowns, small_primes):
     trivial = 0
     xs = []
     while len(xs) < args.count:
-        x = random.choice(range(-SL, SL + -1))
+        #x = random.choice(range(-SL, SL + 1))
+        x = random.choice(range(0, SL + 1))
         if x in boring_composites:
             continue
 
@@ -131,7 +132,7 @@ def double_check(args):
 
 
     # share a factor with K
-    boring_composites = {i for i in range(0, SL) if gmpy2.gcd(K, i) > 1}
+    boring_composites = {i for i in range(0, SL+1) if gmpy2.gcd(K, i) > 1}
     boring_composites.update({-i for i in boring_composites})
 
     # Skipped numbers with trivial factor (<= small_primes)
@@ -180,7 +181,7 @@ def double_check(args):
 
         # Check trivial composites not included
         z = unknowns.intersection(boring_composites)
-        assert not z, (len(z), min(z))
+        assert not z, (m, len(z), min(z))
 
         str_start = f"{m} * {P}# / {D}"
         if args.verbose >= 1:

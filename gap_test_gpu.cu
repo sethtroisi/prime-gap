@@ -71,7 +71,7 @@ using namespace std::chrono;
  */
 const size_t BATCH_GPU = 1024; //2*8192;
 const size_t SEQUENTIAL_IN_BATCH = 2;
-const size_t BATCHED_M = 2 * BATCH_GPU * 120 / 100 / SEQUENTIAL_IN_BATCH;  // 10% extra
+const size_t BATCHED_M = 2 * BATCH_GPU * 140 / 100 / SEQUENTIAL_IN_BATCH;  // 20% extra
 
 /**
  * Originally 8 which has highest throughput but only if we have LOTS of instances
@@ -241,15 +241,13 @@ void run_gpu_thread(const struct Config config) {
         for (GPUBatch& batch : batches) {
             if (batch.state == GPUBatch::State::READY) {
                 if (batch.i != BATCH_GPU) {
-                    size_t test_active = 0;
                     for (size_t gpu_i = 0; gpu_i < BATCH_GPU; gpu_i++) {
-                        test_active += batch.active[gpu_i];
                         if (!batch.active[gpu_i]) {
                             // This prevents the GPU from stalling if z was never initalized.
                             mpz_set_ui(*batch.z[gpu_i], 7);
                         }
                     }
-                    printf("Partial batch %d/%ld actual: %lu\n", batch.i, BATCH_GPU, test_active);
+                    printf("Partial batch %d/%ld\n", batch.i, BATCH_GPU);
                 }
                 // Run batch on GPU and wait for results to be set
                 runner.run_test(batch.z, batch.result);
@@ -261,9 +259,9 @@ void run_gpu_thread(const struct Config config) {
         if (no_batch) {
             // Waiting doesn't count till 1st batch is ready
             if (config.verbose >= 0 && processed_batches > 0) {
-                no_batch_count_ms += 100;
-                printf("Waiting on batch%ld => %.1f seconds\n",
-                        no_batch_count_ms / 100, no_batch_count_ms / 1000.0);
+                no_batch_count_ms += 250;
+                printf("No results ready for batch %ld. Total wait %.1f seconds\n",
+                        processed_batches, no_batch_count_ms / 1000.0);
             }
             usleep(250000); // 250ms
         }
@@ -431,6 +429,9 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     processing[test->m] = test;
                 }
 
+                // TODO trying to understand partial loads
+                size_t count_overflow = 0;
+
                 // Grap some entries from each item in M
                 {
                     batch.i = 0;
@@ -441,7 +442,8 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
 
                     for (auto& pair : processing) {
                         auto& interval = *pair.second;
-                        if (interval.state != DataM::State::READY or interval.overflow) {
+                        if (interval.state != DataM::State::READY || interval.overflow) {
+                            count_overflow += interval.overflow;
                             // Already part of some other batch
                             continue;
                         }
@@ -475,7 +477,10 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
 
                     // Every batch should be full unless we are almost done
                     // technically if many overflowed results this could not be true.
-                    assert( (mi >= M_inc) || (batch.i == BATCH_GPU) );
+                    if (!( (mi >= M_inc) || (batch.i == BATCH_GPU) )) {
+                        printf("Partial load @ %lu/%lu -> %d/%lu | %lu\n",
+                               mi, M_inc, batch.i, BATCH_GPU, count_overflow);
+                    }
                 }
 
                 // Mark batch as ready for GPU processing
@@ -541,9 +546,6 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                                 interval.state = DataM::State::RUNNING;
                                 {
                                     std::unique_lock<std::mutex> lock(overflow_mtx);
-                                    // TODO I THINK THERE'S BAD WRITES IF OVERFLOWED CHANGES POINTS AND STUFF
-                                    // MAYBE I CAN MAKE SHARED POINTERS OR SOMETHING
-                                    // OR I CAN PUSH TO A DIFFERENT QUEUE TBD NOT SURE
                                     overflowed.push_back(pair.second);
                                     pushed_to_overflow = true;
                                 }
@@ -604,10 +606,9 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
 
                             //cout << "Queued prev_p for check " << interval.m << endl;
 
-                            // Mark this for overflow
-                            // TODO not clear if it's bad that not pushed to overflow here.
+                            // Mark this for overflow.
+                            interval.overflow = 1;
                             interval.prev_p = -1;
-                            interval.overflow = 1; // Indicates a side has overflowed
                             continue;
                         }
 

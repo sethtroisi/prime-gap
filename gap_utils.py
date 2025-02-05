@@ -204,7 +204,7 @@ def _parse_unknown_line(line):
     m_test, unknown_l, unknown_h = map(int, match.groups())
 
     # Check if rle or raw
-    rle = b" " not in c_l[:20]
+    rle = b" " not in c_l[:20] and b" " not in c_h[:20]
     if rle:
         def accum_rle(sign, digits):
             assert len(digits) % 2 == 0 or digits[-1] == ord("\n")
@@ -222,7 +222,10 @@ def _parse_unknown_line(line):
         unknowns[0] = accum_rle(-1, c_l)
         unknowns[1] = accum_rle(+1, c_h)
     else:
-        unknowns[0] = array.array('l', map(int, c_l.split(b" ")))
+        if c_l:
+            unknowns[0] = array.array('l', map(int, c_l.split(b" ")))
+        else:
+            unknowns[0] = array.array('l', [])
         unknowns[1] = array.array('l', map(int, c_h.split(b" ")))
 
     unknown_l_test = len(unknowns[0])
