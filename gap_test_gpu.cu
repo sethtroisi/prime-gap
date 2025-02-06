@@ -477,9 +477,12 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                                 mpz_add_ui(*batch.z[gpu_i], interval.center, interval.unknowns[1][interval.n_tests]);
                                 batch.unknown_i[gpu_i] = interval.n_tests++;
                             } else {
-                                // Haven't found next prime, but run out of unknowns to test
-                                interval.next_p = -1;
-                                interval.overflow = 1; // Indicates next side has overflowed unknowns
+                                // Don't push to overflow queue while GPU still has sieve to check.
+                                // It leads to race condition with overflow thread & uglier code.
+                                if (j == 0) {
+                                    interval.next_p = -1;
+                                    interval.overflow = 1; // Indicates next side has overflowed unknowns
+                                }
                                 break;
                             }
 
@@ -530,10 +533,13 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                             assert(interval.n_tests > 0 );
                             interval.n_found = true;
                             int found_offset = interval.unknowns[1][offset_i];
-                            if (interval.next_p < found_offset) {
-                                cerr << "\tFound two next primes for m=" << interval.m;
-                                cerr << " | " << interval.next_p;
-                                cerr << " vs " << found_offset << "(" << offset_i << ")" << endl;
+                            if (interval.next_p > 0 && interval.next_p < found_offset) {
+                                // Two primes happens fairly regularly with SEQUENTIAL_IN_BATCH > 1
+                                assert(SEQUENTIAL_IN_BATCH > 1);
+                                //cerr << "\tFound two next primes for m=" << interval.m;
+                                //cerr << " | " << interval.next_p;
+                                //cerr << " vs " << found_offset << "(" << offset_i << ")" << endl;
+                                continue;
                             }
                             assert(interval.next_p == 0);
                             interval.next_p = found_offset;
