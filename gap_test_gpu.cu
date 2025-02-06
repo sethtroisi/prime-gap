@@ -41,6 +41,7 @@
 #include "miller_rabin.h"
 
 using std::cout;
+using std::cerr;
 using std::endl;
 using std::vector;
 using namespace std::chrono;
@@ -72,6 +73,10 @@ using namespace std::chrono;
 const size_t BATCH_GPU = 1024; //2*8192;
 const size_t SEQUENTIAL_IN_BATCH = 2;
 const size_t BATCHED_M = 2 * BATCH_GPU * 140 / 100 / SEQUENTIAL_IN_BATCH;  // 20% extra
+
+// 1080Ti - 1024, 2, 16 -> 170-180K!
+// A100   - 4096, 4, 8 -> 327K!
+
 
 /**
  * Originally 8 which has highest throughput but only if we have LOTS of instances
@@ -143,6 +148,9 @@ class GPUBatch {
 
         // current index;
         int i;
+
+        // true if running out of m (used to suppress "No results ready" warning)
+        bool end_of_file;
 
         // number to check if prime
         vector<mpz_t*> z;
@@ -236,6 +244,7 @@ void run_gpu_thread(const struct Config config) {
 
     size_t processed_batches = 0;
     size_t no_batch_count_ms = 0;
+    bool is_close_to_end = false;
     while (is_running) {
         bool no_batch = true;
         for (GPUBatch& batch : batches) {
@@ -247,23 +256,31 @@ void run_gpu_thread(const struct Config config) {
                             mpz_set_ui(*batch.z[gpu_i], 7);
                         }
                     }
-                    printf("Partial batch %d/%ld\n", batch.i, BATCH_GPU);
+                    if (!batch.end_of_file) {
+                        printf("Partial batch %d vs %lu\n", batch.i, BATCH_GPU);
+                    }
                 }
+                assert(std::count(batch.active.begin(), batch.active.end(), 1) == batch.i);
                 // Run batch on GPU and wait for results to be set
                 runner.run_test(batch.z, batch.result);
                 batch.state = GPUBatch::State::RESULT_WRITTEN;
                 no_batch = false;
                 processed_batches++;
+                is_close_to_end |= batch.end_of_file;
+                break;
             }
         }
         if (no_batch) {
             // Waiting doesn't count till 1st batch is ready
             if (config.verbose >= 0 && processed_batches > 0) {
-                no_batch_count_ms += 250;
-                printf("No results ready for batch %ld. Total wait %.1f seconds\n",
-                        processed_batches, no_batch_count_ms / 1000.0);
+                no_batch_count_ms += 100;
+                // When we run out of m's it's normal for batches to be empty.
+                if (!is_close_to_end) {
+                    printf("No results ready for batch %ld. Total wait %.1f seconds\n",
+                            processed_batches, no_batch_count_ms / 1000.0);
+                }
             }
-            usleep(250000); // 250ms
+            usleep(100000); // 100ms
         }
     }
 
@@ -484,7 +501,8 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                 }
 
                 // Mark batch as ready for GPU processing
-                batch.state = GPUBatch::State::READY;
+                batch.state = batch.i > 0 ? GPUBatch::State::READY : GPUBatch::State::EMPTY;
+                batch.end_of_file = (mi == M_inc);
             }
 
             // If PRP result has been written to all entries by GPU
@@ -504,140 +522,139 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
 
                         if (batch.result[i]) {
                             // Found prime in last partial batch of unknowns, no longer overflowed
+                            assert(interval.overflow == 0 || SEQUENTIAL_IN_BATCH > 1);
                             interval.overflow = 0;
 
-                            int offset_i = batch.unknown_i[i];
-                            if (interval.n_found) {
-                                /*
-                                cout << "Found two next primes for m=" << interval.m << endl;
-                                cout << "\t" << interval.next_p << " vs "
-                                     << interval.unknowns[1][offset_i] << "(" << offset_i << ")" << endl;
-                                */
-                                continue;
-                            }
-
                             // next_prime found (and done)
+                            int offset_i = batch.unknown_i[i];
                             assert(interval.n_tests > 0 );
                             interval.n_found = true;
-                            interval.next_p = interval.unknowns[1][offset_i];
-                        }
-                    }
-                }
-
-                // Finalize any finished (or overflowed) results from processing
-                {
-                    // Push Out-Of-Sieve gaps to overflow queue and notify that thread
-                    {
-                        bool pushed_to_overflow = false;
-                        for (auto& pair : processing) {
-                            auto& interval = *pair.second;
-                            if (interval.overflow && interval.state == DataM::State::READY) {
-                                if (interval.next_p == -1) {
-                                    assert(interval.n_tests > 0);
-                                    stats.s_gap_out_of_sieve_next += 1;
-                                }
-
-                                if (interval.prev_p == -1) {
-                                    assert(interval.n_found);
-                                    stats.s_gap_out_of_sieve_prev += 1;
-                                }
-
-                                // Push to overflow and wake up that thread
-                                interval.state = DataM::State::RUNNING;
-                                {
-                                    std::unique_lock<std::mutex> lock(overflow_mtx);
-                                    overflowed.push_back(pair.second);
-                                    pushed_to_overflow = true;
-                                }
+                            int found_offset = interval.unknowns[1][offset_i];
+                            if (interval.next_p < found_offset) {
+                                cerr << "\tFound two next primes for m=" << interval.m;
+                                cerr << " | " << interval.next_p;
+                                cerr << " vs " << found_offset << "(" << offset_i << ")" << endl;
                             }
+                            assert(interval.next_p == 0);
+                            interval.next_p = found_offset;
                         }
-                        // TODO print warning if overflowed.size() is very large
-                        if (pushed_to_overflow) {
-                            overflow_cv.notify_one();
-                        }
-                    }
-
-                    {
-                        // Update any items finished in overflow as ready to be loaded into batches again
-                        for (auto& pair : processing) {
-                            auto& interval = *pair.second;
-                            if (interval.state == DataM::State::OVERFLOW_DONE) {
-                                interval.state = DataM::State::READY;
-                            }
-                        }
-                    }
-
-                    // Ugly code that allows for remove during iteration
-                    auto it = processing.begin();
-                    while (it != processing.end()) {
-                        auto& interval = *it->second;
-
-                        int prev_p = interval.prev_p;
-                        int next_p = interval.next_p;
-
-                        // Potentially do Side-Skip if next_p is not very large.
-                        // Only consider if next_p just found.
-                        if (interval.n_found && interval.prev_p == 0 && !interval.p_found) {
-                            // TODO improve this with constant and logging
-                            float next_merit = next_p / (K_log + log(interval.m));
-                            /**
-                             * TODO better math
-                             * With Y = 24
-                             * 50% of gaps with merit > 24 merit have prev > 12 merit
-                             *      only test 1/2^(12-3) = 1/512 gaps
-                             * 75% of gaps with merit > 24 merit have prev > 6 merit
-                             *      test 1/2^(6-3) = 1/8 gaps
-                             */
-                            float MIN_MERIT_TO_CONTINUE = min_merit / 2 - 2;
-
-                            if (next_merit < MIN_MERIT_TO_CONTINUE) {
-                                stats.s_skips_after_one_side += 1;
-
-                                bool is_last = (mi >= M_inc) && processing.size() == 1;
-                                stats.process_results(config, interval.m, is_last,
-                                    interval.unknowns[0].size(), interval.unknowns[1].size(),
-                                    prev_p, next_p,
-                                    interval.p_tests, interval.n_tests, next_merit);
-
-                                mpz_clear(interval.center);
-                                it = processing.erase(it);  // Erase this element
-                                continue;
-                            }
-
-                            //cout << "Queued prev_p for check " << interval.m << endl;
-
-                            // Mark this for overflow.
-                            interval.overflow = 1;
-                            interval.prev_p = -1;
-                            continue;
-                        }
-
-                        if (!interval.p_found || !interval.n_found) {
-                            ++it;
-                            continue;
-                        }
-                        assert( prev_p > 0 && next_p > 0 );
-
-                        float merit = (next_p + prev_p) / (K_log + log(interval.m));
-                        if (merit > min_merit)  {
-                            // TODO: Record finished mi in log file / db.
-                            printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
-                                (next_p + prev_p), merit, interval.m, P, D, prev_p, next_p);
-                        }
-
-                        bool is_last = (mi >= M_inc) && processing.size() == 1;
-                        stats.process_results(config, interval.m, is_last,
-                            interval.unknowns[0].size(), interval.unknowns[1].size(),
-                            prev_p, next_p,
-                            interval.p_tests, interval.n_tests, merit);
-
-                        mpz_clear(interval.center);
-                        it = processing.erase(it);  // Erase this element
                     }
                 }
 
                 // Result batch to EMPTY
                 batch.state = GPUBatch::State::EMPTY;
+            }
+
+            // Finalize any finished (or overflowed) results from processing
+            {
+                // Push Out-Of-Sieve gaps to overflow queue and notify that thread
+                {
+                    bool pushed_to_overflow = false;
+                    for (auto& pair : processing) {
+                        auto& interval = *pair.second;
+                        if (interval.overflow && interval.state == DataM::State::READY) {
+                            if (interval.next_p == -1) {
+                                assert(interval.n_tests > 0);
+                                stats.s_gap_out_of_sieve_next += 1;
+                            }
+
+                            if (interval.prev_p == -1) {
+                                assert(interval.n_found);
+                                stats.s_gap_out_of_sieve_prev += 1;
+                            }
+
+                            // Push to overflow and wake up that thread
+                            interval.state = DataM::State::RUNNING;
+                            {
+                                std::unique_lock<std::mutex> lock(overflow_mtx);
+                                overflowed.push_back(pair.second);
+                                pushed_to_overflow = true;
+                            }
+                        }
+                    }
+                    // TODO print warning if overflowed.size() is very large
+                    if (pushed_to_overflow) {
+                        overflow_cv.notify_one();
+                    }
+                }
+
+                {
+                    // Update any items finished in overflow as ready to be loaded into batches again
+                    for (auto& pair : processing) {
+                        auto& interval = *pair.second;
+                        if (interval.state == DataM::State::OVERFLOW_DONE) {
+                            interval.state = DataM::State::READY;
+                        }
+                    }
+                }
+
+                // Ugly code that allows for remove during iteration
+                auto it = processing.begin();
+                while (it != processing.end()) {
+                    auto& interval = *it->second;
+
+                    int prev_p = interval.prev_p;
+                    int next_p = interval.next_p;
+
+                    // Potentially do Side-Skip if next_p is not very large.
+                    // Only consider if next_p just found.
+                    if (interval.n_found && interval.prev_p == 0 && !interval.p_found) {
+                        // TODO improve this with constant and logging
+                        float next_merit = next_p / (K_log + log(interval.m));
+                        /**
+                         * TODO better math
+                         * With Y = 24
+                         * 50% of gaps with merit > 24 merit have prev > 12 merit
+                         *      only test 1/2^(12-3) = 1/512 gaps
+                         * 75% of gaps with merit > 24 merit have prev > 6 merit
+                         *      test 1/2^(6-3) = 1/8 gaps
+                         */
+                        float MIN_MERIT_TO_CONTINUE = min_merit / 2 - 2;
+
+                        if (next_merit < MIN_MERIT_TO_CONTINUE) {
+                            stats.s_skips_after_one_side += 1;
+
+                            bool is_last = (mi >= M_inc) && processing.size() == 1;
+                            stats.process_results(config, interval.m, is_last,
+                                interval.unknowns[0].size(), interval.unknowns[1].size(),
+                                prev_p, next_p,
+                                interval.p_tests, interval.n_tests, next_merit);
+
+                            mpz_clear(interval.center);
+                            it = processing.erase(it);  // Erase this element
+                            continue;
+                        }
+
+                        //cout << "Queued prev_p for check " << interval.m << endl;
+
+                        // Mark this for overflow.
+                        interval.overflow = 1;
+                        interval.prev_p = -1;
+                        continue;
+                    }
+
+                    if (!interval.p_found || !interval.n_found) {
+                        ++it;
+                        continue;
+                    }
+                    assert( prev_p > 0 && next_p > 0 );
+
+                    float merit = (next_p + prev_p) / (K_log + log(interval.m));
+                    if (merit > min_merit)  {
+                        // TODO: Record finished mi in log file / db.
+                        printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
+                            (next_p + prev_p), merit, interval.m, P, D, prev_p, next_p);
+                    }
+
+                    bool is_last = (mi >= M_inc) && processing.size() == 1;
+                    stats.process_results(config, interval.m, is_last,
+                        interval.unknowns[0].size(), interval.unknowns[1].size(),
+                        prev_p, next_p,
+                        interval.p_tests, interval.n_tests, merit);
+
+                    mpz_clear(interval.center);
+                    it = processing.erase(it);  // Erase this element
+                }
             }
         }
     }
