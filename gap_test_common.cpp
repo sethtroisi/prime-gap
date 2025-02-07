@@ -105,7 +105,7 @@ bool StatsCounters::possible_print_stats(
 
             if (config.verbose >= 2) {
                 if (s_skips_after_one_side) {
-                    printf("\t    only prev_prime %ld (%.2f%%)\n",
+                    printf("\t    only next_prime %ld (%.2f%%)\n",
                         s_skips_after_one_side, 100.0 * s_skips_after_one_side / s_tests);
                 }
                 if (s_gap_out_of_sieve_prev + s_gap_out_of_sieve_next > 0) {
