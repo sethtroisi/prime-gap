@@ -72,7 +72,7 @@ using namespace std::chrono;
  */
 const size_t BATCH_GPU = 1024; //2*8192;
 const size_t SEQUENTIAL_IN_BATCH = 2;
-const size_t BATCHED_M = 2 * BATCH_GPU * 140 / 100 / SEQUENTIAL_IN_BATCH;  // 20% extra
+const size_t BATCHED_M = 2 * BATCH_GPU * 120 / 100 / SEQUENTIAL_IN_BATCH;  // 50% extra for SEQUENTIAL_IN_BATCH
 
 // 1080Ti - 1024, 2, 16 -> 170-180K!
 // A100   - 4096, 4, 8 -> 327K!
@@ -244,6 +244,7 @@ void run_gpu_thread(const struct Config config) {
 
     size_t processed_batches = 0;
     size_t no_batch_count_ms = 0;
+    bool last_was_skip = false;
     bool is_close_to_end = false;
     while (is_running) {
         bool no_batch = true;
@@ -257,7 +258,7 @@ void run_gpu_thread(const struct Config config) {
                         }
                     }
                     if (!batch.end_of_file) {
-                        printf("Partial batch %d vs %lu\n", batch.i, BATCH_GPU);
+                        //printf("Partial batch %d vs %lu\n", batch.i, BATCH_GPU);
                     }
                 }
                 assert(std::count(batch.active.begin(), batch.active.end(), 1) == batch.i);
@@ -267,20 +268,22 @@ void run_gpu_thread(const struct Config config) {
                 no_batch = false;
                 processed_batches++;
                 is_close_to_end |= batch.end_of_file;
+                last_was_skip = false;
                 break;
             }
         }
         if (no_batch) {
             // Waiting doesn't count till 1st batch is ready
-            if (config.verbose >= 0 && processed_batches > 0) {
-                no_batch_count_ms += 100;
+            if (config.verbose >= 0 && processed_batches > 0 & last_was_skip) {
                 // When we run out of m's it's normal for batches to be empty.
                 if (!is_close_to_end) {
                     printf("No results ready for batch %ld. Total wait %.1f seconds\n",
                             processed_batches, no_batch_count_ms / 1000.0);
                 }
             }
-            usleep(100000); // 100ms
+            no_batch_count_ms += 20;
+            last_was_skip = true;
+            usleep(20'000); // 20ms
         }
     }
 
@@ -292,6 +295,7 @@ void run_gpu_thread(const struct Config config) {
 void run_overflow_thread(const struct Config config) {
     mpz_t prime_test;
     mpz_init(prime_test);
+    size_t tested = 0;
 
     std::unique_lock<std::mutex> lock(overflow_mtx);
 
@@ -343,6 +347,7 @@ void run_overflow_thread(const struct Config config) {
         }
     }
 
+    cout << "\tOverflowed " << tested << " intervals" << endl;
     mpz_clear(prime_test);
 }
 
@@ -367,6 +372,10 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
     const uint64_t M_inc = config.minc;
 
     const float min_merit = config.min_merit;
+    // See THEORY.md!
+    // 1.5 is small preference for doing less prev_p
+    const float MIN_MERIT_TO_CONTINUE = 1.3 * std::log2(min_merit * std::log(2) + 1);
+
 
     // Print Header info & Open unknown_fn
     {
@@ -378,6 +387,9 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
             if (config.verbose >= 1) {
                 printf("Min Gap ~= %d (for merit > %.1f)\n",
                     (int) (min_merit * (K_log + m_log)), min_merit);
+                printf("Min Gap to continue ~= %d (for merit = %.1f)\n",
+                    (int) (MIN_MERIT_TO_CONTINUE * (K_log + m_log)),
+                    MIN_MERIT_TO_CONTINUE);
             }
         }
 
@@ -467,16 +479,9 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
 
                         for (size_t j = 0; j < SEQUENTIAL_IN_BATCH; j++) {
                             assert(! (interval.p_found && interval.n_found) );
-
-                            int gpu_i = batch.i;  // [GPU] batch index
-                            batch.data_i[gpu_i] = interval.m;  // [Data] index for GPU Batch
-
                             // One sided only runs positive side.
                             assert(!interval.n_found);
-                            if (interval.n_tests < interval.unknowns[1].size()) {
-                                mpz_add_ui(*batch.z[gpu_i], interval.center, interval.unknowns[1][interval.n_tests]);
-                                batch.unknown_i[gpu_i] = interval.n_tests++;
-                            } else {
+                            if (interval.n_tests == interval.unknowns[1].size()) {
                                 // Don't push to overflow queue while GPU still has sieve to check.
                                 // It leads to race condition with overflow thread & uglier code.
                                 if (j == 0) {
@@ -486,7 +491,13 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                                 break;
                             }
 
-                            //gmp_printf("batch[%d] = %d,%d = %d | %Zd\n", gpu_i, i, j, interval.m, *batch.z[gpu_i]);
+                            int gpu_i = batch.i;  // [GPU] batch index
+                            batch.data_i[gpu_i] = interval.m;  // [Data] index for GPU Batch
+                            auto offset = interval.unknowns[1][interval.n_tests];
+                            assert(offset > 0);
+                            mpz_add_ui(*batch.z[gpu_i], interval.center, offset);
+                            //gmp_printf("%d = %d,%d = %d*K+%d| %Zd\n", gpu_i, i, j, interval.m, offset, *batch.z[gpu_i]);
+                            batch.unknown_i[gpu_i] = interval.n_tests++;
                             interval.state = DataM::State::RUNNING;
                             batch.active[gpu_i] = true;
                             batch.i++;
@@ -498,8 +509,8 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     // Every batch should be full unless we are almost done
                     // technically if many overflowed results this could not be true.
                     if (!( (mi >= M_inc) || (batch.i == BATCH_GPU) )) {
-                        printf("Partial load @ %lu/%lu -> %d/%lu | %lu\n",
-                               mi, M_inc, batch.i, BATCH_GPU, count_overflow);
+                        //printf("Partial load @ %lu/%lu -> %d/%lu | %lu\n",
+                        //       mi, M_inc, batch.i, BATCH_GPU, count_overflow);
                     }
                 }
 
@@ -531,9 +542,8 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                             // next_prime found (and done)
                             int offset_i = batch.unknown_i[i];
                             assert(interval.n_tests > 0 );
-                            interval.n_found = true;
                             int found_offset = interval.unknowns[1][offset_i];
-                            if (interval.next_p > 0 && interval.next_p < found_offset) {
+                            if (interval.n_found && interval.next_p > 0 && interval.next_p < found_offset) {
                                 // Two primes happens fairly regularly with SEQUENTIAL_IN_BATCH > 1
                                 assert(SEQUENTIAL_IN_BATCH > 1);
                                 //cerr << "\tFound two next primes for m=" << interval.m;
@@ -542,6 +552,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                                 continue;
                             }
                             assert(interval.next_p == 0);
+                            interval.n_found = true;
                             interval.next_p = found_offset;
                         }
                     }
@@ -604,18 +615,9 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
 
                     // Potentially do Side-Skip if next_p is not very large.
                     // Only consider if next_p just found.
-                    if (interval.n_found && interval.prev_p == 0 && !interval.p_found) {
+                    if (interval.n_found && !interval.p_found && prev_p == 0) {
                         // TODO improve this with constant and logging
                         float next_merit = next_p / (K_log + log(interval.m));
-                        /**
-                         * TODO better math
-                         * With Y = 24
-                         * 50% of gaps with merit > 24 merit have prev > 12 merit
-                         *      only test 1/2^(12-3) = 1/512 gaps
-                         * 75% of gaps with merit > 24 merit have prev > 6 merit
-                         *      test 1/2^(6-3) = 1/8 gaps
-                         */
-                        float MIN_MERIT_TO_CONTINUE = min_merit / 2 - 2;
 
                         if (next_merit < MIN_MERIT_TO_CONTINUE) {
                             stats.s_skips_after_one_side += 1;

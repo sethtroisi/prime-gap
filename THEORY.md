@@ -128,20 +128,6 @@ def ExpectedTests(m, K, old_limit, new_limit):
 ```
 
 
-### One Sided Tests
-
-Given many `m_n` and `prob_record`.
-
-If `prev_prime` is "small" don't waste time on `next_prime` only to be disappointed by small gap.
-
-Calculate `new_prob_record` taking into account `prev_prime` result.
-
-Simple math says `prob_record` takes 2 "time" to test, if `new_prob_record < 0.5 * prob_record` then skip.
-
-Better analysis says with skipping test more than `prob_record/2` each "time". Let `prob_processed / one sided test` be the average of (`prob_record - new_prob_record` if skip else `prob_record/2`). This is the rate (including skips) `prob_record` is tested at. If `new_prob_record` is less then skip.
-
-In practice `one side skips` is often as high as 90% and the prob record rate is `0.8 * prob / side` for a `0.8 / 0.5 =` 60% speedup!
-
 #### Experimental evidence
 
 Sieve a range to multiple depths (100M, 200M, ... 3B, 4B)
@@ -201,6 +187,53 @@ Can compute how many real PRP tests were skipped by each increase in `--sieve-ra
 | 3000M           | 21645      | 405             | 427                  |  5.4% |
 | 4000M           | 21388      | 257             | 294                  | 14.4% |
 
+### One Sided Tests
+
+Given many `m_n` and `prob_record`.
+
+If `prev_prime` is "small" don't waste time on `next_prime` only to be disappointed by small gap.
+
+Calculate `new_prob_record` taking into account `prev_prime` result.
+
+Simple math says `prob_record` takes 2 "time" to test, if `new_prob_record < 0.5 * prob_record` then skip.
+
+Better analysis says with skipping test more than `prob_record/2` each "time". Let `prob_processed / one sided test` be the average of (`prob_record - new_prob_record` if skip else `prob_record/2`). This is the rate (including skips) `prob_record` is tested at. If `new_prob_record` is less then skip.
+
+In practice `one side skips` is often as high as 90% and the prob record rate is `0.8 * prob / side` for a `0.8 / 0.5 =` 60% speedup!
+
+### One Sided Tests without `gap_stats`
+
+Assume that `next_prime` and `prev_prime` are the same exponential distribution.
+With a small portion of the distribution (gap < P) removed
+
+```
+λ = scale = -ln(1/2) = .69
+{\textstyle \sigma ^{2}}
+PDF(x) = λ*e^(-λ*x)
+CDF(next) = 1-e^(-λ*x)
+```
+
+The chance of a large merit M, m, is the sum of two exponential distrbution.
+
+```
+PDF_joint(m) = λ^2*m*e^(-λ*m)
+CDF_joint(m) = 1 - (1/2)^m * (m * log(2) + 1)
+```
+
+Without `prev_p` or `next_p` the odds for merit > m is given by `1 - CDF(m)` call this the "default" probability.
+Given a `next_p` (and associated `left_merit`) we can then calculate the probability of merit > m as
+
+```
+1 - CDF(m - left_merit) = e^(ln(1/2) * (m - left_merit)) = (1/2)^(m-left_merit)
+vs
+1 - CDF_joint(m) = (1/2)^m * (m * log(2) + 1)
+```
+
+the point where it's better to eval `prev_p` (and get an answer for 1 cost) vs go next (for 1.0X cost) is ...
+
+```
+left_merit = log2(m * log(2) + 1)
+```
 
 ## `gap_stats`
 
