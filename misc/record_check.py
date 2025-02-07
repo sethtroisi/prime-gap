@@ -91,6 +91,12 @@ def describe_found_gaps(gaps):
         ))
     print()
 
+    for gap, merit, _, start, _ in gaps:
+        n = primegapverify.parse(start)
+        assert gmpy2.is_prime(n), (start)
+        assert gmpy2.is_prime(n + gap), (start, gap)
+
+
 
 def print_record_gaps(args, gaps):
     with sqlite3.connect(args.prime_gaps_db) as conn:

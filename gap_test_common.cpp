@@ -160,8 +160,8 @@ void test_interval_cpu(
     if (prev_p == 0) {
         s_gap_out_of_sieve_prev += 1;
 
-        // Double checks SL which is fine.
-        mpz_sub_ui(prime_test, center, SIEVE_LENGTH);
+        // If only one-sided then do the thing
+        mpz_sub_ui(prime_test, center, unknowns[0].size() > 2 ? SIEVE_LENGTH : 1);
         mpz_prevprime(prime_test, prime_test);
         mpz_sub(prime_test, center, prime_test);
         prev_p = mpz_get_ui(prime_test);
