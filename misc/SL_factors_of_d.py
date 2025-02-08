@@ -40,8 +40,7 @@ for d in [2, 3, 5, 6, 30]:
             for i in range(len(cum_count))])
         percent_factor = cum_count / group_size
 
-    # scatter = plt.scatter(test, percent_factor, label=str(d), marker='.')
-    # c = scatter.get_fc()[0]
+    #scatter = plt.scatter(test, percent_factor, label=str(d), marker='.')
 
     factors_d = sympy.factorint(d)
     assert all(v == 1 for v in factors_d.values())
@@ -60,8 +59,7 @@ for d in [2, 3, 5, 6, 30]:
     plt.ylabel("Fraction of X with gcd(X, d) = 1")
 
     count_after = len([i for i in test if gmpy2.gcd(K + i, d) == 1])
-    print(f"{d}\t{count_after}/{len(test)} = {count_after/len(test):.4f} vs ")
-    print(f"{expected:.4f}\t {2*count_after}")
+    print(f"{d}\t{count_after}/{len(test)} = {count_after/len(test):.4f} vs {expected:.4f}\t {2*count_after}")
 
 
 plt.title(f'K={P}#/d')

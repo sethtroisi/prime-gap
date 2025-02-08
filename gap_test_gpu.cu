@@ -384,7 +384,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
     const float min_merit = config.min_merit;
     // See THEORY.md!
     // Added const is small preference for doing less prev_p
-    const float MIN_MERIT_TO_CONTINUE = 3 + std::log2(min_merit * std::log(2) + 1);
+    const float MIN_MERIT_TO_CONTINUE = 2.6 + std::log2(min_merit * std::log(2) + 1);
 
     // Print Header info & Open unknown_fn
     {

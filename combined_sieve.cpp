@@ -52,7 +52,7 @@ using namespace std::chrono;
  * GMP_VALIDATE_LARGE_FACTORS only validates the rarer 60+ bit factors
  */
 //#define GMP_VALIDATE_FACTORS
-#define GMP_VALIDATE_LARGE_FACTORS
+//#define GMP_VALIDATE_LARGE_FACTORS
 
 // Compresses composite by 50-80%,
 // Might make large prime faster but never makes sense because
@@ -198,11 +198,12 @@ void set_defaults(struct Config& config) {
                     break;
                 }
 
-                // Try searching all values of m (up to 20,000)
-                config.minc = std::min(config.d, 20'000U);
+                // Try searching all values of m up to (d or large-ish)
+                config.minc = std::min(config.d, 100'000U);
                 auto expected = count_K_d(config);
-                printf("Optimizing | d = %5d * %2d# | %d remaining, %5.0f avg gap | SL insufficient %.3f%% of time\n",
-                    lp, p, std::get<1>(expected), std::get<0>(expected), 100 * std::get<2>(expected));
+                printf("Optimizing | d = %5d * %2d# | tested %d intervals | %d avg remaining, %5.0f avg gap | SL insufficient %.4f%% of time\n",
+                    lp, p,
+                    std::get<0>(expected), std::get<2>(expected), std::get<1>(expected), 100 * std::get<3>(expected));
             }
         }
         exit(0);
@@ -1269,8 +1270,8 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
         // Lots of expressive (unoptimized) comments and code removed in 9cf1cf40
 
-        // (mi_0 + X) % 2 == (ms + Sl) % 2
-        const bool X_M_parity_check = (M_start + SIEVE_LENGTH) & 1;
+        const bool M_parity_check = M_start & 1;
+
 
         size_t small_factors = 0;
         // Find m*K = X, X in [L, R]
@@ -1280,7 +1281,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
             int64_t mi_0 = (X * neg_inv_K + mi_0_shift) % prime;
 
             // Check if X parity == m parity
-            if (K_odd && ((X ^ mi_0) & 1) == X_M_parity_check) {
+            if (K_odd && ((X ^ mi_0) & 1) == M_parity_check) {
                 mi_0 += prime;
             }
 

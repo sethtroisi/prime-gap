@@ -457,7 +457,7 @@ double combined_sieve_method2_time_estimate(
  * See "Optimizing Choice Of D" in THEORY.md
  * Return: Counts the number of coprimes of (N, i), -sl <= i <= sl
  */
-std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& config) {
+std::tuple<uint32_t, double, uint32_t, double, double> count_K_d(const struct Config& config) {
     uint64_t K_mod_d;
     double N_log;
     const uint64_t d = config.d;
@@ -518,7 +518,7 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
     uint64_t m = config.mstart;
 
     // Periodic in d, but d might be X00'000'000 so limit to 5'000
-    const uint64_t intervals = std::min(d, 5'000UL);
+    const uint64_t intervals = std::min(d, 100'000UL);
     size_t m_count = 0;
     for (; m_count < intervals; m++) {
         if (m >= config.mstart + config.minc) break; // Tested all values.
@@ -558,12 +558,14 @@ std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& conf
                     expected_count += 1;
                 }
             }
-            expected += sl * prob;
+            // If no prime found, guess SL + 1 merit
+            expected += (sl + N_log) * prob;
             expected_length += expected;
             remaining_prob += prob;
         }
     }
-    return {expected_length / m_count,
+    return {m_count,
+            expected_length / m_count,
             expected_count / (m_count * 2),
             remaining_prob / (m_count * 2),
             prob_prime_adj
@@ -584,9 +586,9 @@ double prob_prime_and_stats(const struct Config& config, mpz_t &K) {
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
         auto stats = count_K_d(config);
-        size_t count_coprime_p = std::get<1>(stats);
-        double prob_prime_coprime_p = std::get<3>(stats);
-        double prob_gap_hypothetical = std::get<2>(stats);
+        size_t count_coprime_p = std::get<2>(stats);
+        double prob_prime_coprime_p = std::get<4>(stats);
+        double prob_gap_hypothetical = std::get<3>(stats);
 
         float expected = count_coprime_p * (prob_prime_coprime_p / prob_prime_after_sieve);
         printf("\n");

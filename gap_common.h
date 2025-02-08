@@ -200,7 +200,7 @@ double combined_sieve_method2_time_estimate(
 
 
 // Used to optimize d
-std::tuple<double, uint32_t, double, double>
+std::tuple<uint32_t, double, uint32_t, double, double>
 count_K_d(const struct Config& config);
 
 double prob_prime_and_stats(const struct Config& config, mpz_t &K);
