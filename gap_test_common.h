@@ -31,7 +31,7 @@ class StatsCounters {
     public:
         StatsCounters(std::chrono::high_resolution_clock::time_point now) : s_start_t(now) {}
 
-        const std::chrono::high_resolution_clock::time_point s_start_t;
+        std::chrono::high_resolution_clock::time_point s_start_t;
 
         uint32_t  s_tests     = 0;
 

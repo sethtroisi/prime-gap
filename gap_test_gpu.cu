@@ -71,8 +71,8 @@ using namespace std::chrono;
  *
  */
 const size_t BATCH_GPU = 1024; //2*8192;
-const size_t SEQUENTIAL_IN_BATCH = 2;
-const size_t BATCHED_M = 2 * BATCH_GPU * 120 / 100 / SEQUENTIAL_IN_BATCH;  // 50% extra for SEQUENTIAL_IN_BATCH
+const size_t SEQUENTIAL_IN_BATCH = 1;
+const size_t BATCHED_M = 2 * BATCH_GPU * 130 / 100 / SEQUENTIAL_IN_BATCH;  // 30% extra for overflow
 
 // 1080Ti - 1024, 2, 16 -> 170-180K!
 // A100   - 4096, 4, 8 -> 327K!
@@ -178,7 +178,6 @@ class GPUBatch {
 
             z_array = (mpz_t *) malloc(n * sizeof(mpz_t));
             for (size_t i = 0; i < n; i++) {
-                // MAYBE FIXES MY STALL ISSUE?
                 mpz_init(z_array[i]);
                 z.push_back(&z_array[i]);
             }
@@ -259,19 +258,22 @@ void run_gpu_thread(const struct Config config) {
             //printf("BB %d\n", (int)batch.state);
             if (batch.state == GPUBatch::State::READY) {
                 if (batch.i != BATCH_GPU) {
-                    for (size_t gpu_i = 0; gpu_i < BATCH_GPU; gpu_i++) {
-                        if (!batch.active[gpu_i]) {
-                            // This prevents the GPU from stalling if z was never initalized.
-                            mpz_set_ui(*batch.z[gpu_i], 7);
-                        }
-                    }
                     if (!batch.end_of_file) {
                         printf("Partial batch %d vs %lu\n", batch.i, BATCH_GPU);
                     }
                 }
                 assert(std::count(batch.active.begin(), batch.active.end(), 1) == batch.i);
                 // Run batch on GPU and wait for results to be set
-                runner.run_test(batch.z, batch.result);
+                if (true) {
+                    runner.run_test(batch.z, batch.result);
+                } else {
+                    // Return true for 1/10 results (helps not overflow sieve)
+                    for (size_t gpu_i = 0; gpu_i < BATCH_GPU; gpu_i++) {
+                        if (batch.active[gpu_i]) {
+                            batch.result[gpu_i] = (std::rand() % 10) == 1;
+                        }
+                    }
+                }
                 batch.state = GPUBatch::State::RESULT_WRITTEN;
                 no_batch = false;
                 processed_batches++;
@@ -288,9 +290,10 @@ void run_gpu_thread(const struct Config config) {
                             processed_batches, no_batch_count_ms / 1000.0);
                 }
             }
-            no_batch_count_ms += 20;
+            uint32_t sleep_ms = last_was_skip ? 20 : 1;
+            no_batch_count_ms += sleep_ms;
+            usleep(sleep_ms * 1000);
             last_was_skip = true;
-            usleep(20'000); // 20ms
         }
     }
 
@@ -371,9 +374,6 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
     double K_log;
     std::ifstream unknown_file;
 
-    // Used for various stats
-    StatsCounters stats(high_resolution_clock::now());
-
     std::unordered_map<int64_t, std::shared_ptr<DataM>> processing;
 
     const uint64_t P = config.p;
@@ -384,7 +384,7 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
     const float min_merit = config.min_merit;
     // See THEORY.md!
     // Added const is small preference for doing less prev_p
-    const float MIN_MERIT_TO_CONTINUE = 2.8 + std::log2(min_merit * std::log(2) + 1);
+    const float MIN_MERIT_TO_CONTINUE = 3 + std::log2(min_merit * std::log(2) + 1);
 
     // Print Header info & Open unknown_fn
     {
@@ -434,10 +434,14 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
     // For compressed lines
     BitArrayHelper helper(config, K);
 
+    // Used for various stats
+    StatsCounters stats(high_resolution_clock::now());
+    size_t pushed_batches = 0;
+
     // Main loop
     uint64_t mi = 0;
     while (mi < M_inc || !processing.empty()) {
-        usleep(500); // 0.5ms
+        usleep(100); // 0.1ms
         for (GPUBatch& batch : batches) {
             // If batch is ready to have new data loaded
             if (batch.state == GPUBatch::State::EMPTY) {
@@ -477,6 +481,10 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     std::fill_n(batch.active.begin(), BATCH_GPU, false);
                     // Mark all results as invalid
                     std::fill_n(batch.result.begin(), BATCH_GPU, -1);
+                    for (size_t i = 0; i < BATCH_GPU; i++) {
+                        // This prevents the GPU from stalling in partial batches
+                        mpz_set_ui(*batch.z[i], 7);
+                    }
 
                     {
                         std::unique_lock<std::mutex> lock(interval_mtx);
@@ -531,6 +539,13 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                 // Needs to be last so that GPU_thread doesn't read other parts early.
                 batch.state = batch.i > 0 ? GPUBatch::State::READY : GPUBatch::State::EMPTY;
                 //cout << "AA " << mi << " " << batch.i << endl;
+
+                pushed_batches += batch.state == GPUBatch::State::READY;
+                if (pushed_batches == 1) {
+                    // Helpful for getting better tests/sec
+                    stats.s_start_t = high_resolution_clock::now();
+                }
+
             } else if (batch.state == GPUBatch::State::RESULT_WRITTEN) {
                 //cout << "CC " << mi << " " << batch.i << endl;
                 // If GPU PRP result are ready:
@@ -709,7 +724,6 @@ void prime_gap_test(struct Config config) {
 
     std::thread main_thread(load_batch_thread, config, BATCHED_M);
     std::thread gpu_thread(run_gpu_thread, config);
-    // 2x threads gives a lot more headroom
     vector<std::thread> overflow_threads;
     for (size_t t = 0; t < CPU_THREADS; t++) {
         overflow_threads.push_back(std::thread(run_overflow_thread, config));
