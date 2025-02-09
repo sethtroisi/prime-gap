@@ -1644,7 +1644,6 @@ void prime_gap_parallel(struct Config& config) {
     const uint32_t x_reindex_wheel_size = caches.x_reindex_wheel_size;
 
     const size_t count_coprime_sieve = caches.coprime_X.size();
-    assert( count_coprime_sieve % 2 == 0 );
 
     const auto THRESHOLDS =
         calculate_thresholds_method2(config, count_coprime_sieve, valid_ms);

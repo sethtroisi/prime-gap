@@ -794,7 +794,7 @@ int Args::guess_compression(const struct Config& config, std::ifstream& unknown_
 
     bool has_space = false;
     bool has_high_range = false;
-    for (size_t i = 50; i < strlen(t) - 1; i++) {
+    for (size_t i = 50; i < strlen(t) - 1 && t[i] != '\n'; i++) {
         has_space      |= t[i] == ' ' && t[i+1] != '|' && t[i-1] != '|';
         has_high_range |= t[i] > '9';
     }
