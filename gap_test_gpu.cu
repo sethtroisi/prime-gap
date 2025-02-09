@@ -716,7 +716,7 @@ void prime_gap_test(struct Config config) {
                 break;
             }
         }
-        assert( N_bits < BITS ); // See last debug line.
+        assert( (N_bits + 1) < BITS ); // See last debug line.
         assert( BITS <= (1 << (2 * WINDOW_BITS)) );
     }
 
