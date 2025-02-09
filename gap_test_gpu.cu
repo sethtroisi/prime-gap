@@ -250,7 +250,7 @@ void run_gpu_thread(const struct Config config) {
 
     size_t processed_batches = 0;
     size_t no_batch_count_ms = 0;
-    bool last_was_skip = false;
+    auto last_finished = high_resolution_clock::now();
     bool is_close_to_end = false;
     while (is_running) {
         bool no_batch = true;
@@ -278,22 +278,24 @@ void run_gpu_thread(const struct Config config) {
                 no_batch = false;
                 processed_batches++;
                 is_close_to_end |= batch.end_of_file;
-                last_was_skip = false;
+                last_finished = high_resolution_clock::now();
             }
         }
         if (no_batch) {
             // Waiting doesn't count till 1st batch is ready
-            if (config.verbose >= 0 && processed_batches > 0 && last_was_skip) {
+            auto now = high_resolution_clock::now();
+            auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    now - last_finished).count();
+            if (config.verbose >= 0 && processed_batches > 0 && delta > 50) {
                 // When we run out of m's it's normal for batches to be empty.
                 if (!is_close_to_end) {
                     printf("No results ready for batch %ld. Total wait %.1f seconds\n",
                             processed_batches, no_batch_count_ms / 1000.0);
                 }
             }
-            uint32_t sleep_ms = last_was_skip ? 20 : 1;
+            uint32_t sleep_ms = delta < 10 ? 1 : (delta < 100 ? 5 : 20);
             no_batch_count_ms += sleep_ms;
             usleep(sleep_ms * 1000);
-            last_was_skip = true;
         }
     }
 

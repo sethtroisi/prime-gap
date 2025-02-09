@@ -48,6 +48,9 @@ all: $(OUT)
 combined_sieve: combined_sieve.cpp $(OBJS)
 	$(CC) -o $@ $^ $(CFLAGS) -lprimesieve $(LDFLAGS) $(DEFINES)
 
+combined_sieve_small: combined_sieve_small.cpp gap_common.o gap_test_common.o
+	$(CC) -o $@ $^ $(CFLAGS) -lprimesieve $(LDFLAGS) $(DEFINES)
+
 gap_stats: gap_stats.cpp gap_common.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
