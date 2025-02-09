@@ -45,6 +45,10 @@ void StatsCounters::process_results(
 
     // TODO s_side_skips
 
+    s_total_merit += merit;
+    s_total_prev_p += std::max(0, prev_p);
+    s_total_next_p += std::max(0, next_p);
+
     if (merit > s_best_merit_interval) {
         s_best_merit_interval = merit;
         s_best_merit_interval_m = m;
@@ -116,6 +120,13 @@ bool StatsCounters::possible_print_stats(
 
                 printf("\t    best merit this interval: %.3f (at m=%ld)\n",
                     s_best_merit_interval, s_best_merit_interval_m);
+
+                printf("\t    avg merit: %.3f, avg gap: %.1f (%lu + %lu)\n",
+                    s_total_merit / s_tests,
+                    ((float) s_total_prev_p + s_total_next_p) / s_tests,
+                    s_total_prev_p / s_tests,
+                    s_total_next_p / s_tests
+               );
             }
             return true;
         }
