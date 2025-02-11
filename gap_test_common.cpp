@@ -73,7 +73,7 @@ bool StatsCounters::possible_print_stats(
 
     // if s_tests = {1,3,5} * 10 ^ x
     bool is_power_print = (s_tests == 1);
-    for (long p = 10; p < s_tests; p *= 10) {
+    for (uint64_t p = 10; p < s_tests; p *= 10) {
         is_power_print |= (s_tests == p) || (s_tests == 3*p) || (s_tests == 5*p);
     }
 
@@ -90,10 +90,10 @@ bool StatsCounters::possible_print_stats(
 
             // Stats!
             if (s_tests > secs) {
-                printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
+                printf("\t    tests     %-10lu (%.2f/sec)  %.0f seconds elapsed\n",
                     s_tests, s_tests / secs, secs);
             } else {
-                printf("\t    tests     %-10d (%.2f secs/test)  %.0f seconds elapsed\n",
+                printf("\t    tests     %-10lu (%.2f secs/test)  %.0f seconds elapsed\n",
                     s_tests, secs / s_tests, secs);
             }
 

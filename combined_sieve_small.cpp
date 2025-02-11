@@ -617,6 +617,7 @@ std::unique_ptr<SieveOutput> save_unknowns(
             }
         }
 
+        // Could swap back to uint16_t with 0 as a sentinal for 255 delta
         vector<uint16_t> deltas;
         deltas.reserve(found);
 
@@ -642,7 +643,7 @@ std::unique_ptr<SieveOutput> save_unknowns(
 
     auto s_stop_t = high_resolution_clock::now();
     std::string fn = Args::gen_unknown_fn(config, ".txt");
-    printf("\nSaved deltas for '%s' %ld/%ld (%.1f%%) in %.1f seconds\n",
+    printf("\n\tSaved deltas for '%s' %ld/%ld (%.1f%%) in %.1f seconds\n\n",
            fn.c_str(),
            count_a, count_b, 100.0f * count_a / count_b,
            duration<double>(s_stop_t - s_save_t).count());
@@ -673,6 +674,11 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
 
     assert(P < SMALL_THRESHOLD);
     assert(SMALL_THRESHOLD < (size_t) std::numeric_limits<uint32_t>::max());
+    {
+        uint64_t m_end = config.mstart + config.minc;
+        uint64_t prime_end = config.max_prime;
+        assert(!__builtin_mul_overflow_p(m_end, prime_end, (int64_t) 0));
+    }
 
     mpz_t test;
     mpz_init(test);
@@ -731,6 +737,7 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
                 uint64_t base_r = pr.second;
                 // For each interval that prints
 
+                // TODO is this actualy safe?
                 // Safe as base_r < prime < (2^32-1)
                 uint64_t modulo = (m * base_r) % a_prime;
                 // negative modulo
@@ -833,6 +840,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
     const uint64_t M_start = config.mstart;
     const uint64_t M_inc = config.minc;
     assert(config.minc <= (size_t) std::numeric_limits<int32_t>::max());
+    assert(!__builtin_mul_overflow_p(M_start + M_inc, prime_end, (int64_t) 0));
 
 #if METHOD2_WHEEL
     const uint32_t x_reindex_wheel_size = caches.x_reindex_wheel_size;
@@ -856,11 +864,14 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
             stats.pi_interval += 1;
         }
 
+        // TODO measure this time and possible store in a more global cache
         const uint64_t base_r = mpz_mod_ui(test, K, prime);
         mpz_set_ui(test2, prime);
         assert(mpz_invert(test, test, test2) > 0);
 
         const int64_t inv_K = mpz_get_ui(test);
+        // inv_K as large as prime
+        // base_r as large as prime
         assert(((__int128) inv_K * base_r) % prime == 1);
         const int64_t neg_inv_K = prime - inv_K;
 

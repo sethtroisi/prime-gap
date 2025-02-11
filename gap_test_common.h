@@ -33,28 +33,28 @@ class StatsCounters {
 
         std::chrono::high_resolution_clock::time_point s_start_t;
 
-        uint32_t  s_tests     = 0;
+        uint64_t  s_tests     = 0;
 
         /* Counters for unknowns after sieve */
-        size_t    s_total_unknown = 0;
-        size_t    s_t_unk_prev = 0;
-        size_t    s_t_unk_next = 0;
+        uint64_t    s_total_unknown = 0;
+        uint64_t    s_t_unk_prev = 0;
+        uint64_t    s_t_unk_next = 0;
 
         /* PRP counter */
-        size_t    s_total_prp_tests = 0;
+        uint64_t    s_total_prp_tests = 0;
 
         /* Number of times fallback or skips happened */
-        size_t    s_skips_after_one_side = 0;
-        size_t    s_gap_out_of_sieve_prev = 0;
-        size_t    s_gap_out_of_sieve_next = 0;
+        uint64_t    s_skips_after_one_side = 0;
+        uint64_t    s_gap_out_of_sieve_prev = 0;
+        uint64_t    s_gap_out_of_sieve_next = 0;
 
         /* Interval stats */
         float     s_best_merit_interval = 0;
-        size_t    s_best_merit_interval_m = 0;
+        uint64_t    s_best_merit_interval_m = 0;
 
         float     s_total_merit = 0.0;
-        size_t    s_total_prev_p = 0;
-        size_t    s_total_next_p = 0;
+        uint64_t    s_total_prev_p = 0;
+        uint64_t    s_total_next_p = 0;
 
         // This can change in const possible_print_stats
         mutable float     s_tests_per_second = 0;

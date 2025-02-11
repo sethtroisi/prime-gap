@@ -240,7 +240,7 @@ def search_logs(log_files):
             if match:
                 file_match += 1
                 partial_line = line.split(':')[-1].strip()
-                match_print = f"    Match {file_match} at line {li}: {partial_line}"
+                match_print = f"    Match {file_match:<3d} at line {li:<4d}: {partial_line}"
                 if file_match < 6:
                     print (match_print)
 

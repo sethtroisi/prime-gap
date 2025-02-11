@@ -176,14 +176,12 @@ int main(int argc, char* argv[]) {
     setlocale(LC_NUMERIC, "");
     if (config.verbose >= 0) {
         printf("\n");
-        printf("Testing m * %d#/%d, m = %ld + [0, %'ld)\n",
-            config.p, config.d, config.mstart, config.minc);
+        printf("Testing m * %d#/%d\n", config.p, config.d);
     }
 
-    if (config.mskip > 0) {
-        printf("\tskipping m < %'ld\n", config.mskip);
-        assert(config.mskip >= config.mstart);
-        assert(config.mskip < (config.mstart + config.minc));
+    if (config.mskip != 0) {
+        cout << "Use m_start not mskip" << endl;
+        return 1;
     }
 
     setlocale(LC_NUMERIC, "C");
@@ -394,12 +392,17 @@ void run_sieve_thread(void) {
             continue;
         }
 
-        printf("\tStarting Combined Sieve %ld to %ld\n",
-            to_sieve->config.mstart, to_sieve->config.mstart + to_sieve->config.minc);
+        //auto M_end = to_sieve->config.mstart + to_sieve->config.minc;
+        //printf("\tStarting Combined Sieve %ld to %ld\n", to_sieve->config.mstart, M_end);
+        auto s_save_t = high_resolution_clock::now();
+        // DO MORE FOR FIRST RUN THEN LESS AFTER
+        to_sieve->config.threads = 6;
         to_sieve->config.verbose -= 3;
-        to_sieve->config.threads = 8;
         auto result = prime_gap_parallel(to_sieve->config);
         to_sieve->config.verbose += 3;
+        auto s_stop_t = high_resolution_clock::now();
+        printf("\tCombined Sieve took %.1f seconds\n",
+               duration<double>(s_stop_t - s_save_t).count());
 
         lock.lock();
         to_sieve->state = SieveResult::SIEVED;
@@ -479,7 +482,8 @@ void batch_run_config(
         std::shared_ptr<const SieveResult> result,
         const size_t QUEUE_SIZE,
         StatsCounters& stats) {
-    const auto& config = result->config;
+    // So we can modify
+    Config config = result->config;
     const auto& output = *result->sieved;
 
     mpz_t K;
@@ -501,10 +505,13 @@ void batch_run_config(
     {
 
         // ----- Merit / Sieve stats
+        int tmp_verbose = config.verbose;
+        if (stats.s_tests > 0) config.verbose = 0;
         K_log = prob_prime_and_stats(config, K);
+        if (stats.s_tests > 0) config.verbose = tmp_verbose;
         {
             float m_log = log(M_start);
-            if (config.verbose >= 1) {
+            if (stats.s_tests == 0 && config.verbose >= 1) {
                 printf("Min Gap ~= %d (for merit > %.1f)\n",
                     (int) (min_merit * (K_log + m_log)), min_merit);
                 printf("Min Gap to continue ~= %d (for merit = %.1f)\n",
@@ -551,10 +558,6 @@ void batch_run_config(
                     int64_t found = std::get<1>(output.m_inc[result_i]);
                     const auto m_unknown_deltas = output.unknowns[result_i];
                     result_i++;
-
-                    // Can skip if m < M_RESUME without parsing line here
-                    if (m < config.mskip)
-                        continue;
 
                     assert(result_m == m);
 
@@ -824,23 +827,28 @@ void coordinator_thread(struct Config global_config) {
 
         for (auto& sieved : sieveds) {
             if (sieved->state == SieveResult::SIEVED) {
-                if (!to_test || to_test->config.mstart > sieve->config.mstart) {
+                if (!to_test || to_test->config.mstart > sieved->config.mstart) {
                     to_test = sieved;
                 }
             }
         }
-        to_test->state = SieveResult::TESTING;
+        if (to_test) {
+            to_test->state = SieveResult::TESTING;
+        }
         lock.unlock();
 
         if (to_test == nullptr) {
             skipped_ms += 1000;
-            printf("\tNothing to test (%.1f seconds paused)\n", skipped_ms / 1000.0);
+            if (stats.s_tests > 0) {
+                printf("\tNothing to test (%.1f seconds paused)\n", skipped_ms / 1000.0);
+            }
             usleep(1'000'000); // 1,000ms
             continue;
         }
 
-        // TODO some stuff with sieved
-        printf("Testing %'lu to %'lu\n",
+        // TODO: Figure out how to avoid partial batches as each batch finishes up.
+        // Have a middle person (this thread?) merge them into a new queue or something.
+        printf("\tTesting %'lu to %'lu\n",
                 to_test->config.mstart,
                 to_test->config.mstart + to_test->config.minc);
         batch_run_config(to_test, BATCHED_M, stats);
@@ -849,7 +857,6 @@ void coordinator_thread(struct Config global_config) {
         sieveds.erase(std::remove(sieveds.begin(), sieveds.end(), to_test), sieveds.end());
         lock.unlock();
     }
-
 }
 
 
