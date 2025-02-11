@@ -16,12 +16,12 @@
 OBJS	= gap_common.o modulo_search.o gap_test_common.o
 OUT	= combined_sieve gap_stats gap_test_simple benchmark benchmark_google
 CC	= g++
-CFLAGS	= -Wall -Werror -O3
+CFLAGS	= -Wall -Werror -O3 -fopenmp
 NVCC	= nvcc
-CUDA_FLAGS	= -Xcompiler -Wall -Xcompiler -Werror -O3
+CUDA_FLAGS	= -Xcompiler -Wall -Xcompiler -Werror -O3 -Xcompiler -fopenmp
 BITS    = 1024
 
-LDFLAGS	= -lgmp -lsqlite3 -fopenmp
+LDFLAGS	= -lgmp -lsqlite3
 # Need for local gmp / primesieve
 LDFLAGS+= -L /usr/local/lib
 
@@ -33,17 +33,13 @@ ifdef VALIDATE_LARGE
 DEFINES += -DGMP_VALIDATE_LARGE_FACTORS
 endif
 
+all: $(OUT)
+
 %.o: %.cpp
 	$(CC) -c -o $@ $< $(CFLAGS) $(DEFINES)
 
 %_cuda.o: %.cpp
 	$(NVCC) -c -o $@ $< $(CUDA_FLAGS) $(DEFINES)
-
-
-all: $(OUT)
-
-#$(PROGS) : %: %.cpp $(OBJS)
-#	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(DEFINES)
 
 combined_sieve: combined_sieve.cpp $(OBJS)
 	$(CC) -o $@ $^ $(CFLAGS) -lprimesieve $(LDFLAGS) $(DEFINES)
@@ -57,12 +53,12 @@ gap_stats: gap_stats.cpp gap_common.o
 gap_test_simple: gap_test_simple.cpp gap_common.o gap_test_common.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
-gap_test_gpu: gap_test_gpu.cu miller_rabin.h gap_common_cuda.o gap_test_common_cuda.o
+gap_test_gpu: gap_test_gpu.cu miller_rabin.h gap_common_cuda.o gap_test_common_cuda.o combined_sieve_small_cuda.o
 	nvcc -o $@ -I../CGBN/include \
 		-DGPU_BITS=$(BITS) \
 		$(filter-out miller_rabin.h, $^) \
 		-arch=sm_61 $(CUDA_FLAGS) \
-		$(filter-out -fopenmp, $(LDFLAGS))
+		$(filter-out -fopenmp, $(LDFLAGS)) -lprimesieve
 
 benchmark: misc/benchmark.cpp modulo_search.o
 	$(CC) -o $@ $^ $(CFLAGS) -lprimesieve $(LDFLAGS) -I.

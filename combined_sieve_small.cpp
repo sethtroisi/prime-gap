@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "combined_sieve_small.h"
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -22,6 +24,7 @@
 #include <functional>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <thread>
@@ -43,6 +46,7 @@ using std::vector;
 using namespace std::chrono;
 
 
+
 // Used to validate factors divide the number claimed
 //#define GMP_VALIDATE_FACTORS
 
@@ -53,94 +57,6 @@ using namespace std::chrono;
 // Related to sizeof(int) * SIEVE_INTERVAL * WHEEL_MAX
 // WHEEL should divide config.d
 #define METHOD2_WHEEL_MAX (2*3*5*7)
-
-void set_defaults(struct Config& config);
-void prime_gap_parallel(const struct Config& config);
-
-
-int main(int argc, char* argv[]) {
-    // Display %'d with commas i.e. 12,345
-    setlocale(LC_NUMERIC, "");
-
-    Config config = Args::argparse(argc, argv, Args::Pr::SIEVE);
-
-    if (config.verbose >= 2) {
-        printf("\tCompiled with GMP %d.%d.%d\n\n",
-            __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
-    }
-
-    // More combined sieve specific validation
-    {
-        set_defaults(config);
-
-        // Both shouldn't be true from gap_common.
-        assert(!(config.save_unknowns && config.testing));
-
-        if (!config.save_unknowns && !config.testing) {
-            cout << "Must set --save-unknowns" << endl;
-            exit(1);
-        }
-
-        if (config.sieve_length < 6 * config.p || config.sieve_length > 22 * config.p) {
-            int sl_min = ((config.p * 8 - 1) / 500 + 1) * 500;
-            int sl_max = ((config.p * 20 - 1) / 500 + 1) * 500;
-            printf("--sieve_length(%d) should be between [%d, %d]\n",
-                config.sieve_length, sl_min, sl_max);
-            exit(1);
-        }
-
-        if (config.valid == 0) {
-            Args::show_usage(argv[0], Args::Pr::SIEVE);
-            exit(1);
-        }
-
-        if (config.max_prime > 100'000'000) {
-            printf("\tmax_prime(%ldM) is probably too large\n",
-                config.max_prime / 1'000'000);
-        }
-
-        if (config.save_unknowns) {
-            std::string fn = Args::gen_unknown_fn(config, ".txt");
-            std::ifstream f(fn);
-            if (f.good()) {
-                printf("\nOutput file '%s' already exists\n", fn.c_str());
-                exit(1);
-            }
-        }
-
-        if (!config.compression) {
-            printf("\tSetting --rle to prevent very large output file\n");
-            config.compression = 1;
-        }
-
-        if (config.compression != 1) {
-            cout << "only --rle compression is supported" << endl;
-            exit(1);
-        }
-    }
-
-    // Status lines
-    if (config.verbose >= 0) {
-        printf("\n");
-        printf("Testing m * %u#/%u, m = %'ld + [0, %'ld)\n",
-            config.p, config.d, config.mstart, config.minc);
-    }
-
-    if (config.verbose >= 2 && config.threads > 1) {
-        printf("Running with %d threads\n", config.threads);
-    }
-
-#ifdef GMP_VALIDATE_FACTORS
-    printf("\tValidating factors with GMP\n");
-#endif
-
-    if (config.method1) {
-        cout << "method1 not supported here" << endl;
-    } else {
-        prime_gap_parallel(config);
-    }
-}
-
 
 void set_defaults(struct Config& config) {
     if (config.valid == 0) {
@@ -256,7 +172,7 @@ void method2_increment_print(
         if (stats.thread == 0) {
             // Other threads don't print details
 
-            if (config.threads > 1 && config.verbose) {
+            if (config.threads > 1 && config.verbose > 0) {
                 printf("\nWARNING stats aren't synchronized when "
                        "running with multiple threads(%d)\n\n", config.threads);
             }
@@ -664,39 +580,24 @@ std::vector<std::pair<uint64_t, uint64_t>> split_prime_range_to_intervals(
     return intervals;
 }
 
-void save_unknowns_method2(
+std::unique_ptr<SieveOutput> save_unknowns(
         const struct Config& config,
         const mpz_t &K,
         const Cached &caches,
         const vector<bool> *composite) {
-
-    // ----- Open and Save to Output file
-    std::ofstream unknown_file;
-    {
-        std::string fn = Args::gen_unknown_fn(config, ".txt");
-        printf("\nSaving unknowns to '%s'\n", fn.c_str());
-        unknown_file.open(fn, std::ios::out);
-        assert( unknown_file.is_open() ); // Can't open save_unknowns file
-    }
+    auto s_save_t = high_resolution_clock::now();
 
     const uint64_t M_start = config.mstart;
     const uint32_t D = config.d;
     const int32_t SL = config.sieve_length;
 
-    const uint32_t neg_K_mod_d = mpz_cdiv_ui(K, D);
-    if (D > 1)
-        assert(neg_K_mod_d != 0);
-
-    // factors of D = P#/D
-    vector<uint32_t> D_primes = get_sieve_primes(config.p);
-    D_primes.erase(
-        std::remove_if(D_primes.begin(), D_primes.end(), [&](uint32_t p){ return config.d % p != 0; }),
-        D_primes.end());
-    assert(D_primes.size() <= 9);  // 23# > 2^32
-    assert(D_primes.front() >= 2);
-
     size_t count_a = 0;
     size_t count_b = caches.valid_mi.size() * caches.coprime_X.size();
+
+    auto output = std::make_unique<SieveOutput>(M_start, SL);
+    output->unknowns.reserve(caches.valid_ms);
+
+    uint64_t m_last = M_start;
 
     #pragma omp parallel for ordered schedule(dynamic, 1) num_threads(config.threads)
     for (size_t mii = 0; mii < caches.valid_mi.size(); mii++) {
@@ -709,64 +610,44 @@ void save_unknowns_method2(
         const auto &x_reindex_m = caches.x_reindex_wheel[m % caches.x_reindex_wheel_size];
         assert(x_reindex_m.size() == (uint64_t) (SL + 1));
 
-        if (config.compression != 1) {
-            cout << "only compression=1 implemented" << endl;
-            exit(1);
+        int64_t found = 0;
+        for (int x : caches.coprime_X) {
+            if (!comp[x_reindex_m[x]]) {
+                found += 1;
+            }
         }
 
-        std::stringstream line;
-        std::stringstream header;
-        header << m << " : ";
+        vector<uint16_t> deltas;
+        deltas.reserve(found);
 
-        // d = 0 yields "|
-        for (int d = 0; d <= 1; d++) {
-            if (d == 0) {
-                line << "|  ";
-                header << "-0 ";
-                continue;
+        int last = 0;
+        for (int x : caches.coprime_X) {
+            if (!comp[x_reindex_m[x]]) {
+                int delta = x - last;
+                last = x;
+                assert(delta <= 0xFFFF);
+                deltas.push_back(delta);
             }
-
-            assert(d == 1);
-            int64_t found = 0;
-            line << "|";
-
-            // RLE
-            line << " ";
-            int last = 0;
-
-            for (int x : caches.coprime_X) {
-                if (!comp[x_reindex_m[x]]) {
-                    found += 1;
-
-                    int delta = x - last;
-                    last = x;
-
-                    // Ascii 48 to 122 are all "safe" -> 75 characters -> 5625
-                    // Not quite enough so we use 48 + 128 which includes
-                    // non printable characters.
-                    // assert(0 <= delta && delta < (128L*128));
-                    unsigned char upper = 48 + (delta >> 7);
-                    unsigned char lower = 48 + (delta & 127);
-                    line << upper << lower;
-                }
-            }
-            count_a += found;
-
-            line << "\n";
-            header << "+" << found << " ";
         }
 
         #pragma omp ordered
         {
-            // unknown_file format is "<m> : -10 : +9 | -1 -5 -10 ... | 3 7 11 ...\n"
-            unknown_file << header.str() << line.str();
+            output->m_inc.emplace_back(m - m_last, found);
+            m_last = m;
+            // TODO this is probably slow copying to the back, try to avoid slow copy.
+            output->unknowns.emplace_back(deltas);
+            count_a += found;
         }
     }
-    if (config.verbose >= 2) {
-        printf("\tsaving %ld/%ld (%.1f%%) %s\n",
-                count_a, count_b, 100.0f * count_a / count_b,
-                config.compression == 2 ? "as bitarray" : "from sieve");
-    }
+
+    auto s_stop_t = high_resolution_clock::now();
+    std::string fn = Args::gen_unknown_fn(config, ".txt");
+    printf("\nSaved deltas for '%s' %ld/%ld (%.1f%%) in %.1f seconds\n",
+           fn.c_str(),
+           count_a, count_b, 100.0f * count_a / count_b,
+           duration<double>(s_stop_t - s_save_t).count());
+
+    return output;
 }
 
 
@@ -1061,7 +942,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 }
 
 
-void prime_gap_parallel(const struct Config& config) {
+std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
     // Method2
     const uint64_t M_start = config.mstart;
     const uint32_t M_inc = config.minc;
@@ -1194,7 +1075,6 @@ void prime_gap_parallel(const struct Config& config) {
             printf("\ncombined_sieve expects to use %'ld MB which is greater than %d GB limit\n",
                     guess / MB, config.max_mem);
             printf("\nAdd `--max-mem %ld` to skip this warning\n", (guess / 1024 / MB) + 1);
-            std::this_thread::sleep_for(std::chrono::seconds(10));
             exit(1);
         }
 
@@ -1424,25 +1304,10 @@ void prime_gap_parallel(const struct Config& config) {
         }
     }
 
-
-    if (config.save_unknowns) {
-        auto s_save_t = high_resolution_clock::now();
-
-        save_unknowns_method2(config, K, caches, composite);
-
-        auto s_stop_t = high_resolution_clock::now();
-
-        if (config.verbose >= 2) {
-            printf("Saving unknowns took %.1f seconds\n",
-                    duration<double>(s_stop_t - s_save_t).count());
-        }
-    }
-
-    if (config.verbose >= 2) {
-        printf("combined sieve Done!\n");
-    }
+    auto result = save_unknowns(config, K, caches, composite);
 
     delete[] composite;
-
     mpz_clear(K);
+
+    return result;
 }

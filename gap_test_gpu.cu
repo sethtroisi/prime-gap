@@ -1,4 +1,4 @@
-// Copyright 2021 Seth Troisi
+// Copyright 2025 Seth Troisi
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@
 
 #include "gap_common.h"
 #include "gap_test_common.h"
+#include "combined_sieve_small.h"
 #include "miller_rabin.h"
 
 using std::cout;
@@ -89,7 +90,7 @@ const int ROUNDS = 1;
  * Used for doing mpz_prevprime and mpz_nextprime on CPU
  * Given 40x slower, need a few to keep up with GPU
  */
-const int CPU_THREADS = 6;
+const int CPU_THREADS = 4;
 
 //************************************************************************
 
@@ -98,6 +99,59 @@ void prime_gap_test(const struct Config config);
 
 int main(int argc, char* argv[]) {
     Config config = Args::argparse(argc, argv, Args::Pr::TEST_GPU);
+    // TODO renable these checks
+    /*
+    {
+        set_defaults(config);
+
+        // Both shouldn't be true from gap_common.
+        assert(!(config.save_unknowns && config.testing));
+
+        if (!config.save_unknowns && !config.testing) {
+            cout << "Must set --save-unknowns" << endl;
+            exit(1);
+        }
+
+        if (config.sieve_length < 6 * config.p || config.sieve_length > 22 * config.p) {
+            int sl_min = ((config.p * 8 - 1) / 500 + 1) * 500;
+            int sl_max = ((config.p * 20 - 1) / 500 + 1) * 500;
+            printf("--sieve_length(%d) should be between [%d, %d]\n",
+                config.sieve_length, sl_min, sl_max);
+            exit(1);
+        }
+
+        if (config.valid == 0) {
+            Args::show_usage(argv[0], Args::Pr::SIEVE);
+            exit(1);
+        }
+
+
+        if (config.max_prime > 100'000'000) {
+            printf("\tmax_prime(%ldM) is probably too large\n",
+                config.max_prime / 1'000'000);
+        }
+
+        if (config.save_unknowns) {
+            std::string fn = Args::gen_unknown_fn(config, ".txt");
+            std::ifstream f(fn);
+            if (f.good()) {
+                printf("\nOutput file '%s' already exists\n", fn.c_str());
+                exit(1);
+            }
+        }
+
+        if (!config.compression) {
+            printf("\tSetting --rle to prevent very large output file\n");
+            config.compression = 1;
+        }
+
+        if (config.compression != 1) {
+            cout << "only --rle compression is supported" << endl;
+            exit(1);
+        }
+    }
+    */
+
     if (config.valid == 0) {
         Args::show_usage(argv[0], Args::Pr::TEST_GPU);
         return 1;
@@ -134,15 +188,11 @@ int main(int argc, char* argv[]) {
 
     setlocale(LC_NUMERIC, "C");
 
-    // Determine compression
-    {
-        std::string fn = Args::gen_unknown_fn(config, ".txt");
-        std::ifstream unknown_file(fn, std::ios::in);
-        assert( unknown_file.is_open() ); // Can't open save_unknowns file
-        assert( unknown_file.good() );    // Can't open save_unknowns file
-        config.compression = Args::guess_compression(config, unknown_file);
-    }
+    // Always use RLE
+    config.compression = 1;
 
+    // Delete unknown_fn so it gets recreated by sieve
+    config.unknown_filename = "";
     prime_gap_test(config);
 }
 
@@ -205,13 +255,14 @@ class DataM {
          * Elements in READY state can ONLY be modified by load_thread
          * Elements in RUNNING are either part of a GPU batch in overflowed queue
          */
-        DataM() {};
-        DataM(long m): m(m) {};
+        DataM(long m, unsigned short sl): m(m), sieve_length(sl) {};
+
+        const long m;
+        const unsigned short sieve_length = 0;
 
         enum State { READY, RUNNING, OVERFLOW_DONE };
         State state = READY;
 
-        long m;
         mpz_t center;
         vector<int32_t> unknowns[2];
 
@@ -227,6 +278,19 @@ class DataM {
 };
 
 
+class SieveResult {
+    public:
+        SieveResult(const struct Config config): config(config) {};
+
+        enum State { CONFIGURED, SIEVED, TESTING };
+        State state = CONFIGURED;
+
+        struct Config config;
+
+        std::unique_ptr<SieveOutput> sieved;
+};
+
+
 /** Shared state between threads */
 std::atomic<bool> is_running;
 
@@ -237,11 +301,15 @@ std::atomic<bool> is_running;
  */
 vector<GPUBatch> batches = {{BATCH_GPU}, {BATCH_GPU}};
 
+std::mutex sieve_mtx;
+vector<std::shared_ptr<SieveResult>> sieveds;
+
 std::mutex interval_mtx;
 std::condition_variable overflow_cv;
 vector<std::shared_ptr<DataM>> overflowed;
 
-void run_gpu_thread(const struct Config config) {
+
+void run_gpu_thread(int verbose) {
     pthread_setname_np(pthread_self(), "RUN_GPU_THREAD");
 
     // XXX: params1024, params2048 with *runner1024, *runner2048 and only new one of them.
@@ -277,7 +345,7 @@ void run_gpu_thread(const struct Config config) {
                 batch.state = GPUBatch::State::RESULT_WRITTEN;
                 no_batch = false;
                 processed_batches++;
-                is_close_to_end |= batch.end_of_file;
+                is_close_to_end = batch.end_of_file;
                 last_finished = high_resolution_clock::now();
             }
         }
@@ -286,7 +354,7 @@ void run_gpu_thread(const struct Config config) {
             auto now = high_resolution_clock::now();
             auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(
                     now - last_finished).count();
-            if (config.verbose >= 0 && processed_batches > 0 && delta > 50) {
+            if (verbose >= 0 && processed_batches > 0 && delta > 50) {
                 // When we run out of m's it's normal for batches to be empty.
                 if (!is_close_to_end) {
                     printf("No results ready for batch %ld. Total wait %.1f seconds\n",
@@ -299,12 +367,48 @@ void run_gpu_thread(const struct Config config) {
         }
     }
 
-    if (config.verbose >= 1) {
+    if (verbose >= 1) {
         printf("Processed %'ld batches\n", processed_batches);
     }
 }
 
-void run_overflow_thread(const struct Config config) {
+void run_sieve_thread(void) {
+    pthread_setname_np(pthread_self(), "SIEVE_THREAD");
+
+    std::unique_lock<std::mutex> lock(interval_mtx, std::defer_lock);
+    while (is_running) {
+        std::shared_ptr<SieveResult> to_sieve = nullptr;
+
+        lock.lock();
+        // Check if any config to start processing
+        for (auto& sieved : sieveds) {
+            if (sieved->state == SieveResult::CONFIGURED) {
+                to_sieve = sieved;
+                break;
+            }
+        }
+        lock.unlock();
+
+        if (to_sieve == nullptr) {
+            usleep(1'000'000); // 1,000ms
+            continue;
+        }
+
+        printf("\tStarting Combined Sieve %ld to %ld\n",
+            to_sieve->config.mstart, to_sieve->config.mstart + to_sieve->config.minc);
+        to_sieve->config.verbose -= 3;
+        to_sieve->config.threads = 8;
+        auto result = prime_gap_parallel(to_sieve->config);
+        to_sieve->config.verbose += 3;
+
+        lock.lock();
+        to_sieve->state = SieveResult::SIEVED;
+        to_sieve->sieved.swap(result);
+        lock.unlock();
+    }
+}
+
+void run_overflow_thread() {
     pthread_setname_np(pthread_self(), "CPU_OVERFLOW_THREAD");
     mpz_t center, prime_test;
     mpz_init(center);
@@ -329,12 +433,13 @@ void run_overflow_thread(const struct Config config) {
             assert(interval.overflow == 1);
             assert(interval.next_p == -1 || interval.prev_p == -1);
             mpz_set(center, interval.center);
+            unsigned sl = interval.sieve_length;
 
             if (interval.next_p == -1) {
                 assert(interval.n_tests > 0);
 
                 lock.unlock();  // Allow main thread to add more things while we process
-                mpz_add_ui(prime_test, center, config.sieve_length);
+                mpz_add_ui(prime_test, center, sl);
                 mpz_nextprime(prime_test, prime_test);
                 mpz_sub(prime_test, prime_test, center);
                 lock.lock();
@@ -369,12 +474,16 @@ void run_overflow_thread(const struct Config config) {
     mpz_clear(prime_test);
 }
 
-void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
-    pthread_setname_np(pthread_self(), "MAIN_LOAD_AND_BATCH_THREAD");
+
+void batch_run_config(
+        std::shared_ptr<const SieveResult> result,
+        const size_t QUEUE_SIZE,
+        StatsCounters& stats) {
+    const auto& config = result->config;
+    const auto& output = *result->sieved;
 
     mpz_t K;
     double K_log;
-    std::ifstream unknown_file;
 
     std::unordered_map<int64_t, std::shared_ptr<DataM>> processing;
 
@@ -404,17 +513,6 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
             }
         }
 
-        // ----- Open unknown input file
-        {
-            std::string fn = Args::gen_unknown_fn(config, ".txt");
-            if (config.verbose >= 1) {
-                printf("\nReading unknowns from '%s'\n", fn.c_str());
-            }
-            unknown_file.open(fn, std::ios::in);
-            assert( unknown_file.is_open() ); // Can't open save_unknowns file
-            assert( unknown_file.good() );    // Can't open save_unknowns file
-        }
-
         uint64_t first_mi = 0;
         for (; first_mi > 0 && gcd(M_start + first_mi, D) > 1; first_mi++);
         assert(first_mi < M_inc);
@@ -433,12 +531,9 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
         }
     }
 
-    // For compressed lines
-    BitArrayHelper helper(config, K);
-
-    // Used for various stats
-    StatsCounters stats(high_resolution_clock::now());
-    size_t pushed_batches = 0;
+    // Two delta trackers for SieveOutput
+    size_t result_i = 0;
+    uint64_t result_m = output.m_start;
 
     // Main loop
     uint64_t mi = 0;
@@ -452,27 +547,35 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     uint64_t m = M_start + mi;
                     if (gcd(m, D) > 1) continue;
 
-                    std::string line;
-                    // Loop can be pragma omp parallel if this is placed in critical section
-                    std::getline(unknown_file, line);
-
-                    std::istringstream iss_line(line);
+                    result_m += std::get<0>(output.m_inc[result_i]);
+                    int64_t found = std::get<1>(output.m_inc[result_i]);
+                    const auto m_unknown_deltas = output.unknowns[result_i];
+                    result_i++;
 
                     // Can skip if m < M_RESUME without parsing line here
-                    if (m < config.mskip) continue;
+                    if (m < config.mskip)
+                        continue;
 
-                    auto test = std::make_shared<DataM>(m);
+                    assert(result_m == m);
 
-                    uint64_t m_parsed = parse_unknown_line(
-                        config, helper, m, iss_line, test->unknowns[0], test->unknowns[1]);
-                    assert(m_parsed == (uint64_t) m);
+                    auto test = std::make_shared<DataM>(m, config.sieve_length);
+
+                    test->unknowns[1].reserve(m_unknown_deltas.size());
+                    int32_t offset = 0;
+                    for (uint16_t delta : m_unknown_deltas) {
+                        offset += delta;
+                        test->unknowns[1].push_back(offset);
+                    }
+
+                    assert(m_unknown_deltas.size() > 2);
+                    assert(test->unknowns[1].size() == m_unknown_deltas.size());
+                    assert(test->unknowns[1].back() <= config.sieve_length);
 
                     mpz_init(test->center);
                     mpz_mul_ui(test->center, K, test->m);
 
                     processing[test->m] = test;
                 }
-                //cout << "00 " << mi << " " << processing.size() << endl;
 
                 size_t currently_overflowed = 0;
 
@@ -536,20 +639,13 @@ void load_batch_thread(const struct Config config, const size_t QUEUE_SIZE) {
                     }
                 }
 
+                // TODO maybe handle this differently
                 // Mark batch as ready for GPU processing
                 batch.end_of_file = (mi == M_inc);
                 // Needs to be last so that GPU_thread doesn't read other parts early.
                 batch.state = batch.i > 0 ? GPUBatch::State::READY : GPUBatch::State::EMPTY;
-                //cout << "AA " << mi << " " << batch.i << endl;
-
-                pushed_batches += batch.state == GPUBatch::State::READY;
-                if (pushed_batches == 1) {
-                    // Helpful for getting better tests/sec
-                    stats.s_start_t = high_resolution_clock::now();
-                }
 
             } else if (batch.state == GPUBatch::State::RESULT_WRITTEN) {
-                //cout << "CC " << mi << " " << batch.i << endl;
                 // If GPU PRP result are ready:
                 // Read results, mark any found primes, and possible finalize m-interval
                 {
@@ -673,6 +769,7 @@ next_process:
                     }
 
                     bool is_last = (mi >= M_inc) && processing.size() == 1;
+                    // TODO this doesn't seem to always be working now
                     stats.process_results(config, interval.m, is_last,
                         interval.unknowns[0].size(), interval.unknowns[1].size(),
                         prev_p, next_p,
@@ -691,6 +788,72 @@ next_process:
     }
 }
 
+void coordinator_thread(struct Config global_config) {
+    pthread_setname_np(pthread_self(), "MAIN_LOAD_AND_BATCH_THREAD");
+
+    size_t skipped_ms = 0;
+
+    // Used for various stats
+    StatsCounters stats(high_resolution_clock::now());
+
+    // TODO make some get_sieved_by_status method.
+    std::unique_lock<std::mutex> lock(interval_mtx, std::defer_lock);
+    while (is_running) {
+        std::shared_ptr<SieveResult> to_test = nullptr;
+
+        lock.lock();
+        {
+            int needed = 2;
+            for (auto& sieved : sieveds) {
+                if (sieved->state == SieveResult::CONFIGURED || sieved->state == SieveResult::SIEVED) {
+                    needed -= 1;
+                }
+            }
+            while (needed > 0) {
+                // Add new config to the queue
+                auto this_config = std::make_shared<SieveResult>(global_config);
+                printf("\tQueued %'lu to %'lu\n",
+                        global_config.mstart,
+                        global_config.mstart + global_config.minc);
+                sieveds.push_back(this_config);
+                needed -= 1;
+
+                global_config.mstart += global_config.minc;
+            }
+        }
+
+        for (auto& sieved : sieveds) {
+            if (sieved->state == SieveResult::SIEVED) {
+                if (!to_test || to_test->config.mstart > sieve->config.mstart) {
+                    to_test = sieved;
+                }
+            }
+        }
+        to_test->state = SieveResult::TESTING;
+        lock.unlock();
+
+        if (to_test == nullptr) {
+            skipped_ms += 1000;
+            printf("\tNothing to test (%.1f seconds paused)\n", skipped_ms / 1000.0);
+            usleep(1'000'000); // 1,000ms
+            continue;
+        }
+
+        // TODO some stuff with sieved
+        printf("Testing %'lu to %'lu\n",
+                to_test->config.mstart,
+                to_test->config.mstart + to_test->config.minc);
+        batch_run_config(to_test, BATCHED_M, stats);
+
+        lock.lock();
+        sieveds.erase(std::remove(sieveds.begin(), sieveds.end(), to_test), sieveds.end());
+        lock.unlock();
+    }
+
+}
+
+
+
 
 void prime_gap_test(struct Config config) {
     // Setup test runner
@@ -706,7 +869,7 @@ void prime_gap_test(struct Config config) {
     {
         mpz_t K;
         init_K(config, K);
-        size_t N_bits = mpz_sizeinbase(K, 2) + log2(config.mstart + config.minc);
+        size_t N_bits = mpz_sizeinbase(K, 2) + log2(config.mstart);
         mpz_clear(K);
 
         // P# roughly 349, 709, 1063, 1447
@@ -724,11 +887,12 @@ void prime_gap_test(struct Config config) {
 
     is_running = true;
 
-    std::thread main_thread(load_batch_thread, config, BATCHED_M);
-    std::thread gpu_thread(run_gpu_thread, config);
+    std::thread main_thread(coordinator_thread, config);
+    std::thread sieve_thread(run_sieve_thread);
+    std::thread gpu_thread(run_gpu_thread, config.verbose);
     vector<std::thread> overflow_threads;
     for (size_t t = 0; t < CPU_THREADS; t++) {
-        overflow_threads.push_back(std::thread(run_overflow_thread, config));
+        overflow_threads.push_back(std::thread(run_overflow_thread));
     }
 
     main_thread.join();
@@ -736,6 +900,7 @@ void prime_gap_test(struct Config config) {
     is_running = false;
     cout << "All done. Goodbye!" << endl;
 
+    sieve_thread.join();
     gpu_thread.join();
     overflow_cv.notify_all();  // wake up all overflow thread
     for (auto& overflow_thread : overflow_threads) {
