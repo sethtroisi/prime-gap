@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
-#include <chrono>
 
+#include <gmp.h>
 #include "gap_common.h"
 
 using std::cout;
@@ -81,3 +85,10 @@ void test_interval_cpu(
         size_t &s_gap_out_of_sieve_prev, size_t &s_gap_out_of_sieve_next,
         vector<int32_t> (&unknowns)[2],
         int &prev_p, int &next_p);
+
+void sieve_interval_cpu(
+        const uint64_t m, const mpz_t &K,
+        const vector<std::pair<uint32_t, uint32_t>> p_and_r,
+        const int32_t sieve_start, const int32_t sieve_length,
+        vector<int32_t> &unknowns);
+

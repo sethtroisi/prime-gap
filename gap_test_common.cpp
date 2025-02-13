@@ -190,3 +190,45 @@ void test_interval_cpu(
 
     mpz_clear(center); mpz_clear(prime_test);
 }
+
+void sieve_interval_cpu(
+        const uint64_t m, const mpz_t &K,
+        const vector<std::pair<uint32_t, uint32_t>> p_and_r,
+        const int32_t sieve_start, const int32_t sieve_length,
+        vector<int32_t> &unknowns) {
+
+    // To make math easy we always start at the bottom of the sieve and head positive
+    // This is natural for next_prime and returns the numbers backwards for a prev_prime
+
+    char composite[sieve_length] = {};
+
+    // Handle 2 because it's weird
+    {
+        bool start_mod_2 = mpz_even_p(K) ^ (m & 1) ^ (sieve_start & 1);
+        for (int32_t i = 1 - start_mod_2; i < sieve_length; i += 2) {
+            composite[i] = 1;
+        }
+    }
+
+    int64_t negative_m = -m;
+
+    // TODO add an assert that m*p doesn't overflow
+    for (const auto& [p, r] : p_and_r) {
+        // (-(m * K + sieve_start) % r)
+        int32_t center_mod = ((int64_t) r * negative_m - sieve_start) % p;
+        if (center_mod < 0) {
+            center_mod += p;
+        }
+        if (center_mod < sieve_length) {
+            if (r >= (uint32_t) sieve_length) {
+                composite[center_mod] = 1;
+            } else {
+                // Could do by 2*p but not worth the extra code IMO
+                for (int32_t i = center_mod; i < sieve_length; i += p) {
+                    composite[i] = 1;
+                }
+            }
+        }
+    }
+}
+
