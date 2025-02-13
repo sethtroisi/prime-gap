@@ -16,9 +16,9 @@
 OBJS	= gap_common.o modulo_search.o gap_test_common.o
 OUT	= combined_sieve gap_stats gap_test_simple benchmark benchmark_google
 CC	= g++
-CFLAGS	= -Wall -Werror -O3 -fopenmp
+CFLAGS	= -Wall -Werror -g -fopenmp
 NVCC	= nvcc
-CUDA_FLAGS	= -Xcompiler -Wall -Xcompiler -Werror -O3 -Xcompiler -fopenmp
+CUDA_FLAGS	= -Xcompiler -Wall -Xcompiler -Werror -g -Xcompiler -fopenmp
 BITS    = 1024
 
 LDFLAGS	= -lgmp -lsqlite3

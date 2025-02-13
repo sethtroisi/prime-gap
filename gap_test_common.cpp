@@ -113,7 +113,7 @@ bool StatsCounters::possible_print_stats(
                         s_skips_after_one_side, 100.0 * s_skips_after_one_side / s_tests);
                 }
                 if (s_gap_out_of_sieve_prev + s_gap_out_of_sieve_next > 0) {
-                    printf("\t    fallback prev_gap %ld (%.2f%%), next_gap %ld (%.2f%%)\n",
+                    printf("\t    extra sieves prev_gap %ld (%.2f%%), next_gap %ld (%.2f%%)\n",
                         s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / s_tests,
                         s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / s_tests);
                 }
@@ -204,7 +204,7 @@ void sieve_interval_cpu(
 
     // Handle 2 because it's weird
     {
-        bool start_mod_2 = mpz_even_p(K) ^ (m & 1) ^ (sieve_start & 1);
+        bool start_mod_2 = mpz_odd_p(K) ^ (m & 1) ^ (sieve_start & 1);
         for (int32_t i = 1 - start_mod_2; i < sieve_length; i += 2) {
             composite[i] = 1;
         }
@@ -229,6 +229,11 @@ void sieve_interval_cpu(
                 }
             }
         }
+    }
+
+    for (size_t i = 0; i < (uint32_t) sieve_length; i++) {
+        if (composite[i] == 0)
+            unknowns.push_back(i);
     }
 }
 

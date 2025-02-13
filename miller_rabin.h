@@ -347,11 +347,10 @@ class test_runner_t {
             exit(1);
           }
 
-          // TODO handle when there are zeros in results more gracefully
-          // TODO handle when there are zeros in tests more gracefully (e.g. DON'T HANG)
-
           for (size_t i = 0; i < tests.size(); i++) {
-             from_mpz(*tests[i], instances[i].candidate._limbs, params::BITS/32);
+              assert( mpz_odd_p(*tests[i]) );
+              assert( mpz_cmp_ui(*tests[i], 1) > 0);
+              from_mpz(*tests[i], instances[i].candidate._limbs, params::BITS/32);
           }
 
           //printf("Copying primes and instances to the GPU ...\n");
