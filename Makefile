@@ -16,9 +16,9 @@
 OBJS	= gap_common.o modulo_search.o gap_test_common.o
 OUT	= combined_sieve gap_stats gap_test_simple benchmark benchmark_google
 CC	= g++
-CFLAGS	= -Wall -Werror -g -fopenmp
+CFLAGS	= -Wall -Werror -O3 -fopenmp
 NVCC	= nvcc
-CUDA_FLAGS	= -Xcompiler -Wall -Xcompiler -Werror -g -Xcompiler -fopenmp
+CUDA_FLAGS	= -Xcompiler -Wall -Xcompiler -Werror -O3 -Xcompiler -fopenmp
 BITS    = 1024
 
 LDFLAGS	= -lgmp -lsqlite3
@@ -38,13 +38,7 @@ all: $(OUT)
 %.o: %.cpp
 	$(CC) -c -o $@ $< $(CFLAGS) $(DEFINES)
 
-%_cuda.o: %.cpp
-	$(NVCC) -c -o $@ $< $(CUDA_FLAGS) $(DEFINES)
-
 combined_sieve: combined_sieve.cpp $(OBJS)
-	$(CC) -o $@ $^ $(CFLAGS) -lprimesieve $(LDFLAGS) $(DEFINES)
-
-combined_sieve_small: combined_sieve_small.cpp gap_common.o gap_test_common.o
 	$(CC) -o $@ $^ $(CFLAGS) -lprimesieve $(LDFLAGS) $(DEFINES)
 
 gap_stats: gap_stats.cpp gap_common.o
@@ -53,7 +47,7 @@ gap_stats: gap_stats.cpp gap_common.o
 gap_test_simple: gap_test_simple.cpp gap_common.o gap_test_common.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
-gap_test_gpu: gap_test_gpu.cu miller_rabin.h gap_common_cuda.o gap_test_common_cuda.o combined_sieve_small_cuda.o
+gap_test_gpu: gap_test_gpu.cu miller_rabin.h gap_common.o gap_test_common.o combined_sieve_small.o
 	nvcc -o $@ -I../CGBN/include \
 		-DGPU_BITS=$(BITS) \
 		$(filter-out miller_rabin.h, $^) \
@@ -71,4 +65,4 @@ benchmark_google: misc/benchmark_google.cpp modulo_search.o
 
 
 clean:
-	rm -f $(OBJS) $(OUT) gap_test_gpu gap_common_cuda.o gap_test_common_cuda.o
+	rm -f $(OUT) gap_test_gpu *.o
