@@ -641,12 +641,14 @@ std::unique_ptr<SieveOutput> save_unknowns(
         }
     }
 
-    auto s_stop_t = high_resolution_clock::now();
-    std::string fn = Args::gen_unknown_fn(config, ".txt");
-    printf("\n\tSaved deltas for '%s' %ld/%ld (%.1f%%) in %.1f seconds\n\n",
-           fn.c_str(),
-           count_a, count_b, 100.0f * count_a / count_b,
-           duration<double>(s_stop_t - s_save_t).count());
+    if (config.verbose >= 1) {
+        auto s_stop_t = high_resolution_clock::now();
+        std::string fn = Args::gen_unknown_fn(config, ".txt");
+        printf("\n\tSaved deltas for '%s' %ld/%ld (%.1f%%) in %.1f seconds\n\n",
+               fn.c_str(),
+               count_a, count_b, 100.0f * count_a / count_b,
+               duration<double>(s_stop_t - s_save_t).count());
+    }
 
     return output;
 }

@@ -323,6 +323,7 @@ void run_gpu_thread(int verbose) {
     test_runner_t<params> runner(BATCH_GPU, ROUNDS);
 
     size_t processed_batches = 0;
+    size_t last_print_batch = 0;
     size_t no_batch_count_ms = 0;
     auto last_finished = high_resolution_clock::now();
     while (is_running) {
@@ -378,9 +379,10 @@ void run_gpu_thread(int verbose) {
             auto now = high_resolution_clock::now();
             auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(
                     now - last_finished).count();
-            if (verbose >= 0 && processed_batches > 0 && delta > 50) {
+            if (verbose >= 0 && processed_batches > last_print_batch && delta > 100) {
                 printf("No results ready for batch %ld. Total wait %.1f seconds\n",
                         processed_batches, no_batch_count_ms / 1000.0);
+                last_print_batch = processed_batches;
             }
             uint32_t sleep_ms = delta < 10 ? 1 : (delta < 100 ? 5 : (delta < 1000 ? 20 : 500));
             no_batch_count_ms += sleep_ms;
@@ -417,7 +419,7 @@ void run_sieve_thread(void) {
 
         //auto M_end = to_sieve->config.mstart + to_sieve->config.minc;
         //printf("\tStarting Combined Sieve %ld to %ld\n", to_sieve->config.mstart, M_end);
-        auto s_save_t = high_resolution_clock::now();
+        auto s_start_t = high_resolution_clock::now();
         // DO MORE FOR FIRST RUN THEN LESS AFTER
         to_sieve->config.threads = 6;
         to_sieve->config.verbose -= 3;
@@ -425,7 +427,7 @@ void run_sieve_thread(void) {
         to_sieve->config.verbose += 3;
         auto s_stop_t = high_resolution_clock::now();
         printf("\tCombined Sieve took %.1f seconds\n",
-               duration<double>(s_stop_t - s_save_t).count());
+               duration<double>(s_stop_t - s_start_t).count());
 
         lock.lock();
         to_sieve->state = SieveResult::SIEVED;
@@ -440,7 +442,7 @@ void run_overflow_thread(const mpz_t &K_in) {
     mpz_init_set(K, K_in);
 
     // TODO make this a #define or based on config or something
-    uint64_t MAX_PRIME = 10'000;
+    uint64_t MAX_PRIME = 1'000'000;
     std::vector<std::pair<uint32_t, uint32_t>> p_and_r;
     primesieve::iterator iter;
     uint64_t prime = iter.next_prime();
@@ -483,25 +485,17 @@ void run_overflow_thread(const mpz_t &K_in) {
 
             lock.unlock();  // Allow main thread to add more things while we process
             vector<int32_t> unknowns;
+            auto s_start_t = high_resolution_clock::now();
             sieve_interval_cpu(interval.m, K, p_and_r, sieve_start, sl, unknowns);
+            auto s_stop_t = high_resolution_clock::now();
             lock.lock();
 
-            if (0 && (interval.m == 1031)) {
-                cout << "SIEVE START " << interval.m << " is prev side: " << (interval.side == DataM::Side::PREV_P) << endl;
-                gmp_printf("%lu %d to %d, %Zd\n", interval.m, sieve_start, sl, K);
-                cout << "SIEVE END   " << interval.m << " -> |" << unknowns.size()
-                    << "| start: " << sieve_start << ", first: " << unknowns[0] << ", last: " << unknowns.back() << endl;
-                size_t q = 0;
-                for (auto iter = unknowns.rbegin(); iter != unknowns.rend(); iter++) {
-                    auto u = *iter;
-                    assert(u >= 0);
-                    // TODO determine if these should be negative or not
-                    assert( sieve_start + u < 0 );
-                    cout << "\t" << q << " " << u << " -> " << sieve_start + u << endl;
-                    if (q++ > 10) {
-                        exit(0);
-                    }
-                }
+            if (0) {
+                printf("\tCPU sieve took %.5f seconds\n",
+                       duration<double>(s_stop_t - s_start_t).count());
+                cout << "SIEVE  " << interval.m << " is prev side: " << (interval.side == DataM::Side::PREV_P)
+                     << " " << interval.m << " -> |" << unknowns.size() << "| start: " << sieve_start
+                     << ", first: " << unknowns[0] << ", last: " << unknowns.back() << endl;
             }
 
             assert(5 <= unknowns.size() && unknowns.size() <= sl / 4);
@@ -563,7 +557,7 @@ void batch_run_config(
     const float min_merit = config.min_merit;
     // See THEORY.md!
     // Added const is small preference for doing less prev_p
-    const float MIN_MERIT_TO_CONTINUE = 2.6 + std::log2(min_merit * std::log(2) + 1);
+    const float MIN_MERIT_TO_CONTINUE = 2.1 + std::log2(min_merit * std::log(2) + 1);
 
     // Print Header info & Open unknown_fn
     {
