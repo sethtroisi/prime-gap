@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
+OPT     = -O3
 OBJS	= gap_common.o modulo_search.o gap_test_common.o
 OUT	= combined_sieve gap_stats gap_test_simple benchmark benchmark_google
 CC	= g++
-CFLAGS	= -Wall -Werror -O3 -fopenmp
+CFLAGS	= $(OPT) -Wall -Werror -fopenmp
 NVCC	= nvcc
-CUDA_FLAGS	= -Xcompiler -Wall -Xcompiler -Werror -O3 -Xcompiler -fopenmp
+CUDA_FLAGS	= $(OPT) -Xcompiler -Wall -Xcompiler -Werror -Xcompiler -fopenmp
 BITS    = 1024
 
 LDFLAGS	= -lgmp -lsqlite3

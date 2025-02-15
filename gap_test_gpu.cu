@@ -305,12 +305,12 @@ vector<GPUBatch> gpu_batches = {{BATCH_GPU}, {BATCH_GPU}};
 
 // Don't read from sieveds without holding sieve_mtx
 std::mutex sieve_mtx;
-vector<std::shared_ptr<SieveResult>> sieveds;
+vector<std::unique_ptr<SieveResult>> sieveds;
 
 // Don't mutate an interval (overflowed or processing) without holding interval_mtx
 std::mutex interval_mtx;
 std::condition_variable overflow_cv;
-vector<std::shared_ptr<DataM>> overflowed;
+vector<DataM*> overflowed;
 
 
 void run_gpu_thread(int verbose) {
@@ -386,16 +386,17 @@ void run_sieve_thread(void) {
 
     std::unique_lock<std::mutex> lock(sieve_mtx, std::defer_lock);
     while (is_running) {
-        std::shared_ptr<SieveResult> to_sieve = nullptr;
+        SieveResult *to_sieve = nullptr;
 
         lock.lock();
         // Check if any config to start processing
         for (auto& sieved : sieveds) {
             if (sieved->state == SieveResult::CONFIGURED) {
-                to_sieve = sieved;
+                to_sieve = sieved.get();
                 break;
             }
         }
+        // Safe to unlock because CONFIGURED are never changed by anyone else.
         lock.unlock();
 
         if (to_sieve == nullptr) {
@@ -517,18 +518,18 @@ void run_overflow_thread(const mpz_t &K_in) {
 size_t add_to_processing(
         const mpz_t &K,
         const uint32_t D,
-        std::unordered_map<int64_t, std::shared_ptr<DataM>> &processing,
+        std::unordered_map<int64_t, std::unique_ptr<DataM>> &processing,
         size_t n) {
     // Add the n smallest m range from sieveds to processing.
-    std::shared_ptr<SieveResult> sieve = nullptr;
 
+    SieveResult *sieve = nullptr;
     {
         // Only need the lock while reading state
         std::unique_lock<std::mutex> lock(sieve_mtx);
         for (auto& test : sieveds) {
             if (test->state == SieveResult::SIEVED) {
-                if (!sieve || test->result->m_start < sieve->result->m_start) {
-                    sieve = test;
+                if (sieve == nullptr || test->result->m_start < sieve->result->m_start) {
+                    sieve = test.get();
                 }
             }
         }
@@ -547,8 +548,10 @@ size_t add_to_processing(
     // We have a range of sieve results
     // Next item is sieve.current_index
     // have to first process m_inc to know m.
-    size_t max_add = result.m_inc.size() -  sieve->current_index;
-    size_t add = std::min(n, max_add);
+    size_t add = std::min(n, result.m_inc.size() -  sieve->current_index);
+
+    //printf("Adding %lu from m_start: %lu @ index: %lu/%lu\n",
+    //    add, result.m_start, sieve->current_index, result.m_inc.size());
 
     for (size_t i = 0; i < add; i++) {
         // Updated last_m (current_m during this loop)
@@ -565,7 +568,7 @@ size_t add_to_processing(
         uint64_t m = sieve->last_m;
         assert( gcd(m, D) == 1 );
 
-        auto test = std::make_shared<DataM>(m, sl);
+        auto test = std::make_unique<DataM>(m, sl);
         test->unknowns[1].reserve(m_unknown_deltas.size());
         int32_t offset = 0;
         for (uint16_t delta : m_unknown_deltas) {
@@ -582,13 +585,19 @@ size_t add_to_processing(
         mpz_init(test->center);
         mpz_mul_ui(test->center, K, test->m);
 
-        processing[test->m] = test;
+        processing.emplace(test->m, std::move(test));
+    }
+
+    if (sieve->current_index == result.m_inc.size()) {
+        std::unique_lock<std::mutex> lock(sieve_mtx);
+        sieve->state = SieveResult::DONE;
     }
 
     return add;
 }
 
 void create_gpu_batches(const struct Config og_config) {
+    cout << endl;
 
     // K is initialized in prob_prime_and_stats
     mpz_t K;
@@ -620,7 +629,7 @@ void create_gpu_batches(const struct Config og_config) {
         setlocale(LC_NUMERIC, "C");
     }
 
-    std::unordered_map<int64_t, std::shared_ptr<DataM>> processing;
+    std::unordered_map<int64_t, std::unique_ptr<DataM>> processing;
 
     const size_t QUEUE_SIZE = BATCHED_M;
 
@@ -683,7 +692,7 @@ void create_gpu_batches(const struct Config og_config) {
                                         if (j == 0) {
                                             interval.state = DataM::State::OVERFLOWED;
                                             stats.s_gap_out_of_sieve_next += 1;
-                                            overflowed.push_back(pair.second);
+                                            overflowed.push_back(pair.second.get());
                                             any_pushed_to_overflow = true;
                                         }
                                         break;
@@ -698,7 +707,7 @@ void create_gpu_batches(const struct Config og_config) {
                                         if (j == 0) {
                                             interval.state = DataM::State::OVERFLOWED;
                                             stats.s_gap_out_of_sieve_prev += 1;
-                                            overflowed.push_back(pair.second);
+                                            overflowed.push_back(pair.second.get());
                                             any_pushed_to_overflow = true;
                                         }
                                         break;
@@ -733,7 +742,7 @@ void create_gpu_batches(const struct Config og_config) {
 
                     assert( batch.i <= BATCH_GPU);
                     // Batches should be full unless lots of overflowed results.
-                    if (batch.i < BATCH_GPU) {
+                    if (batch.i > 0 && batch.i < BATCH_GPU) {
                         printf("Partial load @ %lu -> %lu/%lu | %lu\n",
                             batch.i > 0 ? batch.data_m[0] : 0,
                             batch.i, BATCH_GPU, currently_overflowed);
@@ -837,7 +846,7 @@ void create_gpu_batches(const struct Config og_config) {
                             stats.s_gap_out_of_sieve_prev += 1;
                             interval.side = DataM::Side::PREV_P;
                             interval.state = DataM::State::OVERFLOWED;
-                            overflowed.push_back(it->second);
+                            overflowed.push_back(it->second.get());
                             //cout << "PREV_P for m=" << interval.m << endl;
                             any_pushed_to_overflow = true;
                             it++;
@@ -889,12 +898,11 @@ void coordinator_thread(struct Config global_config) {
 
     std::unique_lock<std::mutex> lock(sieve_mtx, std::defer_lock);
     while (is_running) {
-        std::shared_ptr<SieveResult> to_test = nullptr;
+        usleep(1'000'000); // 1,000ms
 
-        // TODO what kicks this thread off?
-
+        std::unique_ptr<SieveResult> to_test = nullptr;
         lock.lock();
-        {
+        {  // Add new configs to sieveds queue.
             int needed = 2;
             for (auto& sieved : sieveds) {
                 if (sieved->state == SieveResult::CONFIGURED || sieved->state == SieveResult::SIEVED) {
@@ -910,13 +918,12 @@ void coordinator_thread(struct Config global_config) {
 
 
                 // Add new config to the queue
-                auto this_config = std::make_shared<SieveResult>(global_config);
                 printf("\tQueued(%lu) %'lu to %'lu\n",
                         total_ranges,
                         global_config.mstart,
                         global_config.mstart + global_config.minc);
 
-                sieveds.push_back(this_config);
+                sieveds.emplace_back(std::make_unique<SieveResult>(global_config));
                 needed -= 1;
                 total_ranges += 1;
 
@@ -927,11 +934,12 @@ void coordinator_thread(struct Config global_config) {
                 }
             }
         }
-        lock.unlock();
 
-        lock.lock();
-        std::remove_if(std::begin(sieveds), std::end(sieveds),
-                [](const std::shared_ptr<SieveResult>& sieve) { return sieve->state == SieveResult::DONE; });
+        // Remove any finished results.
+        sieveds.erase(std::remove_if(std::begin(sieveds), std::end(sieveds),
+                [](const std::unique_ptr<SieveResult>& sieve) {
+                    return sieve->state == SieveResult::DONE;
+                }), sieveds.end());
         lock.unlock();
     }
 }
