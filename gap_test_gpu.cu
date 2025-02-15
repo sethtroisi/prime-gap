@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (config.compresion != 0) {
+    if (config.compression != 0) {
         cout << argv[0] << " Doesn't support any compression options." << endl;
         return 1;
     }
@@ -190,10 +190,7 @@ class GPUBatch {
         State state = EMPTY;
 
         // current index;
-        int i;
-
-        // true if running out of m (used to suppress "No results ready" warning)
-        bool end_of_file;
+        size_t i;
 
         // number to check if prime
         vector<mpz_t*> z;
@@ -283,12 +280,15 @@ class SieveResult {
     public:
         SieveResult(const struct Config config): config(config) {};
 
-        enum State { CONFIGURED, SIEVED, TESTING };
+        // TODO make use of DONE
+        enum State { CONFIGURED, SIEVED, DONE };
         State state = CONFIGURED;
 
         struct Config config;
 
-        std::unique_ptr<SieveOutput> sieved;
+        uint64_t last_m = (uint64_t) -1;
+        size_t current_index = 0;
+        std::unique_ptr<SieveOutput> result;
 };
 
 
@@ -329,11 +329,6 @@ void run_gpu_thread(int verbose) {
         std::unique_lock<std::mutex> lock(batches_mtx);
         for (GPUBatch& batch : gpu_batches) {
             if (batch.state == GPUBatch::State::READY) {
-                if (batch.i != BATCH_GPU) {
-                    if (!batch.end_of_file) {
-                        printf("Partial batch %d vs %lu\n", batch.i, BATCH_GPU);
-                    }
-                }
                 assert(std::count(batch.active.begin(), batch.active.end(), 1) == batch.i);
                 lock.unlock();
                 // Run batch on GPU and wait for results to be set
@@ -389,7 +384,7 @@ void run_gpu_thread(int verbose) {
 void run_sieve_thread(void) {
     pthread_setname_np(pthread_self(), "SIEVE_THREAD");
 
-    std::unique_lock<std::mutex> lock(interval_mtx, std::defer_lock);
+    std::unique_lock<std::mutex> lock(sieve_mtx, std::defer_lock);
     while (is_running) {
         std::shared_ptr<SieveResult> to_sieve = nullptr;
 
@@ -422,7 +417,8 @@ void run_sieve_thread(void) {
 
         lock.lock();
         to_sieve->state = SieveResult::SIEVED;
-        to_sieve->sieved.swap(result);
+        to_sieve->last_m = result->m_start;
+        to_sieve->result.swap(result);
         lock.unlock();
     }
 }
@@ -479,9 +475,7 @@ void run_overflow_thread(const mpz_t &K_in) {
 
             lock.unlock();  // Allow main thread to add more things while we process
             vector<int32_t> unknowns;
-            auto s_start_t = high_resolution_clock::now();
             sieve_interval_cpu(interval.m, K, p_and_r, sieve_start, sl, unknowns);
-            auto s_stop_t = high_resolution_clock::now();
             lock.lock();
 
             assert(5 <= unknowns.size() && unknowns.size() <= sl / 4);
@@ -520,112 +514,133 @@ void run_overflow_thread(const mpz_t &K_in) {
 }
 
 
-void batch_run_config(
-        std::shared_ptr<const SieveResult> result,
-        const size_t QUEUE_SIZE,
-        StatsCounters& stats) {
-    // So we can modify
-    Config config = result->config;
-    const auto& output = *result->sieved;
+size_t add_to_processing(
+        const mpz_t &K,
+        const uint32_t D,
+        std::unordered_map<int64_t, std::shared_ptr<DataM>> &processing,
+        size_t n) {
+    // Add the n smallest m range from sieveds to processing.
+    std::shared_ptr<SieveResult> sieve = nullptr;
 
-    mpz_t K;
-    double K_log;
-
-    std::unordered_map<int64_t, std::shared_ptr<DataM>> processing;
-
-    const uint64_t P = config.p;
-    const uint64_t D = config.d;
-    const uint64_t M_start = config.mstart;
-    const uint64_t M_inc = config.minc;
-
-    const float min_merit = config.min_merit;
-    // See THEORY.md!
-    // Added const is small preference for doing less prev_p
-    const float MIN_MERIT_TO_CONTINUE = 2.1 + std::log2(min_merit * std::log(2) + 1);
-
-    // Print Header info & Open unknown_fn
     {
-
-        // ----- Merit / Sieve stats
-        int tmp_verbose = config.verbose;
-        if (stats.s_tests > 0) config.verbose = 0;
-        K_log = prob_prime_and_stats(config, K);
-        if (stats.s_tests > 0) config.verbose = tmp_verbose;
-        {
-            float m_log = log(M_start);
-            if (stats.s_tests == 0 && config.verbose >= 1) {
-                printf("Min Gap ~= %d (for merit > %.1f)\n",
-                    (int) (min_merit * (K_log + m_log)), min_merit);
-                printf("Min Gap to continue ~= %d (for merit = %.1f)\n",
-                    (int) (MIN_MERIT_TO_CONTINUE * (K_log + m_log)),
-                    MIN_MERIT_TO_CONTINUE);
+        // Only need the lock while reading state
+        std::unique_lock<std::mutex> lock(sieve_mtx);
+        for (auto& test : sieveds) {
+            if (test->state == SieveResult::SIEVED) {
+                if (!sieve || test->result->m_start < sieve->result->m_start) {
+                    sieve = test;
+                }
             }
-        }
-
-        uint64_t first_mi = 0;
-        for (; first_mi > 0 && gcd(M_start + first_mi, D) > 1; first_mi++);
-        assert(first_mi < M_inc);
-
-        uint64_t last_mi = M_inc - 1;
-        for (; last_mi > 0 && gcd(M_start + last_mi, D) > 1; last_mi--);
-        assert(last_mi > 0 && last_mi < M_inc);
-
-        // ----- Main sieve loop.
-        if (config.verbose >= 1) {
-            uint64_t valid_ms = count_num_m(M_start, M_inc, D);
-            assert(valid_ms > 0 && valid_ms <= M_inc);
-
-            printf("\n%ld tests M_start(%ld) + mi(%ld to %ld)\n\n",
-                valid_ms, M_start, first_mi, last_mi);
         }
     }
 
-    // Two delta trackers for SieveOutput
-    size_t result_i = 0;
-    uint64_t result_m = output.m_start;
+    if (!sieve) {
+        // Nothing to add!
+        return 0;
+    }
+
+    const SieveOutput& result = *(sieve->result);
+
+    size_t sl = result.sieve_length;
+    assert( sl == sieve->config.sieve_length );
+
+    // We have a range of sieve results
+    // Next item is sieve.current_index
+    // have to first process m_inc to know m.
+    size_t max_add = result.m_inc.size() -  sieve->current_index;
+    size_t add = std::min(n, max_add);
+
+    for (size_t i = 0; i < add; i++) {
+        // Updated last_m (current_m during this loop)
+        // Update current_index (next_index during the loop)
+
+        // TODO found is unused
+        const auto [m_add, found] = result.m_inc[sieve->current_index];
+        // TODO I want to clear these in the future.
+        const auto m_unknown_deltas = result.unknowns[sieve->current_index];
+        assert( m_unknown_deltas.size() == found );
+        sieve->last_m += m_add;
+        sieve->current_index++;
+
+        uint64_t m = sieve->last_m;
+        assert( gcd(m, D) == 1 );
+
+        auto test = std::make_shared<DataM>(m, sl);
+        test->unknowns[1].reserve(m_unknown_deltas.size());
+        int32_t offset = 0;
+        for (uint16_t delta : m_unknown_deltas) {
+            offset += delta;
+            test->unknowns[1].push_back(offset);
+        }
+
+        // TODO clear result.output[INDEX] here.
+
+        assert( m_unknown_deltas.size() > 2 );
+        assert( test->unknowns[1].size() == found );
+        assert( test->unknowns[1].back() <= sl );
+
+        mpz_init(test->center);
+        mpz_mul_ui(test->center, K, test->m);
+
+        processing[test->m] = test;
+    }
+
+    return add;
+}
+
+void create_gpu_batches(const struct Config og_config) {
+
+    // K is initialized in prob_prime_and_stats
+    mpz_t K;
+    double K_log = prob_prime_and_stats(og_config, K);
+    const uint64_t P = og_config.p;
+    const uint64_t D = og_config.d;
+
+    const float min_merit = og_config.min_merit;
+
+    // See THEORY.md! Added const is small preference for doing less prev_p.
+    const float MIN_MERIT_TO_CONTINUE = 2.1 + std::log2(min_merit * std::log(2) + 1);
+
+    // Print Header info
+    if (og_config.verbose >= 1) {
+        setlocale(LC_NUMERIC, "");
+        // ----- Merit / Sieve stats
+        float m_log = log(og_config.minc);
+            printf("Min Gap ~= %'d (for merit > %.1f)\n",
+                (int) (min_merit * (K_log + m_log)), min_merit);
+            printf("Min Gap to continue ~= %'d (for merit = %.1f)\n",
+                (int) (MIN_MERIT_TO_CONTINUE * (K_log + m_log)),
+                MIN_MERIT_TO_CONTINUE);
+
+        const uint64_t M_start = og_config.mstart;
+        const uint64_t M_inc = og_config.minc;
+        uint64_t valid_ms = count_num_m(M_start, M_inc, D);
+        assert(valid_ms > 0 && valid_ms <= M_inc);
+        printf("\nTesting ranges of %'ld ~ %'ld m per range.\n\n", M_inc, valid_ms);
+        setlocale(LC_NUMERIC, "C");
+    }
+
+    std::unordered_map<int64_t, std::shared_ptr<DataM>> processing;
+
+    const size_t QUEUE_SIZE = BATCHED_M;
+
+    // TODO set time AFTER first combined_sieve is done
+
+    // Used for various stats
+    StatsCounters stats(high_resolution_clock::now());
 
     // Main loop
-    uint64_t mi = 0;
-    while (mi < M_inc || !processing.empty()) {
-        usleep(100); // 0.1ms
+    while (is_running) {
+        usleep(200); // 0.2ms
 
         bool any_pushed_to_overflow = false;
         for (GPUBatch& batch : gpu_batches) {
             // If batch is ready to have new data loaded
             if (batch.state == GPUBatch::State::EMPTY) {
                 // Add new DataM if free space in processing
-                for (; processing.size() < QUEUE_SIZE && mi < M_inc; mi++) {
-                    // TODO move to a seperate load more processing function.
-                    uint64_t m = M_start + mi;
-                    if (gcd(m, D) > 1) continue;
+                size_t added = add_to_processing(K, D, processing, QUEUE_SIZE - processing.size());
 
-                    result_m += std::get<0>(output.m_inc[result_i]);
-                    int64_t found = std::get<1>(output.m_inc[result_i]);
-                    const auto m_unknown_deltas = output.unknowns[result_i];
-                    result_i++;
-
-                    assert(result_m == m);
-
-                    auto test = std::make_shared<DataM>(m, config.sieve_length);
-
-                    test->unknowns[1].reserve(m_unknown_deltas.size());
-                    int32_t offset = 0;
-                    for (uint16_t delta : m_unknown_deltas) {
-                        offset += delta;
-                        test->unknowns[1].push_back(offset);
-                    }
-
-                    assert(m_unknown_deltas.size() > 2);
-                    assert(test->unknowns[1].size() == m_unknown_deltas.size());
-                    assert(test->unknowns[1].back() <= config.sieve_length);
-
-                    mpz_init(test->center);
-                    mpz_mul_ui(test->center, K, test->m);
-
-                    processing[test->m] = test;
-                }
-
-                // Not a full count but (only covers the portion till GPU_BATCH is full).
+                // Not a full count but (only covers the portion till BATCH_GPU is full).
                 size_t currently_overflowed = 0;
                 size_t side_count[2] = {};
 
@@ -656,7 +671,7 @@ void batch_run_config(
                             int32_t last_offset = 0;
 
                             auto side = interval.side;
-                            for (size_t j = 0; batch.i < GPU_BATCH && j < SEQUENTIAL_IN_BATCH; j++) {
+                            for (size_t j = 0; batch.i < BATCH_GPU && j < SEQUENTIAL_IN_BATCH; j++) {
                                 int32_t index = 0;
                                 int32_t offset = 0;
                                 if (side == DataM::Side::NEXT_P) {
@@ -716,18 +731,17 @@ void batch_run_config(
                         }
                     }
 
-                    assert( 0 <= batch.i && batch.i <= BATCH_GPU);
-                    // Every batch should be full unless we are almost done
-                    // technically if many overflowed results this could not be true.
-                    if (!( (mi >= M_inc) || (batch.i == BATCH_GPU) )) {
-                        printf("Partial load @ %lu/%lu -> %d/%lu | %lu\n",
-                               mi, M_inc, batch.i, BATCH_GPU, currently_overflowed);
+                    assert( batch.i <= BATCH_GPU);
+                    // Batches should be full unless lots of overflowed results.
+                    if (batch.i < BATCH_GPU) {
+                        printf("Partial load @ %lu -> %lu/%lu | %lu\n",
+                            batch.i > 0 ? batch.data_m[0] : 0,
+                            batch.i, BATCH_GPU, currently_overflowed);
                     }
                 }
 
-                // TODO maybe handle this differently
-                // Mark batch as ready for GPU processing
-                batch.end_of_file = (mi == M_inc);
+                // TODO this should probably be behind a mutex so that it doesn't need
+                // to rely on being "last" thing executed.
                 // Needs to be last so that GPU_thread doesn't read other parts early.
                 batch.state = batch.i > 0 ? GPUBatch::State::READY : GPUBatch::State::EMPTY;
 
@@ -845,8 +859,7 @@ void batch_run_config(
                             (next_p + prev_p), merit, interval.m, P, D, prev_p, next_p);
                     }
 
-                    bool is_last = (mi >= M_inc) && processing.size() == 1;
-                    stats.process_results(config, interval.m, is_last,
+                    stats.process_results(og_config, interval.m, /* is_last */ false,
                         interval.unknowns[0].size(), interval.unknowns[1].size(),
                         prev_p, next_p,
                         interval.p_tests, interval.n_tests, merit);
@@ -872,15 +885,13 @@ void batch_run_config(
 void coordinator_thread(struct Config global_config) {
     pthread_setname_np(pthread_self(), "MAIN_LOAD_AND_BATCH_THREAD");
 
-    size_t skipped_ms = 0;
-    size_t queued_ranges = 0;
+    size_t total_ranges = 0;
 
-    // Used for various stats
-    StatsCounters stats(high_resolution_clock::now());
-
-    std::unique_lock<std::mutex> lock(interval_mtx, std::defer_lock);
+    std::unique_lock<std::mutex> lock(sieve_mtx, std::defer_lock);
     while (is_running) {
         std::shared_ptr<SieveResult> to_test = nullptr;
+
+        // TODO what kicks this thread off?
 
         lock.lock();
         {
@@ -892,7 +903,7 @@ void coordinator_thread(struct Config global_config) {
             }
             while (needed > 0) {
                 // Make minc half for first two ranges to get first results twice as fast.
-                if (queued_ranges == 0) {
+                if (total_ranges == 0) {
                     assert( global_config.minc % 2 == 0 );
                     global_config.minc /= 2;
                 }
@@ -901,55 +912,26 @@ void coordinator_thread(struct Config global_config) {
                 // Add new config to the queue
                 auto this_config = std::make_shared<SieveResult>(global_config);
                 printf("\tQueued(%lu) %'lu to %'lu\n",
-                        queued_ranges,
+                        total_ranges,
                         global_config.mstart,
                         global_config.mstart + global_config.minc);
 
                 sieveds.push_back(this_config);
                 needed -= 1;
-                queued_ranges += 1;
+                total_ranges += 1;
 
                 global_config.mstart += global_config.minc;
 
-                if (queued_ranges == 2) {
+                if (total_ranges == 2) {
                     global_config.minc *= 2;
                 }
             }
         }
-
-        for (auto& sieved : sieveds) {
-            if (sieved->state == SieveResult::SIEVED) {
-                if (!to_test || to_test->config.mstart > sieved->config.mstart) {
-                    to_test = sieved;
-                }
-            }
-        }
-        if (to_test) {
-            to_test->state = SieveResult::TESTING;
-        }
         lock.unlock();
 
-        if (to_test == nullptr) {
-            skipped_ms += 1000;
-            if (stats.s_tests > 0) {
-                printf("\tWaiting for sieve results (%.1f seconds paused)\n", skipped_ms / 1000.0);
-            }
-            usleep(1'000'000); // 1,000ms
-            continue;
-        }
-
-        // TODO: Figure out how to avoid partial batches as each batch finishes up.
-        // Probably just have another queue of these and let batch_run_config pull from any SieveResult
-        // Need to add a next_m_index to SieveResult
-        // Have to thing about how to delete from that queue or if we just tombstone.
-        // Have a middle person (this thread?) merge them into a new queue or something.
-        printf("\tTesting %'lu to %'lu\n",
-                to_test->config.mstart,
-                to_test->config.mstart + to_test->config.minc);
-        batch_run_config(to_test, BATCHED_M, stats);
-
         lock.lock();
-        sieveds.erase(std::remove(sieveds.begin(), sieveds.end(), to_test), sieveds.end());
+        std::remove_if(std::begin(sieveds), std::end(sieveds),
+                [](const std::shared_ptr<SieveResult>& sieve) { return sieve->state == SieveResult::DONE; });
         lock.unlock();
     }
 }
@@ -988,8 +970,21 @@ void prime_gap_test(struct Config config) {
 
     is_running = true;
 
+    /**
+     * coordinator_thread: creates configs and adds them to queue
+     * sieve_thread: reads configs from ^ queue and runs combined_sieve_small
+     *
+     * batch_thread: reads SieveResult's and creates GPU batches
+     * gpu_thread: runs the GPU batches.
+     * ^ any reason these couldn't be the same thread?
+     *
+     * overflow_sieve_thread: computes extra sieves for prev_p and overflowed next_p
+     *
+     */
     std::thread main_thread(coordinator_thread, config);
     std::thread sieve_thread(run_sieve_thread);
+
+    std::thread batch_thread(create_gpu_batches, config);
     std::thread gpu_thread(run_gpu_thread, config.verbose);
     std::thread overflow_sieve_thread(run_overflow_thread, std::ref(K));
 
@@ -999,6 +994,7 @@ void prime_gap_test(struct Config config) {
     cout << "All done. Goodbye!" << endl;
 
     sieve_thread.join();
+    batch_thread.join();
     gpu_thread.join();
     overflow_cv.notify_all();  // wake up all overflow thread
     overflow_sieve_thread.join();

@@ -33,6 +33,7 @@ class SieveOutput {
         // m_increment, unknown count
         vector<std::tuple<int16_t, int16_t>> m_inc;
 
+        // TODO change to uint8_t with 0 as a +255 jump without testing.
         vector<vector<uint16_t>> unknowns;
 };
 
