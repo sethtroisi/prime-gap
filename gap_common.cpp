@@ -346,7 +346,7 @@ pair<uint64_t, uint64_t> calculate_thresholds_method2(
         const struct Config config,
         size_t count_coprime_sieve,
         size_t valid_ms) {
-    uint32_t SL = config.sieve_length;
+    uint32_t sieve_interval = 2 * config.sieve_length + 1;
 
     // (small vs modulo_search)  MULT  vs  log2(MULT) * (M_inc/valid_ms)
     float SMALL_MULT = std::max(8.0, log(8) * config.minc / valid_ms);
@@ -355,7 +355,7 @@ pair<uint64_t, uint64_t> calculate_thresholds_method2(
     uint64_t MEDIUM_CROSSOVER_SMALL = 1.0 * count_coprime_sieve * config.minc / valid_ms;
 
     // (medium vs modulo_search)  count_coprime_sieve vs M*S/P * (log2(P) - log2(SL))
-    float M_PER_P_CROSSOVER = 1.0 * config.minc * SL / count_coprime_sieve;
+    float M_PER_P_CROSSOVER = 1.0 * config.minc * sieve_interval / count_coprime_sieve;
     // correct for how much work it takes to skip to next m
     float MEDIUM_MULT = std::max(1.9, 0.65 * log2(M_PER_P_CROSSOVER / count_coprime_sieve));
     uint64_t MEDIUM_CROSSOVER_SEARCH = MEDIUM_MULT * M_PER_P_CROSSOVER;
@@ -363,9 +363,9 @@ pair<uint64_t, uint64_t> calculate_thresholds_method2(
     // XXX: What would it look like to do this more dynamically?
     // Everytime prime >= next_mult run a couple through both MEDIUM & LARGE prime and choose faster.
 
-    uint64_t SMALL_THRESHOLD = std::min((uint64_t) SMALL_MULT * SL, MEDIUM_CROSSOVER_SMALL);
-    if (SMALL_THRESHOLD < SL) {
-        SMALL_THRESHOLD = SL + 1;
+    uint64_t SMALL_THRESHOLD = std::min((uint64_t) SMALL_MULT * sieve_interval, MEDIUM_CROSSOVER_SMALL);
+    if (SMALL_THRESHOLD < sieve_interval) {
+        SMALL_THRESHOLD = sieve_interval + 1;
     }
 
     uint64_t MEDIUM_THRESHOLD = std::max(SMALL_THRESHOLD, MEDIUM_CROSSOVER_SEARCH);
@@ -457,7 +457,7 @@ double combined_sieve_method2_time_estimate(
  * See "Optimizing Choice Of D" in THEORY.md
  * Return: Counts the number of coprimes of (N, i), -sl <= i <= sl
  */
-std::tuple<uint32_t, double, uint32_t, double, double> count_K_d(const struct Config& config) {
+std::tuple<double, uint32_t, double, double> count_K_d(const struct Config& config) {
     uint64_t K_mod_d;
     double N_log;
     const uint64_t d = config.d;
@@ -518,7 +518,7 @@ std::tuple<uint32_t, double, uint32_t, double, double> count_K_d(const struct Co
     uint64_t m = config.mstart;
 
     // Periodic in d, but d might be X00'000'000 so limit to 5'000
-    const uint64_t intervals = std::min(d, 100'000UL);
+    const uint64_t intervals = std::min(d, 5'000UL);
     size_t m_count = 0;
     for (; m_count < intervals; m++) {
         if (m >= config.mstart + config.minc) break; // Tested all values.
@@ -558,14 +558,12 @@ std::tuple<uint32_t, double, uint32_t, double, double> count_K_d(const struct Co
                     expected_count += 1;
                 }
             }
-            // If no prime found, guess SL + 1 merit
-            expected += (sl + N_log) * prob;
+            expected += sl * prob;
             expected_length += expected;
             remaining_prob += prob;
         }
     }
-    return {m_count,
-            expected_length / m_count,
+    return {expected_length / m_count,
             expected_count / (m_count * 2),
             remaining_prob / (m_count * 2),
             prob_prime_adj
@@ -586,9 +584,9 @@ double prob_prime_and_stats(const struct Config& config, mpz_t &K) {
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
         auto stats = count_K_d(config);
-        size_t count_coprime_p = std::get<2>(stats);
-        double prob_prime_coprime_p = std::get<4>(stats);
-        double prob_gap_hypothetical = std::get<3>(stats);
+        size_t count_coprime_p = std::get<1>(stats);
+        double prob_prime_coprime_p = std::get<3>(stats);
+        double prob_gap_hypothetical = std::get<2>(stats);
 
         float expected = count_coprime_p * (prob_prime_coprime_p / prob_prime_after_sieve);
         printf("\n");
@@ -794,7 +792,7 @@ int Args::guess_compression(const struct Config& config, std::ifstream& unknown_
 
     bool has_space = false;
     bool has_high_range = false;
-    for (size_t i = 50; i < strlen(t) - 1 && t[i] != '\n'; i++) {
+    for (size_t i = 50; i < strlen(t) - 1; i++) {
         has_space      |= t[i] == ' ' && t[i+1] != '|' && t[i-1] != '|';
         has_high_range |= t[i] > '9';
     }

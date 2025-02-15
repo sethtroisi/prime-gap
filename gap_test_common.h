@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <utility>
 #include <vector>
+#include <chrono>
 
-#include <gmp.h>
 #include "gap_common.h"
 
 using std::cout;
@@ -35,30 +31,26 @@ class StatsCounters {
     public:
         StatsCounters(std::chrono::high_resolution_clock::time_point now) : s_start_t(now) {}
 
-        std::chrono::high_resolution_clock::time_point s_start_t;
+        const std::chrono::high_resolution_clock::time_point s_start_t;
 
-        uint64_t  s_tests     = 0;
+        uint32_t  s_tests     = 0;
 
         /* Counters for unknowns after sieve */
-        uint64_t    s_total_unknown = 0;
-        uint64_t    s_t_unk_prev = 0;
-        uint64_t    s_t_unk_next = 0;
+        size_t    s_total_unknown = 0;
+        size_t    s_t_unk_prev = 0;
+        size_t    s_t_unk_next = 0;
 
         /* PRP counter */
-        uint64_t    s_total_prp_tests = 0;
+        size_t    s_total_prp_tests = 0;
 
         /* Number of times fallback or skips happened */
-        uint64_t    s_skips_after_one_side = 0;
-        uint64_t    s_gap_out_of_sieve_prev = 0;
-        uint64_t    s_gap_out_of_sieve_next = 0;
+        size_t    s_skips_after_one_side = 0;
+        size_t    s_gap_out_of_sieve_prev = 0;
+        size_t    s_gap_out_of_sieve_next = 0;
 
         /* Interval stats */
         float     s_best_merit_interval = 0;
-        uint64_t    s_best_merit_interval_m = 0;
-
-        float     s_total_merit = 0.0;
-        uint64_t    s_total_prev_p = 0;
-        uint64_t    s_total_next_p = 0;
+        size_t    s_best_merit_interval_m = 0;
 
         // This can change in const possible_print_stats
         mutable float     s_tests_per_second = 0;
@@ -85,10 +77,3 @@ void test_interval_cpu(
         size_t &s_gap_out_of_sieve_prev, size_t &s_gap_out_of_sieve_next,
         vector<int32_t> (&unknowns)[2],
         int &prev_p, int &next_p);
-
-void sieve_interval_cpu(
-        const uint64_t m, const mpz_t &K,
-        const vector<std::pair<uint32_t, uint32_t>> p_and_r,
-        const int32_t sieve_start, const int32_t sieve_length,
-        vector<int32_t> &unknowns);
-

@@ -45,10 +45,6 @@ void StatsCounters::process_results(
 
     // TODO s_side_skips
 
-    s_total_merit += merit;
-    s_total_prev_p += std::max(0, prev_p);
-    s_total_next_p += std::max(0, next_p);
-
     if (merit > s_best_merit_interval) {
         s_best_merit_interval = merit;
         s_best_merit_interval_m = m;
@@ -73,7 +69,7 @@ bool StatsCounters::possible_print_stats(
 
     // if s_tests = {1,3,5} * 10 ^ x
     bool is_power_print = (s_tests == 1);
-    for (uint64_t p = 10; p < s_tests; p *= 10) {
+    for (long p = 10; p < s_tests; p *= 10) {
         is_power_print |= (s_tests == p) || (s_tests == 3*p) || (s_tests == 5*p);
     }
 
@@ -90,10 +86,10 @@ bool StatsCounters::possible_print_stats(
 
             // Stats!
             if (s_tests > secs) {
-                printf("\t    tests     %-10lu (%.2f/sec)  %.0f seconds elapsed\n",
+                printf("\t    tests     %-10d (%.2f/sec)  %.0f seconds elapsed\n",
                     s_tests, s_tests / secs, secs);
             } else {
-                printf("\t    tests     %-10lu (%.2f secs/test)  %.0f seconds elapsed\n",
+                printf("\t    tests     %-10d (%.2f secs/test)  %.0f seconds elapsed\n",
                     s_tests, secs / s_tests, secs);
             }
 
@@ -109,24 +105,17 @@ bool StatsCounters::possible_print_stats(
 
             if (config.verbose >= 2) {
                 if (s_skips_after_one_side) {
-                    printf("\t    only next_prime %ld (%.2f%%)\n",
+                    printf("\t    only prev_prime %ld (%.2f%%)\n",
                         s_skips_after_one_side, 100.0 * s_skips_after_one_side / s_tests);
                 }
                 if (s_gap_out_of_sieve_prev + s_gap_out_of_sieve_next > 0) {
-                    printf("\t    extra sieves prev_gap %ld (%.2f%%), next_gap %ld (%.2f%%)\n",
+                    printf("\t    fallback prev_gap %ld (%.2f%%), next_gap %ld (%.2f%%)\n",
                         s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / s_tests,
                         s_gap_out_of_sieve_next, 100.0 * s_gap_out_of_sieve_next / s_tests);
                 }
 
                 printf("\t    best merit this interval: %.3f (at m=%ld)\n",
                     s_best_merit_interval, s_best_merit_interval_m);
-
-                printf("\t    avg merit: %.3f, avg gap: %.1f (%lu + %lu)\n",
-                    s_total_merit / s_tests,
-                    ((float) s_total_prev_p + s_total_next_p) / s_tests,
-                    s_total_prev_p / s_tests,
-                    s_total_next_p / s_tests
-               );
             }
             return true;
         }
@@ -171,8 +160,8 @@ void test_interval_cpu(
     if (prev_p == 0) {
         s_gap_out_of_sieve_prev += 1;
 
-        // If only one-sided then do the thing
-        mpz_sub_ui(prime_test, center, unknowns[0].size() > 2 ? SIEVE_LENGTH : 1);
+        // Double checks SL which is fine.
+        mpz_sub_ui(prime_test, center, SIEVE_LENGTH);
         mpz_prevprime(prime_test, prime_test);
         mpz_sub(prime_test, center, prime_test);
         prev_p = mpz_get_ui(prime_test);
@@ -190,50 +179,3 @@ void test_interval_cpu(
 
     mpz_clear(center); mpz_clear(prime_test);
 }
-
-void sieve_interval_cpu(
-        const uint64_t m, const mpz_t &K,
-        const vector<std::pair<uint32_t, uint32_t>> p_and_r,
-        const int32_t sieve_start, const int32_t sieve_length,
-        vector<int32_t> &unknowns) {
-
-    // To make math easy we always start at the bottom of the sieve and head positive
-    // This is natural for next_prime and returns the numbers backwards for a prev_prime
-
-    char composite[sieve_length] = {};
-
-    // Handle 2 because it's weird
-    {
-        bool start_mod_2 = mpz_odd_p(K) ^ (m & 1) ^ (sieve_start & 1);
-        for (int32_t i = 1 - start_mod_2; i < sieve_length; i += 2) {
-            composite[i] = 1;
-        }
-    }
-
-    int64_t negative_m = -m;
-
-    // TODO add an assert that m*p doesn't overflow
-    for (const auto& [p, r] : p_and_r) {
-        // (-(m * K + sieve_start) % r)
-        int32_t center_mod = ((int64_t) r * negative_m - sieve_start) % p;
-        if (center_mod < 0) {
-            center_mod += p;
-        }
-        if (center_mod < sieve_length) {
-            if (r >= (uint32_t) sieve_length) {
-                composite[center_mod] = 1;
-            } else {
-                // Could do by 2*p but not worth the extra code IMO
-                for (int32_t i = center_mod; i < sieve_length; i += p) {
-                    composite[i] = 1;
-                }
-            }
-        }
-    }
-
-    for (size_t i = 0; i < (uint32_t) sieve_length; i++) {
-        if (composite[i] == 0)
-            unknowns.push_back(i);
-    }
-}
-

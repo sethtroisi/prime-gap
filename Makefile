@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-OPT     = -O3
+
 OBJS	= gap_common.o modulo_search.o gap_test_common.o
 OUT	= combined_sieve gap_stats gap_test_simple benchmark benchmark_google
 CC	= g++
-CFLAGS	= $(OPT) -Wall -Werror -fopenmp
+CFLAGS	= -Wall -Werror -O3
 NVCC	= nvcc
-CUDA_FLAGS	= $(OPT) -Xcompiler -Wall -Xcompiler -Werror -Xcompiler -fopenmp
+CUDA_FLAGS	= -Xcompiler -Wall -Xcompiler -Werror -O3
 BITS    = 1024
 
-LDFLAGS	= -lgmp -lsqlite3
+LDFLAGS	= -lgmp -lsqlite3 -fopenmp
 # Need for local gmp / primesieve
 LDFLAGS+= -L /usr/local/lib
 
@@ -33,10 +33,17 @@ ifdef VALIDATE_LARGE
 DEFINES += -DGMP_VALIDATE_LARGE_FACTORS
 endif
 
-all: $(OUT)
-
 %.o: %.cpp
 	$(CC) -c -o $@ $< $(CFLAGS) $(DEFINES)
+
+%_cuda.o: %.cpp
+	$(NVCC) -c -o $@ $< $(CUDA_FLAGS) $(DEFINES)
+
+
+all: $(OUT)
+
+#$(PROGS) : %: %.cpp $(OBJS)
+#	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(DEFINES)
 
 combined_sieve: combined_sieve.cpp $(OBJS)
 	$(CC) -o $@ $^ $(CFLAGS) -lprimesieve $(LDFLAGS) $(DEFINES)
@@ -47,12 +54,12 @@ gap_stats: gap_stats.cpp gap_common.o
 gap_test_simple: gap_test_simple.cpp gap_common.o gap_test_common.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
-gap_test_gpu: gap_test_gpu.cu miller_rabin.h gap_common.o gap_test_common.o combined_sieve_small.o
+gap_test_gpu: gap_test_gpu.cu miller_rabin.h gap_common_cuda.o gap_test_common_cuda.o
 	nvcc -o $@ -I../CGBN/include \
 		-DGPU_BITS=$(BITS) \
 		$(filter-out miller_rabin.h, $^) \
 		-arch=sm_61 $(CUDA_FLAGS) \
-		$(filter-out -fopenmp, $(LDFLAGS)) -lprimesieve
+		$(filter-out -fopenmp, $(LDFLAGS))
 
 benchmark: misc/benchmark.cpp modulo_search.o
 	$(CC) -o $@ $^ $(CFLAGS) -lprimesieve $(LDFLAGS) -I.
@@ -65,4 +72,4 @@ benchmark_google: misc/benchmark_google.cpp modulo_search.o
 
 
 clean:
-	rm -f $(OUT) gap_test_gpu *.o
+	rm -f $(OBJS) $(OUT) gap_test_gpu gap_common_cuda.o gap_test_common_cuda.o

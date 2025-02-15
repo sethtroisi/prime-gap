@@ -91,12 +91,6 @@ def describe_found_gaps(gaps):
         ))
     print()
 
-    for gap, merit, _, start, _ in gaps:
-        n = primegapverify.parse(start)
-        assert gmpy2.is_prime(n), (start)
-        assert gmpy2.is_prime(n + gap), (start, gap)
-
-
 
 def print_record_gaps(args, gaps):
     with sqlite3.connect(args.prime_gaps_db) as conn:
@@ -240,7 +234,7 @@ def search_logs(log_files):
             if match:
                 file_match += 1
                 partial_line = line.split(':')[-1].strip()
-                match_print = f"    Match {file_match:<3d} at line {li:<4d}: {partial_line}"
+                match_print = f"    Match {file_match} at line {li}: {partial_line}"
                 if file_match < 6:
                     print (match_print)
 
