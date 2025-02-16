@@ -97,45 +97,7 @@ int main(int argc, char* argv[]) {
     Config config = Args::argparse(argc, argv, Args::Pr::TEST_GPU);
     // TODO renable these checks
     /*
-    {
         set_defaults(config);
-
-        // Both shouldn't be true from gap_common.
-        assert(!(config.save_unknowns && config.testing));
-
-        if (!config.save_unknowns && !config.testing) {
-            cout << "Must set --save-unknowns" << endl;
-            exit(1);
-        }
-
-        if (config.sieve_length < 6 * config.p || config.sieve_length > 22 * config.p) {
-            int sl_min = ((config.p * 8 - 1) / 500 + 1) * 500;
-            int sl_max = ((config.p * 20 - 1) / 500 + 1) * 500;
-            printf("--sieve_length(%d) should be between [%d, %d]\n",
-                config.sieve_length, sl_min, sl_max);
-            exit(1);
-        }
-
-        if (config.valid == 0) {
-            Args::show_usage(argv[0], Args::Pr::SIEVE);
-            exit(1);
-        }
-
-
-        if (config.max_prime > 100'000'000) {
-            printf("\tmax_prime(%ldM) is probably too large\n",
-                config.max_prime / 1'000'000);
-        }
-
-        if (config.save_unknowns) {
-            std::string fn = Args::gen_unknown_fn(config, ".txt");
-            std::ifstream f(fn);
-            if (f.good()) {
-                printf("\nOutput file '%s' already exists\n", fn.c_str());
-                exit(1);
-            }
-        }
-    }
     */
 
     if (config.valid == 0) {
@@ -159,6 +121,18 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    if (config.sieve_length < 6 * config.p || config.sieve_length > 22 * config.p) {
+        int sl_min = ((config.p * 8 - 1) / 500 + 1) * 500;
+        int sl_max = ((config.p * 20 - 1) / 500 + 1) * 500;
+        printf("--sieve_length(%d) should be between [%d, %d]\n",
+            config.sieve_length, sl_min, sl_max);
+        return 1;
+    }
+
+    if (100'000 < config.max_prime && config.max_prime > 100'000'000) {
+        printf("\tmax_prime(%'ld) should be between 100K and 100M\n", config.max_prime);
+    }
+
     if (config.compression != 0) {
         cout << argv[0] << " Doesn't support any compression options." << endl;
         return 1;
@@ -180,7 +154,10 @@ int main(int argc, char* argv[]) {
 
     // Delete unknown_fn so it gets recreated by sieve
     config.unknown_filename = "";
+
     prime_gap_test(config);
+
+    cout << "END OF MAIN?" << endl;
 }
 
 
@@ -361,11 +338,11 @@ void run_gpu_thread(int verbose) {
         }
         lock.unlock();
         if (no_batch) {
-            // Waiting doesn't count till 1st batch is ready
             auto now = high_resolution_clock::now();
             auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(
                     now - last_finished).count();
-            if (verbose >= 0 && processed_batches > last_print_batch && delta > 100) {
+            // Only print once per batch (and not for zeroth batch) and only after waiting 1 sec.
+            if (verbose >= 0 && processed_batches > last_print_batch && delta > 1000) {
                 printf("No results ready for batch %ld. Total wait %.1f seconds\n",
                         processed_batches, no_batch_count_ms / 1000.0);
                 last_print_batch = processed_batches;
@@ -904,11 +881,20 @@ void coordinator_thread(struct Config global_config) {
         lock.lock();
         {  // Add new configs to sieveds queue.
             int needed = 2;
+            int finished = 0;
             for (auto& sieved : sieveds) {
-                if (sieved->state == SieveResult::CONFIGURED || sieved->state == SieveResult::SIEVED) {
+                if (sieved->state == SieveResult::CONFIGURED) {
                     needed -= 1;
                 }
+                if (sieved->state == SieveResult::SIEVED) {
+                    needed -= 1;
+                    finished += 1;
+                }
             }
+            if (finished == 0 && total_ranges > 2) {
+                printf("Currently no finished ranges!!!\n");
+            }
+
             while (needed > 0) {
                 // Make minc half for first two ranges to get first results twice as fast.
                 if (total_ranges == 0) {
@@ -942,6 +928,8 @@ void coordinator_thread(struct Config global_config) {
                 }), sieveds.end());
         lock.unlock();
     }
+    cout << "\n\nEND OF MAIN THREAD???\n" << endl;
+    cout << "is_running: " << is_running << endl;
 }
 
 
@@ -976,6 +964,8 @@ void prime_gap_test(struct Config config) {
         assert( BITS <= (1 << (2 * WINDOW_BITS)) );
     }
 
+
+    // TODO considering adding signal_callback_handle to handle CTRL+C gracefully
     is_running = true;
 
     /**

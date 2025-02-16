@@ -58,49 +58,6 @@ using namespace std::chrono;
 // WHEEL should divide config.d
 #define METHOD2_WHEEL_MAX (2*3*5*7)
 
-void set_defaults(struct Config& config) {
-    if (config.valid == 0) {
-        // Don't do anything if argparse didn't work.
-        return;
-    }
-
-    if (config.d % 4 == 0) {
-        cout << "d optimizer is in combined_sieve" << endl;
-        exit(1);
-    }
-
-    if (config.sieve_length == 0) {
-        cout << "sieve length optimizer is in combined_sieve" << endl;
-        exit(1);
-    }
-
-    if (config.max_prime == 0) {
-        printf("Must set max_prime");
-        exit(1);
-    }
-
-    mpz_t K;
-    double K_log;
-    {
-        // Suppress log
-        int temp = config.verbose;
-        config.verbose = -1;
-
-        int K_digits;
-        K_stats(config, K, &K_digits, &K_log);
-
-        config.verbose = temp;
-    }
-
-    mpz_clear(K);
-}
-
-
-// Method 2
-
-// TODO considering additng signal_callback_handle to handle CTRL+C gracefully
-
-
 class method2_stats {
     public:
         method2_stats() {};
