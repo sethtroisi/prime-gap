@@ -73,20 +73,25 @@ using namespace std::chrono;
  *  ???4096,    2048,  4,  16, 1
  *
  */
-const size_t BATCH_GPU = 1024; //2*8192;
+const size_t BATCH_GPU = 4 * 1024;
 const size_t SEQUENTIAL_IN_BATCH = 1;
-const size_t BATCHED_M = 2 * BATCH_GPU * 130 / 100 / SEQUENTIAL_IN_BATCH;  // 30% extra for overflow
-
-// 1080Ti - 1024, 2, 16 -> 170-180K!
-// A100   - 4096, 4, 8 -> 327K!
-
+const size_t BATCHED_M = 2 * BATCH_GPU * 120 / 100 / SEQUENTIAL_IN_BATCH;  // 20% extra for overflow
 
 /**
  * Originally 8 which has highest throughput but only if we have LOTS of instances
  * this helps reduce the number of parallel instances needed
  */
-const int THREADS_PER_INSTANCE = 16;
+const int THREADS_PER_INSTANCE = 8;
 const int ROUNDS = 1;
+
+// 701#
+// 1080Ti - 1024, 2, 16 -> 170-180K!
+// A100   - 4096, 4, 8 -> 327K!
+
+// 347#
+// 1080Ti - 1024, 1, 16 -> 860K!
+// 1080Ti - 2048, 1, 8  -> 1069K!
+// 1080Ti - 2048, 1, 8  -> 1150K! (spin lock)
 
 //************************************************************************
 
@@ -284,7 +289,7 @@ vector<GPUBatch> gpu_batches = {{BATCH_GPU}, {BATCH_GPU}};
 std::mutex sieve_mtx;
 vector<std::unique_ptr<SieveResult>> sieveds;
 
-// Don't mutate an interval (overflowed or processing) without holding interval_mtx
+// Don't mutate an interval (especially status) without holding interval_mtx
 std::mutex interval_mtx;
 std::condition_variable overflow_cv;
 vector<DataM*> overflowed;
@@ -293,7 +298,6 @@ vector<DataM*> overflowed;
 void run_gpu_thread(int verbose) {
     pthread_setname_np(pthread_self(), "RUN_GPU_THREAD");
 
-    // XXX: params1024, params2048 with *runner1024, *runner2048 and only new one of them.
     typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
     test_runner_t<params> runner(BATCH_GPU, ROUNDS);
 
@@ -382,8 +386,7 @@ void run_sieve_thread(void) {
             continue;
         }
 
-        //auto M_end = to_sieve->config.mstart + to_sieve->config.minc;
-        //printf("\tStarting Combined Sieve %ld to %ld\n", to_sieve->config.mstart, M_end);
+        auto M_end = to_sieve->config.mstart + to_sieve->config.minc;
         auto s_start_t = high_resolution_clock::now();
         // TODO set with const.
         to_sieve->config.threads = 6;
@@ -391,7 +394,8 @@ void run_sieve_thread(void) {
         auto result = prime_gap_parallel(to_sieve->config);
         to_sieve->config.verbose += 3;
         auto s_stop_t = high_resolution_clock::now();
-        printf("\tCombined Sieve took %.1f seconds\n",
+        printf("\tCombined Sieve (%ldM to %ldM) took %.1f seconds\n",
+               to_sieve->config.mstart / 1'000'000, M_end / 1'000'000,
                duration<double>(s_stop_t - s_start_t).count());
 
         lock.lock();
@@ -617,10 +621,16 @@ void create_gpu_batches(const struct Config og_config) {
 
     const size_t QUEUE_SIZE = BATCHED_M;
 
-    // TODO set time AFTER first combined_sieve is done
+    while (is_running) {
+        usleep(50'000); // 50ms
+        // Wait for first data before intitalizing StatsCounter to get more stable numbers.
+        if (add_to_processing(K, D, processing, QUEUE_SIZE - processing.size())) {
+            break;
+        }
+    }
 
     // Used for various stats
-    //StatsCounters stats(high_resolution_clock::now());
+    StatsCounters stats(high_resolution_clock::now());
 
     // Main loop
     while (is_running) {
@@ -911,10 +921,12 @@ void coordinator_thread(struct Config global_config) {
 
 
                 // Add new config to the queue
-                printf("\tQueued(%lu) %'lu to %'lu\n",
-                        total_ranges,
-                        global_config.mstart,
-                        global_config.mstart + global_config.minc);
+                if (global_config.verbose >= 3) {
+                    printf("\tQueued(%lu) %'lu to %'lu\n",
+                            total_ranges,
+                            global_config.mstart,
+                            global_config.mstart + global_config.minc);
+                }
 
                 sieveds.emplace_back(std::make_unique<SieveResult>(global_config));
                 needed -= 1;

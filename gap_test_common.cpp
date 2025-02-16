@@ -73,7 +73,7 @@ bool StatsCounters::possible_print_stats(
 
     // if s_tests = {1,3,5} * 10 ^ x
     bool is_power_print = (s_tests == 1);
-    for (uint64_t p = 10; p < s_tests; p *= 10) {
+    for (uint64_t p = 100; p <= s_tests; p *= 10) {
         is_power_print |= (s_tests == p) || (s_tests == 3*p) || (s_tests == 5*p);
     }
 
@@ -108,7 +108,8 @@ bool StatsCounters::possible_print_stats(
                 s_total_prp_tests / secs);
 
             if (config.verbose >= 2) {
-                if (s_skips_after_one_side) {
+                // Suppress for now, this is almost exactly 100 - extra sieves prev_gap %
+                if (0 && s_skips_after_one_side) {
                     printf("\t    only next_prime %ld (%.2f%%)\n",
                         s_skips_after_one_side, 100.0 * s_skips_after_one_side / s_tests);
                 }
