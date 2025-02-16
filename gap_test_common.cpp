@@ -69,7 +69,7 @@ bool StatsCounters::possible_print_stats(
 
     // if s_tests = {1,3,5} * 10 ^ x
     bool is_power_print = (s_tests == 1);
-    for (long p = 10; p < s_tests; p *= 10) {
+    for (long p = 10; p <= s_tests; p *= 10) {
         is_power_print |= (s_tests == p) || (s_tests == 3*p) || (s_tests == 5*p);
     }
 
