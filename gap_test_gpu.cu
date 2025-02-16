@@ -319,6 +319,7 @@ void run_gpu_thread(int verbose) {
                             assert( mpz_cmp_ui(*batch.z[i], 6) >= 1);
                         }
                     }
+                    // TODO test changing cudaDeviceScheduleBlockingSync to cudaDeviceScheduleYield or cudaDeviceScheduleSpin
                     runner.run_test(batch.z, batch.result);
                     //cout << "Finished batch: " << processed_batches << " " << endl;
                 } else {
@@ -522,6 +523,8 @@ size_t add_to_processing(
     size_t sl = result.sieve_length;
     assert( sl == sieve->config.sieve_length );
 
+    const auto& coprime_X = result.coprime_X;
+
     // We have a range of sieve results
     // Next item is sieve.current_index
     // have to first process m_inc to know m.
@@ -538,7 +541,7 @@ size_t add_to_processing(
         const auto [m_add, found] = result.m_inc[sieve->current_index];
         // TODO I want to clear these in the future.
         const auto m_unknown_deltas = result.unknowns[sieve->current_index];
-        assert( m_unknown_deltas.size() == found );
+        assert( found == m_unknown_deltas.size() );
         sieve->last_m += m_add;
         sieve->current_index++;
 
@@ -546,15 +549,19 @@ size_t add_to_processing(
         assert( gcd(m, D) == 1 );
 
         auto test = std::make_unique<DataM>(m, sl);
-        test->unknowns[1].reserve(m_unknown_deltas.size());
+        test->unknowns[1].reserve(found);
+
         int32_t offset = 0;
-        for (uint16_t delta : m_unknown_deltas) {
+        for (size_t j = 0; j < (unsigned) found; j++) {
+            uint8_t delta = m_unknown_deltas[j];
             offset += delta;
-            test->unknowns[1].push_back(offset);
+            test->unknowns[1].push_back(coprime_X[offset]);
         }
+
 
         // TODO clear result.output[INDEX] here.
 
+        assert( offset < coprime_X.size() );
         assert( m_unknown_deltas.size() > 2 );
         assert( test->unknowns[1].size() == found );
         assert( test->unknowns[1].back() <= sl );
@@ -613,7 +620,7 @@ void create_gpu_batches(const struct Config og_config) {
     // TODO set time AFTER first combined_sieve is done
 
     // Used for various stats
-    StatsCounters stats(high_resolution_clock::now());
+    //StatsCounters stats(high_resolution_clock::now());
 
     // Main loop
     while (is_running) {

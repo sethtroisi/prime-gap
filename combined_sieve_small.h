@@ -30,11 +30,13 @@ class SieveOutput {
         // Is there anything also needed from config?
         const int32_t sieve_length;
 
+        // unknowns are delta run length encoded into this table.
+        vector<uint16_t> coprime_X;
+
         // m_increment, unknown count
         vector<std::tuple<int16_t, int16_t>> m_inc;
 
-        // TODO change to uint8_t with 0 as a +255 jump without testing.
-        vector<vector<uint16_t>> unknowns;
+        vector<vector<uint8_t>> unknowns;
 };
 
 std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config);

@@ -542,6 +542,9 @@ std::unique_ptr<SieveOutput> save_unknowns(
         const mpz_t &K,
         const Cached &caches,
         const vector<bool> *composite) {
+    // For 50M range with 5M sieve, this took 3.9 of 74 seconds!
+    // For 10M range with 1M sieve, this took 0.8 of 11 seconds!
+    // For 20M range with 1M sieve, this took 1.7 of 23 seconds!
     auto s_save_t = high_resolution_clock::now();
 
     const uint64_t M_start = config.mstart;
@@ -552,15 +555,37 @@ std::unique_ptr<SieveOutput> save_unknowns(
     size_t count_b = caches.valid_mi.size() * caches.coprime_X.size();
 
     auto output = std::make_unique<SieveOutput>(M_start, SL);
-    output->unknowns.reserve(caches.valid_ms);
+    {
+        output->coprime_X.reserve(caches.coprime_X.size());
+        for (uint32_t x : caches.coprime_X) {
+            // Limits sieve_length to 32K
+            assert(x < 0x8FFF);
+            output->coprime_X.push_back(x);
+        }
+    }
 
-    uint64_t m_last = M_start;
+    size_t count_m = caches.valid_ms;
+    output->m_inc.reserve(count_m);
+    output->unknowns.resize(count_m);
 
-    #pragma omp parallel for ordered schedule(dynamic, 1) num_threads(config.threads)
-    for (size_t mii = 0; mii < caches.valid_mi.size(); mii++) {
+    // Create all vectors so that threads don't need to be ordered.
+    {
+        uint64_t m_last = M_start;
+
+        for (uint64_t mi : caches.valid_mi) {
+            uint64_t m = M_start + mi;
+            assert(gcd(m, D) == 1);
+            output->m_inc.emplace_back(m - m_last, /* found */ 0);
+            m_last = m;
+        }
+    }
+
+    auto s_mid_t = high_resolution_clock::now();
+
+    #pragma omp parallel for ordered schedule(dynamic, 8) num_threads(config.threads) reduction(+:count_a)
+    for (size_t mii = 0; mii < count_m; mii++) {
         uint64_t mi = caches.valid_mi[mii];
         uint64_t m = M_start + mi;
-        assert(gcd(m, D) == 1);
         assert((signed)mii == caches.m_reindex[mi]);
 
         const auto &comp = composite[mii];
@@ -568,42 +593,40 @@ std::unique_ptr<SieveOutput> save_unknowns(
         assert(x_reindex_m.size() == (uint64_t) (SL + 1));
 
         int64_t found = 0;
-        for (int x : caches.coprime_X) {
+        auto& deltas = output->unknowns[mii];
+        // TODO how to set a reasonable bound?
+        //deltas.reserve(found);
+
+        // TODO consider if I can use __builtin_ctz or __builtin_ffs to avoid looking at each index
+        // would take 8 bytes from comp vector and make a 64bit int then do repeat builtin_ffs.
+
+        // Index of last unknown.
+        int last_u_i = 0;
+        int u_i = 0;
+        for (uint32_t x : caches.coprime_X) {
             if (!comp[x_reindex_m[x]]) {
+                int delta = u_i - last_u_i;
+                assert( delta <= 0xFF );
+
+                deltas.push_back(delta);
+
+                last_u_i = u_i;
                 found += 1;
             }
+            u_i++;
         }
 
-        // Could swap back to uint16_t with 0 as a sentinal for 255 delta
-        vector<uint16_t> deltas;
-        deltas.reserve(found);
-
-        int last = 0;
-        for (int x : caches.coprime_X) {
-            if (!comp[x_reindex_m[x]]) {
-                int delta = x - last;
-                last = x;
-                assert(delta <= 0xFFFF);
-                deltas.push_back(delta);
-            }
-        }
-
-        #pragma omp ordered
-        {
-            output->m_inc.emplace_back(m - m_last, found);
-            m_last = m;
-            // TODO this is probably slow copying to the back, try to avoid slow copy.
-            output->unknowns.emplace_back(deltas);
-            count_a += found;
-        }
+        std::get<1>(output->m_inc[mii]) = found;
+        count_a += found;
     }
 
-    if (config.verbose >= 1) {
+    if (config.verbose >= 0) {
         auto s_stop_t = high_resolution_clock::now();
         std::string fn = Args::gen_unknown_fn(config, ".txt");
-        printf("\n\tSaved deltas for '%s' %ld/%ld (%.1f%%) in %.1f seconds\n\n",
+        printf("\n\tSaved deltas for '%s' %ld/%ld (%.1f%%) in %.1f -> %.1f seconds\n\n",
                fn.c_str(),
                count_a, count_b, 100.0f * count_a / count_b,
+               duration<double>(s_mid_t - s_save_t).count(),
                duration<double>(s_stop_t - s_save_t).count());
     }
 
