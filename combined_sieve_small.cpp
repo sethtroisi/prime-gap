@@ -606,7 +606,15 @@ std::unique_ptr<SieveOutput> save_unknowns(
         for (uint32_t x : caches.coprime_X) {
             if (!comp[x_reindex_m[x]]) {
                 int delta = u_i - last_u_i;
-                assert( delta <= 0xFF );
+
+                // HACK: handle extra delta by just doing more tests.
+                // TODO: This is super ugly, but FAST to write
+                //assert( delta <= 0xFF );
+                while (delta > 0xFF) {
+                    deltas.push_back(0xFF);
+                    delta -= 0xFF;
+                    found += 1;
+                }
 
                 deltas.push_back(delta);
 
