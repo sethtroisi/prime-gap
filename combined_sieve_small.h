@@ -36,7 +36,7 @@ class SieveOutput {
         // m_increment, unknown count
         vector<std::tuple<int16_t, int16_t>> m_inc;
 
-        vector<vector<uint8_t>> unknowns;
+        vector<vector<uint16_t>> unknowns;
 };
 
 std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config);

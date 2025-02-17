@@ -607,15 +607,7 @@ std::unique_ptr<SieveOutput> save_unknowns(
             if (!comp[x_reindex_m[x]]) {
                 int delta = u_i - last_u_i;
 
-                // HACK: handle extra delta by just doing more tests.
-                // TODO: This is super ugly, but FAST to write
-                //assert( delta <= 0xFF );
-                while (delta > 0xFF) {
-                    deltas.push_back(0xFF);
-                    delta -= 0xFF;
-                    found += 1;
-                }
-
+                assert( delta <= 0xFFFF );
                 deltas.push_back(delta);
 
                 last_u_i = u_i;

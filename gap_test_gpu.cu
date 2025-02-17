@@ -577,11 +577,10 @@ size_t add_to_processing(
 
         int32_t offset = 0;
         for (size_t j = 0; j < (unsigned) found; j++) {
-            uint8_t delta = m_unknown_deltas[j];
+            auto delta = m_unknown_deltas[j];
             offset += delta;
             test->unknowns[1].push_back(coprime_X[offset]);
         }
-
 
         // TODO clear result.output[INDEX] here.
 
