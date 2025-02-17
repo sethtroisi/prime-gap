@@ -27,6 +27,7 @@
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <queue>
 #include <ranges>
 #include <sstream>
 #include <string>
@@ -161,14 +162,14 @@ int main(int argc, char* argv[]) {
 
     prime_gap_test(config);
 
-    cout << "END OF MAIN?" << endl;
+    cout << "gap_test_gpu ended" << endl;
 }
 
 
 class GPUBatch {
     public:
         enum State : uint8_t { EMPTY, READY, DONE };
-        State state = EMPTY;
+        std::atomic<State> state = EMPTY;
 
         // current index;
         size_t i;
@@ -188,6 +189,10 @@ class GPUBatch {
 
         // index into the interval[data_m].unknowns
         vector<int> unknown_i;
+
+        // For signaling
+        std::mutex m;
+        std::condition_variable cv;
 
         explicit GPUBatch(size_t n) {
             elements = n;
@@ -297,79 +302,52 @@ std::mutex interval_mtx;
 std::condition_variable overflow_cv;
 vector<DataM*> overflowed;
 
-
-typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
-test_runner_t<params> runner(GPU_BATCH_SIZE, ROUNDS);
-
-// Single threaded!
-void run_single_gpu_batch(GPUBatch& batch) {
-    assert (batch.state == GPUBatch::State::READY);
-
-    // Run batch on GPU and wait for results to be set
-    if (1) {
-        // TODO test changing cudaDeviceScheduleBlockingSync to cudaDeviceScheduleYield or cudaDeviceScheduleSpin
-
-        //cout << "Started batch:  " << processed_batches << " " << batch.i << endl;
-        runner.run_test(batch.z, batch.result);
-        //cout << "Finished batch: " << processed_batches << " " << endl;
-    } else {
-        // Return true for 1/10 results (helps not overflow sieve)
-        for (size_t gpu_i = 0; gpu_i < GPU_BATCH_SIZE; gpu_i++) {
-            if (batch.active[gpu_i]) {
-                batch.result[gpu_i] = (std::rand() % 10) == 1;
-            }
-        }
-    }
-}
-
-
-/*
-void run_gpu_thread(int verbose) {
+void run_gpu_thread(int verbose, int runner_num, GPUBatch& batch) {
     try {
+        // TODO use runner in threadname.
         pthread_setname_np(pthread_self(), "RUN_GPU_THREAD");
 
+        // TODO test changing cudaDeviceScheduleBlockingSync to cudaDeviceScheduleYield or cudaDeviceScheduleSpin
+        typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
         test_runner_t<params> runner(GPU_BATCH_SIZE, ROUNDS);
 
         size_t processed_batches = 0;
-        size_t last_print_batch = 0;
-        size_t no_batch_count_ms = 0;
-        auto last_finished = high_resolution_clock::now();
+        std::unique_lock lock(batch.m, std::defer_lock);
         while (is_running) {
-            bool no_batch = true;
-            std::unique_lock<std::mutex> lock(batches_mtx);
-            for (GPUBatch& batch : gpu_batches) {
-                if (batch.state == GPUBatch::State::READY) {
-                    assert(std::count(batch.active.begin(), batch.active.end(), 1) == batch.i);
-                    lock.unlock();
+            lock.lock();
+            batch.cv.wait(lock, [&] { return batch.state == GPUBatch::State::READY ||!is_running; });
 
-                    run_single_gpu_batch(runner, batch);
+            if (!is_running) break;
 
-                    lock.lock();
-                    batch.state = GPUBatch::State::DONE;
-                    no_batch = false;
-                    processed_batches++;
-                    last_finished = high_resolution_clock::now();
-                }
-            }
+            assert(batch.state == GPUBatch::State::READY);
+            assert(std::count(batch.active.begin(), batch.active.end(), 1) == batch.i);
             lock.unlock();
-            if (no_batch) {
-                auto now = high_resolution_clock::now();
-                auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        now - last_finished).count();
-                // Only print once per batch (and not for zeroth batch) and only after waiting 1 sec.
-                if (verbose >= 0 && processed_batches > last_print_batch && delta > 1000) {
-                    printf("No results ready for batch %ld. Total wait %.1f seconds\n",
-                            processed_batches, no_batch_count_ms / 1000.0);
-                    last_print_batch = processed_batches;
+
+            // Run batch on GPU and wait for results to be set
+            if (1) {
+                //printf("GPU(%d): Starting batch %lu\n", runner_num, processed_batches);
+                runner.run_test(batch.z, batch.result);
+                //printf("GPU(%d): Finished batch %lu\n", runner_num, processed_batches);
+            } else {
+                // Return true for 1/10 results (helps not overflow sieve)
+                for (size_t gpu_i = 0; gpu_i < GPU_BATCH_SIZE; gpu_i++) {
+                    if (batch.active[gpu_i]) {
+                        batch.result[gpu_i] = (std::rand() % 10) == 1;
+                    }
                 }
-                uint32_t sleep_ms = delta < 10 ? 1 : (delta < 100 ? 5 : (delta < 1000 ? 20 : 500));
-                no_batch_count_ms += sleep_ms;
-                usleep(sleep_ms * 1000);
             }
+
+            lock.lock();
+            batch.state = GPUBatch::State::DONE;
+            processed_batches += 1;
+
+            // let CPU thread one.
+            lock.unlock();
+            batch.cv.notify_one();
         }
 
         if (verbose >= 1) {
-            printf("Processed %'ld batches\n", processed_batches);
+            printf("GPU Runner %d processed %'ld batches\n", runner_num, processed_batches);
         }
     } catch (const std::exception &e) {
         cout << "ERROR in run_gpu_thread" << endl;
@@ -377,7 +355,6 @@ void run_gpu_thread(int verbose) {
         is_running = false;
     }
 }
-*/
 
 void run_sieve_thread(void) {
     try {
@@ -535,7 +512,7 @@ size_t add_to_processing(
     SieveResult *sieve = nullptr;
     {
         // Only need the lock while reading state
-        std::unique_lock<std::mutex> lock(sieve_mtx);
+        std::lock_guard lock(sieve_mtx);
         for (auto& test : sieveds) {
             if (test->state == SieveResult::SIEVED) {
                 if (sieve == nullptr || test->result->m_start < sieve->result->m_start) {
@@ -603,7 +580,7 @@ size_t add_to_processing(
     }
 
     if (sieve->current_index == result.m_inc.size()) {
-        std::unique_lock<std::mutex> lock(sieve_mtx);
+        std::lock_guard lock(sieve_mtx);
         sieve->state = SieveResult::DONE;
     }
 
@@ -615,7 +592,7 @@ bool process_finished_batch(
         GPUBatch& batch,
         std::unordered_map<int64_t, std::unique_ptr<DataM>> &processing) {
     bool found_any_primes = false;
-    std::unique_lock<std::mutex> lock(interval_mtx);
+    std::lock_guard lock(interval_mtx);
     for (size_t i = 0; i < GPU_BATCH_SIZE; i++) {
         if (!batch.active[i]) {
             continue;
@@ -675,10 +652,9 @@ bool process_finished_batch(
 }
 
 
-size_t fill_batch(
+void fill_batch(
         GPUBatch& batch,
         std::unordered_map<int64_t, std::unique_ptr<DataM>> &processing,
-        bool& any_pushed_to_overflow,
         StatsCounters& stats) {
     assert( batch.state == GPUBatch::State::EMPTY);
 
@@ -698,8 +674,9 @@ size_t fill_batch(
         mpz_set_ui(*batch.z[i], 7);
     }
 
+    bool any_pushed_to_overflow = false;
     {
-        std::unique_lock<std::mutex> lock(interval_mtx);
+        std::lock_guard lock(interval_mtx);
         for (auto& pair : processing) {
             auto& interval = *pair.second;
             currently_overflowed += (
@@ -770,9 +747,19 @@ size_t fill_batch(
             if (batch.i == GPU_BATCH_SIZE) break;
         }
     }
+    if (any_pushed_to_overflow) {
+        // CPU sieving thread will start if unlocked and notified
+        overflow_cv.notify_one();
+    }
 
     assert( batch.i <= GPU_BATCH_SIZE);
-    return currently_overflowed;
+
+    // Batches should be full unless lots of overflowed results.
+    if (batch.i > 0 && batch.i < GPU_BATCH_SIZE) {
+        printf("Partial load @ %lu -> %lu/%lu | %lu\n",
+            batch.i > 0 ? batch.data_m[0] : 0,
+            batch.i, GPU_BATCH_SIZE, currently_overflowed);
+    }
 }
 
 
@@ -825,115 +812,153 @@ void create_gpu_batches(const struct Config og_config) {
         // Used for various stats
         StatsCounters stats(high_resolution_clock::now());
 
+        std::thread gpu0(run_gpu_thread, og_config.verbose, 0, std::ref(gpu_batches[0]));
+        std::thread gpu1(run_gpu_thread, og_config.verbose, 1, std::ref(gpu_batches[1]));
+
+        // Silly but that's what life is.
+        std::queue<int> open_gpu;
+
+
         // Main loop
         while (is_running) {
-            bool any_pushed_to_overflow = false;
-            bool any_primed = false;
-            for (GPUBatch& batch : gpu_batches) {
-                // If batch is ready to have new data loaded
-                if (batch.state == GPUBatch::State::EMPTY) {
-                    // Add new DataM if free space in processing
-                    // TODO make use of return at some later point
-                    add_to_processing(K, D, processing, QUEUE_SIZE - processing.size());
+            /**
+             * Try to fill all batches
+             * send for async all ready batches
+             * wait for result from the 1st batch sent
+             * repeat?
+             */
 
-                    auto in_overflowed = fill_batch(batch, processing, any_pushed_to_overflow, stats);
+            // Add new DataM if free space in processing
+            // TODO make use of return at some later point
+            add_to_processing(K, D, processing, QUEUE_SIZE - processing.size());
 
-                    // Batches should be full unless lots of overflowed results.
-                    if (batch.i > 0 && batch.i < GPU_BATCH_SIZE) {
-                        printf("Partial load @ %lu -> %lu/%lu | %lu\n",
-                            batch.i > 0 ? batch.data_m[0] : 0,
-                            batch.i, GPU_BATCH_SIZE, in_overflowed);
+            for (size_t i = 0; i < 2; i++) {
+                GPUBatch& batch = gpu_batches[i];
+
+                if (batch.state != GPUBatch::State::EMPTY)
+                    continue;
+
+                fill_batch(batch, processing, stats);
+
+                if (batch.i > 0) {
+                    batch.state = GPUBatch::State::READY;
+
+                    //cout << "Pushed to GPU " << i << endl;
+                    open_gpu.push(i);
+
+                    // Start the batch
+                    batch.cv.notify_one();
+                }
+            }
+
+            // Wait for the next batch to be done.
+            {
+                if (open_gpu.empty()) {
+                    usleep(5'000); // 5,000ms
+                } else {
+                    int i = open_gpu.front();
+                    open_gpu.pop();
+
+                    GPUBatch& batch = gpu_batches[i];
+                    // Wait for the batch to be Done (unless it's already done)
+                    if (batch.state != GPUBatch::State::DONE) {
+                        std::unique_lock<std::mutex> lock(gpu_batches[i].m);
+                        batch.cv.wait(lock, [&] { return batch.state == GPUBatch::State::DONE ||!is_running; });
                     }
 
-                    if (batch.i > 0) {
-                        batch.state = GPUBatch::State::READY;
-
-                        run_single_gpu_batch(batch);
-
+                    if (batch.state == GPUBatch::State::DONE) {
                         // Read results, mark any found primes, and possible finalize m-interval
-                        any_primed = process_finished_batch(batch, processing);
+                        process_finished_batch(batch, processing);
 
                         // Result batch to EMPTY
                         batch.state = GPUBatch::State::EMPTY;
                     }
                 }
+            }
 
-                if (any_primed) {
-                    // Process & remove finished intervals.
-                    // This is handled seperately for easier clean & single call to overflow.
-                    std::unique_lock<std::mutex> lock(interval_mtx);
-                    for (auto it = processing.begin(); it != processing.end(); /* increment in loop */) {
-                        auto& interval = *it->second;
+            {
+                bool any_pushed_to_overflow = false;
+                // Process & remove finished intervals.
+                // This is handled seperately for easier clean & single call to overflow.
+                std::unique_lock<std::mutex> lock(interval_mtx);
+                for (auto it = processing.begin(); it != processing.end(); /* increment in loop */) {
+                    auto& interval = *it->second;
 
-                        if (interval.state != DataM::State::PRIMED) {
+                    if (interval.state != DataM::State::PRIMED) {
+                        it++;
+                        continue;
+                    }
+
+                    int prev_p = interval.prev_p;
+                    int next_p = interval.next_p;
+
+                    assert(interval.n_found);
+                    assert(interval.n_tests > 0);
+                    assert(next_p > 0);
+
+                    // Potentially do Side-Skip if next_p is not very large (and just found)
+                    if (!interval.p_found) {
+                        assert( interval.p_tests == 0 );
+                        float next_merit = next_p / (K_log + log(interval.m));
+
+                        if (next_merit >= MIN_MERIT_TO_CONTINUE) {
+                            // Mark this for prev_p sieve
+                            stats.s_gap_out_of_sieve_prev += 1;
+                            interval.side = DataM::Side::PREV_P;
+                            interval.state = DataM::State::OVERFLOWED;
+                            overflowed.push_back(it->second.get());
+                            //cout << "PREV_P for m=" << interval.m << endl;
+                            any_pushed_to_overflow = true;
                             it++;
                             continue;
                         }
 
-                        int prev_p = interval.prev_p;
-                        int next_p = interval.next_p;
-
-                        assert(interval.n_found);
-                        assert(interval.n_tests > 0);
-                        assert(next_p > 0);
-
-                        // Potentially do Side-Skip if next_p is not very large (and just found)
-                        if (!interval.p_found) {
-                            assert( interval.p_tests == 0 );
-                            float next_merit = next_p / (K_log + log(interval.m));
-
-                            if (next_merit >= MIN_MERIT_TO_CONTINUE) {
-                                // Mark this for prev_p sieve
-                                stats.s_gap_out_of_sieve_prev += 1;
-                                interval.side = DataM::Side::PREV_P;
-                                interval.state = DataM::State::OVERFLOWED;
-                                overflowed.push_back(it->second.get());
-                                //cout << "PREV_P for m=" << interval.m << endl;
-                                any_pushed_to_overflow = true;
-                                it++;
-                                continue;
-                            }
-
-                            assert(prev_p == 0);
-                            stats.s_skips_after_one_side += 1;
-                        } else {
-                            assert(interval.p_found);
-                            assert(interval.p_tests > 0);
-                            assert(prev_p > 0);
-                        }
-
-                        float merit = (next_p + prev_p) / (K_log + log(interval.m));
-                        if (merit > min_merit)  {
-                            // TODO: Record finished mi in log file / db.
-                            printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
-                                (next_p + prev_p), merit, interval.m, P, D, prev_p, next_p);
-                        }
-
-                        stats.process_results(og_config, interval.m, /* is_last */ false,
-                            interval.unknowns[0].size(), interval.unknowns[1].size(),
-                            prev_p, next_p,
-                            interval.p_tests, interval.n_tests, merit);
-
-                        mpz_clear(interval.center);
-                        it = processing.erase(it);  // Erase this element
+                        assert(prev_p == 0);
+                        stats.s_skips_after_one_side += 1;
+                    } else {
+                        assert(interval.p_found);
+                        assert(interval.p_tests > 0);
+                        assert(prev_p > 0);
                     }
-                }
 
+                    float merit = (next_p + prev_p) / (K_log + log(interval.m));
+                    if (merit > min_merit)  {
+                        // TODO: Record finished mi in log file / db.
+                        printf("%-5d %.4f  %ld * %ld#/%ld -%d to +%d\n",
+                            (next_p + prev_p), merit, interval.m, P, D, prev_p, next_p);
+                    }
+
+                    stats.process_results(og_config, interval.m, /* is_last */ false,
+                        interval.unknowns[0].size(), interval.unknowns[1].size(),
+                        prev_p, next_p,
+                        interval.p_tests, interval.n_tests, merit);
+
+                    mpz_clear(interval.center);
+                    it = processing.erase(it);  // Erase this element
+                }
                 if (any_pushed_to_overflow) {
                     // CPU sieving thread will start if unlocked and notified
+                    lock.unlock();
                     overflow_cv.notify_one();
                 }
             }
+
         }
 
         // ----- cleanup
         {
             mpz_clear(K);
-            std::unique_lock<std::mutex> lock(interval_mtx);
+            std::lock_guard lock(interval_mtx);
             for (auto& [m, interval] : processing) {
                 mpz_clear(interval->center);
             }
         }
+
+        // Send notifies
+        gpu_batches[0].cv.notify_all();
+        gpu_batches[1].cv.notify_all();
+        gpu0.join();
+        gpu1.join();
     } catch (const std::exception &e) {
         cout << "ERROR in create_gpu_batches" << endl;
         cout << e.what() << endl;
@@ -1077,17 +1102,15 @@ void prime_gap_test(struct Config config) {
     std::thread sieve_thread(run_sieve_thread);
 
     std::thread batch_thread(create_gpu_batches, config);
-    //std::thread gpu_thread(run_gpu_thread, config.verbose);
     std::thread overflow_sieve_thread(run_overflow_thread, std::ref(K));
 
     main_thread.join();
     // Tell other threads to quit
     is_running = false;
-    cout << "All done. Goodbye!" << endl;
+    cout << "Setting `is_running = false` and joining threads" << endl;
 
     sieve_thread.join();
     batch_thread.join();
-    //gpu_thread.join();
     overflow_cv.notify_all();  // wake up all overflow thread
     overflow_sieve_thread.join();
     mpz_clear(K);
