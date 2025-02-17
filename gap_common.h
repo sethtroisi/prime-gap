@@ -25,8 +25,6 @@
 #include <vector>
 
 #include <gmp.h>
-#include <sqlite3.h>
-
 
 using std::map;
 using std::string;
@@ -104,21 +102,6 @@ class Args
     private:
         // Disallow creating instance
         Args() = default;
-};
-
-
-// TODO hide this behind NEEDS_DB define
-class DB
-{
-    public:
-        explicit DB(const char* path);
-        ~DB() { if (db != nullptr) sqlite3_close(db); };
-
-        uint64_t    config_hash(const struct Config& config);
-        sqlite3*    get_db() { assert(db != nullptr); return db; };
-
-    private:
-        sqlite3 *db = nullptr;
 };
 
 

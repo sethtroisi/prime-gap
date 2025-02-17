@@ -1,0 +1,51 @@
+# Advice from https://kerpanic.wordpress.com/2016/04/28/valgrind-suppressing-cudazmqippopenmp-errors/
+
+##----------------------------------------------------------------------##
+# OMP Suppresions
+
+{
+ <insert_a_suppression_name_here>
+ Memcheck:Leak
+ match-leak-kinds: possible
+ fun:calloc
+ fun:_dl_allocate_tls
+ fun:pthread_create@@GLIBC_2.2.5
+ obj:/usr/lib64/libgomp.so.1.0.0
+ fun:_ZN9AutoFocus8startPGAEP7Ipp32fcfiiPf
+ fun:main
+}
+
+
+##----------------------------------------------------------------------##
+# CUDA Suppresions
+
+{
+ <alloc_libcuda>
+ Memcheck:Leak
+ match-leak-kinds: reachable,possible
+ fun:*alloc
+ ...
+ obj:*libcuda.so*
+ ...
+}
+
+{
+ <alloc_libcuda>
+ Memcheck:Leak
+ match-leak-kinds: reachable,possible
+ fun:*alloc
+ ...
+ obj:*libcufft.so*
+ ...
+}
+
+{
+ <alloc_libcudart>
+ Memcheck:Leak
+ match-leak-kinds: reachable,possible
+ fun:*alloc
+ ...
+ obj:*libcudart.so*
+ ...
+}
+

@@ -13,11 +13,13 @@
 // limitations under the License.
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cassert>
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
+#include <csignal>
 #include <cstdint>
 #include <cstdio>
 #include <exception>
@@ -60,7 +62,7 @@ using namespace std::chrono;
 #define WINDOW_BITS ((BITS <= 1024) ? 5 : 6)
 
 /**
- * BATCH_GPU is 2^n >= 1024
+ * GPU_BATCH_SIZE is 2^n >= 1024
  * SEQUENTIAL_IN_BATCH = {1,2,4}
  *      1 => 0 overhead
  *      2 => 0.5 extra PRP/m
@@ -74,9 +76,9 @@ using namespace std::chrono;
  *  ???4096,    2048,  4,  16, 1
  *
  */
-const size_t BATCH_GPU = 2 * 1024;
+const size_t GPU_BATCH_SIZE = 2 * 1024;
 const size_t SEQUENTIAL_IN_BATCH = 1;
-const size_t BATCHED_M = 2 * BATCH_GPU * 120 / 100 / SEQUENTIAL_IN_BATCH;  // 20% extra for overflow
+const size_t BATCHED_M = 2 * GPU_BATCH_SIZE * 120 / 100 / SEQUENTIAL_IN_BATCH;  // 20% extra for overflow
 
 /**
  * Originally 8 which has highest throughput but only if we have LOTS of instances
@@ -187,7 +189,7 @@ class GPUBatch {
         // index into the interval[data_m].unknowns
         vector<int> unknown_i;
 
-        GPUBatch(size_t n) {
+        explicit GPUBatch(size_t n) {
             elements = n;
 
             z_array = (mpz_t *) malloc(n * sizeof(mpz_t));
@@ -204,10 +206,15 @@ class GPUBatch {
         }
 
         ~GPUBatch() {
+            cout << "~GPUBatch" << endl;
             for (size_t i = 0; i < elements; i++) {
                 mpz_clear(z_array[i]);
             }
+            free(z_array);
         }
+
+        //GPUBatch(const GPUBatch&) = delete;
+        GPUBatch& operator=(const GPUBatch&) = delete;
 
     private:
         size_t elements;
@@ -229,7 +236,7 @@ class DataM {
         // OVERFLOWED means that load thread ran out of unknowns to load
         // SIEVING means that cpu sieve thread is currently processing
         // PRIMED means that a prime endpoint (next_p or prev_p has just been found)
-        enum State : uint8_t { READY, RUNNING, OVERFLOWED, SIEVING, PRIMED, TOMBSTONE};
+        enum State : uint8_t { READY, RUNNING, OVERFLOWED, SIEVING, PRIMED};
         State state = READY;
 
         enum Side : uint8_t { NEXT_P, PREV_P };
@@ -279,7 +286,7 @@ std::atomic<bool> is_running;
  * While GPU runs batch_b
  */
 std::mutex batches_mtx;
-vector<GPUBatch> gpu_batches = {{BATCH_GPU}, {BATCH_GPU}};
+std::array<GPUBatch, 2> gpu_batches = {GPUBatch(GPU_BATCH_SIZE), GPUBatch(GPU_BATCH_SIZE)};
 
 // Don't read from sieveds without holding sieve_mtx
 std::mutex sieve_mtx;
@@ -292,21 +299,22 @@ vector<DataM*> overflowed;
 
 
 typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
-test_runner_t<params> runner(BATCH_GPU, ROUNDS);
+test_runner_t<params> runner(GPU_BATCH_SIZE, ROUNDS);
 
 // Single threaded!
 void run_single_gpu_batch(GPUBatch& batch) {
     assert (batch.state == GPUBatch::State::READY);
 
     // Run batch on GPU and wait for results to be set
-    if (true) {
-        //cout << "Started batch:  " << processed_batches << " " << batch.i << endl;
+    if (1) {
         // TODO test changing cudaDeviceScheduleBlockingSync to cudaDeviceScheduleYield or cudaDeviceScheduleSpin
+
+        //cout << "Started batch:  " << processed_batches << " " << batch.i << endl;
         runner.run_test(batch.z, batch.result);
         //cout << "Finished batch: " << processed_batches << " " << endl;
     } else {
         // Return true for 1/10 results (helps not overflow sieve)
-        for (size_t gpu_i = 0; gpu_i < BATCH_GPU; gpu_i++) {
+        for (size_t gpu_i = 0; gpu_i < GPU_BATCH_SIZE; gpu_i++) {
             if (batch.active[gpu_i]) {
                 batch.result[gpu_i] = (std::rand() % 10) == 1;
             }
@@ -320,7 +328,7 @@ void run_gpu_thread(int verbose) {
     try {
         pthread_setname_np(pthread_self(), "RUN_GPU_THREAD");
 
-        test_runner_t<params> runner(BATCH_GPU, ROUNDS);
+        test_runner_t<params> runner(GPU_BATCH_SIZE, ROUNDS);
 
         size_t processed_batches = 0;
         size_t last_print_batch = 0;
@@ -453,7 +461,7 @@ void run_overflow_thread(const mpz_t &K_in) {
                 cout << "CPU SIEVE QUEUE: " << overflowed.size() << endl;
             }
 
-            while (overflowed.size()) {
+            while (is_running && overflowed.size()) {
                 DataM& interval = *overflowed.back(); overflowed.pop_back();
                 assert(interval.state == DataM::State::OVERFLOWED);
                 interval.state = DataM::State::SIEVING;
@@ -476,7 +484,7 @@ void run_overflow_thread(const mpz_t &K_in) {
                 sieve_interval_cpu(interval.m, K, p_and_r, sieve_start, sl, unknowns);
                 lock.lock();
 
-                assert(5 <= unknowns.size() && unknowns.size() <= sl / 4);
+                assert(5 <= unknowns.size() && unknowns.size() <= (((size_t) sl) / 4));
                 assert(unknowns.front() >= 0 && unknowns.back() <= sl);
 
                 if (interval.side == DataM::Side::PREV_P) {
@@ -544,8 +552,8 @@ size_t add_to_processing(
 
     const SieveOutput& result = *(sieve->result);
 
-    size_t sl = result.sieve_length;
-    assert( sl == sieve->config.sieve_length );
+    int32_t sl = result.sieve_length;
+    assert( sl == (int32_t) sieve->config.sieve_length );
 
     const auto& coprime_X = result.coprime_X;
 
@@ -561,11 +569,9 @@ size_t add_to_processing(
         // Updated last_m (current_m during this loop)
         // Update current_index (next_index during the loop)
 
-        // TODO found is unused
         const auto [m_add, found] = result.m_inc[sieve->current_index];
-        // TODO I want to clear these in the future.
         const auto m_unknown_deltas = result.unknowns[sieve->current_index];
-        assert( found == m_unknown_deltas.size() );
+        assert( (size_t) found == m_unknown_deltas.size() );
         sieve->last_m += m_add;
         sieve->current_index++;
 
@@ -582,12 +588,13 @@ size_t add_to_processing(
             test->unknowns[1].push_back(coprime_X[offset]);
         }
 
-        // TODO clear result.output[INDEX] here.
-
-        assert( offset < coprime_X.size() );
+        assert( (size_t) offset < coprime_X.size() );
         assert( m_unknown_deltas.size() > 2 );
-        assert( test->unknowns[1].size() == found );
+        assert( test->unknowns[1].size() == (size_t) found );
         assert( test->unknowns[1].back() <= sl );
+
+        // No longer need a copy in SieveResult.
+        sieve->result->unknowns[sieve->current_index - 1].clear();
 
         mpz_init(test->center);
         mpz_mul_ui(test->center, K, test->m);
@@ -609,7 +616,7 @@ bool process_finished_batch(
         std::unordered_map<int64_t, std::unique_ptr<DataM>> &processing) {
     bool found_any_primes = false;
     std::unique_lock<std::mutex> lock(interval_mtx);
-    for (size_t i = 0; i < BATCH_GPU; i++) {
+    for (size_t i = 0; i < GPU_BATCH_SIZE; i++) {
         if (!batch.active[i]) {
             continue;
         }
@@ -675,17 +682,17 @@ size_t fill_batch(
         StatsCounters& stats) {
     assert( batch.state == GPUBatch::State::EMPTY);
 
-    // Not a full count but (only covers the portion till BATCH_GPU is full).
+    // Not a full count but (only covers the portion till GPU_BATCH_SIZE is full).
     size_t currently_overflowed = 0;
 
     // Grap some entries from each item in M
     batch.i = 0;
     // Turn off all entries in batch
-    std::fill_n(batch.active.begin(), BATCH_GPU, false);
+    std::fill_n(batch.active.begin(), GPU_BATCH_SIZE, false);
     // Mark all results as invalid
-    std::fill_n(batch.result.begin(), BATCH_GPU, -1);
+    std::fill_n(batch.result.begin(), GPU_BATCH_SIZE, -1);
 
-    for (size_t i = 0; i < BATCH_GPU; i++) {
+    for (size_t i = 0; i < GPU_BATCH_SIZE; i++) {
         // TODO see if this can be moved into init or somewhere else.
         // This prevents the GPU from stalling in partial batches
         mpz_set_ui(*batch.z[i], 7);
@@ -706,7 +713,7 @@ size_t fill_batch(
             int32_t last_offset = 0;
 
             auto side = interval.side;
-            for (size_t j = 0; batch.i < BATCH_GPU && j < SEQUENTIAL_IN_BATCH; j++) {
+            for (size_t j = 0; batch.i < GPU_BATCH_SIZE && j < SEQUENTIAL_IN_BATCH; j++) {
                 int32_t index = 0;
                 int32_t offset = 0;
                 if (side == DataM::Side::NEXT_P) {
@@ -760,11 +767,11 @@ size_t fill_batch(
                 batch.i++;
                 last_offset = offset;
             }
-            if (batch.i == BATCH_GPU) break;
+            if (batch.i == GPU_BATCH_SIZE) break;
         }
     }
 
-    assert( batch.i <= BATCH_GPU);
+    assert( batch.i <= GPU_BATCH_SIZE);
     return currently_overflowed;
 }
 
@@ -826,15 +833,16 @@ void create_gpu_batches(const struct Config og_config) {
                 // If batch is ready to have new data loaded
                 if (batch.state == GPUBatch::State::EMPTY) {
                     // Add new DataM if free space in processing
-                    size_t added = add_to_processing(K, D, processing, QUEUE_SIZE - processing.size());
+                    // TODO make use of return at some later point
+                    add_to_processing(K, D, processing, QUEUE_SIZE - processing.size());
 
                     auto in_overflowed = fill_batch(batch, processing, any_pushed_to_overflow, stats);
 
                     // Batches should be full unless lots of overflowed results.
-                    if (batch.i > 0 && batch.i < BATCH_GPU) {
+                    if (batch.i > 0 && batch.i < GPU_BATCH_SIZE) {
                         printf("Partial load @ %lu -> %lu/%lu | %lu\n",
                             batch.i > 0 ? batch.data_m[0] : 0,
-                            batch.i, BATCH_GPU, in_overflowed);
+                            batch.i, GPU_BATCH_SIZE, in_overflowed);
                     }
 
                     if (batch.i > 0) {
@@ -921,6 +929,10 @@ void create_gpu_batches(const struct Config og_config) {
         // ----- cleanup
         {
             mpz_clear(K);
+            std::unique_lock<std::mutex> lock(interval_mtx);
+            for (auto& [m, interval] : processing) {
+                mpz_clear(interval->center);
+            }
         }
     } catch (const std::exception &e) {
         cout << "ERROR in create_gpu_batches" << endl;
@@ -992,8 +1004,7 @@ void coordinator_thread(struct Config global_config) {
                     }), sieveds.end());
             lock.unlock();
         }
-        cout << "\n\nEND OF MAIN THREAD???\n" << endl;
-        cout << "is_running: " << is_running << endl;
+        cout << "\n\nEND OF MAIN THREAD\n" << endl;
     } catch (const std::exception &e) {
         cout << "ERROR in coordinator_thread" << endl;
         cout << e.what() << endl;
@@ -1003,16 +1014,25 @@ void coordinator_thread(struct Config global_config) {
 
 
 
+void signal_callback_handler(int) {
+    if (is_running) {
+       cout << "Caught CTRL+C stopping, exiting soon. " << endl;
+       is_running = false;
+    } else {
+       cout << "Caught 2nd CTRL+C stopping now." << endl;
+       exit(2);
+    }
+}
 
 void prime_gap_test(struct Config config) {
     // Setup test runner
     printf("BITS=%d\tWINDOW_BITS=%d\n", BITS, WINDOW_BITS);
     printf("PRP/BATCH=%ld\tM/BATCH=%ld\n",
-            BATCH_GPU, BATCH_GPU/SEQUENTIAL_IN_BATCH);
+            GPU_BATCH_SIZE, GPU_BATCH_SIZE/SEQUENTIAL_IN_BATCH);
     printf("THREADS/PRP=%d\n", THREADS_PER_INSTANCE);
 
-    assert( BATCH_GPU == 1024 || BATCH_GPU == 2048 || BATCH_GPU == 4096 ||
-            BATCH_GPU == 8192 || BATCH_GPU ==16384 || BATCH_GPU ==32768 );
+    assert( GPU_BATCH_SIZE == 1024 || GPU_BATCH_SIZE == 2048 || GPU_BATCH_SIZE == 4096 ||
+            GPU_BATCH_SIZE == 8192 || GPU_BATCH_SIZE ==16384 || GPU_BATCH_SIZE ==32768 );
     assert( SEQUENTIAL_IN_BATCH == 1 || SEQUENTIAL_IN_BATCH == 2 || SEQUENTIAL_IN_BATCH == 4 );
 
     mpz_t K;
@@ -1036,8 +1056,12 @@ void prime_gap_test(struct Config config) {
     }
 
 
-    // TODO considering adding signal_callback_handle to handle CTRL+C gracefully
     is_running = true;
+
+    // Setup CTRL+C catcher
+    // This isn't safe because some threads die faster and delete their references while other
+    // threads might still make reads.
+    signal(SIGINT, signal_callback_handler);
 
     /**
      * coordinator_thread: creates configs and adds them to queue

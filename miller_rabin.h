@@ -328,6 +328,15 @@ class test_runner_t {
 
           CUDA_CHECK(cudaMalloc((void **)&gpuPrimes, sizeof(uint32_t) * rounds));
           CUDA_CHECK(cudaMemcpy(gpuPrimes, primes, sizeof(uint32_t) * rounds, cudaMemcpyHostToDevice));
+
+          // TODO: only use this if batch takes > 100ms
+          // Reduces GPU_THREAD cpu from 100% while waiting
+          //CUDA_CHECK(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
+          CUDA_CHECK(cudaSetDeviceFlags(cudaDeviceScheduleSpin));
+
+          // create a cgbn_error_report for CGBN to report back errors
+          CUDA_CHECK(cgbn_error_report_alloc(&report));
+
       }
 
       ~test_runner_t() {
@@ -356,8 +365,7 @@ class test_runner_t {
           //printf("Copying primes and instances to the GPU ...\n");
           CUDA_CHECK(cudaMemcpy(gpuInstances, instances, sizeof(instance_t) * tests.size(), cudaMemcpyHostToDevice));
 
-          // create a cgbn_error_report for CGBN to report back errors
-          CUDA_CHECK(cgbn_error_report_alloc(&report));
+          cgbn_error_report_reset(report);
 
           //printf("Running GPU kernel ...\n");
 
@@ -365,11 +373,6 @@ class test_runner_t {
           //printf("Hi %ld = %ld x %d\n", tests.size(), blocks, TPB);
           kernel_miller_rabin<params><<<blocks, TPB>>>(report, gpuInstances, tests.size(), gpuPrimes, rounds);
           //printf("Bye %ld\n", blocks);
-
-          // TODO: only use this if batch takes > 100ms
-          // Reduces GPU_THREAD cpu from 100% while waiting
-          //CUDA_CHECK(cudaSetDeviceFlags(cudaDeviceScheduleBlockingSync));
-          CUDA_CHECK(cudaSetDeviceFlags(cudaDeviceScheduleSpin));
 
           // error report uses managed memory, so we sync the device (or stream) and check for cgbn errors
           CUDA_CHECK(cudaDeviceSynchronize());
@@ -379,7 +382,7 @@ class test_runner_t {
           CUDA_CHECK(cudaMemcpy(instances, gpuInstances, sizeof(instance_t) * tests.size(), cudaMemcpyDeviceToHost));
 
           for (size_t i = 0; i < tests.size(); i++) {
-              results[i] = instances[i].passed == rounds;
+              results[i] = (instances[i].passed == rounds);
           }
       }
 };

@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#pragma once
+
+#include <cstdio>
 #include <memory>
+#include <utility>
+#include <vector>
 
 #include "gap_common.h"
 
+using std::vector;
 
 class SieveOutput {
     public:
@@ -25,6 +31,12 @@ class SieveOutput {
 
         SieveOutput(uint64_t m_start, int32_t sieve_length):
             m_start(m_start), sieve_length(sieve_length) {};
+
+        /* Was used for debug.
+        ~SieveOutput() {
+            printf("~SieveOutput\n");
+        }
+        // */
 
         const uint64_t m_start;
         // Is there anything also needed from config?

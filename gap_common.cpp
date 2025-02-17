@@ -1101,28 +1101,6 @@ Config Args::argparse(int argc, char* argv[], Pr program) {
 }
 
 
-DB::DB(const char* path) {
-    assert_file_exists(path);
-
-    if (sqlite3_open(path, &db) != SQLITE_OK) {
-        printf("Can't open database(%s): %s\n", path, sqlite3_errmsg(db));
-        exit(1);
-    }
-};
-
-
-uint64_t DB::config_hash(const struct Config& config) {
-    // Hash the config to a uint64
-    uint64_t hash =    config.mstart;
-    hash = hash * 31 + config.minc;
-    hash = hash * 31 + config.p;
-    hash = hash * 31 + config.d;
-    hash = hash * 31 + config.sieve_length;
-    hash = hash * 31 + config.max_prime;
-    return hash;
-}
-
-
 BitArrayHelper::BitArrayHelper(const struct Config& config, const mpz_t &K) {
     const unsigned int SL = config.sieve_length;
     const unsigned int SIEVE_INTERVAL = 2 * SL + 1;
