@@ -59,43 +59,41 @@ using namespace std::chrono;
 #define BITS 1024
 #endif
 
-
 #define WINDOW_BITS ((BITS <= 1024) ? 5 : 6)
 
 /**
- * GPU_BATCH_SIZE is 2^n >= 1024
+ * GPU_BATCH_SIZE is 2^n | best is between 2K and 8K.
  * SEQUENTIAL_IN_BATCH = {1,2,4}
- *      1 => 0 overhead
- *      2 => 0.5 extra PRP/m
- *      4 => 1.5 extra PRP/M
- *
+ *      1 => 0 overhead, 2 => 0.5 extra PRP/m, 4 => 1.5 extra PRP/M
  * BATCHED_M is number of M loaded at the same time
- * ------------------
- * Try:
- *  1025,   16384,  1,  8,  1
- *  ???2048,    4096,  2,  8,  1
- *  ???4096,    2048,  4,  16, 1
- *
  */
-const size_t GPU_BATCH_SIZE = 2 * 1024;
-const size_t SEQUENTIAL_IN_BATCH = 1;
-const size_t BATCHED_M = 2 * GPU_BATCH_SIZE * 120 / 100 / SEQUENTIAL_IN_BATCH;  // 20% extra for overflow
 
-/**
- * Originally 8 which has highest throughput but only if we have LOTS of instances
- * this helps reduce the number of parallel instances needed
- */
-const int THREADS_PER_INSTANCE = 8;
-const int ROUNDS = 1;
+const size_t GPU_BATCH_SIZE = 4 * 1024;
+// 8 is best for BITS=1024, 4 is best for BITS=512
+const int THREADS_PER_INSTANCE = 4;
 
 // 701#
-// 1080Ti - 1024, 2, 16 -> 170-180K!
-// A100   - 4096, 4, 8 -> 327K!
+// 1080Ti - 16K,  8 -> 213K
+// 1080Ti - 8K,   8 -> 220K -> 230K double batched
+// 1080Ti - 4K,   8 -> 201K
+// OLD 701# - A100  -> 327K!
 
 // 347#
-// 1080Ti - 1024, 1, 16 -> 860K!
-// 1080Ti - 2048, 1, 8  -> 1069K!
-// 1080Ti - 2048, 1, 8  -> 1150K! (spin lock)
+// 1080Ti - 4K, 8  -> 1034K
+// 1080Ti - 2K, 8  -> 1054K!
+// 1080Ti - 1K, 8  -> 780K
+// 1080Ti - 8K, 4  -> 1300K
+// 1080Ti - 4K, 4  -> 1448K!
+// 1080Ti - 2K, 4  -> 1022K
+
+
+// 1 is best, 2 if very large batch.
+const size_t SEQUENTIAL_IN_BATCH = 1;
+// Always use 1.
+const int ROUNDS = 1;
+// 20% extra for overflow is vary reasonable.
+const size_t BATCHED_M = 2 * GPU_BATCH_SIZE * 120 / 100 / SEQUENTIAL_IN_BATCH;
+
 
 //************************************************************************
 
@@ -347,7 +345,7 @@ void run_gpu_thread(int verbose, int runner_num, GPUBatch& batch) {
         }
 
         if (verbose >= 1) {
-            printf("GPU Runner %d processed %'ld batches\n", runner_num, processed_batches);
+            printf("GPU(%d): Processed %'ld batches\n", runner_num, processed_batches);
         }
     } catch (const std::exception &e) {
         cout << "ERROR in run_gpu_thread" << endl;
@@ -818,6 +816,9 @@ void create_gpu_batches(const struct Config og_config) {
         // Silly but that's what life is.
         std::queue<int> open_gpu;
 
+        //auto s_start_t = high_resolution_clock::now();
+        //auto s_batch0_t = s_start_t;
+        //auto s_batch1_t = s_start_t;
 
         // Main loop
         while (is_running) {
@@ -832,7 +833,7 @@ void create_gpu_batches(const struct Config og_config) {
             // TODO make use of return at some later point
             add_to_processing(K, D, processing, QUEUE_SIZE - processing.size());
 
-            for (size_t i = 0; i < 2; i++) {
+            for (int i = 0; i < 2; i++) {
                 GPUBatch& batch = gpu_batches[i];
 
                 if (batch.state != GPUBatch::State::EMPTY)
@@ -843,7 +844,15 @@ void create_gpu_batches(const struct Config og_config) {
                 if (batch.i > 0) {
                     batch.state = GPUBatch::State::READY;
 
-                    //cout << "Pushed to GPU " << i << endl;
+                    /*
+                    auto last = ((i == 0) ? s_batch0_t : s_batch1_t);
+                    auto now = high_resolution_clock::now();
+                    ((i == 0) ? s_batch0_t : s_batch1_t) = now;
+                    printf("CPU: Batch(%d) ready to run @ %.5f | %.5f\n",
+                        i, duration<double>(now - last).count(),
+                        duration<double>(now - s_start_t).count());
+                    // */
+
                     open_gpu.push(i);
 
                     // Start the batch
@@ -867,6 +876,14 @@ void create_gpu_batches(const struct Config og_config) {
                     }
 
                     if (batch.state == GPUBatch::State::DONE) {
+                        /*
+                        auto last = ((i == 0) ? s_batch0_t : s_batch1_t);
+                        auto now = high_resolution_clock::now();
+                        ((i == 0) ? s_batch0_t : s_batch1_t) = now;
+                        printf("CPU: Processing batch from GPU(%d) took %.5f | %.5f\n",
+                               i, duration<double>(now - last).count(),
+                               duration<double>(now - s_start_t).count());
+                        // */
                         // Read results, mark any found primes, and possible finalize m-interval
                         process_finished_batch(batch, processing);
 
@@ -995,13 +1012,6 @@ void coordinator_thread(struct Config global_config) {
                 }
 
                 while (needed > 0) {
-                    // Make minc half for first two ranges to get first results twice as fast.
-                    if (total_ranges == 0) {
-                        assert( global_config.minc % 2 == 0 );
-                        global_config.minc /= 2;
-                    }
-
-
                     // Add new config to the queue
                     if (global_config.verbose >= 3) {
                         printf("\tQueued(%lu) %'lu to %'lu\n",
@@ -1015,10 +1025,6 @@ void coordinator_thread(struct Config global_config) {
                     total_ranges += 1;
 
                     global_config.mstart += global_config.minc;
-
-                    if (total_ranges == 2) {
-                        global_config.minc *= 2;
-                    }
                 }
             }
 
@@ -1115,13 +1121,3 @@ void prime_gap_test(struct Config config) {
     overflow_sieve_thread.join();
     mpz_clear(K);
 }
-
-/**
- * TODO next major change is combining batch_thread & gpu_thread
- * run_gpu_thread will return some event I can wait on.
- *      miller rabin has some post processing like CGBN_CHECK(report) too.
- * create_gpu_batches is actualy much simplier
- *      run_gpu_thread becomes a promise(results)
- *      we queue two of them then wait on the "first" (always the first issued)
- *      "just" need to convert run_gpu_thread to a promise
- */
