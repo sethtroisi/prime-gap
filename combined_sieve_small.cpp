@@ -685,7 +685,7 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
                 continue;
             }
 
-            // Others are handled by is_offset_coprime above
+            // primes part of K are handled by is_offset_coprime / x_reindex_m.
             if (D % prime == 0 || prime > P) {
                 const uint32_t base_r = mpz_fdiv_ui(K, prime);
                 p_and_r.push_back({(uint32_t) prime, base_r});
@@ -715,12 +715,11 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
             bool lowIsEven = !centerOdd;
 
             for (const auto &pr : p_and_r) {
-                uint64_t a_prime = pr.first;
+                uint32_t a_prime = pr.first;
                 uint64_t base_r = pr.second;
                 // For each interval that prints
 
-                // TODO is this actualy safe?
-                // Safe as base_r < prime < (2^32-1)
+                // Safe | checked above that m_end * prime_end fits in int64_t
                 uint64_t modulo = (m * base_r) % a_prime;
                 // negative modulo
                 uint32_t first = modulo > 0 ? a_prime - modulo : 0;
@@ -790,6 +789,34 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
     return temp_stats;
 }
 
+/**
+ * Return a^-1 mod p
+ * a^-1 * a mod p = 1
+ * assumes that gcd(a, p) = 1
+ */
+int32_t invert(int32_t a, int32_t p) {
+    // Use extended euclidean algorithm to get
+    // a * x + p * y = 1
+    // inverse of a is then x
+    int x = 1, y = 0;
+    int x1 = 0, y1 = 1, a1 = a, p1 = p;
+    while (p1) {
+        int32_t q = a1 / p1;
+
+        int32_t t = x1;
+        x1 = x - q * x1;
+        x = t;
+
+        t = y1;
+        y1 = y - q * y1;
+        y = t;
+
+        t = p1;
+        p1 = a1 - q * p1;
+        a1 = t;
+    }
+    return x < 0 ? (p + x) : x;
+}
 
 void method2_medium_primes(const Config &config, method2_stats &stats,
                            const mpz_t &K,
@@ -815,9 +842,10 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
      */
 
     const uint32_t SIEVE_LENGTH = config.sieve_length;
-    assert(prime_end <= (size_t)std::numeric_limits<int64_t>::max());
+    assert(prime_end <= (size_t)std::numeric_limits<int32_t>::max());
     // Prime can be larger than int32, prime * SIEVE_LENGTH must not overflow int64
     assert(!__builtin_mul_overflow_p(SIEVE_LENGTH, 4 * prime_end, (int64_t) 0));
+    assert(!__builtin_mul_overflow_p(prime_end, prime_end, (int64_t) 0));
 
     const uint64_t M_start = config.mstart;
     const uint64_t M_inc = config.minc;
@@ -848,13 +876,12 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
         // TODO measure this time and possible store in a more global cache
         const uint64_t base_r = mpz_mod_ui(test, K, prime);
-        mpz_set_ui(test2, prime);
-        assert(mpz_invert(test, test, test2) > 0);
+        // Replaces mpz_invert, checked by assert below.
+        const int32_t inv_K = invert(base_r, prime);
 
-        const int64_t inv_K = mpz_get_ui(test);
         // inv_K as large as prime
         // base_r as large as prime
-        assert(((__int128) inv_K * base_r) % prime == 1);
+        assert((inv_K * base_r) % prime == 1);
         const int64_t neg_inv_K = prime - inv_K;
 
         // -M_start % p
@@ -863,28 +890,33 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
         // Lots of expressive (unoptimized) comments and code removed in 9cf1cf40
 
-        const bool M_parity_check = M_start & 1;
+        // This check can only be used if K_odd is true, set to impossible value otherwise.
+        const uint8_t M_parity_check = K_odd ? (M_start & 1) : 0xFE;
 
+        uint64_t shift = prime << K_odd; // (1 + K_odd) * prime;
 
         size_t small_factors = 0;
         // Find m*K = X, X in [L, R]
         // NOTE: X is positive [0, SL)
         for (int64_t X : coprime_X_thread) {
-            // Safe from overflow as 2 * SL * prime < int64
+            // HOTSPOT 14%
+            // Safe from overflow as (SL * prime + prime) < int64
             int64_t mi_0 = (X * neg_inv_K + mi_0_shift) % prime;
 
+            // HOTSPOT 6%
             // Check if X parity == m parity
-            if (K_odd && ((X ^ mi_0) & 1) == M_parity_check) {
+            if (((X ^ mi_0) & 1) == M_parity_check) {
+                // HOTSPOT 10%
                 mi_0 += prime;
             }
-
-            uint64_t shift = prime << K_odd; // (1 + K_odd) * prime;
 
             // Separate loop when shift > M_inc not significantly faster
             for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
                 uint64_t m = M_start + mi;
 
+                // NOTE: Addition (shift % 231) & condition subtraction is way slower.
                 uint32_t m_mod2310 = m % 2310;
+
                 // Filters ~80% or more of m where (m, D) != 1
                 if (!caches.is_m_coprime2310[m_mod2310])
                     continue;
@@ -1304,3 +1336,87 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
 
     return result;
 }
+
+
+/*
+int main(int argc, char* argv[]) {
+    // Display %'d with commas i.e. 12,345
+    setlocale(LC_NUMERIC, "");
+
+    Config config = Args::argparse(argc, argv, Args::Pr::SIEVE);
+
+    if (config.verbose >= 2) {
+        printf("\tCompiled with GMP %d.%d.%d\n\n",
+            __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
+    }
+
+    // More combined sieve specific validation
+    {
+        // Both shouldn't be true from gap_common.
+        assert(!(config.save_unknowns && config.testing));
+
+        if (!config.save_unknowns && !config.testing) {
+            cout << "Must set --save-unknowns" << endl;
+            exit(1);
+        }
+
+        if (config.sieve_length < 6 * config.p || config.sieve_length > 22 * config.p) {
+            int sl_min = ((config.p * 8 - 1) / 500 + 1) * 500;
+            int sl_max = ((config.p * 20 - 1) / 500 + 1) * 500;
+            printf("--sieve_length(%d) should be between [%d, %d]\n",
+                config.sieve_length, sl_min, sl_max);
+            exit(1);
+        }
+
+        if (config.valid == 0) {
+            Args::show_usage(argv[0], Args::Pr::SIEVE);
+            exit(1);
+        }
+
+        if (config.max_prime > 100'000'000) {
+            printf("\tmax_prime(%ldM) is probably too large\n",
+                config.max_prime / 1'000'000);
+        }
+
+        if (config.save_unknowns) {
+            std::string fn = Args::gen_unknown_fn(config, ".txt");
+            std::ifstream f(fn);
+            if (f.good()) {
+                printf("\nOutput file '%s' already exists\n", fn.c_str());
+                exit(1);
+            }
+        }
+
+        if (!config.compression) {
+            printf("\tSetting --rle to prevent very large output file\n");
+            config.compression = 1;
+        }
+
+        if (config.compression != 1) {
+            cout << "only --rle compression is supported" << endl;
+            exit(1);
+        }
+    }
+
+    // Status lines
+    if (config.verbose >= 0) {
+        printf("\n");
+        printf("Testing m * %u#/%u, m = %'ld + [0, %'ld)\n",
+            config.p, config.d, config.mstart, config.minc);
+    }
+
+    if (config.verbose >= 2 && config.threads > 1) {
+        printf("Running with %d threads\n", config.threads);
+    }
+
+#ifdef GMP_VALIDATE_FACTORS
+    printf("\tValidating factors with GMP\n");
+#endif
+
+    if (config.method1) {
+        cout << "method1 not supported here" << endl;
+    } else {
+        prime_gap_parallel(config);
+    }
+}
+// */

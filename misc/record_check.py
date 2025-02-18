@@ -25,6 +25,7 @@ import os.path
 import re
 import sqlite3
 import sys
+import time
 from collections import defaultdict
 
 import gmpy2
@@ -91,11 +92,14 @@ def describe_found_gaps(gaps):
         ))
     print()
 
+    T0 = time.time()
     for gap, merit, _, start, _ in gaps:
         n = primegapverify.parse(start)
         assert gmpy2.is_prime(n), (start)
         assert gmpy2.is_prime(n + gap), (start, gap)
-
+        assert gmpy2.next_prime(n+1) == n + gap
+        assert gmpy2.prev_prime(n+1) == n
+    print(f"Verified Gaps ({time.time() - T0:.2f}s)")
 
 
 def print_record_gaps(args, gaps):

@@ -41,6 +41,9 @@ all: $(OUT)
 combined_sieve: combined_sieve.cpp $(OBJS)
 	$(CC) -o $@ $^ $(CFLAGS) -lsqlite3 $(LDFLAGS) $(DEFINES)
 
+combined_sieve_small: combined_sieve_small.cpp $(OBJS)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(DEFINES)
+
 gap_stats: gap_stats.cpp gap_common.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
