@@ -25,6 +25,7 @@ import os.path
 import re
 import sqlite3
 import sys
+import time
 from collections import defaultdict
 
 import gmpy2
@@ -68,10 +69,14 @@ def get_arg_parser():
         '-s', '--sort', action="store_true",
         help="Sort new records by gapsize")
 
+    parser.add_argument(
+        '-v', '--verify', action="store_true",
+        help="Verify gaps")
+
     return parser
 
 
-def describe_found_gaps(gaps):
+def describe_found_gaps(gaps, verify):
     gaps_by_size = sorted(g[0] for g in gaps)
     gaps_by_merit = defaultdict(list)
     for gap in gaps:
@@ -90,6 +95,21 @@ def describe_found_gaps(gaps):
                       ["..."] * (len(items) > 2))
         ))
     print()
+
+    if verify:
+        T0 = time.time()
+        print(f"Verifying Gaps")
+        for gap, merit, _, start, _ in gaps:
+            n = primegapverify.parse(start)
+            assert gmpy2.is_prime(n), (start)
+            assert gmpy2.is_prime(n + gap), (start, gap)
+            assert gmpy2.next_prime(n+1) == n + gap
+            assert gmpy2.prev_prime(n+1) == n
+        print(f"Verified Gaps ({time.time() - T0:.2f}s)")
+
+
+def record_line_sort(line):
+    return tuple(float(v) for v in line.split()[:3])
 
 
 def print_record_gaps(args, gaps):
@@ -178,15 +198,18 @@ def print_record_gaps(args, gaps):
 
         if record_lines:
             if args.sort:
-                record_lines.sort()
+                record_lines.sort(key=record_line_sort)
 
             seen = set()
             for line in record_lines:
-                seen.add(line.split()[0])
+                gap = line.split()[0]
+                if gap in seen:
+                    continue
+                seen.add(gap)
                 if len(seen) % 50 == 1:
-                    # Seperator *after* 50 unique items, before the 51st
+                    # Seperator before 0 and *after* 50 unique items, before the 51st
                     print()
-                print(line)
+                print(len(seen), "\t", line)
 
             print()
             print("Records {} unique {} {}".format(
@@ -195,8 +218,8 @@ def print_record_gaps(args, gaps):
             if improvements:
                 print("Merit  : +{:.2f} total, +{:.2f} for {}".format(
                     sum(improvements.values()), *max((v, k) for k, v in improvements.items())))
-            print("Smallst:", min(record_lines))
-            print("Largest:", max(record_lines))
+            print("Smallst:", min(record_lines, key=record_line_sort))
+            print("Largest:", max(record_lines, key=record_line_sort))
             if small_merit:
                 print(f'\tHid {small_merit} new "records" with merit < {args.ignore_small}')
             print()
@@ -258,7 +281,7 @@ def search_logs(log_files):
             print (match_print)
 
     if gaps:
-        describe_found_gaps(gaps)
+        describe_found_gaps(gaps, args.verify)
         print_record_gaps(args, gaps)
     else:
         print("Didn't find any gaps in logs files: %s".format(
@@ -301,7 +324,7 @@ def search_db(args):
                 ", ".join(f"{k}={gap[k]}" for k in ('p', 'd', 'm', 'prev_p', 'next_p')),
             ))
 
-    describe_found_gaps(gaps)
+    describe_found_gaps(gaps, args.verify)
     print_record_gaps(args, gaps)
 
 
