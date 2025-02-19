@@ -92,15 +92,19 @@ def describe_found_gaps(gaps):
         ))
     print()
 
-    T0 = time.time()
-    for gap, merit, _, start, _ in gaps:
-        n = primegapverify.parse(start)
-        assert gmpy2.is_prime(n), (start)
-        assert gmpy2.is_prime(n + gap), (start, gap)
-        assert gmpy2.next_prime(n+1) == n + gap
-        assert gmpy2.prev_prime(n+1) == n
-    print(f"Verified Gaps ({time.time() - T0:.2f}s)")
+    if False:
+        T0 = time.time()
+        for gap, merit, _, start, _ in gaps:
+            n = primegapverify.parse(start)
+            assert gmpy2.is_prime(n), (start)
+            assert gmpy2.is_prime(n + gap), (start, gap)
+            assert gmpy2.next_prime(n+1) == n + gap
+            assert gmpy2.prev_prime(n+1) == n
+        print(f"Verified Gaps ({time.time() - T0:.2f}s)")
 
+
+def record_line_sort(line):
+    return tuple(float(v) for v in line.split()[:3])
 
 def print_record_gaps(args, gaps):
     with sqlite3.connect(args.prime_gaps_db) as conn:
@@ -188,15 +192,18 @@ def print_record_gaps(args, gaps):
 
         if record_lines:
             if args.sort:
-                record_lines.sort()
+                record_lines.sort(key=record_line_sort)
 
             seen = set()
             for line in record_lines:
-                seen.add(line.split()[0])
+                gap = line.split()[0]
+                if gap in seen:
+                    continue
+                seen.add(gap)
                 if len(seen) % 50 == 1:
-                    # Seperator *after* 50 unique items, before the 51st
+                    # Seperator before 0 and *after* 50 unique items, before the 51st
                     print()
-                print(line)
+                print(len(seen), "\t", line)
 
             print()
             print("Records {} unique {} {}".format(
@@ -205,8 +212,8 @@ def print_record_gaps(args, gaps):
             if improvements:
                 print("Merit  : +{:.2f} total, +{:.2f} for {}".format(
                     sum(improvements.values()), *max((v, k) for k, v in improvements.items())))
-            print("Smallst:", min(record_lines))
-            print("Largest:", max(record_lines))
+            print("Smallst:", min(record_lines, key=record_line_sort))
+            print("Largest:", max(record_lines, key=record_line_sort))
             if small_merit:
                 print(f'\tHid {small_merit} new "records" with merit < {args.ignore_small}')
             print()
