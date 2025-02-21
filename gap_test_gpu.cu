@@ -92,8 +92,13 @@ const size_t SEQUENTIAL_IN_BATCH = 1;
 // Always use 1.
 const int ROUNDS = 1;
 // 20% extra for overflow is vary reasonable.
-const size_t BATCHED_M = 2 * GPU_BATCH_SIZE * 120 / 100 / SEQUENTIAL_IN_BATCH;
+const size_t BATCHED_M = 160 / 100 * 2 * GPU_BATCH_SIZE / SEQUENTIAL_IN_BATCH;
 
+
+// From 701# I believe.
+// 1M -> 2000/second
+// 200K -> 4000/second
+const size_t CPU_SIEVE_LIMIT = 100'000;
 
 //************************************************************************
 
@@ -381,7 +386,7 @@ void run_sieve_thread(void) {
             auto M_end = to_sieve->config.mstart + to_sieve->config.minc;
             auto s_start_t = high_resolution_clock::now();
             // TODO set with const.
-            to_sieve->config.threads = 6;
+            to_sieve->config.threads = 8;
             to_sieve->config.verbose -= 3;
             auto result = prime_gap_parallel(to_sieve->config);
             to_sieve->config.verbose += 3;
@@ -409,15 +414,11 @@ void run_overflow_thread(const mpz_t &K_in) {
         mpz_t K;
         mpz_init_set(K, K_in);
 
-        // TODO make this a #define or based on config or something
-        // 1M -> 2000/second
-        // 200K -> 4000/second
-        uint64_t MAX_PRIME = 100'000;
         std::vector<std::pair<uint32_t, uint32_t>> p_and_r;
         primesieve::iterator iter;
         uint64_t prime = iter.next_prime();
         assert (prime == 2);  // we skip 2 which is the oddest prime.
-        for (prime = iter.next_prime(); prime < MAX_PRIME; prime = iter.next_prime()) {
+        for (prime = iter.next_prime(); prime < CPU_SIEVE_LIMIT; prime = iter.next_prime()) {
             const uint32_t base_r = mpz_fdiv_ui(K, prime);
             p_and_r.emplace_back((uint32_t) prime, base_r);
         }
@@ -432,11 +433,12 @@ void run_overflow_thread(const mpz_t &K_in) {
             // Lock IS NOT held while waiting.
             overflow_cv.wait(lock, []{ return overflowed.size() || !is_running; });
 
-            if (overflowed.size() > 200) {
-                cout << "CPU SIEVE QUEUE: " << overflowed.size() << endl;
-            }
-
             while (is_running && overflowed.size()) {
+                if (tested % 1000 == 0 && overflowed.size() > 200) {
+                    printf("CPU Sieve Queue: %lu open, %lu processed\n",
+                            overflowed.size(), tested);
+                }
+
                 DataM& interval = *overflowed.back(); overflowed.pop_back();
                 assert(interval.state == DataM::State::OVERFLOWED);
                 interval.state = DataM::State::SIEVING;
@@ -754,14 +756,18 @@ void fill_batch(
 
     // Batches should be full unless lots of overflowed results.
     if (batch.i > 0 && batch.i < GPU_BATCH_SIZE) {
-        printf("Partial load @ %lu -> %lu/%lu | %lu\n",
-            batch.i > 0 ? batch.data_m[0] : 0,
-            batch.i, GPU_BATCH_SIZE, currently_overflowed);
+        //printf("Partial load @ %lu -> %lu/%lu | %lu\n",
+        //    batch.i > 0 ? batch.data_m[0] : 0,
+        //    batch.i, GPU_BATCH_SIZE, currently_overflowed);
     }
 }
 
 
 void create_gpu_batches(const struct Config og_config) {
+
+    // gap / 2 up to 60 merit
+    uint64_t distance_counts[10000] = {};
+
     try {
         cout << endl;
 
@@ -774,7 +780,7 @@ void create_gpu_batches(const struct Config og_config) {
         const float min_merit = og_config.min_merit;
 
         // See THEORY.md! Added const is small preference for doing less prev_p.
-        const float MIN_MERIT_TO_CONTINUE = 2.1 + std::log2(min_merit * std::log(2) + 1);
+        const float MIN_MERIT_TO_CONTINUE = 2.6 + std::log2(min_merit * std::log(2) + 1);
 
         // Print Header info
         if (og_config.verbose >= 1) {
@@ -949,6 +955,23 @@ void create_gpu_batches(const struct Config og_config) {
                         interval.unknowns[0].size(), interval.unknowns[1].size(),
                         prev_p, next_p,
                         interval.p_tests, interval.n_tests, merit);
+
+                    distance_counts[next_p >> 1] += 1;
+
+                    if (0 && (stats.s_tests % 1'000'000'000) == 100'000'000) {
+                        size_t i = 0;  // max set index
+                        for (size_t j = 0; j < 10000; j++) {
+                            if (distance_counts[j] > 0) {
+                                i = j;
+                            }
+                        }
+
+                        cout << "COUNTS@" << stats.s_tests << ": " << distance_counts[0];
+                        for (size_t j = 1; j <= i; j++) {
+                            cout << "," << distance_counts[j];
+                        }
+                        cout << endl;
+                    }
 
                     mpz_clear(interval.center);
                     it = processing.erase(it);  // Erase this element

@@ -886,7 +886,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
         // -M_start % p
         const int64_t m_start_shift = (prime - (M_start % prime)) % prime;
-        const int64_t mi_0_shift = m_start_shift % prime;
+        const int64_t mi_0_shift = m_start_shift;
 
         // Lots of expressive (unoptimized) comments and code removed in 9cf1cf40
 
@@ -902,6 +902,9 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
             // HOTSPOT 14%
             // Safe from overflow as (SL * prime + prime) < int64
             int64_t mi_0 = (X * neg_inv_K + mi_0_shift) % prime;
+
+            // TODO What would it take to guess this parity?
+            // Can I mod by (2*prime) and find it that way?
 
             // HOTSPOT 6%
             // Check if X parity == m parity
@@ -1205,8 +1208,8 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
         }
 
         /**
-         * Note: Each extra split means another call to mpz_invert for all primes.
-         * This is fast, ~5 minutes for 300M inverts (limit = 7e9) so ~1% overheard
+         * Note: Each extra split means more calls to invert for all primes.
+         * This is fast but still has some overheard
          */
         const size_t NUM_SPLITS = THREADS + 3;
         vector<uint32_t> coprime_X_split[NUM_SPLITS];
