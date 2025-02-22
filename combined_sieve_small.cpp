@@ -116,7 +116,7 @@ class method2_stats {
 void method2_increment_print(
         uint64_t prime,
         size_t valid_ms,
-        vector<bool> *composite,
+        vector<bool> &composite,
         method2_stats &stats,
         const struct Config& config) {
 
@@ -137,10 +137,9 @@ void method2_increment_print(
 
             // This sligtly duplicates work below, but we don't care.
             auto   temp = high_resolution_clock::now();
-            for (size_t i = 0; i < valid_ms; i++) {
-                // Claim is that after c++20 popcount is used by std::count for vector<bool>
-                stats.count_coprime_p += std::count(composite[i].begin(), composite[i].end(), false);
-            }
+            // Claim is that after c++20 popcount is used by std::count for vector<bool>
+            stats.count_coprime_p = std::count(composite.begin(), composite.end(), false);
+
             double interval_count_time = duration<double>(high_resolution_clock::now() - temp).count();
             if (config.verbose >= 2) {
                 printf("\t\t counting unknowns takes ~%.1f seconds\n", interval_count_time);
@@ -229,10 +228,7 @@ void method2_increment_print(
             double skipped_prp = 2 * valid_ms * delta_sieve_prob;
 
             if (is_last || config.threads <= 1) {
-                uint64_t t_total_unknowns = 0;
-                for (size_t i = 0; i < valid_ms; i++) {
-                    t_total_unknowns += std::count(composite[i].begin(), composite[i].end(), false);
-                }
+                uint64_t t_total_unknowns = std::count(composite.begin(), composite.end(), false);
                 uint64_t new_composites = stats.total_unknowns - t_total_unknowns;
 
                 // count_coprime_sieve * valid_ms also makes sense but leads to smaller numbers
@@ -325,7 +321,7 @@ class Cached {
         size_t valid_ms;
 
         /**
-         * m_reindex[mi] = composite[mii] if coprime
+         * m_reindex[mi] = mii (index into composite) if coprime
          * -1 if gcd(ms + i, D) > 1
          *
          * This is potentially very large use is_m_coprime and is_m_coprime2310
@@ -363,6 +359,7 @@ class Cached {
         vector<uint16_t> x_reindex_wheel[METHOD2_WHEEL_MAX];
         vector<size_t> x_reindex_wheel_count;
 
+        uint64_t composite_line_size;
 
         int32_t K_mod2310;
 
@@ -484,6 +481,15 @@ class Cached {
             #endif
         }
 
+        uint32_t max_composites = *std::max_element(
+                x_reindex_wheel_count.begin(), x_reindex_wheel_count.end());
+
+        composite_line_size = 32 * ((max_composites + 31) / 32);
+        if (config.verbose >= 2) {
+            cout << "Need at least " << max_composites << " per m, rounding up to "
+                 << composite_line_size << endl << endl;;
+        }
+
         K_mod2310 = mpz_fdiv_ui(K, 2310);
 
         is_coprime2310.resize(2*3*5*7*11, 1);
@@ -547,7 +553,7 @@ std::unique_ptr<SieveOutput> save_unknowns(
         const struct Config& config,
         const mpz_t &K,
         const Cached &caches,
-        const vector<bool> *composite) {
+        const vector<bool> &composite) {
     // For 50M range with 5M sieve, this took 3.9 of 74 seconds!
     // For 10M range with 1M sieve, this took 0.8 of 11 seconds!
     // For 20M range with 1M sieve, this took 1.7 of 23 seconds!
@@ -594,7 +600,7 @@ std::unique_ptr<SieveOutput> save_unknowns(
         uint64_t m = M_start + mi;
         assert((signed)mii == caches.m_reindex[mi]);
 
-        const auto &comp = composite[mii];
+        const size_t composite_index = mii * caches.composite_line_size;
         const auto &x_reindex_m = caches.x_reindex_wheel[m % caches.x_reindex_wheel_size];
         assert(x_reindex_m.size() == (uint64_t) (SL + 1));
 
@@ -610,12 +616,10 @@ std::unique_ptr<SieveOutput> save_unknowns(
         int last_u_i = 0;
         int u_i = 0;
         for (uint32_t x : caches.coprime_X) {
-            if (!comp[x_reindex_m[x]]) {
+            if (!composite[composite_index + x_reindex_m[x]]) {
                 int delta = u_i - last_u_i;
-
                 assert( delta <= 0xFFFF );
                 deltas.push_back(delta);
-
                 last_u_i = u_i;
                 found += 1;
             }
@@ -647,7 +651,7 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
                           const Cached &caches,
                           const vector<uint32_t> &valid_mi,
                           const uint64_t SMALL_THRESHOLD,
-                          vector<bool> *composite) {
+                          vector<bool> &composite) {
 
     method2_stats temp_stats(thread_i, config, valid_mi.size(), SMALL_THRESHOLD, stats.prob_prime);
     temp_stats.last_prime = stats.last_prime;
@@ -717,7 +721,7 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
 #else
                 caches.x_reindex;
 #endif  // METHOD2_WHEEL
-            vector<bool> &composite_mii = composite[mii];
+            const uint64_t composite_index = mii * caches.composite_line_size;
 
             bool centerOdd = ((D & 1) == 0) && (m & 1);
             bool lowIsEven = !centerOdd;
@@ -746,7 +750,7 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
 #endif  // GMP_VALIDATE_FACTORS
 
                         if (firstIsEven) {
-                            assert( (first >= SL) || composite_mii[x_reindex_m[first]] );
+                            assert( (first >= SL) || composite[composite_index + x_reindex_m[first]] );
                             // divisible by 2 move to next multiple (an odd multiple)
                             first += a_prime;
                         }
@@ -762,7 +766,8 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
                          */
                         uint32_t xii = x_reindex_m[x];
                         if (xii > 0) {
-                            composite_mii[xii] = true;
+                            assert( composite_index + xii < composite.size() );
+                            composite[composite_index + xii] = true;
                             temp_stats.small_prime_factors_interval += 1;
                         }
                     }
@@ -834,7 +839,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                            const Cached &caches,
                            vector<uint32_t> &coprime_X_thread,
                            const uint64_t prime_start, const uint64_t prime_end,
-                           vector<bool> *composite) {
+                           vector<bool> &composite) {
     /**
      * Break this up into a long list of <Prime Range, comprime_X_range> then parallel
      * over that list so all work finishes at the same time.
@@ -957,7 +962,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                  * Note: Risk of race condition / contention is reduced by having
                  * each thread handling a different range of xii
                  */
-                composite[mii][xii] = true;
+                composite[mii * caches.composite_line_size + xii] = true;
 
 #ifdef GMP_VALIDATE_FACTORS
                 validate_factor_m_k_x(stats, test, K, M_start + mi, X, prime);
@@ -1060,7 +1065,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
 
     // <char> is faster (0-5%?) than <bool>, but uses 8x the memory.
     // Need to change here and in `save_unknowns_method2` signature.
-    vector<bool> *composite = new vector<bool>[valid_ms];
+    vector<bool> composite(valid_ms * caches.composite_line_size);
     {
         int align_print = 0;
         /**
@@ -1075,7 +1080,8 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
 
         size_t MB = 8 * 1024 * 1024;
         size_t overhead_bits = M_inc * (8 * sizeof(uint32_t) + 1) +
-                               valid_ms * 8 * (sizeof(uint32_t) + sizeof(composite[0]));
+                               valid_ms * 8 * sizeof(uint32_t) +
+                               composite.size();
 
         // Per valid_ms
         size_t guess = overhead_bits + valid_ms * (count_coprime_sieve + 1);
@@ -1113,15 +1119,18 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
             exit(1);
         }
 
-        size_t allocated = 0;
+        size_t allocated = composite.size();
         for (size_t i = 0; i < valid_ms; i++) {
             int m_wheel = (M_start + caches.valid_mi[i]) % x_reindex_wheel_size;
             assert(gcd(m_wheel, x_reindex_wheel_size) == 1);
 
             // +1 reserves extra 0th entry for x_reindex[x] = 0
-            composite[i].resize(caches.x_reindex_wheel_count[m_wheel] + 1, false);
-            composite[i][0] = true;
-            allocated += composite[i].size();
+            composite[i * caches.composite_line_size] = true;
+            // disable all the back bits
+            size_t used = caches.x_reindex_wheel_count[m_wheel] + 1;
+            for (size_t j = used; j < caches.composite_line_size; j++) {
+                composite[i * caches.composite_line_size + j] = true;
+            }
         }
         if (config.verbose >= 1 && x_reindex_wheel_size > 1) {
             printf("%*s", align_print, "");
@@ -1129,9 +1138,9 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
                 allocated / valid_ms, SIEVE_LENGTH,
                 allocated / 8 / 1024 / 1024);
         }
-
         if (config.verbose >= 1) {
-            align_print += 1;  // avoid unused warning
+            cout << "\tcomposite line: " << caches.composite_line_size
+                << " total: " << composite.size() << endl;
             printf("\n");
         }
     }
@@ -1341,14 +1350,13 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
 
     auto result = save_unknowns(config, K, caches, composite);
 
-    delete[] composite;
     mpz_clear(K);
 
     return result;
 }
 
 
-// /*
+/*
 int main(int argc, char* argv[]) {
     // Display %'d with commas i.e. 12,345
     setlocale(LC_NUMERIC, "");
