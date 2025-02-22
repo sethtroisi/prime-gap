@@ -15,6 +15,7 @@
 #include "combined_sieve_small.h"
 
 #include <algorithm>
+#include <bitset>
 #include <cassert>
 #include <chrono>
 #include <clocale>
@@ -137,6 +138,7 @@ void method2_increment_print(
             // This sligtly duplicates work below, but we don't care.
             auto   temp = high_resolution_clock::now();
             for (size_t i = 0; i < valid_ms; i++) {
+                // Claim is that after c++20 popcount is used by std::count for vector<bool>
                 stats.count_coprime_p += std::count(composite[i].begin(), composite[i].end(), false);
             }
             double interval_count_time = duration<double>(high_resolution_clock::now() - temp).count();
@@ -317,6 +319,7 @@ void validate_factor_m_k_x(
 class Cached {
     public:
         // mi such that gcd(m_start + mi, D) = 1
+        // TODO: Can I change this to m_inc as a uint8_t?
         vector<uint32_t> valid_mi;
         // valid_mi.size()
         size_t valid_ms;
@@ -333,10 +336,11 @@ class Cached {
         vector<bool> is_m_coprime;
         /**
          * is_m_coprime2310[i] = (i, D') == 1
-         * D' has only factors <= 11
-         * first 2310 values
+         * D' only has primes <= 11
+         * first 2310 values.
+         * vector<bool> seems faster than char [2310]
          */
-        vector<bool> is_m_coprime2310;
+        std::bitset<2310> is_m_coprime2310;
 
 
         // X which are coprime to K
@@ -487,7 +491,9 @@ class Cached {
             for (size_t i = 0; i < is_coprime2310.size(); i += p)
                 is_coprime2310[i] = 0;
 
-        is_m_coprime2310.resize(2310, 1);
+        //is_m_coprime2310.resize(2310, 1);
+        is_m_coprime2310.set();
+
         for (int p : {2, 3, 5, 7, 11})
             if (config.d % p == 0)
                 for (int i = 0; i < 2310; i += p)
@@ -594,7 +600,7 @@ std::unique_ptr<SieveOutput> save_unknowns(
 
         int64_t found = 0;
         auto& deltas = output->unknowns[mii];
-        // TODO how to set a reasonable bound?
+        // threadlocal char tmp[1000], didn't speed this up, but maybe would reduce memory
         //deltas.reserve(found);
 
         // TODO consider if I can use __builtin_ctz or __builtin_ffs to avoid looking at each index
@@ -635,7 +641,6 @@ std::unique_ptr<SieveOutput> save_unknowns(
 
 
 
-
 method2_stats method2_small_primes(const Config &config, method2_stats &stats,
                           const mpz_t &K,
                           int thread_i,
@@ -662,8 +667,11 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
         assert(!__builtin_mul_overflow_p(m_end, prime_end, (int64_t) 0));
     }
 
+#ifdef GMP_VALIDATE_FACTORS
     mpz_t test;
     mpz_init(test);
+#endif  // GMP_VALIDATE_FACTORS
+
 
     primesieve::iterator iter;
     uint64_t prime = 0;
@@ -785,7 +793,9 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
         stats.validated_factors += temp_stats.validated_factors;
     }
 
+#ifdef GMP_VALIDATE_FACTORS
     mpz_clear(test);
+#endif  // GMP_VALIDATE_FACTORS
     return temp_stats;
 }
 
@@ -838,7 +848,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
      *      ~1/2 of all "factors" are found at 10-1000x rate of below so locking
      *      much more needed to avoid collision
      * 2. only one thread can execute per coprime_X_thread_chunk
-     *      still have issue at edges
+     *      have to be clever at edges of coprime_X_thread making sure all /8 end in the same thread.
      */
 
     const uint32_t SIEVE_LENGTH = config.sieve_length;
@@ -852,15 +862,15 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
     assert(config.minc <= (size_t) std::numeric_limits<int32_t>::max());
     assert(!__builtin_mul_overflow_p(M_start + M_inc, prime_end, (int64_t) 0));
 
+    mpz_t test;
+    mpz_init(test);
+
 #if METHOD2_WHEEL
     const uint32_t x_reindex_wheel_size = caches.x_reindex_wheel_size;
 #endif  // METHOD2_WHEEL
 
-    mpz_t test, test2;
-    mpz_init(test);
-    mpz_init(test2);
-
     const int K_odd = mpz_odd_p(K);
+    assert( K_odd ); // Good for optimizations also good for big gaps.
 
     primesieve::iterator iter(prime_start);
     uint64_t prime = iter.prev_prime();
@@ -874,9 +884,8 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
             stats.pi_interval += 1;
         }
 
-        // TODO measure this time and possible store in a more global cache
-        const uint64_t base_r = mpz_mod_ui(test, K, prime);
-        // Replaces mpz_invert, checked by assert below.
+        const uint64_t base_r = mpz_fdiv_ui(K, prime);
+        // Replaced mpz_invert, checked by assert below.
         const int32_t inv_K = invert(base_r, prime);
 
         // inv_K as large as prime
@@ -890,10 +899,10 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
         // Lots of expressive (unoptimized) comments and code removed in 9cf1cf40
 
-        // This check can only be used if K_odd is true, set to impossible value otherwise.
-        const uint8_t M_parity_check = K_odd ? (M_start & 1) : 0xFE;
+        // This check can only be used if K_odd is true.
+        const uint8_t M_parity_check = M_start & 1;
 
-        uint64_t shift = prime << K_odd; // (1 + K_odd) * prime;
+        uint32_t shift = prime << 1; // prime << K_odd;
 
         size_t small_factors = 0;
         // Find m*K = X, X in [L, R]
@@ -903,21 +912,22 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
             // Safe from overflow as (SL * prime + prime) < int64
             int64_t mi_0 = (X * neg_inv_K + mi_0_shift) % prime;
 
-            // TODO What would it take to guess this parity?
-            // Can I mod by (2*prime) and find it that way?
-
-            // HOTSPOT 6%
             // Check if X parity == m parity
-            if (((X ^ mi_0) & 1) == M_parity_check) {
-                // HOTSPOT 10%
-                mi_0 += prime;
-            }
+            // HOTSPOT 6 & 11%
+            //if (((X ^ mi_0) & 1) == M_parity_check) {
+            //    mi_0 += prime;
+            //}
+            // If coprime_X_thread is split even / odd this can be reduced even more.
+            mi_0 += (((X ^ mi_0) & 1) == M_parity_check) ? prime : 0;
 
-            // Separate loop when shift > M_inc not significantly faster
-            for (uint64_t mi = mi_0; mi < M_inc; mi += shift) {
+            // Tried manual loop unrolling.
+            // Tried using a vectorized shift that was aware of mod 3 and skipped 1/3 of indexes.
+
+            uint64_t mi = mi_0;
+            for (; mi < M_inc; mi += shift) {
+                // NOTE: Addition of constant, shift % 2310, and condition subtraction is way slower.
+                // TODO: Maybe can do magic division constant on mi_0:
                 uint64_t m = M_start + mi;
-
-                // NOTE: Addition (shift % 231) & condition subtraction is way slower.
                 uint32_t m_mod2310 = m % 2310;
 
                 // Filters ~80% or more of m where (m, D) != 1
@@ -926,10 +936,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
                 // After initial value this increases by (shift * K_mod2310) % 2310
                 uint32_t n_mod2310 = ((caches.K_mod2310 * m_mod2310) + X) % 2310;
-                if (!caches.is_coprime2310[n_mod2310])
-                    continue;
-
-                if (!caches.is_m_coprime[mi])
+                if (!caches.is_coprime2310[n_mod2310] || !caches.is_m_coprime[mi])
                     continue;
 
                 int32_t mii = caches.m_reindex[mi];
@@ -938,7 +945,8 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                 small_factors += 1;
 
 #if METHOD2_WHEEL
-                uint32_t xii = caches.x_reindex_wheel[m % x_reindex_wheel_size][X];
+                // x_reindex_wheel_size divides 2310 so this is same as m % x_reindex_wheel_size
+                uint32_t xii = caches.x_reindex_wheel[m_mod2310 % x_reindex_wheel_size][X];
 #else
                 uint32_t xii = caches.x_reindex[X];
 #endif  // METHOD2_WHEEL
@@ -947,7 +955,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
                 /**
                  * Note: Risk of race condition / contention is reduced by having
-                 * each thread handling a different ranche of xii
+                 * each thread handling a different range of xii
                  */
                 composite[mii][xii] = true;
 
@@ -966,7 +974,6 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
         }
     }
     mpz_clear(test);
-    mpz_clear(test2);
 }
 
 
@@ -1061,7 +1068,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
          *      4 bytes in m_reindex
          *      1 bit   in is_m_coprime
          * Per valid_ms
-         *      4  bytes in caches.valid_mi
+         *      4  bytes in caches.valid_mi (could be 1 byte if valid_mi -> m_inc);
          *      40 bytes for vector<bool> instance
          *      count_coprime_sieve + 1 bits
          */
@@ -1077,7 +1084,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
             std::string s_coprime_m = "coprime m    " +
                 std::to_string(valid_ms) + "/" + std::to_string(M_inc) + " ";
             std::string s_coprime_i = "coprime i    " +
-                std::to_string(count_coprime_sieve / 2) + "/" + std::to_string(SIEVE_LENGTH);
+                std::to_string(count_coprime_sieve) + "/" + std::to_string(SIEVE_LENGTH);
             align_print = s_coprime_m.size();
 
             printf("%*s", align_print + (int) s_coprime_i.size(), "");
@@ -1097,7 +1104,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
                 size_t allocated = guess - overhead_bits;
                 printf("%*s", align_print, "");
                 printf("coprime wheel %ld/%d, ~%'ldMB\n",
-                    allocated / (2 * valid_ms), SIEVE_LENGTH,
+                    allocated / valid_ms, SIEVE_LENGTH,
                     allocated / 8 / 1024 / 1024);
             }
             printf("\ncombined_sieve expects to use %'ld MB which is greater than %d GB limit\n",
@@ -1119,7 +1126,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
         if (config.verbose >= 1 && x_reindex_wheel_size > 1) {
             printf("%*s", align_print, "");
             printf("coprime wheel %ld/%d, ~%'ld MB\n",
-                allocated / (2 * valid_ms), SIEVE_LENGTH,
+                allocated / valid_ms, SIEVE_LENGTH,
                 allocated / 8 / 1024 / 1024);
         }
 
@@ -1211,7 +1218,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
          * Note: Each extra split means more calls to invert for all primes.
          * This is fast but still has some overheard
          */
-        const size_t NUM_SPLITS = THREADS + 3;
+        const size_t NUM_SPLITS = THREADS <= 1 ? 1 : THREADS + 3;
         vector<uint32_t> coprime_X_split[NUM_SPLITS];
         size_t coprime_X_count = caches.coprime_X.size();
 
@@ -1341,7 +1348,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
 }
 
 
-/*
+// /*
 int main(int argc, char* argv[]) {
     // Display %'d with commas i.e. 12,345
     setlocale(LC_NUMERIC, "");
@@ -1356,18 +1363,8 @@ int main(int argc, char* argv[]) {
     // More combined sieve specific validation
     {
         // Both shouldn't be true from gap_common.
-        assert(!(config.save_unknowns && config.testing));
-
-        if (!config.save_unknowns && !config.testing) {
-            cout << "Must set --save-unknowns" << endl;
-            exit(1);
-        }
-
-        if (config.sieve_length < 6 * config.p || config.sieve_length > 22 * config.p) {
-            int sl_min = ((config.p * 8 - 1) / 500 + 1) * 500;
-            int sl_max = ((config.p * 20 - 1) / 500 + 1) * 500;
-            printf("--sieve_length(%d) should be between [%d, %d]\n",
-                config.sieve_length, sl_min, sl_max);
+        if (!config.testing) {
+            cout << "Must set --testing" << endl;
             exit(1);
         }
 
@@ -1379,25 +1376,6 @@ int main(int argc, char* argv[]) {
         if (config.max_prime > 100'000'000) {
             printf("\tmax_prime(%ldM) is probably too large\n",
                 config.max_prime / 1'000'000);
-        }
-
-        if (config.save_unknowns) {
-            std::string fn = Args::gen_unknown_fn(config, ".txt");
-            std::ifstream f(fn);
-            if (f.good()) {
-                printf("\nOutput file '%s' already exists\n", fn.c_str());
-                exit(1);
-            }
-        }
-
-        if (!config.compression) {
-            printf("\tSetting --rle to prevent very large output file\n");
-            config.compression = 1;
-        }
-
-        if (config.compression != 1) {
-            cout << "only --rle compression is supported" << endl;
-            exit(1);
         }
     }
 

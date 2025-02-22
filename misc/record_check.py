@@ -203,7 +203,7 @@ def print_record_gaps(args, gaps):
                 if len(seen) % 50 == 1:
                     # Seperator before 0 and *after* 50 unique items, before the 51st
                     print()
-                print(len(seen), "\t", line)
+                print("\t", line)
 
             print()
             print("Records {} unique {} {}".format(

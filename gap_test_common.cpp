@@ -201,7 +201,8 @@ void sieve_interval_cpu(
     // To make math easy we always start at the bottom of the sieve and head positive
     // This is natural for next_prime and returns the numbers backwards for a prev_prime
 
-    char composite[sieve_length] = {};
+    char composite[sieve_length];
+    std::fill_n(composite, sieve_length, 0);
 
     // Handle 2 because it's weird
     {

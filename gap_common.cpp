@@ -157,7 +157,8 @@ double prp_time_estimate_composite(double K_log, int verbose) {
         + -1.9582e-18 * K_log_2 * K_log_2;
     float t_estimate = std::max(1e-3f, t_estimate_poly);
 
-    if (verbose >= 2) {
+    // Not needed with GPU code.
+    if (verbose >= 3) {
         if (t_estimate > 0.3) {
             printf("Estimated secs/PRP: %.1f\n", t_estimate);
         } else {

@@ -98,7 +98,7 @@ const size_t BATCHED_M = 160 / 100 * 2 * GPU_BATCH_SIZE / SEQUENTIAL_IN_BATCH;
 // From 701# I believe.
 // 1M -> 2000/second
 // 200K -> 4000/second
-const size_t CPU_SIEVE_LIMIT = 100'000;
+const size_t CPU_SIEVE_LIMIT = 90'000;
 
 //************************************************************************
 
@@ -434,7 +434,7 @@ void run_overflow_thread(const mpz_t &K_in) {
             overflow_cv.wait(lock, []{ return overflowed.size() || !is_running; });
 
             while (is_running && overflowed.size()) {
-                if (tested % 1000 == 0 && overflowed.size() > 200) {
+                if (tested % 100'000 == 0 && overflowed.size() > 200) {
                     printf("CPU Sieve Queue: %lu open, %lu processed\n",
                             overflowed.size(), tested);
                 }

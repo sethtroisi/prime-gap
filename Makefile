@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-OPT     = -O3
+OPT     = -O3 -std=c++20 -g
 OBJS	= gap_common.o modulo_search.o gap_test_common.o
 OUT	= combined_sieve gap_stats gap_test_simple benchmark benchmark_google
 CC	= g++
-CFLAGS	= $(OPT) -Wall -Werror -fopenmp
+CFLAGS	= $(OPT) -Wall -Werror -Wno-vla -fopenmp
 NVCC	= nvcc
 CUDA_FLAGS	= $(OPT) -Xcompiler -Wall -Xcompiler -Werror -Xcompiler -fopenmp
 BITS    = 1024
