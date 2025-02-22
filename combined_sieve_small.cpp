@@ -53,9 +53,6 @@ using namespace std::chrono;
 // Used to validate factors divide the number claimed
 //#define GMP_VALIDATE_FACTORS
 
-// Compresses composite by 50-80%,
-#define METHOD2_WHEEL   1
-
 // This probably should be optimized to fit in L2/L3
 // Related to sizeof(int) * SIEVE_INTERVAL * WHEEL_MAX
 // WHEEL should divide config.d
@@ -225,7 +222,7 @@ void method2_increment_print(
             // See THEORY.md
             double prob_prime_after_sieve = stats.prob_prime * log(prime) * exp(GAMMA);
             double delta_sieve_prob = (1/stats.current_prob_prime - 1/prob_prime_after_sieve);
-            double skipped_prp = 2 * valid_ms * delta_sieve_prob;
+            double skipped_prp = valid_ms * delta_sieve_prob;
 
             if (is_last || config.threads <= 1) {
                 uint64_t t_total_unknowns = composite.size() - composite.count();
@@ -268,7 +265,7 @@ void method2_increment_print(
 
             double prp_rate = skipped_prp / (int_secs * config.threads);
             if (config.show_timing) {
-                printf("\t~ 2x %.2f PRP/m\t\t"
+                printf("\t%.2f PRP/m\t\t"
                        "(~ %4.1f skipped PRP => %.1f PRP/%s)\n",
                     1 / stats.current_prob_prime, skipped_prp,
                     prp_rate,
@@ -404,9 +401,8 @@ class Cached {
         x_reindex.resize(SL+1, 0);
 
         // reindex composite[m][i] using (m, wheel) (wheel is 1!,2!,3!,5!)
-        // This could be first indexed by x_reindex,
         // Would reduce size from wheel * SL to wheel * coprime_i
-#if METHOD2_WHEEL
+
         // Note: Larger wheel eliminates more numbers but takes more space.
         // 6 seems reasonable for larger numbers  (uses 1/3 memory = 33%)
         // 30 is maybe better for smaller numbers (uses 4/15 memory = 26%)
@@ -422,9 +418,6 @@ class Cached {
         }
         x_reindex_wheel_size = wheel;
         assert(x_reindex_wheel_size <= METHOD2_WHEEL_MAX); // Static size in Caches will break;
-#else
-        x_reindex_wheel_size = 1;
-#endif  // METHOD2_WHEEL
 
         x_reindex_wheel_count.resize(x_reindex_wheel_size, 0);
 
@@ -476,7 +469,6 @@ class Cached {
             }
             x_reindex_wheel_count[m_wheel] = coprime_count_wheel;
 
-            #if METHOD2_WHEEL
             {
                 size_t x_reindex_limit = std::numeric_limits<
                     std::remove_extent_t<decltype(x_reindex_wheel)>::value_type>::max();
@@ -485,7 +477,6 @@ class Cached {
                 // Fix by changing x_reindex_wheel type to int32_t
                 assert(coprime_count_wheel < x_reindex_limit);  // See comment above.
             }
-            #endif
         }
 
         uint32_t max_composites = *std::max_element(
@@ -598,8 +589,6 @@ std::unique_ptr<SieveOutput> save_unknowns(
         }
     }
 
-    auto s_mid_t = high_resolution_clock::now();
-
     // composite's are flipped as we are searching for unknowns.
     composite.flip();
 
@@ -648,10 +637,10 @@ std::unique_ptr<SieveOutput> save_unknowns(
     if (config.verbose >= 0) {
         auto s_stop_t = high_resolution_clock::now();
         std::string fn = Args::gen_unknown_fn(config, ".txt");
-        printf("\n\tSaved deltas for '%s' %ld/%ld (%.1f%%) in %.1f -> %.1f seconds\n\n",
-               fn.c_str(),
+        printf("\n\tSaved deltas for '%s'\n", fn.c_str());
+        printf("\t\t%ld/%ld (%.1f%%) -> %.1f/m (%.1f%% of SL) in %.1f seconds\n\n",
                count_a, count_b, 100.0f * count_a / count_b,
-               duration<double>(s_mid_t - s_save_t).count(),
+               1.0f * count_a / count_m, (100.0f * count_a / count_m / SL),
                duration<double>(s_stop_t - s_save_t).count());
     }
 
@@ -706,7 +695,7 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
             temp_stats.pi_interval += 1;
 
             if (x_reindex_wheel_size % prime == 0) {
-                if (thread_i == 0 && config.verbose >= 2) {
+                if (thread_i == 0 && config.verbose >= 3) {
                     printf("\t%ld handled by coprime wheel(%d)\n", prime, x_reindex_wheel_size);
                 }
                 continue;
@@ -730,12 +719,7 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
             assert(mii >= 0);
 
             uint64_t m = config.mstart + mi;
-            const auto &x_reindex_m =
-#if METHOD2_WHEEL
-                caches.x_reindex_wheel[m % x_reindex_wheel_size];
-#else
-                caches.x_reindex;
-#endif  // METHOD2_WHEEL
+            const auto &x_reindex_m = caches.x_reindex_wheel[m % x_reindex_wheel_size];
             const uint64_t composite_index = mii * caches.composite_line_size;
 
             bool centerOdd = ((D & 1) == 0) && (m & 1);
@@ -781,7 +765,8 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
                          */
                         uint32_t xii = x_reindex_m[x];
                         if (xii > 0) {
-                            assert( composite_index + xii < composite.size() );
+                            // Access to composite is fairly safe because other threads should
+                            // be at very different mii.
                             composite[composite_index + xii] = true;
                             temp_stats.small_prime_factors_interval += 1;
                         }
@@ -885,9 +870,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
     mpz_t test;
     mpz_init(test);
 
-#if METHOD2_WHEEL
     const uint32_t x_reindex_wheel_size = caches.x_reindex_wheel_size;
-#endif  // METHOD2_WHEEL
 
     const int K_odd = mpz_odd_p(K);
     assert( K_odd ); // Good for optimizations also good for big gaps.
@@ -964,18 +947,15 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
                 small_factors += 1;
 
-#if METHOD2_WHEEL
                 // x_reindex_wheel_size divides 2310 so this is same as m % x_reindex_wheel_size
                 uint32_t xii = caches.x_reindex_wheel[m_mod2310 % x_reindex_wheel_size][X];
-#else
-                uint32_t xii = caches.x_reindex[X];
-#endif  // METHOD2_WHEEL
 
                 assert(xii > 0);
 
                 /**
                  * Note: Risk of race condition / contention is reduced by having
-                 * each thread handling a different range of xii
+                 * each thread handling a different range of xii.
+                 * Because of METHOD2_WHEEL this doesn't eliminate risk, just reduces it
                  */
                 composite[mii * caches.composite_line_size + xii] = true;
 
@@ -1049,9 +1029,9 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
     const uint64_t SMALL_THRESHOLD = THRESHOLDS.first;
     const uint64_t MEDIUM_THRESHOLD = config.max_prime;
     if (config.verbose >= 1) {
-        printf("sieve_length:  2x %'d\n", config.sieve_length);
-        printf("max_prime:        %'ld\n", config.max_prime);
-        printf("small_threshold:  %'ld\n", SMALL_THRESHOLD);
+        printf("sieve_length:    %'d\n", config.sieve_length);
+        printf("max_prime:       %'ld\n", config.max_prime);
+        printf("small_threshold: %'ld\n", SMALL_THRESHOLD);
     }
 
     // TODO reconsider this limit
@@ -1072,7 +1052,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
     /**
      * Much space is saved via a reindexing scheme
      * composite[mi][x] (0 <= mi < M_inc, 0 <= x <= SL) is re-indexed to
-     *      composite[m_reindex[mi]][x_reindex[x]]
+     *      composite[m_reindex[mi]][x_reindex_wheel[m%wheel_size][x]]
      * m_reindex[mi] with (D, M + mi) > 0 are mapped to -1 (and must be handled by code)
      * x_reindex[x]  with (K, x) > 0 are mapped to 0 (and that bit is ignored)
      * x_reindex_wheel[x] same as x_reindex[x]
@@ -1138,9 +1118,8 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
             int m_wheel = (M_start + caches.valid_mi[i]) % x_reindex_wheel_size;
             assert(gcd(m_wheel, x_reindex_wheel_size) == 1);
 
-            // +1 reserves extra 0th entry for x_reindex[x] = 0
             composite[i * caches.composite_line_size] = true;
-            // disable all the back bits
+            // disable all the extra padding bits
             size_t used = caches.x_reindex_wheel_count[m_wheel] + 1;
             for (size_t j = used; j < caches.composite_line_size; j++) {
                 composite[i * caches.composite_line_size + j] = true;
@@ -1371,7 +1350,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
 }
 
 
-/*
+// /*
 int main(int argc, char* argv[]) {
     // Display %'d with commas i.e. 12,345
     setlocale(LC_NUMERIC, "");

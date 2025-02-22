@@ -582,7 +582,7 @@ double prob_prime_and_stats(const struct Config& config, mpz_t &K) {
     if (config.verbose >= 2) {
         // From Mertens' 3rd theorem
         double unknowns_after_sieve = 1 / (log(config.max_prime) * exp(GAMMA));
-        const double N_log = K_log + log(config.mstart);
+        const double N_log = K_log + log(config.mstart + config.minc / 2);
         const double prob_prime = 1 / N_log - 1 / (N_log * N_log);
         double prob_prime_after_sieve = prob_prime / unknowns_after_sieve;
 
@@ -593,16 +593,16 @@ double prob_prime_and_stats(const struct Config& config, mpz_t &K) {
 
         float expected = count_coprime_p * (prob_prime_coprime_p / prob_prime_after_sieve);
         printf("\n");
-        printf("\texpect %.0f left = 2 * %.0f (%.3f%%) of %u after %ldM\n",
-                2 * expected, expected,  100.0 * expected / (config.sieve_length + 1),
+        printf("\texpect %.0f left (%.3f%%) of %u after %ldM\n",
+                expected, 100.0 * expected / (config.sieve_length + 1),
                 config.sieve_length, config.max_prime/1'000'000);
         printf("\t%.3f%% of %d digit numbers are prime\n",
                 100 * prob_prime, K_digits);
         printf("\t%.3f%% of tests should be prime (%.1fx speedup)\n",
                 100 * prob_prime_after_sieve, 1 / unknowns_after_sieve);
-        printf("\t~2x%.1f = %.1f PRP tests per m\n",
-                1 / prob_prime_after_sieve, 2 / prob_prime_after_sieve);
-        printf("\tsieve_length=%d is insufficient ~~%.3f%% of time\n",
+        printf("\t~ %.1f PRP tests per m (per side)\n",
+                1 / prob_prime_after_sieve);
+        printf("\tsieve_length=%d is insufficient ~%.3f%% of time\n",
                 config.sieve_length, 100 * prob_gap_hypothetical);
         printf("\n");
     }
