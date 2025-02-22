@@ -35,6 +35,7 @@
 #include <gmp.h>
 #include <omp.h>
 #include <primesieve.hpp>
+#include <boost/dynamic_bitset.hpp>
 
 #include "gap_common.h"
 
@@ -44,6 +45,7 @@ using std::map;
 using std::mutex;
 using std::pair;
 using std::vector;
+using boost::dynamic_bitset;
 using namespace std::chrono;
 
 
@@ -116,7 +118,7 @@ class method2_stats {
 void method2_increment_print(
         uint64_t prime,
         size_t valid_ms,
-        vector<bool> &composite,
+        dynamic_bitset<uint32_t> &composite,
         method2_stats &stats,
         const struct Config& config) {
 
@@ -137,9 +139,7 @@ void method2_increment_print(
 
             // This sligtly duplicates work below, but we don't care.
             auto   temp = high_resolution_clock::now();
-            // Claim is that after c++20 popcount is used by std::count for vector<bool>
-            stats.count_coprime_p = std::count(composite.begin(), composite.end(), false);
-
+            stats.count_coprime_p = composite.size() - composite.count();
             double interval_count_time = duration<double>(high_resolution_clock::now() - temp).count();
             if (config.verbose >= 2) {
                 printf("\t\t counting unknowns takes ~%.1f seconds\n", interval_count_time);
@@ -228,7 +228,7 @@ void method2_increment_print(
             double skipped_prp = 2 * valid_ms * delta_sieve_prob;
 
             if (is_last || config.threads <= 1) {
-                uint64_t t_total_unknowns = std::count(composite.begin(), composite.end(), false);
+                uint64_t t_total_unknowns = composite.size() - composite.count();
                 uint64_t new_composites = stats.total_unknowns - t_total_unknowns;
 
                 // count_coprime_sieve * valid_ms also makes sense but leads to smaller numbers
@@ -357,6 +357,8 @@ class Cached {
         // 6 (saves 2/3 memory), 30 (saves 11/15 memory)
         uint32_t x_reindex_wheel_size;
         vector<uint16_t> x_reindex_wheel[METHOD2_WHEEL_MAX];
+        // x_unindex_wheel[j] = k, where x_reindex_wheel[coprime_X[k]] = j
+        vector<uint16_t> x_unindex_wheel[METHOD2_WHEEL_MAX];
         vector<size_t> x_reindex_wheel_count;
 
         uint64_t composite_line_size;
@@ -458,12 +460,17 @@ class Cached {
             // m * K % wheel => m_wheel % wheel
             uint32_t mod_center = m_wheel * mpz_fdiv_ui(K, x_reindex_wheel_size);
 
+            // 0 is special index
+            x_unindex_wheel[m_wheel].push_back(0xFFFF);
+
             size_t coprime_count_wheel = 0;
             for (size_t i = 0; i < SL+1; i++) {
                 if (is_offset_coprime[i] > 0) {
                     if (gcd(mod_center + i, x_reindex_wheel_size) == 1) {
                         coprime_count_wheel += 1;
                         x_reindex_wheel[m_wheel][i] = coprime_count_wheel;
+                        // i is offset, want to know that index in coprime_X
+                        x_unindex_wheel[m_wheel].push_back(x_reindex[i] - 1);
                     }
                 }
             }
@@ -483,7 +490,6 @@ class Cached {
 
         uint32_t max_composites = *std::max_element(
                 x_reindex_wheel_count.begin(), x_reindex_wheel_count.end());
-
         composite_line_size = 32 * ((max_composites + 31) / 32);
         if (config.verbose >= 2) {
             cout << "Need at least " << max_composites << " per m, rounding up to "
@@ -553,7 +559,7 @@ std::unique_ptr<SieveOutput> save_unknowns(
         const struct Config& config,
         const mpz_t &K,
         const Cached &caches,
-        const vector<bool> &composite) {
+        dynamic_bitset<uint32_t> &composite) {
     // For 50M range with 5M sieve, this took 3.9 of 74 seconds!
     // For 10M range with 1M sieve, this took 0.8 of 11 seconds!
     // For 20M range with 1M sieve, this took 1.7 of 23 seconds!
@@ -594,6 +600,9 @@ std::unique_ptr<SieveOutput> save_unknowns(
 
     auto s_mid_t = high_resolution_clock::now();
 
+    // composite's are flipped as we are searching for unknowns.
+    composite.flip();
+
     #pragma omp parallel for ordered schedule(dynamic, 8) num_threads(config.threads) reduction(+:count_a)
     for (size_t mii = 0; mii < count_m; mii++) {
         uint64_t mi = caches.valid_mi[mii];
@@ -602,6 +611,7 @@ std::unique_ptr<SieveOutput> save_unknowns(
 
         const size_t composite_index = mii * caches.composite_line_size;
         const auto &x_reindex_m = caches.x_reindex_wheel[m % caches.x_reindex_wheel_size];
+        const auto &x_unindex_m = caches.x_unindex_wheel[m % caches.x_reindex_wheel_size];
         assert(x_reindex_m.size() == (uint64_t) (SL + 1));
 
         int64_t found = 0;
@@ -614,16 +624,21 @@ std::unique_ptr<SieveOutput> save_unknowns(
 
         // Index of last unknown.
         int last_u_i = 0;
-        int u_i = 0;
-        for (uint32_t x : caches.coprime_X) {
-            if (!composite[composite_index + x_reindex_m[x]]) {
-                int delta = u_i - last_u_i;
-                assert( delta <= 0xFFFF );
-                deltas.push_back(delta);
-                last_u_i = u_i;
-                found += 1;
-            }
-            u_i++;
+
+        vector<int16_t> test;
+        const size_t max_i = composite_index + caches.composite_line_size;
+        for (size_t i = composite.find_next(composite_index); i < max_i; i = composite.find_next(i)) {
+            size_t j = i - composite_index;
+            auto u_i = x_unindex_m[j];
+            assert( x_reindex_m[caches.coprime_X[u_i]] == j );
+
+            int delta = u_i - last_u_i;
+
+            assert( delta <= 0xFFFF );
+            deltas.push_back(delta);
+
+            last_u_i = u_i;
+            found += 1;
         }
 
         std::get<1>(output->m_inc[mii]) = found;
@@ -651,7 +666,7 @@ method2_stats method2_small_primes(const Config &config, method2_stats &stats,
                           const Cached &caches,
                           const vector<uint32_t> &valid_mi,
                           const uint64_t SMALL_THRESHOLD,
-                          vector<bool> &composite) {
+                          dynamic_bitset<uint32_t> &composite) {
 
     method2_stats temp_stats(thread_i, config, valid_mi.size(), SMALL_THRESHOLD, stats.prob_prime);
     temp_stats.last_prime = stats.last_prime;
@@ -839,7 +854,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
                            const Cached &caches,
                            vector<uint32_t> &coprime_X_thread,
                            const uint64_t prime_start, const uint64_t prime_end,
-                           vector<bool> &composite) {
+                           dynamic_bitset<uint32_t> &composite) {
     /**
      * Break this up into a long list of <Prime Range, comprime_X_range> then parallel
      * over that list so all work finishes at the same time.
@@ -1063,9 +1078,8 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
      * x_reindex_wheel[x] same as x_reindex[x]
      */
 
-    // <char> is faster (0-5%?) than <bool>, but uses 8x the memory.
-    // Need to change here and in `save_unknowns_method2` signature.
-    vector<bool> composite(valid_ms * caches.composite_line_size);
+    // dynamic_bitset has optimized count and find_next.
+    dynamic_bitset<uint32_t> composite(valid_ms * caches.composite_line_size);
     {
         int align_print = 0;
         /**
@@ -1138,6 +1152,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
                 allocated / valid_ms, SIEVE_LENGTH,
                 allocated / 8 / 1024 / 1024);
         }
+
         if (config.verbose >= 1) {
             cout << "\tcomposite line: " << caches.composite_line_size
                 << " total: " << composite.size() << endl;
