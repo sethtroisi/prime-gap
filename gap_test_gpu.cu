@@ -118,11 +118,6 @@ int main(int argc, char* argv[]) {
             __GNU_MP_VERSION, __GNU_MP_VERSION_MINOR, __GNU_MP_VERSION_PATCHLEVEL);
     }
 
-    if( !has_prev_prime_gmp() ) {
-        cout << "See Notes in README.md for instructions on using dev GMPlib" << endl;
-        return 1;
-    }
-
     if (config.sieve_length == 0) {
         cout << "Must set sieve-length for " << argv[0] << endl;
         Args::show_usage(argv[0], Args::Pr::TEST_GPU);
@@ -287,6 +282,7 @@ class SieveResult {
 
 /** Shared state between threads */
 std::atomic<bool> is_running;
+std::atomic<bool> queue_new_work;
 
 /**
  * Note: Uses a double batched system
@@ -364,7 +360,7 @@ void run_sieve_thread(void) {
         pthread_setname_np(pthread_self(), "SIEVE_THREAD");
 
         std::unique_lock<std::mutex> lock(sieve_mtx, std::defer_lock);
-        while (is_running) {
+        while (queue_new_work) {
             SieveResult *to_sieve = nullptr;
 
             lock.lock();
@@ -396,11 +392,24 @@ void run_sieve_thread(void) {
                    duration<double>(s_stop_t - s_start_t).count());
 
             lock.lock();
-            to_sieve->state = SieveResult::SIEVED;
-            to_sieve->last_m = result->m_start;
-            to_sieve->result.swap(result);
+            if (queue_new_work) {
+                to_sieve->state = SieveResult::SIEVED;
+                to_sieve->last_m = result->m_start;
+                to_sieve->result.swap(result);
+            } else {
+                to_sieve->state = SieveResult::DONE;
+            }
             lock.unlock();
         }
+
+        // Delete any CONFIGURED but not started
+        lock.lock();
+        for (auto& sieved : sieveds) {
+            if (sieved->state == SieveResult::CONFIGURED) {
+                sieved->state = SieveResult::DONE;
+            }
+        }
+        lock.unlock();
     } catch (const std::exception &e) {
         cout << "ERROR in run_sieve_thread" << endl;
         cout << e.what() << endl;
@@ -1013,12 +1022,12 @@ void coordinator_thread(struct Config global_config) {
         size_t total_ranges = 0;
 
         std::unique_lock<std::mutex> lock(sieve_mtx, std::defer_lock);
-        while (is_running) {
+        while (is_running && (queue_new_work || sieveds.size())) {
             usleep(1'000'000); // 1,000ms
 
             std::unique_ptr<SieveResult> to_test = nullptr;
             lock.lock();
-            {  // Add new configs to sieveds queue.
+            if (queue_new_work) {  // Add new configs to sieveds queue.
                 int needed = 2;
                 int finished = 0;
                 for (auto& sieved : sieveds) {
@@ -1058,7 +1067,7 @@ void coordinator_thread(struct Config global_config) {
                     }), sieveds.end());
             lock.unlock();
         }
-        cout << "\n\nEND OF MAIN THREAD\n" << endl;
+        cout << "\n\nCoordinator Done.\n" << endl;
     } catch (const std::exception &e) {
         cout << "ERROR in coordinator_thread" << endl;
         cout << e.what() << endl;
@@ -1069,11 +1078,16 @@ void coordinator_thread(struct Config global_config) {
 
 
 void signal_callback_handler(int) {
-    if (is_running) {
-       cout << "Caught CTRL+C stopping, exiting soon. " << endl;
-       is_running = false;
+    if (queue_new_work) {
+       cout << endl;
+       cout << "Caught CTRL+C stopping, winding down work." << endl;
+       cout << endl;
+       queue_new_work = false;
     } else {
-       cout << "Caught 2nd CTRL+C stopping now." << endl;
+       cout << endl;
+       cout << "Caught 2nd CTRL+C, exit(2) now." << endl;
+       cout << endl;
+       is_running = false;
        exit(2);
     }
 }
@@ -1110,11 +1124,10 @@ void prime_gap_test(struct Config config) {
     }
 
 
-    is_running = true;
+    is_running     = true;
+    queue_new_work = true;
 
     // Setup CTRL+C catcher
-    // This isn't safe because some threads die faster and delete their references while other
-    // threads might still make reads.
     signal(SIGINT, signal_callback_handler);
 
     /**
@@ -1134,13 +1147,17 @@ void prime_gap_test(struct Config config) {
     std::thread overflow_sieve_thread(run_overflow_thread, std::ref(K));
 
     main_thread.join();
-    // Tell other threads to quit
-    is_running = false;
-    cout << "Setting `is_running = false` and joining threads" << endl;
+    cout << "Joining threads" << endl;
 
-    sieve_thread.join();
-    batch_thread.join();
-    overflow_cv.notify_all();  // wake up all overflow thread
-    overflow_sieve_thread.join();
+    // Tell other threads to quit
+    {
+        is_running = false;
+        sieve_thread.join();
+        batch_thread.join();
+
+        overflow_cv.notify_all();  // wake up all overflow thread
+        overflow_sieve_thread.join();
+    }
+
     mpz_clear(K);
 }

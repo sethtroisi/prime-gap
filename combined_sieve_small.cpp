@@ -1350,7 +1350,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
 }
 
 
-// /*
+/*
 int main(int argc, char* argv[]) {
     // Display %'d with commas i.e. 12,345
     setlocale(LC_NUMERIC, "");
