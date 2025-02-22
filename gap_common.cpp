@@ -880,6 +880,7 @@ Config Args::argparse(int argc, char* argv[], Pr program) {
             case 'u':
                 {
                     // Ugh, change to c++17 filesystem::path at some later point
+                    char* s;
                     char* t = strdup(optarg);
                     string dir = dirname(t);
                     free(t);
@@ -904,11 +905,23 @@ Config Args::argparse(int argc, char* argv[], Pr program) {
                     t++;
 
                     config.mstart = atoll(t);
+                    s = t;
                     t = std::strchr(t, '_');
+                    t = std::strchr(t, '_');
+                    if (s[t - s - 1] == 'B') {
+                        assert( config.mstart < 100 );
+                        config.mstart *= 1'000'000'000;
+                    }
                     t++;
 
                     config.minc = atoll(t);
+                    s = t;
                     t = std::strchr(t, '_');
+                    if (s[t - s - 1] == 'M') {
+                        assert( config.minc < 1'000 );
+                        config.minc *= 1'000'000;
+                    }
+
                     assert( t[0] == '_' && t[1] == 's' );
                     t += 2;
 
