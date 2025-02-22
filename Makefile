@@ -39,7 +39,7 @@ all: $(OUT)
 	$(CC) -c -o $@ $< $(CFLAGS) $(DEFINES)
 
 combined_sieve: combined_sieve.cpp $(OBJS)
-	$(CC) -o $@ $^ $(CFLAGS) -lsqlite3 $(LDFLAGS) $(DEFINES)
+	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(DEFINES)
 
 combined_sieve_small: combined_sieve_small.cpp $(OBJS)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(DEFINES)
