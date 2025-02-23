@@ -310,21 +310,22 @@ class test_runner_t {
       uint32_t TPB=(params::TPB==0) ? 128 : params::TPB;
       uint32_t TPI=params::TPI, IPB=TPB/TPI;
 
+      cudaStream_t runner_stream;
 
       test_runner_t(size_t n, size_t rounds) :
               n(n), rounds(rounds), instance_size(sizeof(instance_t) * n) {
           primes = generate_primes(rounds);
 
-          instances = (instance_t *) malloc(sizeof(instance_t) * n);
-          if (instances == NULL) {
-            printf("malloc(%ld) failed\n", instance_size);
-          }
+          // Create with pinned memory
+          CUDA_CHECK(cudaMallocHost((void**) &instances, sizeof(instance_t) * n));
 
           CUDA_CHECK(cudaSetDevice(0));
           CUDA_CHECK(cudaMalloc((void **)&gpuInstances, instance_size));
 
           CUDA_CHECK(cudaMalloc((void **)&gpuPrimes, sizeof(uint32_t) * rounds));
           CUDA_CHECK(cudaMemcpy(gpuPrimes, primes, sizeof(uint32_t) * rounds, cudaMemcpyHostToDevice));
+
+          CUDA_CHECK(cudaStreamCreate(&runner_stream));
 
           // TODO: only use this if batch takes > 100ms
           // Reduces GPU_THREAD cpu from 100% while waiting
@@ -338,9 +339,10 @@ class test_runner_t {
 
       ~test_runner_t() {
           free(primes);
-          free(instances);
+          CUDA_CHECK(cudaFreeHost(instances));
           CUDA_CHECK(cudaFree(gpuPrimes));
           CUDA_CHECK(cudaFree(gpuInstances));
+          CUDA_CHECK(cudaStreamDestroy(runner_stream));
           CUDA_CHECK(cgbn_error_report_free(report));
       }
 
@@ -359,15 +361,16 @@ class test_runner_t {
               from_mpz(*tests[i], instances[i].candidate._limbs, params::BITS/32);
           }
 
-          //printf("Copying primes and instances to the GPU ...\n");
-          CUDA_CHECK(cudaMemcpy(gpuInstances, instances, sizeof(instance_t) * tests.size(), cudaMemcpyHostToDevice));
-
           cgbn_error_report_reset(report);
 
-          //printf("Running GPU kernel ...\n");
+          //printf("Copying primes and instances to the GPU ...\n");
+          CUDA_CHECK(cudaMemcpyAsync(
+             gpuInstances, instances, sizeof(instance_t) * tests.size(), cudaMemcpyHostToDevice,
+             runner_stream));
 
+          //printf("Running GPU kernel ...\n");
           size_t blocks = (tests.size() + IPB - 1) / IPB;
-          kernel_miller_rabin<params><<<blocks, TPB>>>(
+          kernel_miller_rabin<params><<<blocks, TPB, 0, runner_stream>>>(
                   report,
                   gpuInstances,
                   std::min<>(active, tests.size()),
@@ -375,11 +378,13 @@ class test_runner_t {
                   rounds);
 
           // error report uses managed memory, so we sync the device (or stream) and check for cgbn errors
-          CUDA_CHECK(cudaDeviceSynchronize());
-          CGBN_CHECK(report);
-
           // copy the instances back from gpuMemory
-          CUDA_CHECK(cudaMemcpy(instances, gpuInstances, sizeof(instance_t) * tests.size(), cudaMemcpyDeviceToHost));
+          CUDA_CHECK(cudaMemcpyAsync(
+              instances, gpuInstances, sizeof(instance_t) * tests.size(), cudaMemcpyDeviceToHost,
+              runner_stream));
+
+          CUDA_CHECK(cudaStreamSynchronize(runner_stream));
+          CGBN_CHECK(report);
 
           for (size_t i = 0; i < tests.size(); i++) {
               results[i] = (instances[i].passed == rounds);
