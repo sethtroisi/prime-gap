@@ -248,8 +248,8 @@ class miller_rabin_t {
 
 template<class params>
 __global__ void kernel_miller_rabin(cgbn_error_report_t *report, typename miller_rabin_t<params>::instance_t *instances, uint32_t instance_count, uint32_t *primes, uint32_t prime_count) {
-  int32_t instance=(blockIdx.x*blockDim.x + threadIdx.x)/params::TPI;
 
+  int32_t instance=(blockIdx.x*blockDim.x + threadIdx.x)/params::TPI;
   if(instance>=instance_count)
     return;
 
@@ -284,9 +284,6 @@ uint32_t *generate_primes(uint32_t count) {
   }
   return list;
 }
-
-// TODO avoid reallocating eachtime
-// TODO with globals at first
 
 template<class params>
 class test_runner_t {
@@ -347,7 +344,7 @@ class test_runner_t {
           CUDA_CHECK(cgbn_error_report_free(report));
       }
 
-      void run_test(const std::vector<mpz_t*> &tests, std::vector<int> &results) {
+      void run_test(const size_t active, const std::vector<mpz_t*> &tests, std::vector<int> &results) {
           if (tests.size() == 0)
             return;
 
@@ -370,9 +367,12 @@ class test_runner_t {
           //printf("Running GPU kernel ...\n");
 
           size_t blocks = (tests.size() + IPB - 1) / IPB;
-          //printf("Hi %ld = %ld x %d\n", tests.size(), blocks, TPB);
-          kernel_miller_rabin<params><<<blocks, TPB>>>(report, gpuInstances, tests.size(), gpuPrimes, rounds);
-          //printf("Bye %ld\n", blocks);
+          kernel_miller_rabin<params><<<blocks, TPB>>>(
+                  report,
+                  gpuInstances,
+                  std::min<>(active, tests.size()),
+                  gpuPrimes,
+                  rounds);
 
           // error report uses managed memory, so we sync the device (or stream) and check for cgbn errors
           CUDA_CHECK(cudaDeviceSynchronize());

@@ -25,6 +25,7 @@
 #include <exception>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <queue>
@@ -180,7 +181,7 @@ class GPUBatch {
         mpz_t *z_array;
 
         // If z[i] should be tested
-        vector<bool>  active;
+        vector<char>  active;
         // Result from GPU
         vector<int>  result;
 
@@ -321,13 +322,17 @@ void run_gpu_thread(int verbose, int runner_num, GPUBatch& batch) {
             if (!is_running) break;
 
             assert(batch.state == GPUBatch::State::READY);
-            assert(std::count(batch.active.begin(), batch.active.end(), 1) == batch.i);
+            // Active items are all at the front of the batch.
+            auto mid = batch.active.begin();
+            std::advance(mid, batch.i);
+            assert(std::count(batch.active.begin(), mid, 1) == batch.i);
+            assert(std::count(mid,   batch.active.end(), 1) == 0);
             lock.unlock();
 
             // Run batch on GPU and wait for results to be set
             if (1) {
                 //printf("GPU(%d): Starting batch %lu\n", runner_num, processed_batches);
-                runner.run_test(batch.z, batch.result);
+                runner.run_test(batch.i, batch.z, batch.result);
                 //printf("GPU(%d): Finished batch %lu\n", runner_num, processed_batches);
             } else {
                 // Return true for 1/10 results (helps not overflow sieve)
@@ -680,12 +685,6 @@ void fill_batch(
     std::fill_n(batch.active.begin(), GPU_BATCH_SIZE, false);
     // Mark all results as invalid
     std::fill_n(batch.result.begin(), GPU_BATCH_SIZE, -1);
-
-    for (size_t i = 0; i < GPU_BATCH_SIZE; i++) {
-        // TODO see if this can be moved into init or somewhere else.
-        // This prevents the GPU from stalling in partial batches
-        mpz_set_ui(*batch.z[i], 7);
-    }
 
     bool any_pushed_to_overflow = false;
     {
