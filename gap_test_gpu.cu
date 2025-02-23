@@ -46,7 +46,7 @@
 
 #include "gap_common.h"
 #include "gap_test_common.h"
-#include "combined_sieve_small.h"
+#include "sieve_small.h"
 #include "miller_rabin.h"
 
 using std::cout;

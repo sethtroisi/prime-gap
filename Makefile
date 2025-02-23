@@ -41,7 +41,7 @@ all: $(OUT)
 combined_sieve: combined_sieve.cpp $(OBJS)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(DEFINES)
 
-combined_sieve_small: combined_sieve_small.cpp $(OBJS)
+combined_sieve_small: combined_sieve_small.cpp $(OBJS) sieve_small.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(DEFINES)
 
 gap_stats: gap_stats.cpp gap_common.o
@@ -50,7 +50,7 @@ gap_stats: gap_stats.cpp gap_common.o
 gap_test_simple: gap_test_simple.cpp gap_common.o gap_test_common.o
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
-gap_test_gpu: gap_test_gpu.cu miller_rabin.h gap_common.o gap_test_common.o combined_sieve_small.o
+gap_test_gpu: gap_test_gpu.cu miller_rabin.h gap_common.o gap_test_common.o sieve_small.o
 	nvcc -o $@ -I../CGBN/include \
 		-DGPU_BITS=$(BITS) \
 		$(filter-out miller_rabin.h, $^) \
