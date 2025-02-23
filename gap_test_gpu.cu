@@ -66,18 +66,18 @@ const int WINDOW_BITS = (BITS <= 1024) ? 5 : 6;
 const int THREADS_PER_INSTANCE = (BITS <= 512) ? 4 : 8;
 
 /**
- * GPU_BATCH_SIZE is 2^n | best is between 2K and 8K.
- * QUEUE_SIZE is number of M loaded (as intervals (AKA DataM) at the same time.
+ * GPU_BATCHES the number of simultanious batches to create & queue.
+ * GPU_BATCH_SIZE is 2^n | best is between 4K and 16K.
  */
-
-const size_t GPU_BATCH_SIZE = 8 * 1024;
+const size_t GPU_BATCHES = 2;
+const size_t GPU_BATCH_SIZE = 4 * 1024;
 
 /********** BENCHMARKING ***********/
 // 701#
 // GPU    - BATCH TPI -> PRP/second
 // 1080Ti - 2K,   8 -> 250K
 // 1080Ti - 4K,   8 -> 266K
-// 1080Ti - 8K,   8 ->
+// 1080Ti - 8K,   8 -> 282K
 // 1080Ti - 16K,  8 ->
 
 // Remember to set sm_80
@@ -94,9 +94,9 @@ const size_t GPU_BATCH_SIZE = 8 * 1024;
 // A100   - 16K,  4 -> 2210K (40% utilization)
 // A100   - 32K,  4 ->
 
-// 257# as high as 300K m/sec!
+// 257# as high as 340K m/sec!
 // 1080Ti - 2K,  4 -> 2500K!
-// 1080Ti - 4K,  4 -> 3200K!
+// 1080Ti - 4K,  4 -> 3300K!
 // 1080Ti - 8K,  4 -> 3060K!
 
 // A100   - 16K, 4 ->
@@ -107,8 +107,7 @@ const size_t GPU_BATCH_SIZE = 8 * 1024;
 // Always use 1.
 const int ROUNDS = 1;
 // 20-60% extra for overflow is very reasonable.
-const size_t QUEUE_SIZE = 160 * 2 * GPU_BATCH_SIZE / 100;
-
+const size_t QUEUE_SIZE = 140 * GPU_BATCHES * GPU_BATCH_SIZE / 100;
 
 // From 701# I believe.
 // 1M -> 2000/second
@@ -323,7 +322,7 @@ deque<DataM*> overflowed;
 
 void run_gpu_thread(int verbose, int runner_num, GPUBatch& batch) {
     try {
-        // TODO use runner in threadname.
+        // TODO use runner_num in threadname.
         pthread_setname_np(pthread_self(), "RUN_GPU_THREAD");
 
         // TODO test changing cudaDeviceScheduleBlockingSync to cudaDeviceScheduleYield or cudaDeviceScheduleSpin
@@ -840,10 +839,16 @@ void create_gpu_batches(const struct Config og_config) {
 
         /* Note: Uses a double batched system
          * C++ Thread is preparing batch_a (even more m), while GPU runs batch_b */
-        std::array<GPUBatch, 2> gpu_batches = {GPUBatch(GPU_BATCH_SIZE), GPUBatch(GPU_BATCH_SIZE)};
+        std::array<GPUBatch, GPU_BATCHES> gpu_batches = {
+            GPUBatch(GPU_BATCH_SIZE),
+            GPUBatch(GPU_BATCH_SIZE),
+            //GPUBatch(GPU_BATCH_SIZE),
+        };
 
-        std::thread gpu0(run_gpu_thread, og_config.verbose, 0, std::ref(gpu_batches[0]));
-        std::thread gpu1(run_gpu_thread, og_config.verbose, 1, std::ref(gpu_batches[1]));
+        std::thread gpu_threads[GPU_BATCHES];
+        for(size_t i = 0; i < GPU_BATCHES; i++) {
+            gpu_threads[i] = std::thread(run_gpu_thread, og_config.verbose, i, std::ref(gpu_batches[i]));
+        }
 
         // Silly but that's what life is.
         std::queue<int> open_gpu;
@@ -863,7 +868,7 @@ void create_gpu_batches(const struct Config og_config) {
             // Add new DataM for any tombstoned items.
             add_to_processing(K, D, processing);
 
-            for (int i = 0; i < 2; i++) {
+            for (size_t i = 0; i < GPU_BATCHES; i++) {
                 GPUBatch& batch = gpu_batches[i];
 
                 if (batch.state != GPUBatch::State::EMPTY)
@@ -886,8 +891,8 @@ void create_gpu_batches(const struct Config og_config) {
             // Wait for the next batch to be done.
             {
                 if (open_gpu.empty()) {
-                    // Why would this happen?
-                    usleep(1'000); // 1ms
+                    // Why would this happen, empty and nothing to queue?
+                    usleep(50'000); // 50ms
                 } else {
                     int i = open_gpu.front();
                     open_gpu.pop();
@@ -1026,10 +1031,12 @@ void create_gpu_batches(const struct Config og_config) {
         }
 
         // Send notifies
-        gpu_batches[0].cv.notify_all();
-        gpu_batches[1].cv.notify_all();
-        gpu0.join();
-        gpu1.join();
+        for (auto& gpu_batch : gpu_batches) {
+            gpu_batch.cv.notify_all();
+        }
+        for (auto & gpu_thread : gpu_threads) {
+            gpu_thread.join();
+        }
     } catch (const std::exception &e) {
         cout << "ERROR in create_gpu_batches" << endl;
         cout << e.what() << endl;
@@ -1123,7 +1130,7 @@ void prime_gap_test(struct Config config) {
     // Setup test runner
     printf("\n");
     printf("BITS=%d\tWINDOW_BITS=%d\n", BITS, WINDOW_BITS);
-    printf("PRP/BATCH=%ld\n", GPU_BATCH_SIZE)
+    printf("PRP/BATCH=%ld\n", GPU_BATCH_SIZE);
     printf("THREADS/PRP=%d\n", THREADS_PER_INSTANCE);
 
     assert( GPU_BATCH_SIZE == 1024 || GPU_BATCH_SIZE == 2048 || GPU_BATCH_SIZE == 4096 ||
