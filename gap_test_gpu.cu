@@ -67,40 +67,34 @@ const int THREADS_PER_INSTANCE = (BITS <= 512) ? 4 : 8;
 
 /**
  * GPU_BATCH_SIZE is 2^n | best is between 2K and 8K.
- * SEQUENTIAL_IN_BATCH = {1,2,4}
- *      1 => 0 overhead, 2 => 0.5 extra PRP/m, 4 => 1.5 extra PRP/M
  * QUEUE_SIZE is number of M loaded (as intervals (AKA DataM) at the same time.
  */
 
-const size_t GPU_BATCH_SIZE = 4 * 1024;
+const size_t GPU_BATCH_SIZE = 8 * 1024;
 
 /********** BENCHMARKING ***********/
 // 701#
 // GPU    - BATCH TPI -> PRP/second
-// 1080Ti - 16K,  8 -> 240K
-// 1080Ti - 8K,   8 -> 250K
-// 1080Ti - 4K,   8 -> 201K
+// 1080Ti - 2K,   8 -> 250K
+// 1080Ti - 4K,   8 -> 266K
+// 1080Ti - 8K,   8 ->
+// 1080Ti - 16K,  8 ->
 
 // Remember to set sm_80
-// A100   - 4K,   8 -> 610K  (80% utilization)
-// A100   - 8K,   8 -> 710K  (70%)
-// A100   - 16K,  8 -> 735K  (70%)
+// A100   - 4K,   8 -> 930K
+// A100   - 8K,   8 -> 1050K
+// A100   - 16K,  8 -> 1085K!
 
-// 347#
-// 1080Ti - 4K, 8  -> 1034K
-// 1080Ti - 2K, 8  -> 1054K!
-// 1080Ti - 1K, 8  -> 780K
-// 1080Ti - 8K, 4  -> 1300K
-// 1080Ti - 4K, 4  -> 1448K!
-// 1080Ti - 2K, 4  -> 1022K
+// 347# as high as 140K m/sec
+// 1080Ti - 8K, 4  -> 1680K
+// 1080Ti - 4K, 4  -> 1690K!
+// 1080Ti - 2K, 4  -> 1330K
 
-// A100   - 4K,   8 -> 2120K! (50-60% utilization)
-// A100   - 4K,   4 -> 2000K
-// A100   - 8K,   4 -> 2000K  (30-50%)
-// A100   - 16K,  4 -> 2000K  (40%)
-// A100   - 32K,  4 -> 1900K  (20-40%)
+// A100   - 8K,   4 ->
+// A100   - 16K,  4 -> 2210K (40% utilization)
+// A100   - 32K,  4 ->
 
-// 257# as high as 300K/second!
+// 257# as high as 300K m/sec!
 // 1080Ti - 2K,  4 -> 2500K!
 // 1080Ti - 4K,  4 -> 3200K!
 // 1080Ti - 8K,  4 -> 3060K!
@@ -110,12 +104,10 @@ const size_t GPU_BATCH_SIZE = 4 * 1024;
 /********** BENCHMARKING ***********/
 
 
-// 1 is best, 2 if very large batch.
-const size_t SEQUENTIAL_IN_BATCH = 1;
 // Always use 1.
 const int ROUNDS = 1;
 // 20-60% extra for overflow is very reasonable.
-const size_t QUEUE_SIZE = 160 * 2 * GPU_BATCH_SIZE / SEQUENTIAL_IN_BATCH / 100;
+const size_t QUEUE_SIZE = 160 * 2 * GPU_BATCH_SIZE / 100;
 
 
 // From 701# I believe.
@@ -664,24 +656,15 @@ bool process_finished_batch(GPUBatch& batch) {
             int offset_i = batch.unknown_i[i];
             int found_offset = interval.unknowns[side_i][offset_i];
 
-            // Two primes happens fairly regularly with SEQUENTIAL_IN_BATCH > 1
-            // Ignore the further away prime
+            // Shouldn't have found a previous prime.
             if (interval.side == DataM::Side::PREV_P) {
                 assert( found_offset < 0 );
-                if (interval.p_found) {
-                    assert( SEQUENTIAL_IN_BATCH > 1 );
-                    assert( abs(interval.prev_p) < abs(found_offset) );
-                    continue;
-                }
-                assert(interval.prev_p == 0);
+                assert( !interval.p_found );
+                assert( interval.prev_p == 0 );
                 interval.p_found = true;
                 interval.prev_p = -found_offset;
             } else {
-                if (interval.n_found) {
-                    assert( SEQUENTIAL_IN_BATCH > 1 );
-                    assert( interval.next_p < found_offset );
-                    continue;
-                }
+                assert( !interval.n_found );
                 assert(interval.next_p == 0);
                 interval.n_found = true;
                 interval.next_p = found_offset;
@@ -737,60 +720,51 @@ void fill_batch(
             int32_t last_offset = 0;
 
             auto side = interval.side;
-            for (size_t j = 0; batch.i < GPU_BATCH_SIZE && j < SEQUENTIAL_IN_BATCH; j++) {
-                int32_t index = 0;
-                int32_t offset = 0;
-                if (side == DataM::Side::NEXT_P) {
-                    assert(!interval.n_found);
-                    if (interval.n_index == interval.unknowns[1].size()) {
-                        /* Don't push to overflow queue while GPU still has sieve to check.
-                         * leads to race condition with overflow thread & uglier code.
-                         */
-                        if (j == 0) {
-                            interval.state = DataM::State::OVERFLOWED;
-                            stats.s_gap_out_of_sieve_next += 1;
-                            overflowed.push_back(row.get());
-                            any_pushed_to_overflow = true;
-                        }
-                        break;
-                    }
-                    index = interval.n_index++;
-                    offset = interval.unknowns[1][index];
-                } else {
-                    assert(interval.n_found);
-                    assert(!interval.p_found);
-                    if (interval.p_index == interval.unknowns[0].size()) {
-                        if (j == 0) {
-                            interval.state = DataM::State::OVERFLOWED;
-                            stats.s_gap_out_of_sieve_prev += 1;
-                            overflowed.push_back(row.get());
-                            any_pushed_to_overflow = true;
-                        }
-                        break;
-                    }
-                    index = interval.p_index++;
-                    offset = interval.unknowns[0][index];
+            int32_t index = 0;
+            int32_t offset = 0;
+            if (side == DataM::Side::NEXT_P) {
+                assert(!interval.n_found);
+                if (interval.n_index == interval.unknowns[1].size()) {
+                    interval.state = DataM::State::OVERFLOWED;
+                    stats.s_gap_out_of_sieve_next += 1;
+                    overflowed.push_back(row.get());
+                    any_pushed_to_overflow = true;
+                    continue;
                 }
-
-                interval.state = DataM::State::RUNNING;
-                int gpu_i = batch.i;  // [GPU] batch index
-
-                if (offset < 0) {
-                    assert( side == DataM::Side::PREV_P );
-                    assert( offset < last_offset );  // Moving away from center.
-                    mpz_sub_ui(*batch.z[gpu_i], interval.center, -offset);
-                } else {
-                    assert( side == DataM::Side::NEXT_P );
-                    assert( offset > last_offset );  // Moving away from center.
-                    mpz_add_ui(*batch.z[gpu_i], interval.center, offset);
+                index = interval.n_index++;
+                offset = interval.unknowns[1][index];
+            } else {
+                assert(interval.n_found);
+                assert(!interval.p_found);
+                if (interval.p_index == interval.unknowns[0].size()) {
+                    interval.state = DataM::State::OVERFLOWED;
+                    stats.s_gap_out_of_sieve_prev += 1;
+                    overflowed.push_back(row.get());
+                    any_pushed_to_overflow = true;
+                    continue;
                 }
-                batch.intervals[gpu_i] = row.get();
-                batch.unknown_i[gpu_i] = index;
-                batch.active[gpu_i] = true;
-
-                batch.i++;
-                last_offset = offset;
+                index = interval.p_index++;
+                offset = interval.unknowns[0][index];
             }
+
+            interval.state = DataM::State::RUNNING;
+            int gpu_i = batch.i;  // [GPU] batch index
+
+            if (offset < 0) {
+                assert( side == DataM::Side::PREV_P );
+                assert( offset < last_offset );  // Moving away from center.
+                mpz_sub_ui(*batch.z[gpu_i], interval.center, -offset);
+            } else {
+                assert( side == DataM::Side::NEXT_P );
+                assert( offset > last_offset );  // Moving away from center.
+                mpz_add_ui(*batch.z[gpu_i], interval.center, offset);
+            }
+            batch.intervals[gpu_i] = row.get();
+            batch.unknown_i[gpu_i] = index;
+            batch.active[gpu_i] = true;
+
+            batch.i++;
+            last_offset = offset;
             if (batch.i == GPU_BATCH_SIZE) break;
         }
     }
@@ -802,7 +776,7 @@ void fill_batch(
     assert( batch.i <= GPU_BATCH_SIZE);
 
     // Batches should be full unless lots of overflowed results.
-    if (batch.i > 0 && batch.i < GPU_BATCH_SIZE) {
+    if (batch.i > 0 && batch.i < GPU_BATCH_SIZE && num_tombstoned < GPU_BATCH_SIZE) {
         printf("Partial load @ %lu -> %lu/%lu | size: %lu | running: %lu, primed: %lu, overflowed: %lu, tombstoned: %lu\n",
             batch.i > 0 ? batch.intervals[0]->m : 0,
             batch.i, GPU_BATCH_SIZE,
@@ -1149,13 +1123,11 @@ void prime_gap_test(struct Config config) {
     // Setup test runner
     printf("\n");
     printf("BITS=%d\tWINDOW_BITS=%d\n", BITS, WINDOW_BITS);
-    printf("PRP/BATCH=%ld\tM/BATCH=%ld\n",
-            GPU_BATCH_SIZE, GPU_BATCH_SIZE/SEQUENTIAL_IN_BATCH);
+    printf("PRP/BATCH=%ld\n", GPU_BATCH_SIZE)
     printf("THREADS/PRP=%d\n", THREADS_PER_INSTANCE);
 
     assert( GPU_BATCH_SIZE == 1024 || GPU_BATCH_SIZE == 2048 || GPU_BATCH_SIZE == 4096 ||
             GPU_BATCH_SIZE == 8192 || GPU_BATCH_SIZE ==16384 || GPU_BATCH_SIZE ==32768 );
-    assert( SEQUENTIAL_IN_BATCH == 1 || SEQUENTIAL_IN_BATCH == 2 || SEQUENTIAL_IN_BATCH == 4 );
 
     mpz_t K;
     {
