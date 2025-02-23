@@ -46,7 +46,7 @@ class SieveOutput {
         vector<uint16_t> coprime_X;
 
         // m_increment, unknown count
-        vector<std::tuple<int16_t, int16_t>> m_inc;
+        vector<std::tuple<int8_t, uint8_t>> m_inc;
 
         vector<vector<uint16_t>> unknowns;
 };

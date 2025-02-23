@@ -69,14 +69,16 @@ using namespace std::chrono;
  */
 
 const size_t GPU_BATCH_SIZE = 4 * 1024;
-// 8 is best for BITS=1024, 4 is best for BITS=512
-const int THREADS_PER_INSTANCE = 4;
+const int THREADS_PER_INSTANCE = (BITS <= 512) ? 4 : 8;
 
 // 701#
 // 1080Ti - 16K,  8 -> 213K
-// 1080Ti - 8K,   8 -> 220K -> 230K double batched
+// 1080Ti - 8K,   8 -> 230K!
 // 1080Ti - 4K,   8 -> 201K
-// OLD 701# - A100  -> 327K!
+
+// A100   - 4K,   8 -> 333K!
+// A100   - 4K,   8 -> 333K!
+// A100   - 4K,   8 -> 333K!
 
 // 347#
 // 1080Ti - 4K, 8  -> 1034K
@@ -132,8 +134,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (100'000 < config.max_prime && config.max_prime > 100'000'000) {
-        printf("\tmax_prime(%'ld) should be between 100K and 100M\n", config.max_prime);
+    if (100'000 < config.max_prime && config.max_prime > 500'000'000) {
+        printf("\tmax_prime(%'ld) should be between 100K and 500M\n", config.max_prime);
     }
 
     if (config.compression != 0) {
@@ -581,6 +583,8 @@ size_t add_to_processing(
 
         // No longer need a copy in SieveResult.
         sieve->result->unknowns[sieve->current_index - 1].clear();
+        // Try to reclaim memory.
+        sieve->result->unknowns[sieve->current_index - 1].shrink_to_fit();
 
         mpz_init(test->center);
         mpz_mul_ui(test->center, K, test->m);
@@ -1094,6 +1098,7 @@ void signal_callback_handler(int) {
 
 void prime_gap_test(struct Config config) {
     // Setup test runner
+    printf("\n");
     printf("BITS=%d\tWINDOW_BITS=%d\n", BITS, WINDOW_BITS);
     printf("PRP/BATCH=%ld\tM/BATCH=%ld\n",
             GPU_BATCH_SIZE, GPU_BATCH_SIZE/SEQUENTIAL_IN_BATCH);

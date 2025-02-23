@@ -584,6 +584,8 @@ std::unique_ptr<SieveOutput> save_unknowns(
         for (uint64_t mi : caches.valid_mi) {
             uint64_t m = M_start + mi;
             assert(gcd(m, D) == 1);
+            uint16_t delta = m - m_last;
+            assert( delta <= 0x7F );
             output->m_inc.emplace_back(m - m_last, /* found */ 0);
             m_last = m;
         }
@@ -614,7 +616,6 @@ std::unique_ptr<SieveOutput> save_unknowns(
         // Index of last unknown.
         int last_u_i = 0;
 
-        vector<int16_t> test;
         const size_t max_i = composite_index + caches.composite_line_size;
         for (size_t i = composite.find_next(composite_index); i < max_i; i = composite.find_next(i)) {
             size_t j = i - composite_index;
@@ -630,6 +631,7 @@ std::unique_ptr<SieveOutput> save_unknowns(
             found += 1;
         }
 
+        assert( found <= 0xFF );
         std::get<1>(output->m_inc[mii]) = found;
         count_a += found;
     }
@@ -1351,6 +1353,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
 
 
 /*
+TODO move to another file to avoid toggling comment so much.
 int main(int argc, char* argv[]) {
     // Display %'d with commas i.e. 12,345
     setlocale(LC_NUMERIC, "");
