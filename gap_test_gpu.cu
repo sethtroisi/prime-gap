@@ -22,6 +22,7 @@
 #include <csignal>
 #include <cstdint>
 #include <cstdio>
+#include <deque>
 #include <exception>
 #include <fstream>
 #include <iostream>
@@ -51,16 +52,18 @@
 using std::cout;
 using std::cerr;
 using std::endl;
+using std::deque;
 using std::vector;
 using namespace std::chrono;
 
 #ifdef GPU_BITS
-#define BITS GPU_BITS
+const int BITS = GPU_BITS;
 #else
-#define BITS 1024
+const int BITS = 1024;
 #endif
 
-#define WINDOW_BITS ((BITS <= 1024) ? 5 : 6)
+const int WINDOW_BITS = (BITS <= 1024) ? 5 : 6;
+const int THREADS_PER_INSTANCE = (BITS <= 512) ? 4 : 8;
 
 /**
  * GPU_BATCH_SIZE is 2^n | best is between 2K and 8K.
@@ -70,16 +73,18 @@ using namespace std::chrono;
  */
 
 const size_t GPU_BATCH_SIZE = 4 * 1024;
-const int THREADS_PER_INSTANCE = (BITS <= 512) ? 4 : 8;
 
+/********** BENCHMARKING ***********/
 // 701#
+// GPU    - BATCH TPI -> PRP/second
 // 1080Ti - 16K,  8 -> 213K
 // 1080Ti - 8K,   8 -> 230K!
 // 1080Ti - 4K,   8 -> 201K
 
-// A100   - 4K,   8 -> 333K!
-// A100   - 4K,   8 -> 333K!
-// A100   - 4K,   8 -> 333K!
+// Remember to set sm_80
+// A100   - 4K,   8 -> 570K  (80% utilization)
+// A100   - 8K,   8 -> 680K  (70%)
+// A100   - 16K,  8 -> 695K! (60%)
 
 // 347#
 // 1080Ti - 4K, 8  -> 1034K
@@ -89,12 +94,20 @@ const int THREADS_PER_INSTANCE = (BITS <= 512) ? 4 : 8;
 // 1080Ti - 4K, 4  -> 1448K!
 // 1080Ti - 2K, 4  -> 1022K
 
+// A100   - 4K,   8 -> 2120K! (50-60% utilization)
+// A100   - 4K,   4 -> 2000K
+// A100   - 8K,   4 -> 2000K  (30-50%)
+// A100   - 16K,  4 -> 1200K  (20%)
+// A100   - 32K,  4 -> 1300K  (20%)
+/********** BENCHMARKING ***********/
+
+
 
 // 1 is best, 2 if very large batch.
 const size_t SEQUENTIAL_IN_BATCH = 1;
 // Always use 1.
 const int ROUNDS = 1;
-// 20% extra for overflow is vary reasonable.
+// 20-60% extra for overflow is very reasonable.
 const size_t BATCHED_M = 160 / 100 * 2 * GPU_BATCH_SIZE / SEQUENTIAL_IN_BATCH;
 
 
@@ -102,6 +115,8 @@ const size_t BATCHED_M = 160 / 100 * 2 * GPU_BATCH_SIZE / SEQUENTIAL_IN_BATCH;
 // 1M -> 2000/second
 // 200K -> 4000/second
 const size_t CPU_SIEVE_LIMIT = 90'000;
+
+const size_t COMBINED_SIEVE_THREADS = 8;
 
 //************************************************************************
 
@@ -172,6 +187,14 @@ class GPUBatch {
         enum State : uint8_t { EMPTY, READY, DONE };
         std::atomic<State> state = EMPTY;
 
+        // Used in debugging Batch Timing.
+        time_point<high_resolution_clock> fill_start;
+        time_point<high_resolution_clock> fill_end;
+        time_point<high_resolution_clock> gpu_start;
+        time_point<high_resolution_clock> gpu_end;
+        time_point<high_resolution_clock> results_start;
+        time_point<high_resolution_clock> results_end;
+
         // current index;
         size_t i;
 
@@ -219,7 +242,7 @@ class GPUBatch {
             free(z_array);
         }
 
-        //GPUBatch(const GPUBatch&) = delete;
+        GPUBatch(const GPUBatch&) = delete;
         GPUBatch& operator=(const GPUBatch&) = delete;
 
     private:
@@ -287,14 +310,6 @@ class SieveResult {
 std::atomic<bool> is_running;
 std::atomic<bool> queue_new_work;
 
-/**
- * Note: Uses a double batched system
- * C++ Thread is preparing batch_a (even more m)
- * While GPU runs batch_b
- */
-std::mutex batches_mtx;
-std::array<GPUBatch, 2> gpu_batches = {GPUBatch(GPU_BATCH_SIZE), GPUBatch(GPU_BATCH_SIZE)};
-
 // Don't read from sieveds without holding sieve_mtx
 std::mutex sieve_mtx;
 vector<std::unique_ptr<SieveResult>> sieveds;
@@ -302,7 +317,9 @@ vector<std::unique_ptr<SieveResult>> sieveds;
 // Don't mutate an interval (especially status) without holding interval_mtx
 std::mutex interval_mtx;
 std::condition_variable overflow_cv;
-vector<DataM*> overflowed;
+// deque (double ended queue) avoids a degenerate case of large gap getting stuck
+// if this can't keep up. Try to avoid falling behind, but this is an extra safety.
+deque<DataM*> overflowed;
 
 void run_gpu_thread(int verbose, int runner_num, GPUBatch& batch) {
     try {
@@ -327,6 +344,7 @@ void run_gpu_thread(int verbose, int runner_num, GPUBatch& batch) {
             std::advance(mid, batch.i);
             assert(std::count(batch.active.begin(), mid, 1) == batch.i);
             assert(std::count(mid,   batch.active.end(), 1) == 0);
+            batch.gpu_start = high_resolution_clock::now();
             lock.unlock();
 
             // Run batch on GPU and wait for results to be set
@@ -344,6 +362,7 @@ void run_gpu_thread(int verbose, int runner_num, GPUBatch& batch) {
             }
 
             lock.lock();
+            batch.gpu_end = high_resolution_clock::now();
             batch.state = GPUBatch::State::DONE;
             processed_batches += 1;
 
@@ -388,8 +407,7 @@ void run_sieve_thread(void) {
 
             auto M_end = to_sieve->config.mstart + to_sieve->config.minc;
             auto s_start_t = high_resolution_clock::now();
-            // TODO set with const.
-            to_sieve->config.threads = 8;
+            to_sieve->config.threads = COMBINED_SIEVE_THREADS;
             to_sieve->config.verbose -= 3;
             auto result = prime_gap_parallel(to_sieve->config);
             to_sieve->config.verbose += 3;
@@ -450,12 +468,12 @@ void run_overflow_thread(const mpz_t &K_in) {
             overflow_cv.wait(lock, []{ return overflowed.size() || !is_running; });
 
             while (is_running && overflowed.size()) {
-                if (tested % 100'000 == 0 && overflowed.size() > 200) {
+                if (tested % 1'000 == 0 && overflowed.size() > 100) {
                     printf("CPU Sieve Queue: %lu open, %lu processed\n",
                             overflowed.size(), tested);
                 }
 
-                DataM& interval = *overflowed.back(); overflowed.pop_back();
+                DataM& interval = *overflowed.front(); overflowed.pop_front();
                 assert(interval.state == DataM::State::OVERFLOWED);
                 interval.state = DataM::State::SIEVING;
 
@@ -828,6 +846,10 @@ void create_gpu_batches(const struct Config og_config) {
         // Used for various stats
         StatsCounters stats(high_resolution_clock::now());
 
+        /* Note: Uses a double batched system
+         * C++ Thread is preparing batch_a (even more m), while GPU runs batch_b */
+        std::array<GPUBatch, 2> gpu_batches = {GPUBatch(GPU_BATCH_SIZE), GPUBatch(GPU_BATCH_SIZE)};
+
         std::thread gpu0(run_gpu_thread, og_config.verbose, 0, std::ref(gpu_batches[0]));
         std::thread gpu1(run_gpu_thread, og_config.verbose, 1, std::ref(gpu_batches[1]));
 
@@ -857,19 +879,12 @@ void create_gpu_batches(const struct Config og_config) {
                 if (batch.state != GPUBatch::State::EMPTY)
                     continue;
 
+                batch.fill_start = high_resolution_clock::now();
                 fill_batch(batch, processing, stats);
+                batch.fill_end = high_resolution_clock::now();
 
                 if (batch.i > 0) {
                     batch.state = GPUBatch::State::READY;
-
-                    /*
-                    auto last = ((i == 0) ? s_batch0_t : s_batch1_t);
-                    auto now = high_resolution_clock::now();
-                    ((i == 0) ? s_batch0_t : s_batch1_t) = now;
-                    printf("CPU: Batch(%d) ready to run @ %.5f | %.5f\n",
-                        i, duration<double>(now - last).count(),
-                        duration<double>(now - s_start_t).count());
-                    // */
 
                     open_gpu.push(i);
 
@@ -881,7 +896,7 @@ void create_gpu_batches(const struct Config og_config) {
             // Wait for the next batch to be done.
             {
                 if (open_gpu.empty()) {
-                    usleep(5'000); // 5,000ms
+                    usleep(1'000); // 1ms
                 } else {
                     int i = open_gpu.front();
                     open_gpu.pop();
@@ -894,6 +909,7 @@ void create_gpu_batches(const struct Config og_config) {
                     }
 
                     if (batch.state == GPUBatch::State::DONE) {
+                        batch.results_start = high_resolution_clock::now();
                         /*
                         auto last = ((i == 0) ? s_batch0_t : s_batch1_t);
                         auto now = high_resolution_clock::now();
@@ -904,6 +920,18 @@ void create_gpu_batches(const struct Config og_config) {
                         // */
                         // Read results, mark any found primes, and possible finalize m-interval
                         process_finished_batch(batch, processing);
+
+                        batch.results_end = high_resolution_clock::now();
+                        if (rand() % (16 * 1024) == 0) {
+                            printf("CPU: batch timing fill: %.4f, to gpu: %.4f, "
+                                    "gpu: %.4f, to cpu: %.4f, process: %.4f\n",
+                                   duration<double>(batch.fill_end - batch.fill_start).count(),
+                                   duration<double>(batch.gpu_start - batch.fill_end).count(),
+                                   duration<double>(batch.gpu_end - batch.gpu_start).count(),
+                                   duration<double>(batch.results_start - batch.gpu_end).count(),
+                                   duration<double>(batch.results_end - batch.results_start).count());
+                        }
+
 
                         // Result batch to EMPTY
                         batch.state = GPUBatch::State::EMPTY;
@@ -1068,6 +1096,11 @@ void coordinator_thread(struct Config global_config) {
                     [](const std::unique_ptr<SieveResult>& sieve) {
                         return sieve->state == SieveResult::DONE;
                     }), sieveds.end());
+            if (sieveds.size() > (2+2)) {
+                printf("%lu open ranges! `overflowed` might be falling behind!\n", sieveds.size());
+            }
+
+
             lock.unlock();
         }
         cout << "\n\nCoordinator Done.\n" << endl;
