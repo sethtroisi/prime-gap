@@ -100,8 +100,10 @@ const size_t GPU_BATCH_SIZE = 4 * 1024;
 // A100   - 16K,  4 -> 2000K  (40%)
 // A100   - 32K,  4 -> 1900K  (20-40%)
 
-// 257#
-// 1080Ti - 4K,  4 -> 2420K!
+// 257# as high as 300K/second!
+// 1080Ti - 2K,  4 -> 2500K!
+// 1080Ti - 4K,  4 -> 3200K!
+// 1080Ti - 8K,  4 -> 3060K!
 
 // A100   - 16K, 4 ->
 
@@ -474,8 +476,9 @@ void run_overflow_thread(const mpz_t &K_in) {
             overflow_cv.wait(lock, []{ return overflowed.size() || !is_running; });
 
             while (is_running && overflowed.size()) {
-                if (tested % 1'000 == 0 && overflowed.size() > 200) {
-                    printf("CPU Sieve Queue: %lu open, %lu processed\n",
+                // 16K batch might dump 160-400 per batch.
+                if (tested % 10'000 == 0 && overflowed.size() > 1000) {
+                    printf("\tCPU Sieve Queue: %lu open, %lu processed\n",
                             overflowed.size(), tested);
                 }
 

@@ -99,7 +99,7 @@ bool StatsCounters::possible_print_stats(
 
             printf("\t    unknowns  %-10ld (avg: %.2f), %.2f%% composite  %.2f%% <- %% -> %.2f%%\n",
                 s_total_unknown, s_total_unknown / ((double) s_tests),
-                100.0 * (1 - s_total_unknown / ((2.0 * config.sieve_length + 1) * s_tests)),
+                100.0 * (1 - s_t_unk_next / ((double) config.sieve_length * s_tests)),
                 100.0 * s_t_unk_prev / s_total_unknown,
                 100.0 * s_t_unk_next / s_total_unknown);
             printf("\t    prp tests %-10ld (avg: %.2f) (%.1f tests/sec)\n",
@@ -109,10 +109,12 @@ bool StatsCounters::possible_print_stats(
 
             if (config.verbose >= 2) {
                 // Suppress for now, this is almost exactly 100 - extra sieves prev_gap %
-                if (0 && s_skips_after_one_side) {
+                /*
+                if (s_skips_after_one_side) {
                     printf("\t    only next_prime %ld (%.2f%%)\n",
                         s_skips_after_one_side, 100.0 * s_skips_after_one_side / s_tests);
                 }
+                */
                 if (s_gap_out_of_sieve_prev + s_gap_out_of_sieve_next > 0) {
                     printf("\t    extra sieves prev_gap %ld (%.2f%%), next_gap %ld (%.2f%%)\n",
                         s_gap_out_of_sieve_prev, 100.0 * s_gap_out_of_sieve_prev / s_tests,
@@ -122,12 +124,14 @@ bool StatsCounters::possible_print_stats(
                 printf("\t    best merit this interval: %.3f (at m=%ld)\n",
                     s_best_merit_interval, s_best_merit_interval_m);
 
+                /*
                 printf("\t    avg merit: %.3f, avg gap: %.1f (%lu + %lu)\n",
                     s_total_merit / s_tests,
                     ((float) s_total_prev_p + s_total_next_p) / s_tests,
                     s_total_prev_p / s_tests,
                     s_total_next_p / s_tests
-               );
+                );
+                */
             }
             return true;
         }
