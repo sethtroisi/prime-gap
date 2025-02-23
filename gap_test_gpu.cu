@@ -69,7 +69,7 @@ const int THREADS_PER_INSTANCE = (BITS <= 512) ? 4 : 8;
  * GPU_BATCH_SIZE is 2^n | best is between 2K and 8K.
  * SEQUENTIAL_IN_BATCH = {1,2,4}
  *      1 => 0 overhead, 2 => 0.5 extra PRP/m, 4 => 1.5 extra PRP/M
- * BATCHED_M is number of M loaded at the same time
+ * QUEUE_SIZE is number of M loaded (as intervals (AKA DataM) at the same time.
  */
 
 const size_t GPU_BATCH_SIZE = 4 * 1024;
@@ -77,14 +77,14 @@ const size_t GPU_BATCH_SIZE = 4 * 1024;
 /********** BENCHMARKING ***********/
 // 701#
 // GPU    - BATCH TPI -> PRP/second
-// 1080Ti - 16K,  8 -> 213K
-// 1080Ti - 8K,   8 -> 230K!
+// 1080Ti - 16K,  8 -> 240K
+// 1080Ti - 8K,   8 -> 250K
 // 1080Ti - 4K,   8 -> 201K
 
 // Remember to set sm_80
-// A100   - 4K,   8 -> 570K  (80% utilization)
-// A100   - 8K,   8 -> 680K  (70%)
-// A100   - 16K,  8 -> 695K! (60%)
+// A100   - 4K,   8 -> 610K  (80% utilization)
+// A100   - 8K,   8 -> 710K  (70%)
+// A100   - 16K,  8 -> 735K  (70%)
 
 // 347#
 // 1080Ti - 4K, 8  -> 1034K
@@ -97,10 +97,15 @@ const size_t GPU_BATCH_SIZE = 4 * 1024;
 // A100   - 4K,   8 -> 2120K! (50-60% utilization)
 // A100   - 4K,   4 -> 2000K
 // A100   - 8K,   4 -> 2000K  (30-50%)
-// A100   - 16K,  4 -> 1200K  (20%)
-// A100   - 32K,  4 -> 1300K  (20%)
-/********** BENCHMARKING ***********/
+// A100   - 16K,  4 -> 2000K  (40%)
+// A100   - 32K,  4 -> 1900K  (20-40%)
 
+// 257#
+// 1080Ti - 4K,  4 -> 2420K!
+
+// A100   - 16K, 4 ->
+
+/********** BENCHMARKING ***********/
 
 
 // 1 is best, 2 if very large batch.
@@ -108,13 +113,13 @@ const size_t SEQUENTIAL_IN_BATCH = 1;
 // Always use 1.
 const int ROUNDS = 1;
 // 20-60% extra for overflow is very reasonable.
-const size_t BATCHED_M = 160 / 100 * 2 * GPU_BATCH_SIZE / SEQUENTIAL_IN_BATCH;
+const size_t QUEUE_SIZE = 160 * 2 * GPU_BATCH_SIZE / SEQUENTIAL_IN_BATCH / 100;
 
 
 // From 701# I believe.
 // 1M -> 2000/second
 // 200K -> 4000/second
-const size_t CPU_SIEVE_LIMIT = 90'000;
+const size_t CPU_SIEVE_LIMIT = 70'000;
 
 const size_t COMBINED_SIEVE_THREADS = 8;
 
@@ -182,72 +187,20 @@ int main(int argc, char* argv[]) {
 }
 
 
-class GPUBatch {
+class SieveResult {
     public:
-        enum State : uint8_t { EMPTY, READY, DONE };
-        std::atomic<State> state = EMPTY;
+        SieveResult(const struct Config config): config(config) {};
 
-        // Used in debugging Batch Timing.
-        time_point<high_resolution_clock> fill_start;
-        time_point<high_resolution_clock> fill_end;
-        time_point<high_resolution_clock> gpu_start;
-        time_point<high_resolution_clock> gpu_end;
-        time_point<high_resolution_clock> results_start;
-        time_point<high_resolution_clock> results_end;
+        enum State { CONFIGURED, SIEVED, DONE };
+        State state = CONFIGURED;
 
-        // current index;
-        size_t i;
+        struct Config config;
 
-        // number to check if prime
-        vector<mpz_t*> z;
-        // XXX: This is an ugly hack because you can't create mpz_t vector easily
-        mpz_t *z_array;
-
-        // If z[i] should be tested
-        vector<char>  active;
-        // Result from GPU
-        vector<int>  result;
-
-        // index into 'processing', value is m
-        vector<int64_t> data_m;
-
-        // index into the interval[data_m].unknowns
-        vector<int> unknown_i;
-
-        // For signaling
-        std::mutex m;
-        std::condition_variable cv;
-
-        explicit GPUBatch(size_t n) {
-            elements = n;
-
-            z_array = (mpz_t *) malloc(n * sizeof(mpz_t));
-            for (size_t i = 0; i < n; i++) {
-                mpz_init(z_array[i]);
-                z.push_back(&z_array[i]);
-            }
-
-            active.resize(n, 0);
-            result.resize(n, -1);
-
-            data_m.resize(n, -1);
-            unknown_i.resize(n, -1);
-        }
-
-        ~GPUBatch() {
-            cout << "~GPUBatch" << endl;
-            for (size_t i = 0; i < elements; i++) {
-                mpz_clear(z_array[i]);
-            }
-            free(z_array);
-        }
-
-        GPUBatch(const GPUBatch&) = delete;
-        GPUBatch& operator=(const GPUBatch&) = delete;
-
-    private:
-        size_t elements;
+        uint64_t last_m = (uint64_t) -1;
+        size_t current_index = 0;
+        std::unique_ptr<SieveOutput> result;
 };
+
 
 class DataM {
     public:
@@ -291,18 +244,71 @@ class DataM {
 };
 
 
-class SieveResult {
+class GPUBatch {
     public:
-        SieveResult(const struct Config config): config(config) {};
+        enum State : uint8_t { EMPTY, READY, DONE };
+        std::atomic<State> state = EMPTY;
 
-        enum State { CONFIGURED, SIEVED, DONE };
-        State state = CONFIGURED;
+        // Used in debugging Batch Timing.
+        time_point<high_resolution_clock> fill_start;
+        time_point<high_resolution_clock> fill_end;
+        time_point<high_resolution_clock> gpu_start;
+        time_point<high_resolution_clock> gpu_end;
+        time_point<high_resolution_clock> results_start;
+        time_point<high_resolution_clock> results_end;
 
-        struct Config config;
+        // current index;
+        size_t i;
 
-        uint64_t last_m = (uint64_t) -1;
-        size_t current_index = 0;
-        std::unique_ptr<SieveOutput> result;
+        // number to check if prime
+        vector<mpz_t*> z;
+        // XXX: This is an ugly hack because you can't create mpz_t vector easily
+        mpz_t *z_array;
+
+        // If z[i] should be tested
+        vector<char>  active;
+        // Result from GPU
+        vector<int>  result;
+
+        // Intervals for each element
+        vector<DataM*> intervals; // TODO was data_m
+
+        // index into the interval.unknowns
+        vector<int> unknown_i;
+
+        // For signaling
+        std::mutex m;
+        std::condition_variable cv;
+
+        explicit GPUBatch(size_t n) {
+            elements = n;
+
+            z_array = (mpz_t *) malloc(n * sizeof(mpz_t));
+            for (size_t i = 0; i < n; i++) {
+                mpz_init(z_array[i]);
+                z.push_back(&z_array[i]);
+            }
+
+            active.resize(n, 0);
+            result.resize(n, -1);
+
+            intervals.resize(n, nullptr);
+            unknown_i.resize(n, -1);
+        }
+
+        ~GPUBatch() {
+            cout << "~GPUBatch" << endl;
+            for (size_t i = 0; i < elements; i++) {
+                mpz_clear(z_array[i]);
+            }
+            free(z_array);
+        }
+
+        GPUBatch(const GPUBatch&) = delete;
+        GPUBatch& operator=(const GPUBatch&) = delete;
+
+    private:
+        size_t elements;
 };
 
 
@@ -468,7 +474,7 @@ void run_overflow_thread(const mpz_t &K_in) {
             overflow_cv.wait(lock, []{ return overflowed.size() || !is_running; });
 
             while (is_running && overflowed.size()) {
-                if (tested % 1'000 == 0 && overflowed.size() > 100) {
+                if (tested % 1'000 == 0 && overflowed.size() > 200) {
                     printf("CPU Sieve Queue: %lu open, %lu processed\n",
                             overflowed.size(), tested);
                 }
@@ -499,8 +505,8 @@ void run_overflow_thread(const mpz_t &K_in) {
                 assert(unknowns.front() >= 0 && unknowns.back() <= sl);
 
                 if (interval.side == DataM::Side::PREV_P) {
-                    // Consider not clearing and just adding to existing elements.
                     interval.unknowns[0].clear();
+                    interval.unknowns[0].reserve(unknowns.size());
                     interval.p_index = 0;
                     assert(sieve_start + sl <= 0);
                     for (auto iter = unknowns.rbegin(); iter != unknowns.rend(); iter++) {
@@ -510,8 +516,8 @@ void run_overflow_thread(const mpz_t &K_in) {
                         interval.unknowns[0].push_back(sieve_start + u);
                     }
                 } else {
-                    // clear existing unknowns and replace
                     interval.unknowns[1].clear();
+                    interval.unknowns[1].reserve(unknowns.size());
                     interval.n_index = 0;
                     for (auto u : unknowns) {
                         interval.unknowns[1].push_back(sieve_start + u);
@@ -539,8 +545,7 @@ void run_overflow_thread(const mpz_t &K_in) {
 size_t add_to_processing(
         const mpz_t &K,
         const uint32_t D,
-        std::unordered_map<int64_t, std::unique_ptr<DataM>> &processing,
-        size_t n) {
+        std::vector<std::unique_ptr<DataM>> &processing) {
     // Add the n smallest m range from sieveds to processing.
 
     SieveResult *sieve = nullptr;
@@ -568,15 +573,16 @@ size_t add_to_processing(
 
     const auto& coprime_X = result.coprime_X;
 
-    // We have a range of sieve results
-    // Next item is sieve.current_index
-    // have to first process m_inc to know m.
-    size_t add = std::min(n, result.m_inc.size() -  sieve->current_index);
+    size_t added = 0;
 
     //printf("Adding %lu from m_start: %lu @ index: %lu/%lu\n",
     //    add, result.m_start, sieve->current_index, result.m_inc.size());
 
-    for (size_t i = 0; i < add; i++) {
+    for (auto& interval : processing) {
+        if (interval.get() != nullptr) {
+            continue;
+        }
+
         // Updated last_m (current_m during this loop)
         // Update current_index (next_index during the loop)
 
@@ -589,44 +595,42 @@ size_t add_to_processing(
         uint64_t m = sieve->last_m;
         assert( gcd(m, D) == 1 );
 
-        auto test = std::make_unique<DataM>(m, sl);
-        test->unknowns[1].reserve(found);
+        added += 1;
+        interval.reset(new DataM(m, sl));
+        interval->unknowns[1].reserve(found);
 
         int32_t offset = 0;
         for (size_t j = 0; j < (unsigned) found; j++) {
             auto delta = m_unknown_deltas[j];
             offset += delta;
-            test->unknowns[1].push_back(coprime_X[offset]);
+            interval->unknowns[1].push_back(coprime_X[offset]);
         }
 
         assert( (size_t) offset < coprime_X.size() );
         assert( m_unknown_deltas.size() > 2 );
-        assert( test->unknowns[1].size() == (size_t) found );
-        assert( test->unknowns[1].back() <= sl );
+        assert( interval->unknowns[1].size() == (size_t) found );
+        assert( interval->unknowns[1].back() <= sl );
 
         // No longer need a copy in SieveResult.
         sieve->result->unknowns[sieve->current_index - 1].clear();
         // Try to reclaim memory.
         sieve->result->unknowns[sieve->current_index - 1].shrink_to_fit();
 
-        mpz_init(test->center);
-        mpz_mul_ui(test->center, K, test->m);
+        mpz_init(interval->center);
+        mpz_mul_ui(interval->center, K, interval->m);
 
-        processing.emplace(test->m, std::move(test));
+        if (sieve->current_index == result.m_inc.size()) {
+            std::lock_guard lock(sieve_mtx);
+            sieve->state = SieveResult::DONE;
+            break;
+        }
     }
 
-    if (sieve->current_index == result.m_inc.size()) {
-        std::lock_guard lock(sieve_mtx);
-        sieve->state = SieveResult::DONE;
-    }
-
-    return add;
+    return added;
 }
 
 
-bool process_finished_batch(
-        GPUBatch& batch,
-        std::unordered_map<int64_t, std::unique_ptr<DataM>> &processing) {
+bool process_finished_batch(GPUBatch& batch) {
     bool found_any_primes = false;
     std::lock_guard lock(interval_mtx);
     for (size_t i = 0; i < GPU_BATCH_SIZE; i++) {
@@ -636,7 +640,7 @@ bool process_finished_batch(
         // Verify GPU really did write the result
         assert (batch.result[i] == 0 || batch.result[i] == 1);
 
-        DataM &interval = *processing.at(batch.data_m[i]);
+        DataM &interval = *batch.intervals[i];
         assert( interval.state == DataM::State::RUNNING );
 
         int side_i;
@@ -690,12 +694,15 @@ bool process_finished_batch(
 
 void fill_batch(
         GPUBatch& batch,
-        std::unordered_map<int64_t, std::unique_ptr<DataM>> &processing,
+        std::vector<std::unique_ptr<DataM>> &processing,
         StatsCounters& stats) {
     assert( batch.state == GPUBatch::State::EMPTY);
 
     // Not a full count but (only covers the portion till GPU_BATCH_SIZE is full).
-    size_t currently_overflowed = 0;
+    size_t num_overflowed = 0;
+    size_t num_tombstoned = 0;
+    size_t num_primed = 0;
+    size_t num_running = 0;
 
     // Grap some entries from each item in M
     batch.i = 0;
@@ -707,13 +714,20 @@ void fill_batch(
     bool any_pushed_to_overflow = false;
     {
         std::lock_guard lock(interval_mtx);
-        for (auto& pair : processing) {
-            auto& interval = *pair.second;
-            currently_overflowed += (
-                interval.state == DataM::State::OVERFLOWED ||
-                interval.state == DataM::State::SIEVING
-            );
+        for (const auto& row : processing) {
+            if (!row) {
+                num_tombstoned += 1;
+                continue;
+            }
+
+            DataM& interval = *row;
             if (interval.state != DataM::State::READY) {
+                num_overflowed += (
+                    interval.state == DataM::State::OVERFLOWED ||
+                    interval.state == DataM::State::SIEVING
+                );
+                num_primed += interval.state == DataM::State::PRIMED;
+                num_running += interval.state == DataM::State::RUNNING;
                 continue;  // Not ready to be part of a batch.
             }
 
@@ -732,7 +746,7 @@ void fill_batch(
                         if (j == 0) {
                             interval.state = DataM::State::OVERFLOWED;
                             stats.s_gap_out_of_sieve_next += 1;
-                            overflowed.push_back(pair.second.get());
+                            overflowed.push_back(row.get());
                             any_pushed_to_overflow = true;
                         }
                         break;
@@ -746,7 +760,7 @@ void fill_batch(
                         if (j == 0) {
                             interval.state = DataM::State::OVERFLOWED;
                             stats.s_gap_out_of_sieve_prev += 1;
-                            overflowed.push_back(pair.second.get());
+                            overflowed.push_back(row.get());
                             any_pushed_to_overflow = true;
                         }
                         break;
@@ -767,7 +781,7 @@ void fill_batch(
                     assert( offset > last_offset );  // Moving away from center.
                     mpz_add_ui(*batch.z[gpu_i], interval.center, offset);
                 }
-                batch.data_m[gpu_i] = interval.m;  // [Data] index for GPU Batch
+                batch.intervals[gpu_i] = row.get();
                 batch.unknown_i[gpu_i] = index;
                 batch.active[gpu_i] = true;
 
@@ -786,9 +800,11 @@ void fill_batch(
 
     // Batches should be full unless lots of overflowed results.
     if (batch.i > 0 && batch.i < GPU_BATCH_SIZE) {
-        //printf("Partial load @ %lu -> %lu/%lu | %lu\n",
-        //    batch.i > 0 ? batch.data_m[0] : 0,
-        //    batch.i, GPU_BATCH_SIZE, currently_overflowed);
+        printf("Partial load @ %lu -> %lu/%lu | size: %lu | running: %lu, primed: %lu, overflowed: %lu, tombstoned: %lu\n",
+            batch.i > 0 ? batch.intervals[0]->m : 0,
+            batch.i, GPU_BATCH_SIZE,
+            processing.size(),
+            num_running, num_primed, num_overflowed, num_tombstoned);
     }
 }
 
@@ -831,14 +847,13 @@ void create_gpu_batches(const struct Config og_config) {
             setlocale(LC_NUMERIC, "C");
         }
 
-        std::unordered_map<int64_t, std::unique_ptr<DataM>> processing;
-
-        const size_t QUEUE_SIZE = BATCHED_M;
+        // Create QUEUE_SIZE empty unique_ptrs.
+        std::vector<std::unique_ptr<DataM>> processing(QUEUE_SIZE);
 
         while (is_running) {
             usleep(50'000); // 50ms
             // Wait for first data before intitalizing StatsCounter to get more stable numbers.
-            if (add_to_processing(K, D, processing, QUEUE_SIZE - processing.size())) {
+            if (add_to_processing(K, D, processing)) {
                 break;
             }
         }
@@ -864,14 +879,12 @@ void create_gpu_batches(const struct Config og_config) {
         while (is_running) {
             /**
              * Try to fill all batches
-             * send for async all ready batches
+             * queue on gpu all ready batches
              * wait for result from the 1st batch sent
-             * repeat?
              */
 
-            // Add new DataM if free space in processing
-            // TODO make use of return at some later point
-            add_to_processing(K, D, processing, QUEUE_SIZE - processing.size());
+            // Add new DataM for any tombstoned items.
+            add_to_processing(K, D, processing);
 
             for (int i = 0; i < 2; i++) {
                 GPUBatch& batch = gpu_batches[i];
@@ -896,6 +909,7 @@ void create_gpu_batches(const struct Config og_config) {
             // Wait for the next batch to be done.
             {
                 if (open_gpu.empty()) {
+                    // Why would this happen?
                     usleep(1'000); // 1ms
                 } else {
                     int i = open_gpu.front();
@@ -910,19 +924,14 @@ void create_gpu_batches(const struct Config og_config) {
 
                     if (batch.state == GPUBatch::State::DONE) {
                         batch.results_start = high_resolution_clock::now();
-                        /*
-                        auto last = ((i == 0) ? s_batch0_t : s_batch1_t);
-                        auto now = high_resolution_clock::now();
-                        ((i == 0) ? s_batch0_t : s_batch1_t) = now;
-                        printf("CPU: Processing batch from GPU(%d) took %.5f | %.5f\n",
-                               i, duration<double>(now - last).count(),
-                               duration<double>(now - s_start_t).count());
-                        // */
                         // Read results, mark any found primes, and possible finalize m-interval
-                        process_finished_batch(batch, processing);
+                        process_finished_batch(batch);
 
                         batch.results_end = high_resolution_clock::now();
-                        if (rand() % (16 * 1024) == 0) {
+                        //if (rand() % (1 * 1024) == 0) {
+                        if (0) {
+                            // TODO check if gpu times are the same.
+                            // If so that means that they are running side by side which maybe isn't what we want.
                             printf("CPU: batch timing fill: %.4f, to gpu: %.4f, "
                                     "gpu: %.4f, to cpu: %.4f, process: %.4f\n",
                                    duration<double>(batch.fill_end - batch.fill_start).count(),
@@ -944,11 +953,13 @@ void create_gpu_batches(const struct Config og_config) {
                 // Process & remove finished intervals.
                 // This is handled seperately for easier clean & single call to overflow.
                 std::unique_lock<std::mutex> lock(interval_mtx);
-                for (auto it = processing.begin(); it != processing.end(); /* increment in loop */) {
-                    auto& interval = *it->second;
+                for (auto &row : processing) {
+                    if (!row) {
+                        continue;
+                    }
+                    DataM &interval = *row;
 
                     if (interval.state != DataM::State::PRIMED) {
-                        it++;
                         continue;
                     }
 
@@ -969,10 +980,9 @@ void create_gpu_batches(const struct Config og_config) {
                             stats.s_gap_out_of_sieve_prev += 1;
                             interval.side = DataM::Side::PREV_P;
                             interval.state = DataM::State::OVERFLOWED;
-                            overflowed.push_back(it->second.get());
+                            overflowed.push_back(row.get());
                             //cout << "PREV_P for m=" << interval.m << endl;
                             any_pushed_to_overflow = true;
-                            it++;
                             continue;
                         }
 
@@ -1013,8 +1023,9 @@ void create_gpu_batches(const struct Config og_config) {
                         cout << endl;
                     }
 
-                    mpz_clear(interval.center);
-                    it = processing.erase(it);  // Erase this element
+                    //mpz_clear(interval.center);
+                    // Delete finished interval by reseting index.
+                    row.reset();
                 }
                 if (any_pushed_to_overflow) {
                     // CPU sieving thread will start if unlocked and notified
@@ -1029,8 +1040,11 @@ void create_gpu_batches(const struct Config og_config) {
         {
             mpz_clear(K);
             std::lock_guard lock(interval_mtx);
-            for (auto& [m, interval] : processing) {
-                mpz_clear(interval->center);
+            for (auto& interval: processing) {
+                if (interval) {
+                    mpz_clear(interval->center);
+                    interval.reset();
+                }
             }
         }
 
