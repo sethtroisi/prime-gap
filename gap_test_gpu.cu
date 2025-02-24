@@ -269,8 +269,8 @@ class GPUBatch {
         // index into the interval.unknowns
         vector<int> unknown_i;
 
-        // For signaling
-        std::mutex m;
+        // For signaling, must be owned to change state.
+        std::mutex mutex;
         std::condition_variable cv;
 
         explicit GPUBatch(size_t n) {
@@ -330,10 +330,12 @@ void run_gpu_thread(int verbose, int runner_num, GPUBatch& batch) {
         test_runner_t<params> runner(GPU_BATCH_SIZE, ROUNDS);
 
         size_t processed_batches = 0;
-        std::unique_lock lock(batch.m, std::defer_lock);
+        std::unique_lock lock(batch.mutex, std::defer_lock);
         while (is_running) {
             lock.lock();
-            batch.cv.wait(lock, [&] { return batch.state == GPUBatch::State::READY || !is_running; });
+            if (batch.state != GPUBatch::State::READY) {
+                batch.cv.wait(lock, [&] { return batch.state == GPUBatch::State::READY || !is_running; });
+            }
 
             if (!is_running) break;
 
@@ -365,7 +367,7 @@ void run_gpu_thread(int verbose, int runner_num, GPUBatch& batch) {
             batch.state = GPUBatch::State::DONE;
             processed_batches += 1;
 
-            // let CPU thread one.
+            // let CPU thread unlock when it recieves the signal.
             lock.unlock();
             batch.cv.notify_one();
         }
@@ -786,11 +788,11 @@ void fill_batch(
 
 
 void create_gpu_batches(const struct Config og_config) {
-
     // gap / 2 up to 60 merit
     uint64_t distance_counts[10000] = {};
 
     try {
+        pthread_setname_np(pthread_self(), "CREATE_GPU_BATCHES");
         cout << endl;
 
         // K is initialized in prob_prime_and_stats
@@ -870,6 +872,7 @@ void create_gpu_batches(const struct Config og_config) {
 
             for (size_t i = 0; i < GPU_BATCHES; i++) {
                 GPUBatch& batch = gpu_batches[i];
+                batch.mutex.lock();
 
                 if (batch.state != GPUBatch::State::EMPTY)
                     continue;
@@ -878,12 +881,15 @@ void create_gpu_batches(const struct Config og_config) {
                 fill_batch(batch, processing, stats);
                 batch.fill_end = high_resolution_clock::now();
 
-                if (batch.i > 0) {
-                    batch.state = GPUBatch::State::READY;
-
+                if (batch.i == 0) {
+                    // Leave as empty and unlock
+                    batch.mutex.unlock();
+                } else {
                     open_gpu.push(i);
 
-                    // Start the batch
+                    // Mark as ready, unlock, notify gpu thread;
+                    batch.state = GPUBatch::State::READY;
+                    batch.mutex.unlock();
                     batch.cv.notify_one();
                 }
             }
@@ -899,9 +905,10 @@ void create_gpu_batches(const struct Config og_config) {
 
                     GPUBatch& batch = gpu_batches[i];
                     // Wait for the batch to be Done (unless it's already done)
+                    std::unique_lock<std::mutex> lock(batch.mutex);
                     if (batch.state != GPUBatch::State::DONE) {
-                        std::unique_lock<std::mutex> lock(gpu_batches[i].m);
-                        batch.cv.wait(lock, [&] { return batch.state == GPUBatch::State::DONE ||!is_running; });
+                        batch.cv.wait(
+                            lock, [&] { return batch.state == GPUBatch::State::DONE ||!is_running; });
                     }
 
                     if (batch.state == GPUBatch::State::DONE) {
@@ -922,7 +929,6 @@ void create_gpu_batches(const struct Config og_config) {
                                    duration<double>(batch.results_start - batch.gpu_end).count(),
                                    duration<double>(batch.results_end - batch.results_start).count());
                         }
-
 
                         // Result batch to EMPTY
                         batch.state = GPUBatch::State::EMPTY;
