@@ -85,9 +85,9 @@ const size_t GPU_BATCH_SIZE = 4 * 1024;
 // A100   - 8K,   8 -> 1050K
 // A100   - 16K,  8 -> 1085K!
 
-// 347# as high as 140K m/sec
+// 347# as high as 180K m/sec
 // 1080Ti - 8K, 4  -> 1680K
-// 1080Ti - 4K, 4  -> 1690K!
+// 1080Ti - 4K, 4  -> 1890K!
 // 1080Ti - 2K, 4  -> 1330K
 
 // A100   - 8K,   4 ->
@@ -176,7 +176,7 @@ int main(int argc, char* argv[]) {
 
     prime_gap_test(config);
 
-    cout << "gap_test_gpu ended" << endl;
+    cout << argv[0] << " ended" << endl;
 }
 
 
@@ -333,7 +333,7 @@ void run_gpu_thread(int verbose, int runner_num, GPUBatch& batch) {
         std::unique_lock lock(batch.m, std::defer_lock);
         while (is_running) {
             lock.lock();
-            batch.cv.wait(lock, [&] { return batch.state == GPUBatch::State::READY ||!is_running; });
+            batch.cv.wait(lock, [&] { return batch.state == GPUBatch::State::READY || !is_running; });
 
             if (!is_running) break;
 
@@ -1005,8 +1005,8 @@ void create_gpu_batches(const struct Config og_config) {
                         cout << endl;
                     }
 
-                    //mpz_clear(interval.center);
                     // Delete finished interval by reseting index.
+                    mpz_clear(interval.center);
                     row.reset();
                 }
                 if (any_pushed_to_overflow) {
@@ -1030,12 +1030,15 @@ void create_gpu_batches(const struct Config og_config) {
             }
         }
 
-        // Send notifies
+        // Send notifies (TODO Why is this needed?)
         for (auto& gpu_batch : gpu_batches) {
             gpu_batch.cv.notify_all();
         }
+        size_t i = 0;
         for (auto & gpu_thread : gpu_threads) {
             gpu_thread.join();
+            cout << "\tbatch gpu thread(" << i << ") joined" << endl;
+            i++;
         }
     } catch (const std::exception &e) {
         cout << "ERROR in create_gpu_batches" << endl;
@@ -1186,10 +1189,13 @@ void prime_gap_test(struct Config config) {
     {
         is_running = false;
         sieve_thread.join();
+        cout << "\tsieve joined" << endl;
         batch_thread.join();
+        cout << "\tbatch joined" << endl;
 
         overflow_cv.notify_all();  // wake up all overflow thread
         overflow_sieve_thread.join();
+        cout << "\toverflow joined" << endl;
     }
 
     mpz_clear(K);

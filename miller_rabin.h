@@ -285,6 +285,10 @@ uint32_t *generate_primes(uint32_t count) {
   return list;
 }
 
+// This is needed for syncronization.
+// Left as an option to maybe help with valgrind?
+const bool USE_PINNED_MEMORY = true;
+
 template<class params>
 class test_runner_t {
   public:
@@ -317,7 +321,12 @@ class test_runner_t {
           primes = generate_primes(rounds);
 
           // Create with pinned memory
-          CUDA_CHECK(cudaMallocHost((void**) &instances, sizeof(instance_t) * n));
+          if (USE_PINNED_MEMORY) {
+              CUDA_CHECK(cudaMallocHost((void**) &instances, sizeof(instance_t) * n));
+          } else {
+              instances = (instance_t *) malloc(sizeof(instance_t) * n);
+              assert( instances != NULL ); // malloc failed!
+          }
 
           CUDA_CHECK(cudaSetDevice(0));
           CUDA_CHECK(cudaMalloc((void **)&gpuInstances, instance_size));
@@ -339,7 +348,11 @@ class test_runner_t {
 
       ~test_runner_t() {
           free(primes);
-          CUDA_CHECK(cudaFreeHost(instances));
+          if (USE_PINNED_MEMORY) {
+              CUDA_CHECK(cudaFreeHost(instances));
+          } else {
+              free(instances);
+          }
           CUDA_CHECK(cudaFree(gpuPrimes));
           CUDA_CHECK(cudaFree(gpuInstances));
           CUDA_CHECK(cudaStreamDestroy(runner_stream));

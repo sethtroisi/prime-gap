@@ -1286,6 +1286,17 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
                     }
                 }
 
+                // TODO this can break if one split falls behind and all
+                // remaining work is in a locked split.
+                if (min_p == intervals.size()) {
+                    // SO UGLY
+                    if (config.verbose >= 1) {
+                        printf("sieve stalled with unequal queue");
+                    }
+                    std::this_thread::sleep_for(milliseconds(50));
+                    continue;
+                }
+
                 // There should be some item to work on
                 assert(min_p < intervals.size());
 

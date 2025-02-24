@@ -908,9 +908,9 @@ Config Args::argparse(int argc, char* argv[], Pr program) {
                     s = t;
                     t = std::strchr(t, '_');
                     t = std::strchr(t, '_');
-                    if (s[t - s - 1] == 'B') {
-                        assert( config.mstart < 100 );
-                        config.mstart *= 1'000'000'000;
+                    if (s[t - s - 1] == 'M') {
+                        assert( config.mstart < 100'000 );
+                        config.mstart *= 1'000'000;
                     }
                     t++;
 
