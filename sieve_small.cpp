@@ -326,10 +326,11 @@ class Cached {
          */
         vector<int32_t> m_reindex;
         // if gcd(ms + mi, D) = 1
+        // TODO try with dynamic_bitset
         vector<bool> is_m_coprime;
         /**
          * is_m_coprime2310[i] = (i, D') == 1
-         * D' only has primes <= 11
+         * D' = gcd(2310, D)
          * first 2310 values.
          * vector<bool> seems faster than char [2310]
          */
@@ -911,7 +912,7 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
         size_t small_factors = 0;
         // Find m*K = X, X in [L, R]
-        // NOTE: X is positive [0, SL)
+        // NOTE: X is positive [0, SL]
         for (int64_t X : coprime_X_thread) {
             // HOTSPOT 14%
             // Safe from overflow as (SL * prime + prime) < int64
