@@ -322,8 +322,10 @@ deque<DataM*> overflowed;
 
 void run_gpu_thread(int verbose, int runner_num, GPUBatch& batch) {
     try {
-        // TODO use runner_num in threadname.
-        pthread_setname_np(pthread_self(), "RUN_GPU_THREAD");
+        {
+            std::string name = "GPU(" + std::to_string(runner_num) + ")";
+            pthread_setname_np(pthread_self(), name.c_str());
+        }
 
         // TODO test changing cudaDeviceScheduleBlockingSync to cudaDeviceScheduleYield or cudaDeviceScheduleSpin
         typedef mr_params_t<THREADS_PER_INSTANCE, BITS, WINDOW_BITS> params;
@@ -363,10 +365,10 @@ void run_gpu_thread(int verbose, int runner_num, GPUBatch& batch) {
             }
 
             lock.lock();
-            batch.gpu_end = high_resolution_clock::now();
-            batch.state = GPUBatch::State::DONE;
-            processed_batches += 1;
 
+            batch.gpu_end = high_resolution_clock::now();
+            processed_batches += 1;
+            batch.state = GPUBatch::State::DONE;
             // let CPU thread unlock when it recieves the signal.
             lock.unlock();
             batch.cv.notify_one();
@@ -445,7 +447,7 @@ void run_sieve_thread(void) {
 
 void run_overflow_thread(const mpz_t &K_in) {
     try {
-        pthread_setname_np(pthread_self(), "CPU_OVERFLOW_SIEVE_THREAD");
+        pthread_setname_np(pthread_self(), "CPU_OVERFLOW");
         mpz_t K;
         mpz_init_set(K, K_in);
 
@@ -792,7 +794,7 @@ void create_gpu_batches(const struct Config og_config) {
     uint64_t distance_counts[10000] = {};
 
     try {
-        pthread_setname_np(pthread_self(), "CREATE_GPU_BATCHES");
+        pthread_setname_np(pthread_self(), "CREATE_BATCHES");
         cout << endl;
 
         // K is initialized in prob_prime_and_stats
@@ -874,8 +876,10 @@ void create_gpu_batches(const struct Config og_config) {
                 GPUBatch& batch = gpu_batches[i];
                 batch.mutex.lock();
 
-                if (batch.state != GPUBatch::State::EMPTY)
+                if (batch.state != GPUBatch::State::EMPTY) {
+                    batch.mutex.unlock();
                     continue;
+                }
 
                 batch.fill_start = high_resolution_clock::now();
                 fill_batch(batch, processing, stats);
@@ -911,28 +915,30 @@ void create_gpu_batches(const struct Config og_config) {
                             lock, [&] { return batch.state == GPUBatch::State::DONE ||!is_running; });
                     }
 
-                    if (batch.state == GPUBatch::State::DONE) {
-                        batch.results_start = high_resolution_clock::now();
-                        // Read results, mark any found primes, and possible finalize m-interval
-                        process_finished_batch(batch);
+                    assert( batch.state == GPUBatch::State::DONE || !is_running );
+                    if (!is_running)
+                        break;
 
-                        batch.results_end = high_resolution_clock::now();
-                        //if (rand() % (1 * 1024) == 0) {
-                        if (0) {
-                            // TODO check if gpu times are the same.
-                            // If so that means that they are running side by side which maybe isn't what we want.
-                            printf("CPU: batch timing fill: %.4f, to gpu: %.4f, "
-                                    "gpu: %.4f, to cpu: %.4f, process: %.4f\n",
-                                   duration<double>(batch.fill_end - batch.fill_start).count(),
-                                   duration<double>(batch.gpu_start - batch.fill_end).count(),
-                                   duration<double>(batch.gpu_end - batch.gpu_start).count(),
-                                   duration<double>(batch.results_start - batch.gpu_end).count(),
-                                   duration<double>(batch.results_end - batch.results_start).count());
-                        }
+                    batch.results_start = high_resolution_clock::now();
+                    // Read results, mark any found primes, and possible finalize m-interval
+                    process_finished_batch(batch);
 
-                        // Result batch to EMPTY
-                        batch.state = GPUBatch::State::EMPTY;
+                    batch.results_end = high_resolution_clock::now();
+                    //if (rand() % (1 * 1024) == 0) {
+                    if (0) {
+                        // TODO check if gpu times are the same.
+                        // If so that means that they are running side by side which maybe isn't what we want.
+                        printf("CPU: batch timing fill: %.4f, to gpu: %.4f, "
+                                "gpu: %.4f, to cpu: %.4f, process: %.4f\n",
+                               duration<double>(batch.fill_end - batch.fill_start).count(),
+                               duration<double>(batch.gpu_start - batch.fill_end).count(),
+                               duration<double>(batch.gpu_end - batch.gpu_start).count(),
+                               duration<double>(batch.results_start - batch.gpu_end).count(),
+                               duration<double>(batch.results_end - batch.results_start).count());
                     }
+
+                    // Result batch to EMPTY
+                    batch.state = GPUBatch::State::EMPTY;
                 }
             }
 
@@ -1055,7 +1061,7 @@ void create_gpu_batches(const struct Config og_config) {
 
 void coordinator_thread(struct Config global_config) {
     try {
-        pthread_setname_np(pthread_self(), "MAIN_LOAD_AND_BATCH_THREAD");
+        pthread_setname_np(pthread_self(), "COORDINATOR");
 
         size_t total_ranges = 0;
 
