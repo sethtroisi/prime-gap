@@ -1659,9 +1659,9 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
 
     const int K_odd = mpz_odd_p(K);
 
-    primesieve::iterator iter(prime_start);
+    primesieve::iterator iter(prime_start-1);
     uint64_t prime = iter.prev_prime();
-    assert(prime <= prime_start);
+    assert(prime < prime_start);
     prime = iter.next_prime();
     assert(prime >= prime_start);
     assert(prime > (2 * SIEVE_LENGTH + 1));
