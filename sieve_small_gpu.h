@@ -36,8 +36,8 @@ using namespace std::chrono;
 
 
 // TODO figure out what to set here
-#define GRID_SIZE 16
-#define BLOCK_SIZE 16
+#define GRID_SIZE 64
+#define BLOCK_SIZE 32
 
 
 // support routines
@@ -53,7 +53,7 @@ void cuda_check(cudaError_t status, const char *action=NULL, const char *file=NU
 }
 #define CUDA_CHECK(action) cuda_check(action, #action, __FILE__, __LINE__)
 
-
+/**
 __global__ void count_set_bits_in_array(char *array, uint64_t bytes) {
     uint32_t set = 0;
     for (size_t i = 0; i < bytes; i++) {
@@ -61,11 +61,11 @@ __global__ void count_set_bits_in_array(char *array, uint64_t bytes) {
     }
     printf("%u/%lu bytes are non zero\n", set, bytes);
 }
+*/
 
 /** Called by host executed on device. */
 __global__ void method2_medium_primes_kernal(
     /** Caches section **/
-    uint16_t *X_reindex,
     char *is_m_coprime2310,
     char *is_coprime2310,
     // Maybe later? is_m_coprime
@@ -78,6 +78,7 @@ __global__ void method2_medium_primes_kernal(
     uint32_t K_mod2310,
 
     char *composite,
+    size_t composite_bytes,
 
     uint32_t num_primes,
     uint32_t *primes,
@@ -87,25 +88,23 @@ __global__ void method2_medium_primes_kernal(
     uint32_t num_coprimes,
     uint32_t *coprime_X_thread
 ) {
-    int index = threadIdx.x + blockIdx.x * BLOCK_SIZE;
-    uint32_t total_threads = GRID_SIZE * BLOCK_SIZE;
+    // Indexing is hard for me
+    // blockIdx.x / gridDim.x
+    // threadIdx.x / blockDim.x
+    assert( gridDim.x == GRID_SIZE );
+    assert( blockDim.x == BLOCK_SIZE );
+
+    int index = threadIdx.x + (blockIdx.x * BLOCK_SIZE);
+
+    // TODO with block/thread splitting pi/coprime backwards
 
     uint32_t print_mult = 10000;
     uint32_t next_print = print_mult;
     uint32_t next_mult = 5 * print_mult;
 
     uint32_t small_factors = 0;
-    for (size_t i = 0; i < 2310; i++) {
-        small_factors += is_m_coprime2310[i];
-        if (index == 0) {
-            printf("is_m_coprime2310[%lu] = %u | %u\n", i, (uint32_t) is_m_coprime2310[i], small_factors);
-        }
-    }
 
-    if (small_factors != 1111)
-        return;
-
-    for (uint32_t pi = 0; pi < num_primes; pi++) {
+    for (uint32_t pi = threadIdx.x; pi < num_primes; pi += BLOCK_SIZE) {
         const uint32_t prime = primes[pi];
         const uint32_t base_r = remainders[pi];
         const int32_t neg_inv_K = neg_inv_Ks[pi];
@@ -141,7 +140,7 @@ __global__ void method2_medium_primes_kernal(
 
         // Find m*K = X, X in [L, R]
         // NOTE: X is positive [0, SL]
-        for (size_t cxti = index; cxti < num_coprimes; cxti += total_threads) {
+        for (size_t cxti = blockIdx.x; cxti < num_coprimes; cxti += GRID_SIZE) {
             int64_t X = coprime_X_thread[cxti];
             // Safe from overflow as (SL * prime + prime) < int64
             int64_t mi_0 = (X * neg_inv_K + mi_0_shift) % prime;
@@ -152,14 +151,9 @@ __global__ void method2_medium_primes_kernal(
                 uint64_t m = M_start + mi;
                 uint32_t m_mod2310 = m % 2310;
 
-                if (index == 0 && m_mod2310 == 2303) {
-                    printf("%lu -> %u -> %u\n", m, m_mod2310, (uint16_t)is_m_coprime2310[m_mod2310]);
-                }
                 // Filters ~80% or more of m where (m, D) != 1
                 if (!is_m_coprime2310[m_mod2310])
                     continue;
-
-                small_factors += 1;
 
                 // After initial value this increases by (shift * K_mod2310) % 2310
                 uint32_t n_mod2310 = ((K_mod2310 * m_mod2310) + X) % 2310;
@@ -169,18 +163,19 @@ __global__ void method2_medium_primes_kernal(
                 // TODO re-add is_m_coprime test.
 
                 int32_t mii = m_reindex[mi];
-                if (mii == 0)
+                if (mii < 0)
                     continue;
 
-                uint32_t xii = X_reindex[X];
-                // TODO composite_line_size -> num_coprimes?
-                composite[mii * num_coprimes + xii] = true;
-                //small_factors += 1;
+                size_t index = (size_t) mii * num_coprimes + cxti;
+                composite[index] = true;
+                small_factors += 1;
             }
         }
     }
 
-    printf(" GPU thread: %d -> %u factors\n", index, small_factors);
+    if (small_factors == 0 || small_factors > 10'00'000) {
+        printf(" GPU thread: %d -> %u factors\n", index, small_factors);
+    }
 }
 
 /**
@@ -221,7 +216,6 @@ class GPUSieve {
         uint32_t num_coprimes;
         uint32_t *coprime_X;
 
-        uint16_t *X_reindex;
         char     *is_coprime2310;
         char     *is_m_coprime2310;
         int32_t  *m_reindex;
@@ -234,13 +228,14 @@ class GPUSieve {
 
         // Maybe later? is_m_coprime
         char *composite;
+        size_t composite_bytes;
 
         uint64_t M_start;
         uint32_t K_mod2310;
 
         ~GPUSieve() {
+            printf("~GPUSieve\n");
             CUDA_CHECK(cudaFree(coprime_X));
-            CUDA_CHECK(cudaFree(X_reindex));
             CUDA_CHECK(cudaFree(is_coprime2310));
             CUDA_CHECK(cudaFree(is_m_coprime2310));
             CUDA_CHECK(cudaFree(m_reindex));
@@ -308,15 +303,6 @@ class GPUSieve {
             CUDA_CHECK(cudaMalloc(&coprime_X, X_bytes));
             CUDA_CHECK(cudaMemcpy(coprime_X, (void*)caches.coprime_X.data(), X_bytes, cudaMemcpyHostToDevice));
 
-            {
-                // From uint32_t -> uint16_t
-                vector<uint16_t> X_reindex_tmp;
-                for (uint32_t x_i : caches.x_reindex) X_reindex_tmp.push_back(x_i);
-                CUDA_CHECK(cudaMalloc(&X_reindex, X_bytes/2));
-                CUDA_CHECK(cudaMemcpy(X_reindex, X_reindex_tmp.data(), X_bytes/2, cudaMemcpyHostToDevice));
-                count_set_bits_in_array<<<1, 1>>>((char*) X_reindex, X_bytes/2);
-            }
-
             CUDA_CHECK(cudaMalloc(&is_coprime2310, 2310));
             CUDA_CHECK(cudaMemcpy(is_coprime2310, (void*)caches.is_coprime2310.data(), 2310, cudaMemcpyHostToDevice));
 
@@ -334,7 +320,7 @@ class GPUSieve {
             CUDA_CHECK(cudaMalloc(&m_reindex, m_reindex_bytes));
             CUDA_CHECK(cudaMemcpy(m_reindex, caches.m_reindex.data(), m_reindex_bytes, cudaMemcpyHostToDevice));
 
-            const size_t composite_bytes = sizeof(char) * num_coprimes * caches.valid_ms;
+            composite_bytes = sizeof(char) * num_coprimes * caches.valid_ms;
             CUDA_CHECK(cudaMalloc(&composite, composite_bytes));
             CUDA_CHECK(cudaMemset(composite, 0, composite_bytes));
 
@@ -356,12 +342,9 @@ class GPUSieve {
         ) {
             assert( M_start == this->M_start );
 
-            return;
-
-            if (0) { // Run GPU Sieve!
+            { // Run GPU Sieve!
                 auto T0 = high_resolution_clock::now();
                 method2_medium_primes_kernal<<<GRID_SIZE, BLOCK_SIZE>>>(
-                    this->X_reindex,
                     this->is_m_coprime2310,
                     this->is_coprime2310,
                     // Maybe later? is_m_coprime
@@ -372,6 +355,7 @@ class GPUSieve {
                     this->K_mod2310,
 
                     this->composite,
+                    this->composite_bytes,
 
                     this->num_primes,
                     this->primes,
@@ -390,15 +374,18 @@ class GPUSieve {
                 cout << "GPU sieve: " << kernel_ms << " ms" << endl;
             }
 
-            if (0) { // Parse results back to composite.
+            if (1) { // Parse results back to composite.
                 auto T0 = high_resolution_clock::now();
+
+                size_t found_factors = 0;
+                size_t initial_factors = output_composite.count();
+
                 // Segmented by 1M rows
                 const size_t valid_m = caches.valid_ms;
                 const size_t segment_size = 1'000'000;
                 const size_t segment_bytes = sizeof(char) * segment_size * num_coprimes;
-                char* host_composite = (char*) malloc(segment_bytes);
-                assert( host_composite != NULL );
-                //CUDA_CHECK(cudaMallocHost((void**) &host_composite, segment_bytes));
+                char* host_composite;
+                CUDA_CHECK(cudaMallocHost((void**) &host_composite, segment_bytes));
                 printf("\thost buffer: %lu\n", segment_bytes);
 
                 char* composite_start = composite;
@@ -407,7 +394,6 @@ class GPUSieve {
                     printf("\tCopying over mi [%lu, %lu)\n", start_mii, last_mii);
 
                     size_t chunk_bytes = (last_mii - start_mii) * num_coprimes * sizeof(char);
-                    printf("Hi %lu -> %p, %p, %lu\n", start_mii, host_composite, composite_start, chunk_bytes); // TODO cleanup
                     assert( 0 < chunk_bytes && chunk_bytes <= segment_bytes );
                     assert( chunk_bytes == segment_bytes || last_mii == valid_m );
                     CUDA_CHECK(cudaMemcpy(host_composite, composite_start, chunk_bytes, cudaMemcpyDeviceToHost));
@@ -427,17 +413,31 @@ class GPUSieve {
                                 had_factor += 1;
                                 auto X = caches.coprime_X[xi];
                                 auto xii = x_reindex_m[X];
-                                output_composite[m_offset + xii] = 1;
+                                if (xii > 0) {
+                                    /*
+                                    if (!output_composite[m_offset + xii]) {
+                                        printf("mii(%lu) -> %lu + xi(%lu) -> %u -> %d is composite\n",
+                                            mii, m, xi, X, xii);
+                                    }
+                                    */
+                                    output_composite[m_offset + xii] = 1;
+                                }
                             }
                         }
                     }
                     printf("\tmi [%lu, %lu) -> %lu factors\n", start_mii, last_mii, had_factor);
+                    found_factors += had_factor;
                 }
 
-                // TODO free host_composite
+                // TODO delta in output_composite bits set.
+                size_t after_factors = output_composite.count();
+                printf("\t%lu + %lu -> %lu = %lu new\n",
+                    initial_factors, found_factors, after_factors, after_factors - initial_factors);
+
+                CUDA_CHECK(cudaFreeHost(host_composite));
                 auto T1 = high_resolution_clock::now();
                 auto bitfiddling_ms = duration_cast<milliseconds>(T1 - T0).count();
-                cout << "GPU copy-back: " << bitfiddling_ms << " ms" << endl;
+                printf("GPU copy-back: %lu ms | %lu factors\n", bitfiddling_ms, found_factors);
             }
 
         }

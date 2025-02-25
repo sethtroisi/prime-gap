@@ -501,7 +501,7 @@ Cached::Cached(const struct Config& config, const mpz_t &K) {
  * Seperate [start_prime, end_prime] into a series of intervals.
  * interval start and ends have nice round numbers
  * percent controls how quickly intervals can grow.
- * [0, 10], [10, 20], [20, 30], ... [90, 100], [100, 200], [200, 300], [300, 400]
+ * [0, 10], [11, 20], [21, 30], ... [91, 100], [101, 200], [201, 300], [301, 400]
  *
  */
 std::vector<std::pair<uint64_t, uint64_t>> split_prime_range_to_intervals(
@@ -862,9 +862,9 @@ void method2_medium_primes(const Config &config, method2_stats &stats,
     const int K_odd = mpz_odd_p(K);
     assert( K_odd ); // Good for optimizations also good for big gaps.
 
-    primesieve::iterator iter(prime_start);
+    primesieve::iterator iter(prime_start-1);
     uint64_t prime = iter.prev_prime();
-    assert(prime <= prime_start);
+    assert(prime < prime_start);
     prime = iter.next_prime();
     assert(prime >= prime_start);
     assert(prime > SIEVE_LENGTH + 1);
@@ -1174,7 +1174,8 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
     }
 
 
-    if (1) { // Medium Primes
+    // Also run GPUSieve and see what happens
+    if (0) { // Medium Primes
         auto gsieve = GPUSieve(config, K, caches, SMALL_THRESHOLD, MEDIUM_THRESHOLD);
         gsieve.run_sieve(config.mstart, config.minc, caches, composite);
     } else {
