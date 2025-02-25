@@ -1174,7 +1174,10 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
     }
 
 
-    if (0) { // Medium Primes
+    if (1) { // Medium Primes
+        auto gsieve = GPUSieve(config, K, caches, SMALL_THRESHOLD, MEDIUM_THRESHOLD);
+        gsieve.run_sieve(config.mstart, config.minc, caches, composite);
+    } else {
         /**
          * Old (5e782547) parallelization was:
          * each THREADS gets an equal share of work (coprime_X_split)
@@ -1338,8 +1341,6 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
         if (config.verbose >= 1) {
             printf("\tmethod2_medium_primes all done\n");
         }
-    } else {
-        GPUSieve(config, K, caches, SMALL_THRESHOLD, MEDIUM_THRESHOLD);
     }
 
     auto result = save_unknowns(config, K, caches, composite);
