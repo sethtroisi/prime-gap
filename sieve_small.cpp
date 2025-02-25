@@ -38,6 +38,9 @@
 #include <boost/dynamic_bitset.hpp>
 
 #include "gap_common.h"
+#include "cached.h"
+#include "sieve_small_gpu.h"
+
 
 using std::cout;
 using std::endl;
@@ -49,14 +52,8 @@ using boost::dynamic_bitset;
 using namespace std::chrono;
 
 
-
 // Used to validate factors divide the number claimed
 //#define GMP_VALIDATE_FACTORS
-
-// This probably should be optimized to fit in L2/L3
-// Related to sizeof(int) * SIEVE_INTERVAL * WHEEL_MAX
-// WHEEL should divide config.d
-#define METHOD2_WHEEL_MAX (2*3*5*7)
 
 class method2_stats {
     public:
@@ -306,9 +303,10 @@ void validate_factor_m_k_x(
 
 /**
  * TODO better name: RangeStats, KStats, Helpers, Indexes?
- *
  * Helper arrays
  */
+// This is defined in header but left with comments to better code match here.
+/*
 class Cached {
     public:
         // mi such that gcd(m_start + mi, D) = 1
@@ -317,35 +315,27 @@ class Cached {
         // valid_mi.size()
         size_t valid_ms;
 
-        /**
-         * m_reindex[mi] = mii (index into composite) if coprime
-         * -1 if gcd(ms + i, D) > 1
-         *
-         * This is potentially very large use is_m_coprime and is_m_coprime2310
-         * to pre check it's a coprime mi before doing the L3/RAM lookup.
-         */
+        // m_reindex[mi] = mii (index into composite) if coprime
+        // -1 if gcd(ms + i, D) > 1
+        //
+        // This is potentially very large use is_m_coprime and is_m_coprime2310
+        // to pre check it's a coprime mi before doing the L3/RAM lookup.
         vector<int32_t> m_reindex;
+
         // if gcd(ms + mi, D) = 1
         // TODO try with dynamic_bitset
         vector<bool> is_m_coprime;
-        /**
-         * is_m_coprime2310[i] = (i, D') == 1
-         * D' = gcd(2310, D)
-         * first 2310 values.
-         * vector<bool> seems faster than char [2310]
-         */
-        std::bitset<2310> is_m_coprime2310;
 
+        // is_m_coprime2310[i] = (i, D') == 1
+        // D' = gcd(2310, D)
+        // first 2310 values.
+        std::bitset<2310> is_m_coprime2310;
 
         // X which are coprime to K
         vector<uint32_t> coprime_X;
         // reindex composite[m][X] for composite[m_reindex[m]][x_reindex[X]]
         // Special 0'th entry stands for all not coprime
         vector<uint32_t> x_reindex;
-
-        // if [x] is coprime to K | NO longer needed?
-        // vector<char> is_offset_coprime;
-
 
         // reindex composite[m][i] using (m, wheel) (wheel is 1!, 2!, 3!, or 5!)
         // This could be first indexed by x_reindex,
@@ -363,19 +353,14 @@ class Cached {
 
         int32_t K_mod2310;
 
-        /** is_comprime2310[i] = (i % 2) && (i % 3) && (i % 5) && (i % 7) && (i % 11)*/
+        // is_comprime2310[i] = (i % 2) && (i % 3) && (i % 5) && (i % 7) && (i % 11)
         vector<char> is_coprime2310;
 
-        /**
-         * TODO: benchmark adding is_coprime96577 = 13*17*19*23
-         * 1 - 2/3 * 4/5 * 6/7 * 10/11 = 58% chance of sharing a factor of 3, 5, 7, or 11
-         * 1 - 12/13 * 16/17 * 18/19 * 22/23 = 21% chance of sharing a factor of 13, 17, 19, or 23
-         *
-         * Could reduce memory contention (is this the slowness on DDR3?)
-         */
+        Cached(const struct Config& config, const mpz_t &K);
+};
+*/
 
-
-    Cached(const struct Config& config, const mpz_t &K) {
+Cached::Cached(const struct Config& config, const mpz_t &K) {
         const uint32_t P = config.p;
         const uint32_t D = config.d;
 
@@ -509,7 +494,6 @@ class Cached {
          * x_reindex_wheel will always be true if prefiltered by is_coprime2310[n % 310]
          */
         assert(2310 % x_reindex_wheel_size == 0);
-    }
 };
 
 
@@ -1190,7 +1174,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
     }
 
 
-    if (1) { // Medium Primes
+    if (0) { // Medium Primes
         /**
          * Old (5e782547) parallelization was:
          * each THREADS gets an equal share of work (coprime_X_split)
@@ -1354,6 +1338,8 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
         if (config.verbose >= 1) {
             printf("\tmethod2_medium_primes all done\n");
         }
+    } else {
+        GPUSieve(config, K, caches, SMALL_THRESHOLD, MEDIUM_THRESHOLD);
     }
 
     auto result = save_unknowns(config, K, caches, composite);

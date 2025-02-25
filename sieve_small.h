@@ -14,12 +14,20 @@
 
 #pragma once
 
+#include <bitset>
 #include <cstdio>
 #include <memory>
 #include <utility>
 #include <vector>
 
 #include "gap_common.h"
+
+
+// This probably should be optimized to fit in L2/L3
+// Related to sizeof(int) * SIEVE_INTERVAL * WHEEL_MAX
+// WHEEL should divide config.d
+#define METHOD2_WHEEL_MAX (2*3*5*7)
+
 
 using std::vector;
 
@@ -50,5 +58,6 @@ class SieveOutput {
 
         vector<vector<uint16_t>> unknowns;
 };
+
 
 std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config);
