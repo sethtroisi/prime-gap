@@ -1175,7 +1175,7 @@ std::unique_ptr<SieveOutput> prime_gap_parallel(const struct Config& config) {
 
 
     // Also run GPUSieve and see what happens
-    if (0) { // Medium Primes
+    if (1) { // Medium Primes
         auto gsieve = GPUSieve(config, K, caches, SMALL_THRESHOLD, MEDIUM_THRESHOLD);
         gsieve.run_sieve(config.mstart, config.minc, caches, composite);
     } else {
