@@ -106,18 +106,25 @@ Theory and justification for some calculations in present in [THEORY.md](THEORY.
 ## Setup
 
 ```bash
-#$ sudo apt install libgmp10 libgmp-dev
-#$ sudo apt install mercurial build-essential automake autoconf bison make libtool texinfo m4
-# Building gmp from source is required until 6.3
-$ hg clone https://gmplib.org/repo/gmp/
-$ cd gmp
-$ ./.bootstrap
-$ mkdir build
-$ cd build
-$ ../configure
-$ make
-$ make check
-$ make install
+$ sudo apt install libgmp10 libgmp-dev
+$ sudo apt install build-essential automake autoconf bison make libtool texinfo m4
+
+# Building gmp from source is required until 6.3 (not needed in Ubuntu 24.04)
+# Mercurial is not working in Ubuntu 24.04 so from source
+# $ hg clone https://gmplib.org/repo/gmp/
+# $ cd gmp
+
+# $ wget https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz
+# $ tar -xJf gmp-6.3.0.tar.xz
+# $ cd gmp-6.3.0
+
+# $ ./.bootstrap
+# $ mkdir build
+# $ cd build
+# $ ../configure
+# $ make
+# $ make check
+# $ make install
 ```
 
 ```
