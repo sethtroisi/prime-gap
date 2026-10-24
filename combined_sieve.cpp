@@ -1241,6 +1241,7 @@ std::vector<std::pair<uint64_t, uint64_t>> split_prime_range_to_intervals(
     std::vector<std::pair<uint64_t, uint64_t>> intervals;
 
     // interval_inc, interval_start
+    uint64_t first = start_prime + 1;
     uint64_t i_inc = 10'000;
     uint64_t i_start = 0;
     while(i_start < end_prime) {
@@ -1249,12 +1250,22 @@ std::vector<std::pair<uint64_t, uint64_t>> split_prime_range_to_intervals(
             i_inc *= 10;
         }
         uint64_t i_end = std::min(i_start + i_inc, end_prime);
-        if (i_end > start_prime) {
-            uint64_t first = std::max(i_start, start_prime) + 1;
+        if (i_end > first + 1000) {
             intervals.emplace_back(first, i_end);
+            first = i_end + 1;
         }
         i_start = i_end;
     }
+
+    if (intervals.back().second < end_prime) {
+        uint64_t size = end_prime - intervals.back().first;
+        assert( size <= 2 * i_inc );
+        intervals.back().second = end_prime;
+    }
+
+    assert( intervals.front().first == start_prime + 1 );
+    assert( intervals.back().second == end_prime );
+
     return intervals;
 }
 

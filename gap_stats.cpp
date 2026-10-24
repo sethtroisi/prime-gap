@@ -1164,7 +1164,7 @@ void prob_record_vs_plimit(struct Config config) {
                 config, records, min_record_gap, /* min_gap_min_merit */ min_record_gap,
                 gap_probs, /* prob_gap_norm */ empty_vector, empty_vector, empty_vector);
 
-        if (config.verbose >= 2) {
+        if (config.verbose >= 0) {
             // Breakdown of prob inner, extended, extended^2
             printf("%7ld, %.7f = %0.3g + %0.3g + %0.3g (unaccounted: %.7f)\n",
                     config.max_prime, probm.record,
@@ -1274,8 +1274,7 @@ void run_gap_file(
                 sum.record_inner += probm.record_inner;
                 sum.record_extended += probm.record_extended;
                 sum.record_extended2 += probm.record_extended2;
-
-                sum.record_extended2 += line.size();
+                sum.highmerit += probm.highmerit;
             }
 
             #pragma omp critical
@@ -1351,6 +1350,8 @@ void run_gap_file(
         printf("prob record total: %.5f  direct: %.5f  extended: %.5f  extended^2: %.5f\n",
                 sum.record, sum.record_inner,
                 sum.record_extended, sum.record_extended2);
+        printf("prob merit total: %.6f, per m: %.3e\n",
+                sum.highmerit, sum.highmerit / valid_mi.size());
     }
     if (config.verbose >= 1) {
         vector<float> probs_seen;
