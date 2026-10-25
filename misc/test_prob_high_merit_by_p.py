@@ -45,13 +45,14 @@ def get_arg_parser():
         help='list of divisors to test fo each P#')
 
     parser.add_argument(
-        '-m', '--min-merit', type=int, default=30,
+        '-m', '--min-merit', type=int, nargs='+', default=[30],
         help='Check for probability of record > this merit')
 
     return parser
 
 
 def run_sieves(args):
+    jobs = []
     for p in range(args.start_p, args.stop_p + 1):
         if not gmpy2.is_prime(p):
             continue
@@ -61,28 +62,56 @@ def run_sieves(args):
             log_K = gmpy2.log(K)
 
             # Rounded up to next thousand
-            sl = int(log_K * args.min_merit - 1)
+            sl = int(log_K * max(args.min_merit) - 1)
             sl += (-sl % 1000)
 
-        # gap_stats looks at log(m) so use 9e9 to account for it's contribution.
-        unknown_fn = f"{p}_{d}_900000000_50000_s{sl}_l10M.txt"
-        path = os.path.join("unknowns", unknown_fn);
-        if os.path.exists(path):
-            print(f"\t{unknown_fn} already sieved\n")
+            # gap_stats looks at log(m) so use 9e9 to account for it's contribution.
+            unknown_fn = f"{p}_{d}_900000000_50000_s{sl}_l10M.txt"
+            jobs.append((p, d, unknown_fn))
 
-        t0 = time.time()
-        subprocess.check_call(
-                ["./combined_sieve",
-                 "--save", "-q", "-q",
-                 "--search-db", "high-prob-stats.db",
-                 "-u", unknown_fn])
-        t1 = time.time()
-        print(f"\t{unknown_fn} took {t1 - t0:.1f} seconds")
+            path = os.path.join("unknowns", unknown_fn);
+            if os.path.exists(path):
+                print(f"\t{unknown_fn} already sieved")
+                continue
+
+            t0 = time.time()
+            subprocess.check_call(
+                    ["./combined_sieve",
+                     "--save", "-q", "-q",
+                     "--search-db", "high-prob-stats.db",
+                     "-u", unknown_fn])
+            t1 = time.time()
+            print(f"\t{unknown_fn} took {t1 - t0:.1f} seconds")
+
+    return jobs
+
+
+def gap_stats(args, jobs):
+    probs = {}
+    for p, d, unknown_fn in jobs:
+        for m in args.min_merit:
+            result = subprocess.check_output(
+                    ["./gap_stats",
+                     "--testing",
+                     "--min-merit", str(m),
+                     "-u", unknown_fn])
+            print(f"Gap Stats for {unknown_fn!r}")
+            prob = None
+            for line in result.decode().split("\n"):
+                if line.startswith("prob merit total:"):
+                    prob = float(line.split(" ")[-1])
+            assert prob is not None, result
+            probs[(p, d, m)] = prob
+            print(f"\t{p}#/{d} @ {m} = {prob:.2e}")
+
+    print(probs)
+
+    return probs
 
 
 if __name__ == "__main__":
     parser = get_arg_parser()
     args = parser.parse_args()
 
-    print(args)
-    run_sieves(args)
+    jobs = run_sieves(args)
+    gap_stats(args, jobs)

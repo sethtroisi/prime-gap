@@ -187,10 +187,10 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (!config.save_unknowns && !config.testing) {
-        printf("Not saving unknowns (--save-unknowns=0)\n");
+    if (config.testing) {
+        printf("Testing mode\n");
     } else if (is_range_already_processed(config)) {
-        cout << "Range already processed!" << endl;
+        printf("Range already processed!\n");
         return 1;
     }
 
@@ -250,7 +250,7 @@ void load_possible_records(
     // XXX: Records only have 5 sig figs so this method could possible counts records
     //      from same K but smaller m as possible.
 
-    cdouble max_merit_region = N_log < 1400 ? 32 : 28;
+    cdouble max_merit_region = N_log < 1400 ? 36 : 28;
     for (size_t g = 2; g < records.size(); g += 2) {
         // All records > max_merit_region are high likely records, See MAX_RECORD and max_e_c_i
         if (g / N_log > max_merit_region) {
@@ -529,9 +529,9 @@ void store_stats(
 }
 
 
-cdouble NTH_PRIME_CUTOFF = 1e-12;
 // Chosen randomly (not sure how to improve)
-cdouble COMBINED_CUTOFF = 1e-14;
+double NTH_PRIME_CUTOFF = 1e-12;
+double COMBINED_CUTOFF = 1e-14;
 
 float nth_prob_or_zero(const vector<float>& prob_nth, size_t nth) {
     return nth < prob_nth.size() ? prob_nth[nth] : 0.0f;
@@ -881,6 +881,11 @@ void setup_prob_nth(
         printf("prob prime coprime     : %.7f\n", PROB_PRIME / UNKNOWNS_AFTER_COPRIME);
         printf("prob prime after sieve : %.5f\n\n", PROB_PRIME_AFTER_SIEVE);
     }
+
+
+    // Set probs based on config.max_merit
+    NTH_PRIME_CUTOFF = std::min(1e-10, pow(pow(.1, 1/3), config.min_merit));
+    COMBINED_CUTOFF = std::min(1e-14, pow(pow(.1, 1/2), config.min_merit))
 
     prob_nth_prime(
         PROB_PRIME_AFTER_SIEVE,
@@ -1613,7 +1618,7 @@ void prime_gap_stats(struct Config config) {
         );
     }
 
-    if (config.verbose >= 1) {
+    if (!config.testing && config.verbose >= 1) {
         calculate_prp_top_percent(config, valid_mi.size(), N_log, probs_record);
     }
 }
