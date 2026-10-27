@@ -106,7 +106,17 @@ def gap_stats(args, jobs):
 
     print(probs)
 
-    return probs
+
+def benchmark_commands(args, jobs):
+    BITS = 0
+    for p, d, _ in jobs:
+        K = gmpy2.primorial(p) // d
+        bits = int(gmpy2.log2(K) + 45)
+        if bits > BITS:
+            BITS = (bits + 128 - 1) // 128 * 128
+            assert BITS > bits, (bits, BITS)
+            print(f"rm gpu_benchmark; make gpu_benchmark BITS={BITS}")
+        print(f"timeout -s SIGINT 10 ./gpu_benchmark -p {p} -d {d}")
 
 
 if __name__ == "__main__":
@@ -114,4 +124,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     jobs = run_sieves(args)
-    gap_stats(args, jobs)
+    #gap_stats(args, jobs)
+    benchmark_commands(args, jobs)
